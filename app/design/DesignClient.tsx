@@ -171,10 +171,10 @@ export default function DesignClient({ employees }: { employees: { name: string 
         const textStart = hasPhoto ? photoY + photoR + 60 : 320;
         c.textAlign = 'center';
         c.fillStyle = '#ffffff';
-        c.font = `italic 110px 'Great Vibes', cursive`;
+        c.font = `italic 400 110px 'Great Vibes', cursive`;
         c.fillText('Happy', SIZE / 2, textStart);
         c.fillStyle = '#ffffff';
-        c.font = `bold 160px 'Anton', Impact, sans-serif`;
+        c.font = `400 160px 'Anton', Impact, sans-serif`;
         c.fillText('BIRTHDAY', SIZE / 2, textStart + 155);
         c.fillStyle = '#c9a24a';
         c.font = `bold 58px Georgia, serif`;
@@ -223,16 +223,16 @@ export default function DesignClient({ employees }: { employees: { name: string 
         cel.forEach(l => { c.fillText(l, cx2, topY); cx2 += 14; });
 
         c.fillStyle = '#ffffff';
-        c.font = `bold 96px 'Anton', Impact, sans-serif`;
+        c.font = `400 96px 'Anton', Impact, sans-serif`;
         c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
 
         const numStr = String(yr);
-        c.font = `bold 280px 'Anton', Impact, sans-serif`;
+        c.font = `400 280px 'Anton', Impact, sans-serif`;
         const numW = c.measureText(numStr).width;
         c.fillStyle = '#c8102e';
         c.fillText(numStr, SIZE / 2 - suffix.length * 18, topY + 390);
 
-        c.font = `bold 80px 'Anton', Impact, sans-serif`;
+        c.font = `400 80px 'Anton', Impact, sans-serif`;
         c.fillStyle = '#c9a24a';
         c.textAlign = 'left';
         c.fillText(suffix, SIZE / 2 - suffix.length * 18 + numW / 2 + 8, topY + 250);
@@ -277,7 +277,14 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    document.fonts.ready.then(() => draw());
+    Promise.all([
+      document.fonts.load("400 110px 'Great Vibes'"),
+      document.fonts.load("400 160px 'Anton'"),
+      document.fonts.load("400 280px 'Anton'"),
+      document.fonts.load("400 96px 'Anton'"),
+      document.fonts.load("400 80px 'Anton'"),
+      document.fonts.ready,
+    ]).then(() => draw());
   }, [draw]);
 
   function download() {
