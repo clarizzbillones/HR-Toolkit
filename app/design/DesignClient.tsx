@@ -174,6 +174,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
     setGreeting(eventType === 'birthday'
       ? 'Wishing you a wonderful birthday and a year ahead full of joy!'
       : 'Thank you for your dedication and all you bring to the firm. Here is to many more years together!');
+    if (eventType === 'anniversary') setPhotoUrl(null);
   }, [eventType]);
 
   const draw = useCallback(() => {
@@ -389,28 +390,30 @@ export default function DesignClient({ employees }: { employees: { name: string 
         {/* Left form */}
         <div className="w-[340px] flex-shrink-0 border-r border-border bg-white overflow-auto">
           <div className="p-6 space-y-6">
-            {/* Photo upload */}
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
-                1 · PHOTO <span className="font-normal normal-case">(optional)</span>
+            {/* Photo upload — birthday only */}
+            {eventType === 'birthday' && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
+                  1 · PHOTO <span className="font-normal normal-case">(optional)</span>
+                </div>
+                <input ref={photoRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) setPhotoUrl(URL.createObjectURL(f));
+                    e.target.value = '';
+                  }} />
+                <button onClick={() => photoRef.current?.click()}
+                  className="w-full border border-dashed border-border-light rounded-ctrl py-5 text-center hover:border-ink transition-colors">
+                  {photoUrl
+                    ? <><span className="block text-sm font-semibold text-[#2f7d5b]">↑ Photo loaded ✓ — replace</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>
+                    : <><span className="block text-sm font-semibold text-text-secondary">↑ Upload photo</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>}
+                </button>
+                {photoUrl && <button onClick={() => setPhotoUrl(null)} className="mt-2 text-xs text-text-muted hover:text-litred-alt">Remove photo</button>}
               </div>
-              <input ref={photoRef} type="file" accept="image/*" className="hidden"
-                onChange={e => {
-                  const f = e.target.files?.[0];
-                  if (f) setPhotoUrl(URL.createObjectURL(f));
-                  e.target.value = '';
-                }} />
-              <button onClick={() => photoRef.current?.click()}
-                className="w-full border border-dashed border-border-light rounded-ctrl py-5 text-center hover:border-ink transition-colors">
-                {photoUrl
-                  ? <><span className="block text-sm font-semibold text-[#2f7d5b]">↑ Photo loaded ✓ — replace</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>
-                  : <><span className="block text-sm font-semibold text-text-secondary">↑ Upload photo</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>}
-              </button>
-              {photoUrl && <button onClick={() => setPhotoUrl(null)} className="mt-2 text-xs text-text-muted hover:text-litred-alt">Remove photo</button>}
-            </div>
+            )}
 
-            {/* Photo layout */}
-            {photoUrl && (
+            {/* Photo layout — birthday only */}
+            {eventType === 'birthday' && photoUrl && (
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Photo Layout</div>
                 <div className="flex gap-2">
@@ -431,7 +434,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
             {/* Details */}
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">2 · DETAILS</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">{eventType === 'birthday' ? '2 · DETAILS' : '1 · DETAILS'}</div>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-text-primary mb-1.5">Name</label>
