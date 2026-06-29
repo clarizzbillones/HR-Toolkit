@@ -89,12 +89,14 @@ function drawLitson(ctx: CanvasRenderingContext2D) {
 
 function drawBalloons(ctx: CanvasRenderingContext2D) {
   const balloons: [number, number, number, number, string][] = [
-    [105, 185, 38, 46, '#c9a24a'],
-    [158, 148, 32, 40, '#e6c878'],
-    [200, 178, 35, 43, '#c8102e'],
-    [875, 185, 38, 46, '#c9a24a'],
-    [920, 148, 32, 40, '#e6c878'],
-    [965, 178, 35, 43, '#c8102e'],
+    // Left cluster — bigger, staggered heights
+    [108, 230, 62, 78, '#c9a24a'],
+    [178, 160, 52, 66, '#e6c878'],
+    [238, 210, 58, 72, '#c8102e'],
+    // Right cluster
+    [842, 230, 62, 78, '#c9a24a'],
+    [902, 160, 52, 66, '#e6c878'],
+    [962, 210, 58, 72, '#c8102e'],
   ];
   balloons.forEach(([cx, cy, rx, ry, color]) => {
     ctx.fillStyle = color;
@@ -113,7 +115,7 @@ function drawBalloons(ctx: CanvasRenderingContext2D) {
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx, cy + ry + 9);
-    ctx.quadraticCurveTo(cx + 14, cy + ry + 65, cx - 6, cy + ry + 130);
+    ctx.quadraticCurveTo(cx + 18, cy + ry + 90, cx - 8, cy + ry + 180);
     ctx.stroke();
   });
 }
@@ -184,18 +186,22 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
     function drawBirthdayText(textStart: number) {
       c.textAlign = 'center';
+      // "Happy" in Great Vibes script — large and elegant
       c.fillStyle = '#ffffff';
-      c.font = `italic 400 115px 'Great Vibes', cursive`;
+      c.font = `italic 400 140px 'Great Vibes', cursive`;
       c.fillText('Happy', SIZE / 2, textStart);
+      // "BIRTHDAY" in Anton bold display
       c.fillStyle = '#ffffff';
-      c.font = `400 165px 'Anton', Impact, sans-serif`;
-      c.fillText('BIRTHDAY', SIZE / 2, textStart + 165);
+      c.font = `400 185px 'Anton', Impact, sans-serif`;
+      c.fillText('BIRTHDAY', SIZE / 2, textStart + 185);
+      // Name in gold
       c.fillStyle = '#c9a24a';
-      c.font = `600 56px Georgia, serif`;
-      c.fillText(name || 'NAME', SIZE / 2, textStart + 268);
+      c.font = `600 58px Georgia, serif`;
+      c.fillText(name || 'NAME', SIZE / 2, textStart + 296);
+      // Greeting
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `26px Georgia, serif`;
-      wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 330);
+      wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 360);
     }
 
     function drawAnniversaryText(topY: number) {
@@ -276,13 +282,16 @@ export default function DesignClient({ employees }: { employees: { name: string 
       if (photoUrl && photoLayout === 'classic') {
         const img = new Image();
         img.onload = () => {
-          drawCirclePhoto(c, img, SIZE / 2, 340, 128);
-          drawBirthdayText(540);
+          // Photo center at 370, radius 160 → bottom edge at 534
+          drawCirclePhoto(c, img, SIZE / 2, 370, 160);
+          // Text starts 80px below photo bottom = 534 + 80 = 614
+          drawBirthdayText(614);
         };
         img.src = photoUrl;
         return;
       }
-      drawBirthdayText(320);
+      // No photo — center text vertically
+      drawBirthdayText(300);
 
     } else {
       // Anniversary
