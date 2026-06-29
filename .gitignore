@@ -3,3 +3,5 @@ node_modules/
 db/data.db
 db/seed.js
 *.env*.local
+db/data.db-shm
+db/data.db-wal
