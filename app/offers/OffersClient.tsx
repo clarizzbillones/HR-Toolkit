@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useToast } from '@/components/Toast';
+import EditGate from '@/components/EditGate';
 
 interface OfferParams {
   candidate: string; role: string; dept: string; salary: string;
@@ -94,10 +95,12 @@ export default function OffersClient({ employees }: { employees: string[] }) {
               <textarea value={params.notes} onChange={e => set('notes', e.target.value)} rows={3}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
             </div>
+            <EditGate fallback={<p className="text-xs text-text-muted text-center py-2">View only — contact HR Admin to generate letters</p>}>
             <button onClick={generate} disabled={!ready || generating}
               className="w-full bg-ink text-white text-sm font-semibold py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
               {generating ? 'Generating…' : 'Generate Offer Letter'}
             </button>
+            </EditGate>
           </div>
 
           {/* Assets + output */}

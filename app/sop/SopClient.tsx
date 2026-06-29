@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
+import EditGate from '@/components/EditGate';
 
 const TEMPLATES = [
   'Onboarding Checklist',
@@ -67,10 +68,12 @@ export default function SopClient() {
                 placeholder="Firm-specific details, exceptions, special requirements…"
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
             </div>
+            <EditGate fallback={<p className="text-xs text-text-muted text-center py-2">View only — contact HR Admin to generate SOPs</p>}>
             <button onClick={generate} disabled={generating}
               className="w-full bg-ink text-white text-sm font-semibold py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
               {generating ? 'Generating…' : 'Generate SOP'}
             </button>
+            </EditGate>
           </div>
 
           {draft ? (

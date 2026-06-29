@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import EditGate from '@/components/EditGate';
 
 interface PtoEntry {
   id: string; employee: string; start_date: string; end_date: string;
@@ -103,9 +104,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         </div>
         <div className="ml-auto flex items-center gap-2.5">
           <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
+          <EditGate><button onClick={() => fileRef.current?.click()} disabled={uploading} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
             {uploading ? 'Reading…' : '↑ Upload CSV / XLSX'}
-          </button>
+          </button></EditGate>
           <a href="https://outlook.office.com/calendar" target="_blank" rel="noreferrer" className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors">
             Cross-check in Outlook ↗
           </a>

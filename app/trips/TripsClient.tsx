@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
+import EditGate from '@/components/EditGate';
 
 interface Trip {
   id: string; who: string; detail: string; cost: number | null;
@@ -49,9 +50,9 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Trip Help Desk</h1>
           <p className="text-sm text-text-muted mt-0.5">Travel requests from attorneys and staff</p>
         </div>
-        <button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
+        <EditGate><button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
           ＋ New Request
-        </button>
+        </button></EditGate>
       </header>
 
       {linkedUrl ? (

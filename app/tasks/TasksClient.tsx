@@ -3,6 +3,7 @@ import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import EodModal from '@/components/EodModal';
+import EditGate from '@/components/EditGate';
 
 interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string;
@@ -99,7 +100,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
             <button onClick={() => setView('board')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'board' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>Board</button>
             <button onClick={() => setView('list')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'list' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>List</button>
           </div>
-          <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">＋ Add task</button>
+          <EditGate><button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">＋ Add task</button></EditGate>
           <button onClick={() => setShowEod(true)} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors">Generate EOD Report</button>
         </div>
       </header>
