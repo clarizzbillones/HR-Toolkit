@@ -84,10 +84,10 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
           className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
           style={{ background: '#c9a24a', color: '#1b2230' }}
         >
-          RM
+          CA
         </div>
         <div>
-          <div className="text-white text-sm font-semibold leading-tight">Renee Mathis</div>
+          <div className="text-white text-sm font-semibold leading-tight">Clarizz Alon</div>
           <div className="text-[#8b97a8] text-xs">HR Administrator</div>
         </div>
       </div>
