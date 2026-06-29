@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 type EventType = 'birthday' | 'anniversary';
+type PhotoLayout = 'classic' | 'spotlight' | 'banner';
 const SIZE = 1080;
 
 function ordSuffix(n: number): string {
@@ -26,83 +27,93 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, maxWid
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D) {
-  // Dark navy gradient
   const bg = ctx.createLinearGradient(0, 0, 0, SIZE);
   bg.addColorStop(0, '#0e1520');
   bg.addColorStop(1, '#192233');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, SIZE, SIZE);
-  // Thin gold border
   ctx.strokeStyle = '#c9a24a';
   ctx.lineWidth = 6;
   ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
-  // Scattered sparkle dots
-  const sparks: [number, number][] = [
-    [70,70],[180,45],[260,90],[820,55],[940,70],[1010,130],
-    [50,200],[1020,220],[55,500],[1020,480],[60,800],[1010,760],
-    [150,980],[380,1020],[700,1035],[940,1010],[500,40],[620,1040],
-    [300,60],[750,50],[400,980],[700,60],
+}
+
+function drawConfetti(ctx: CanvasRenderingContext2D) {
+  const pieces: [number, number, number, string, number][] = [
+    [90, 120, 12, '#c9a24a', 0.3], [180, 60, 10, '#c8102e', 0.7], [260, 100, 8, '#e6c878', 0.5],
+    [340, 50, 11, '#c9a24a', 0.4], [430, 80, 9, '#c8102e', 0.6], [520, 45, 10, '#ffffff', 0.3],
+    [610, 70, 12, '#c9a24a', 0.5], [700, 55, 8, '#c8102e', 0.7], [790, 90, 11, '#e6c878', 0.4],
+    [880, 60, 10, '#c9a24a', 0.6], [960, 110, 9, '#c8102e', 0.5],
+    [70, 960, 10, '#c9a24a', 0.4], [170, 1010, 12, '#c8102e', 0.6], [300, 990, 9, '#e6c878', 0.5],
+    [450, 1020, 11, '#c9a24a', 0.4], [600, 1000, 8, '#c8102e', 0.7], [750, 1015, 10, '#ffffff', 0.3],
+    [900, 990, 12, '#c9a24a', 0.5], [1000, 960, 9, '#c8102e', 0.6],
+    [50, 400, 8, '#c9a24a', 0.3], [1030, 350, 9, '#e6c878', 0.4], [45, 650, 10, '#c8102e', 0.5],
+    [1025, 620, 8, '#c9a24a', 0.4],
   ];
+  pieces.forEach(([x, y, r, color, opacity]) => {
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = color;
+    ctx.translate(x, y);
+    ctx.rotate(Math.random() * Math.PI);
+    // triangle confetti
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.87, r * 0.5);
+    ctx.lineTo(-r * 0.87, r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  });
+  // Gold cross sparkles
+  const sparks: [number, number][] = [[70,70],[940,65],[55,500],[1020,480],[60,800],[1010,760],[540,45]];
   sparks.forEach(([sx, sy]) => {
     ctx.fillStyle = 'rgba(201,162,74,0.5)';
     ctx.beginPath();
     ctx.arc(sx, sy, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(201,162,74,0.25)';
-    ctx.fillRect(sx - 10, sy - 1.5, 20, 3);
-    ctx.fillRect(sx - 1.5, sy - 10, 3, 20);
+    ctx.fillRect(sx - 12, sy - 1.5, 24, 3);
+    ctx.fillRect(sx - 1.5, sy - 12, 3, 24);
   });
 }
 
 function drawLitson(ctx: CanvasRenderingContext2D) {
+  ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c9a24a';
-  ctx.font = '600 30px Georgia, serif';
-  // letter-spacing via manual positioning
-  const letters = 'LITSON'.split('');
-  const spacing = 10;
-  const totalW = letters.length * 18 + (letters.length - 1) * spacing;
-  let lx = SIZE / 2 - totalW / 2 + 9;
-  letters.forEach(l => {
-    ctx.fillText(l, lx, 75);
-    lx += 18 + spacing;
-  });
+  ctx.font = '600 28px Georgia, serif';
+  ctx.letterSpacing = '8px';
+  ctx.fillText('LITSON', SIZE / 2, 72);
+  ctx.restore();
 }
 
 function drawBalloons(ctx: CanvasRenderingContext2D) {
-  // Each balloon: [cx, cy, rx, ry, color]
   const balloons: [number, number, number, number, string][] = [
-    // Left cluster
-    [110, 175, 36, 44, '#c9a24a'],
-    [155, 145, 32, 40, '#e6c878'],
-    [195, 170, 34, 42, '#c8102e'],
-    // Right cluster
-    [885, 175, 36, 44, '#c9a24a'],
-    [930, 145, 32, 40, '#e6c878'],
-    [970, 170, 34, 42, '#c8102e'],
+    [105, 185, 38, 46, '#c9a24a'],
+    [158, 148, 32, 40, '#e6c878'],
+    [200, 178, 35, 43, '#c8102e'],
+    [875, 185, 38, 46, '#c9a24a'],
+    [920, 148, 32, 40, '#e6c878'],
+    [965, 178, 35, 43, '#c8102e'],
   ];
   balloons.forEach(([cx, cy, rx, ry, color]) => {
-    // Balloon body
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.beginPath();
-    ctx.ellipse(cx - rx * 0.25, cy - ry * 0.25, rx * 0.35, ry * 0.3, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(cx - rx * 0.28, cy - ry * 0.28, rx * 0.35, ry * 0.28, -0.3, 0, Math.PI * 2);
     ctx.fill();
-    // Knot
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(cx, cy + ry + 4, 5, 0, Math.PI * 2);
     ctx.fill();
-    // String
-    ctx.strokeStyle = 'rgba(201,162,74,0.5)';
+    ctx.strokeStyle = 'rgba(201,162,74,0.45)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx, cy + ry + 9);
-    ctx.quadraticCurveTo(cx + 12, cy + ry + 60, cx - 5, cy + ry + 120);
+    ctx.quadraticCurveTo(cx + 14, cy + ry + 65, cx - 6, cy + ry + 130);
     ctx.stroke();
   });
 }
@@ -124,21 +135,33 @@ function drawStars(ctx: CanvasRenderingContext2D) {
     ctx.fill();
     ctx.restore();
   }
-  star(120, 155, 22, 0.9);
-  star(165, 120, 16, 0.7);
-  star(95, 115, 12, 0.5);
-  star(960, 155, 22, 0.9);
-  star(915, 120, 16, 0.7);
-  star(985, 115, 12, 0.5);
-  star(540, 45, 14, 0.5);
-  star(300, 50, 10, 0.4);
-  star(780, 50, 10, 0.4);
+  star(120, 160, 24, 0.9); star(168, 122, 16, 0.7); star(92, 118, 12, 0.5);
+  star(958, 160, 24, 0.9); star(912, 122, 16, 0.7); star(984, 118, 12, 0.5);
+  star(540, 46, 14, 0.5); star(300, 52, 10, 0.4); star(780, 52, 10, 0.4);
+}
+
+function drawCirclePhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, r: number) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  const aspect = img.naturalWidth / img.naturalHeight;
+  let sw = r * 2, sh = r * 2;
+  if (aspect > 1) sw = sh * aspect; else sh = sw / aspect;
+  ctx.drawImage(img, cx - sw / 2, cy - sh / 2, sw, sh);
+  ctx.restore();
+  ctx.strokeStyle = '#c9a24a';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 export default function DesignClient({ employees }: { employees: { name: string }[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [eventType, setEventType] = useState<EventType>('birthday');
+  const [photoLayout, setPhotoLayout] = useState<PhotoLayout>('classic');
   const [name, setName] = useState('');
   const [greeting, setGreeting] = useState('Wishing you a wonderful birthday and a year ahead full of joy!');
   const [years, setYears] = useState('1');
@@ -158,131 +181,169 @@ export default function DesignClient({ employees }: { employees: { name: string 
     if (!ctx) return;
     const c = ctx;
     ctx.clearRect(0, 0, SIZE, SIZE);
-    drawBackground(ctx);
-    drawLitson(ctx);
+
+    function drawBirthdayText(textStart: number) {
+      c.textAlign = 'center';
+      c.fillStyle = '#ffffff';
+      c.font = `italic 400 115px 'Great Vibes', cursive`;
+      c.fillText('Happy', SIZE / 2, textStart);
+      c.fillStyle = '#ffffff';
+      c.font = `400 165px 'Anton', Impact, sans-serif`;
+      c.fillText('BIRTHDAY', SIZE / 2, textStart + 165);
+      c.fillStyle = '#c9a24a';
+      c.font = `600 56px Georgia, serif`;
+      c.fillText(name || 'NAME', SIZE / 2, textStart + 268);
+      c.fillStyle = 'rgba(255,255,255,0.6)';
+      c.font = `26px Georgia, serif`;
+      wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 330);
+    }
+
+    function drawAnniversaryText(topY: number) {
+      const yr = parseInt(years) || 1;
+      const suffix = ordSuffix(yr);
+      c.textAlign = 'center';
+      c.fillStyle = 'rgba(255,255,255,0.4)';
+      c.font = '400 28px Georgia, serif';
+      const celStr = 'C E L E B R A T I N G';
+      c.fillText(celStr, SIZE / 2, topY);
+      c.fillStyle = '#ffffff';
+      c.font = `400 88px 'Anton', Impact, sans-serif`;
+      c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
+      const numStr = String(yr);
+      c.font = `400 260px 'Anton', Impact, sans-serif`;
+      const numW = c.measureText(numStr).width;
+      c.fillStyle = '#c8102e';
+      c.fillText(numStr, SIZE / 2 - suffix.length * 16, topY + 375);
+      c.font = `400 76px 'Anton', Impact, sans-serif`;
+      c.fillStyle = '#c9a24a';
+      c.textAlign = 'left';
+      c.fillText(suffix, SIZE / 2 - suffix.length * 16 + numW / 2 + 6, topY + 240);
+      c.textAlign = 'center';
+      c.fillStyle = 'rgba(255,255,255,0.4)';
+      c.font = '400 24px Georgia, serif';
+      c.fillText('Y E A R S   W I T H   T H E   F I R M', SIZE / 2, topY + 435);
+      c.fillStyle = '#c9a24a';
+      c.font = `600 58px Georgia, serif`;
+      c.fillText(name || 'NAME', SIZE / 2, topY + 510);
+      c.fillStyle = 'rgba(255,255,255,0.6)';
+      c.font = `24px Georgia, serif`;
+      wrapText(c, greeting, SIZE / 2, 820, 38, topY + 570);
+    }
 
     if (eventType === 'birthday') {
-      drawBalloons(ctx);
-      const hasPhoto = !!photoUrl;
-      const photoR = 130;
-      const photoY = 330;
-
-      function finishBirthday() {
-        const textStart = hasPhoto ? photoY + photoR + 60 : 320;
-        c.textAlign = 'center';
-        c.fillStyle = '#ffffff';
-        c.font = `italic 400 110px 'Great Vibes', cursive`;
-        c.fillText('Happy', SIZE / 2, textStart);
-        c.fillStyle = '#ffffff';
-        c.font = `400 160px 'Anton', Impact, sans-serif`;
-        c.fillText('BIRTHDAY', SIZE / 2, textStart + 155);
-        c.fillStyle = '#c9a24a';
-        c.font = `bold 58px Georgia, serif`;
-        c.fillText(name || 'NAME', SIZE / 2, textStart + 260);
-        c.fillStyle = 'rgba(255,255,255,0.6)';
-        c.font = `26px Georgia, serif`;
-        wrapText(c, greeting, SIZE / 2, 800, 40, textStart + 325);
-      }
-
-      if (photoUrl) {
+      if (photoUrl && photoLayout === 'spotlight') {
+        // Spotlight: full-bleed dark photo bg, text overlay
         const img = new Image();
         img.onload = () => {
           c.save();
-          c.beginPath();
-          c.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
-          c.clip();
-          c.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
+          c.drawImage(img, 0, 0, SIZE, SIZE);
+          // dark overlay
+          c.fillStyle = 'rgba(10,16,28,0.72)';
+          c.fillRect(0, 0, SIZE, SIZE);
           c.restore();
-          c.strokeStyle = '#c9a24a';
-          c.lineWidth = 5;
-          c.beginPath();
-          c.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
-          c.stroke();
-          finishBirthday();
+          drawBackground(c); // re-draw border over photo
+          // clear bg fill but keep border — redo just border
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 6;
+          c.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+          drawConfetti(c); drawLitson(c); drawBalloons(c);
+          drawBirthdayText(310);
         };
         img.src = photoUrl;
-      } else { finishBirthday(); }
+        return;
+      }
+      drawBackground(c); drawConfetti(c); drawLitson(c); drawBalloons(c);
+      if (photoUrl && photoLayout === 'banner') {
+        // Banner: wide rectangular strip near top
+        const img = new Image();
+        img.onload = () => {
+          c.save();
+          const bh = 220;
+          const by = 110;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          ctx.clip();
+          c.drawImage(img, 60, by, SIZE - 120, bh);
+          c.restore();
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 4;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          c.stroke();
+          drawBirthdayText(410);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      if (photoUrl && photoLayout === 'classic') {
+        const img = new Image();
+        img.onload = () => {
+          drawCirclePhoto(c, img, SIZE / 2, 340, 128);
+          drawBirthdayText(540);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      drawBirthdayText(320);
 
     } else {
       // Anniversary
-      drawStars(ctx);
-      const hasPhoto = !!photoUrl;
-      const photoR = 110;
-      const photoY = 270;
-
-      function finishAnniversary() {
-        const topY = hasPhoto ? photoY + photoR + 50 : 240;
-        const yr = parseInt(years) || 1;
-        const suffix = ordSuffix(yr);
-
-        c.textAlign = 'center';
-        c.fillStyle = 'rgba(255,255,255,0.4)';
-        c.font = '500 26px Georgia, serif';
-        const cel = 'CELEBRATING'.split('');
-        let cx2 = SIZE / 2 - (cel.length * 14) / 2;
-        cel.forEach(l => { c.fillText(l, cx2, topY); cx2 += 14; });
-
-        c.fillStyle = '#ffffff';
-        c.font = `400 96px 'Anton', Impact, sans-serif`;
-        c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
-
-        const numStr = String(yr);
-        c.font = `400 280px 'Anton', Impact, sans-serif`;
-        const numW = c.measureText(numStr).width;
-        c.fillStyle = '#c8102e';
-        c.fillText(numStr, SIZE / 2 - suffix.length * 18, topY + 390);
-
-        c.font = `400 80px 'Anton', Impact, sans-serif`;
-        c.fillStyle = '#c9a24a';
-        c.textAlign = 'left';
-        c.fillText(suffix, SIZE / 2 - suffix.length * 18 + numW / 2 + 8, topY + 250);
-
-        c.textAlign = 'center';
-        c.fillStyle = 'rgba(255,255,255,0.4)';
-        c.font = '500 22px Georgia, serif';
-        const ytf = 'YEARS WITH THE FIRM'.split('');
-        let yx = SIZE / 2 - (ytf.length * 11) / 2;
-        ytf.forEach(l => { c.fillText(l, yx, topY + 450); yx += 11; });
-
-        c.textAlign = 'center';
-        c.fillStyle = '#c9a24a';
-        c.font = `bold 60px Georgia, serif`;
-        c.fillText(name || 'NAME', SIZE / 2, topY + 530);
-
-        c.fillStyle = 'rgba(255,255,255,0.6)';
-        c.font = `24px Georgia, serif`;
-        wrapText(c, greeting, SIZE / 2, 820, 38, topY + 595);
-      }
-
-      if (photoUrl) {
+      if (photoUrl && photoLayout === 'spotlight') {
         const img = new Image();
         img.onload = () => {
           c.save();
-          c.beginPath();
-          c.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
-          c.clip();
-          c.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
+          c.drawImage(img, 0, 0, SIZE, SIZE);
+          c.fillStyle = 'rgba(10,16,28,0.72)';
+          c.fillRect(0, 0, SIZE, SIZE);
           c.restore();
-          c.strokeStyle = '#c9a24a';
-          c.lineWidth = 5;
-          c.beginPath();
-          c.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
-          c.stroke();
-          finishAnniversary();
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 6;
+          c.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+          drawConfetti(c); drawLitson(c); drawStars(c);
+          drawAnniversaryText(240);
         };
         img.src = photoUrl;
-      } else { finishAnniversary(); }
+        return;
+      }
+      drawBackground(c); drawConfetti(c); drawLitson(c); drawStars(c);
+      if (photoUrl && photoLayout === 'banner') {
+        const img = new Image();
+        img.onload = () => {
+          c.save();
+          const bh = 200;
+          const by = 105;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          ctx.clip();
+          c.drawImage(img, 60, by, SIZE - 120, bh);
+          c.restore();
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 4;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          c.stroke();
+          drawAnniversaryText(380);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      if (photoUrl && photoLayout === 'classic') {
+        const img = new Image();
+        img.onload = () => {
+          drawCirclePhoto(c, img, SIZE / 2, 280, 110);
+          drawAnniversaryText(460);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      drawAnniversaryText(240);
     }
-  }, [name, eventType, photoUrl, years, greeting]);
+  }, [name, eventType, photoUrl, photoLayout, years, greeting]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     Promise.all([
-      document.fonts.load("400 110px 'Great Vibes'"),
-      document.fonts.load("400 160px 'Anton'"),
-      document.fonts.load("400 280px 'Anton'"),
-      document.fonts.load("400 96px 'Anton'"),
-      document.fonts.load("400 80px 'Anton'"),
+      document.fonts.load("italic 400 115px 'Great Vibes'"),
+      document.fonts.load("400 165px 'Anton'"),
+      document.fonts.load("400 260px 'Anton'"),
+      document.fonts.load("400 88px 'Anton'"),
+      document.fonts.load("400 76px 'Anton'"),
       document.fonts.ready,
     ]).then(() => draw());
   }, [draw]);
@@ -319,21 +380,47 @@ export default function DesignClient({ employees }: { employees: { name: string 
         {/* Left form */}
         <div className="w-[340px] flex-shrink-0 border-r border-border bg-white overflow-auto">
           <div className="p-6 space-y-6">
+            {/* Photo upload */}
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
                 1 · PHOTO <span className="font-normal normal-case">(optional)</span>
               </div>
               <input ref={photoRef} type="file" accept="image/*" className="hidden"
-                onChange={e => e.target.files?.[0] && setPhotoUrl(URL.createObjectURL(e.target.files[0]))} />
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) setPhotoUrl(URL.createObjectURL(f));
+                  e.target.value = '';
+                }} />
               <button onClick={() => photoRef.current?.click()}
                 className="w-full border border-dashed border-border-light rounded-ctrl py-5 text-center hover:border-ink transition-colors">
                 {photoUrl
-                  ? <><span className="block text-sm font-semibold text-[#2f7d5b]">✓ Photo uploaded</span><span className="text-xs text-text-muted">Click to change</span></>
+                  ? <><span className="block text-sm font-semibold text-[#2f7d5b]">↑ Photo loaded ✓ — replace</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>
                   : <><span className="block text-sm font-semibold text-text-secondary">↑ Upload photo</span><span className="text-xs text-text-muted">Shown as a round photo on the card</span></>}
               </button>
               {photoUrl && <button onClick={() => setPhotoUrl(null)} className="mt-2 text-xs text-text-muted hover:text-litred-alt">Remove photo</button>}
             </div>
 
+            {/* Photo layout */}
+            {photoUrl && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Photo Layout</div>
+                <div className="flex gap-2">
+                  {(['classic','spotlight','banner'] as PhotoLayout[]).map(l => (
+                    <button key={l} onClick={() => setPhotoLayout(l)}
+                      className={`flex-1 py-2 rounded-ctrl text-xs font-semibold transition-colors capitalize ${photoLayout === l ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-text-muted mt-1.5">
+                  {photoLayout === 'classic' && 'Circular photo centered above text'}
+                  {photoLayout === 'spotlight' && 'Full-card photo background with dark overlay'}
+                  {photoLayout === 'banner' && 'Wide photo banner strip near the top'}
+                </p>
+              </div>
+            )}
+
+            {/* Details */}
             <div>
               <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">2 · DETAILS</div>
               <div className="space-y-4">
@@ -364,6 +451,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
               </div>
             </div>
 
+            {/* Format + download */}
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-sm font-semibold text-text-primary">Format</span>
