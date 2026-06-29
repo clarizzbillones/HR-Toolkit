@@ -186,22 +186,22 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
     function drawBirthdayText(textStart: number) {
       c.textAlign = 'center';
-      // "Happy" in Great Vibes script — large and elegant
+      // "Happy" in Spectral italic — elegant serif, always renders
       c.fillStyle = '#ffffff';
-      c.font = `italic 400 140px 'Great Vibes', cursive`;
+      c.font = `italic 600 120px 'Spectral', Georgia, serif`;
       c.fillText('Happy', SIZE / 2, textStart);
-      // "BIRTHDAY" in Anton bold display
+      // "BIRTHDAY" in Anton
       c.fillStyle = '#ffffff';
-      c.font = `400 185px 'Anton', Impact, sans-serif`;
+      c.font = `400 182px 'Anton', Impact, sans-serif`;
       c.fillText('BIRTHDAY', SIZE / 2, textStart + 185);
       // Name in gold
       c.fillStyle = '#c9a24a';
       c.font = `600 58px Georgia, serif`;
-      c.fillText(name || 'NAME', SIZE / 2, textStart + 296);
+      c.fillText(name || 'NAME', SIZE / 2, textStart + 293);
       // Greeting
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `26px Georgia, serif`;
-      wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 360);
+      wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 358);
     }
 
     function drawAnniversaryText(topY: number) {
@@ -282,10 +282,10 @@ export default function DesignClient({ employees }: { employees: { name: string 
       if (photoUrl && photoLayout === 'classic') {
         const img = new Image();
         img.onload = () => {
-          // Photo center at 370, radius 160 → bottom edge at 534
-          drawCirclePhoto(c, img, SIZE / 2, 370, 160);
-          // Text starts 80px below photo bottom = 534 + 80 = 614
-          drawBirthdayText(614);
+          // Photo center at 350, radius 155 → bottom edge at 509
+          drawCirclePhoto(c, img, SIZE / 2, 350, 155);
+          // "Happy" starts 130px below photo bottom = 509 + 130 = 639
+          drawBirthdayText(639);
         };
         img.src = photoUrl;
         return;
@@ -348,8 +348,8 @@ export default function DesignClient({ employees }: { employees: { name: string 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     Promise.all([
-      document.fonts.load("italic 400 115px 'Great Vibes'"),
-      document.fonts.load("400 165px 'Anton'"),
+      document.fonts.load("italic 600 120px 'Spectral'"),
+      document.fonts.load("400 182px 'Anton'"),
       document.fonts.load("400 260px 'Anton'"),
       document.fonts.load("400 88px 'Anton'"),
       document.fonts.load("400 76px 'Anton'"),
