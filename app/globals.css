@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font-public-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input, select, textarea, button { font-family: inherit; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d8d1c4; border-radius: 6px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.animate-spin-slow { animation: spin 0.8s linear infinite; }
+.animate-fade-up   { animation: fadeUp 0.4s ease; }
+
+/* Status pills */
+.pill-pending  { background:#f7efe1; color:#b07d2a; }
+.pill-doing    { background:#e9f0f5; color:#3f6b8a; }
+.pill-done     { background:#eef5f1; color:#2f7d5b; }
+.pill-approved { background:#eef5f1; color:#2f7d5b; }
+.pill-hold     { background:#f7efe1; color:#b07d2a; }
+.pill-red      { background:#fdeaea; color:#b0412f; }
+
+/* Print styles for EOD/Offer exports */
+@media print {
+  @page { margin: 0.5cm; }
+  .no-print { display: none !important; }
+}
