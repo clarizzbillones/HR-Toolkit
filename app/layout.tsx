@@ -31,6 +31,10 @@ const greatVibes = Great_Vibes({
 export const metadata: Metadata = {
   title: 'Litson HR Toolkit',
   description: 'Litson, PLLC — HR Administration',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
