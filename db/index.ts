@@ -5,7 +5,12 @@ declare global {
   var _pgSql: ReturnType<typeof postgres> | undefined;
 }
 
-export const sql = globalThis._pgSql ?? postgres(process.env.DATABASE_URL!, {
+export const sql = globalThis._pgSql ?? postgres({
+  host: process.env.DB_HOST!,
+  port: Number(process.env.DB_PORT ?? 6543),
+  database: process.env.DB_NAME ?? 'postgres',
+  username: process.env.DB_USER!,
+  password: process.env.DB_PASSWORD!,
   ssl: 'require',
   max: 10,
   idle_timeout: 20,
