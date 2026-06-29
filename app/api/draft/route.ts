@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { generateDraft } from '@/lib/ai';
 import { sql } from '@/lib/db';
