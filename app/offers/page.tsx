@@ -1,16 +1,15 @@
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import OffersClient from './OffersClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function OffersPage() {
-  const db = getDb();
-  const tasks = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'").get() as any;
-  const employees = db.prepare('SELECT name FROM employees ORDER BY name').all() as any[];
+export default async function OffersPage() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const employees = await sql`SELECT name FROM employees ORDER BY name`;
   return (
-    <ModuleLayout pendingTaskCount={tasks.n}>
-      <OffersClient employees={employees.map((e: any) => e.name)} />
+    <ModuleLayout pendingTaskCount={n ?? 0}>
+      <OffersClient employees={(employees as any[]).map((e: any) => e.name)} />
     </ModuleLayout>
   );
 }

@@ -1,15 +1,14 @@
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import TripsClient from './TripsClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function TripsPage() {
-  const db = getDb();
-  const tasks = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'").get() as any;
-  const trips = db.prepare('SELECT * FROM trips ORDER BY created_at DESC').all();
+export default async function TripsPage() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const trips = await sql`SELECT * FROM trips ORDER BY created_at DESC`;
   return (
-    <ModuleLayout pendingTaskCount={tasks.n}>
+    <ModuleLayout pendingTaskCount={n ?? 0}>
       <TripsClient initialTrips={trips as any[]} />
     </ModuleLayout>
   );

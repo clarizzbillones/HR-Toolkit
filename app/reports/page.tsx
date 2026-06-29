@@ -1,14 +1,13 @@
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import ReportsClient from './ReportsClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function ReportsPage() {
-  const db = getDb();
-  const tasks = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'").get() as any;
+export default async function ReportsPage() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
   return (
-    <ModuleLayout pendingTaskCount={tasks.n}>
+    <ModuleLayout pendingTaskCount={n ?? 0}>
       <ReportsClient />
     </ModuleLayout>
   );

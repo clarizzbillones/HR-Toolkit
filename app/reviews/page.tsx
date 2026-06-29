@@ -1,15 +1,14 @@
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import ReviewsClient from './ReviewsClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function ReviewsPage() {
-  const db = getDb();
-  const tasks = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'").get() as any;
-  const employees = db.prepare('SELECT * FROM employees ORDER BY name').all();
+export default async function ReviewsPage() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const employees = await sql`SELECT * FROM employees ORDER BY name`;
   return (
-    <ModuleLayout pendingTaskCount={tasks.n}>
+    <ModuleLayout pendingTaskCount={n ?? 0}>
       <ReviewsClient initialEmployees={employees as any[]} />
     </ModuleLayout>
   );

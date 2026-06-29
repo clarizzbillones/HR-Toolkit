@@ -1,16 +1,15 @@
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import DesignClient from './DesignClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function DesignPage() {
-  const db = getDb();
-  const tasks = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'").get() as any;
-  const employees = db.prepare('SELECT name, birthday FROM employees ORDER BY name').all() as any[];
+export default async function DesignPage() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const employees = await sql`SELECT name, birthday FROM employees ORDER BY name`;
   return (
-    <ModuleLayout pendingTaskCount={tasks.n}>
-      <DesignClient employees={employees} />
+    <ModuleLayout pendingTaskCount={n ?? 0}>
+      <DesignClient employees={employees as any[]} />
     </ModuleLayout>
   );
 }

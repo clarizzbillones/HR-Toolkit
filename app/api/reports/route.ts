@@ -1,42 +1,40 @@
 import { NextResponse } from 'next/server';
-import { getDb, cuid } from '@/lib/db';
+import { sql, cuid } from '@/lib/db';
 
 export async function GET(req: Request) {
-  const db = getDb();
   const url = new URL(req.url);
   const tab = url.searchParams.get('tab') ?? 'monthly';
 
   if (tab === 'insurance') {
-    const invoices = db.prepare('SELECT * FROM insurance_invoices ORDER BY deadline ASC').all();
+    const invoices = await sql`SELECT * FROM insurance_invoices ORDER BY deadline ASC`;
     return NextResponse.json({ invoices });
   }
   if (tab === 'reimbursements') {
-    const rows = db.prepare('SELECT * FROM reimbursements ORDER BY created_at DESC').all();
+    const rows = await sql`SELECT * FROM reimbursements ORDER BY created_at DESC`;
     return NextResponse.json({ rows });
   }
   if (tab === 'cashout') {
     const month = url.searchParams.get('month');
     const category = url.searchParams.get('category');
-    let q = 'SELECT * FROM cashout_ledger WHERE 1=1';
-    const args: string[] = [];
-    if (month) { q += " AND strftime('%Y-%m', date) = ?"; args.push(month); }
-    if (category && category !== 'All') { q += ' AND category = ?'; args.push(category); }
-    q += ' ORDER BY date DESC';
-    const rows = db.prepare(q).all(...args);
+    const rows = await sql`
+      SELECT * FROM cashout_ledger
+      WHERE 1=1
+      ${month ? sql`AND TO_CHAR(date::date, 'YYYY-MM') = ${month}` : sql``}
+      ${category && category !== 'All' ? sql`AND category = ${category}` : sql``}
+      ORDER BY date DESC
+    `;
     return NextResponse.json({ rows });
   }
 
-  // monthly
-  const pto = db.prepare('SELECT * FROM pto_entries ORDER BY start_date ASC').all();
-  const trips = db.prepare('SELECT * FROM trips ORDER BY created_at DESC').all();
-  const contractors = db.prepare('SELECT * FROM contractor_payments ORDER BY due_date ASC').all();
-  const overtime = db.prepare('SELECT * FROM overtime ORDER BY created_at DESC').all();
-  const employees = db.prepare("SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC").all();
+  const pto = await sql`SELECT * FROM pto_entries ORDER BY start_date ASC`;
+  const trips = await sql`SELECT * FROM trips ORDER BY created_at DESC`;
+  const contractors = await sql`SELECT * FROM contractor_payments ORDER BY due_date ASC`;
+  const overtime = await sql`SELECT * FROM overtime ORDER BY created_at DESC`;
+  const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
   return NextResponse.json({ pto, trips, contractors, overtime, employees });
 }
 
 export async function POST(req: Request) {
-  const db = getDb();
   const url = new URL(req.url);
   const tab = url.searchParams.get('tab') ?? 'insurance';
   const body = await req.json();
@@ -44,25 +42,23 @@ export async function POST(req: Request) {
   if (tab === 'insurance') {
     const { carrier, invoiceType, amount, deadline, coveragePeriod, enrolledCount } = body;
     const id = cuid();
-    db.prepare('INSERT INTO insurance_invoices (id,carrier,invoice_type,amount,deadline,coverage_period,enrolled_count) VALUES (?,?,?,?,?,?,?)')
-      .run(id, carrier, invoiceType ?? null, amount, deadline, coveragePeriod ?? null, enrolledCount ?? null);
-    return NextResponse.json({ invoice: db.prepare('SELECT * FROM insurance_invoices WHERE id=?').get(id) }, { status: 201 });
+    await sql`INSERT INTO insurance_invoices (id,carrier,invoice_type,amount,deadline,coverage_period,enrolled_count) VALUES (${id},${carrier},${invoiceType ?? null},${amount},${deadline},${coveragePeriod ?? null},${enrolledCount ?? null})`;
+    const [invoice] = await sql`SELECT * FROM insurance_invoices WHERE id = ${id}`;
+    return NextResponse.json({ invoice }, { status: 201 });
   }
-
   if (tab === 'reimbursements') {
     const { employee, purpose, amount, payoutDate } = body;
     const id = cuid();
-    db.prepare('INSERT INTO reimbursements (id,employee,purpose,amount,payout_date) VALUES (?,?,?,?,?)')
-      .run(id, employee, purpose, amount, payoutDate ?? null);
-    return NextResponse.json({ row: db.prepare('SELECT * FROM reimbursements WHERE id=?').get(id) }, { status: 201 });
+    await sql`INSERT INTO reimbursements (id,employee,purpose,amount,payout_date) VALUES (${id},${employee},${purpose},${amount},${payoutDate ?? null})`;
+    const [row] = await sql`SELECT * FROM reimbursements WHERE id = ${id}`;
+    return NextResponse.json({ row }, { status: 201 });
   }
-
   if (tab === 'cashout') {
     const { date, payee, category, amount, status } = body;
     const id = cuid();
-    db.prepare('INSERT INTO cashout_ledger (id,date,payee,category,amount,status) VALUES (?,?,?,?,?,?)')
-      .run(id, date, payee, category, amount, status ?? 'Pending');
-    return NextResponse.json({ row: db.prepare('SELECT * FROM cashout_ledger WHERE id=?').get(id) }, { status: 201 });
+    await sql`INSERT INTO cashout_ledger (id,date,payee,category,amount,status) VALUES (${id},${date},${payee},${category},${amount},${status ?? 'Pending'})`;
+    const [row] = await sql`SELECT * FROM cashout_ledger WHERE id = ${id}`;
+    return NextResponse.json({ row }, { status: 201 });
   }
 
   return NextResponse.json({ error: 'Unknown tab' }, { status: 400 });

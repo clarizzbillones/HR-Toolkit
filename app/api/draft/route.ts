@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import { generateDraft } from '@/lib/ai';
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 
 export async function POST(req: Request) {
   const body = await req.json();
   const { kind, ...params } = body;
-
-  const db = getDb();
-  const settings = db.prepare('SELECT * FROM app_settings WHERE id="singleton"').get() as any;
+  const [settings] = await sql`SELECT * FROM app_settings WHERE id = 'singleton'`;
   const firm = settings?.firm_name ?? 'Litson';
   const cadence = settings?.payroll_cadence ?? 'Semi-monthly';
-
   try {
     if (kind === 'offer') {
       const text = await generateDraft('offer', { ...params, firm, cadence });
