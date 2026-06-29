@@ -20,6 +20,8 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ who: '', detail: '', cost: '', matter: '' });
   const [saving, setSaving] = useState(false);
+  const [dashUrl, setDashUrl] = useState('');
+  const [linkedUrl, setLinkedUrl] = useState('');
 
   async function submit() {
     if (!form.who || !form.detail) return;
@@ -45,12 +47,33 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
       <header className="flex items-center gap-4 px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Trip Help Desk</h1>
-          <p className="text-sm text-text-muted mt-0.5">{trips.filter(t => t.status === 'Pending').length} pending travel requests</p>
+          <p className="text-sm text-text-muted mt-0.5">Travel requests from attorneys and staff</p>
         </div>
         <button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
           ＋ New Request
         </button>
       </header>
+
+      {linkedUrl ? (
+        <div className="flex items-center gap-3 mx-8 mt-4 px-4 py-3 bg-[#eef5f1] border border-[#c3dfd3] rounded-card text-sm flex-shrink-0">
+          <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
+          <span className="text-[#2f7d5b] font-semibold">Live dashboard connected</span>
+          <span className="text-text-muted truncate">{linkedUrl}</span>
+          <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
+            className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
+          <button onClick={() => { setLinkedUrl(''); setDashUrl(''); showToast('Disconnected'); }}
+            className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 mx-8 mt-4 px-4 py-3 bg-white border border-border rounded-card text-sm flex-shrink-0">
+          <span className="text-text-secondary shrink-0">🔗 Link your live trip dashboard</span>
+          <input value={dashUrl} onChange={e => setDashUrl(e.target.value)}
+            placeholder="https://your-dashboard..."
+            className="flex-1 max-w-xs border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink" />
+          <button onClick={() => { if (dashUrl) { setLinkedUrl(dashUrl); showToast('Dashboard linked'); } }}
+            className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">Connect</button>
+        </div>
+      )}
 
       {showAdd && (
         <div className="px-8 py-5 border-b border-border bg-[#fbf7ee] flex-shrink-0">

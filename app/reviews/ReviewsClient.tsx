@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 
 interface Employee {
@@ -8,131 +7,176 @@ interface Employee {
   review_6mo_status: string | null; review_1yr_status: string | null; review_notes: string | null;
 }
 
-const REVIEW_STATUSES = ['Not Started', 'Scheduled', 'Complete'];
-
-function statusStyle(s: string) {
-  if (s === 'Complete') return 'bg-[#eef5f1] text-[#2f7d5b]';
-  if (s === 'Scheduled') return 'bg-[#e9f0f5] text-[#3f6b8a]';
-  return 'bg-[#f7efe1] text-[#b07d2a]';
+function reviewDate(hireDate: string, months: number): Date {
+  const d = new Date(hireDate);
+  d.setMonth(d.getMonth() + months);
+  return d;
 }
 
-function daysSince(dateStr: string) {
-  if (!dateStr) return null;
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+function daysUntil(date: Date): number {
+  return Math.floor((date.getTime() - Date.now()) / 86400000);
+}
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
   const { showToast } = useToast();
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'due6' | 'due1' | 'complete'>('all');
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [employees] = useState<Employee[]>(initialEmployees);
+  const [dashUrl, setDashUrl] = useState('');
+  const [linkedUrl, setLinkedUrl] = useState('');
 
-  async function updateReview(id: string, field: 'review_6mo_status' | 'review_1yr_status', value: string) {
-    setUpdating(id + field);
-    const res = await fetch(`/api/employees/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value }),
-    });
-    if (res.ok) {
-      const { employee } = await res.json();
-      setEmployees(prev => prev.map(e => e.id === id ? employee : e));
-      showToast('Review updated');
-    }
-    setUpdating(null);
-  }
+  const upcoming = employees
+    .flatMap(e => {
+      if (!e.hire_date) return [];
+      const out = [];
+      if (e.review_6mo_status !== 'Complete') {
+        const d = reviewDate(e.hire_date, 6);
+        out.push({ employee: e, type: '6-month review', date: d, days: daysUntil(d) });
+      }
+      if (e.review_1yr_status !== 'Complete') {
+        const d = reviewDate(e.hire_date, 12);
+        out.push({ employee: e, type: '1-year review', date: d, days: daysUntil(d) });
+      }
+      return out;
+    })
+    .sort((a, b) => a.days - b.days);
 
-  const filtered = employees.filter(e => {
-    if (filter === 'due6') { const d = daysSince(e.hire_date ?? ''); return d !== null && d >= 150 && e.review_6mo_status !== 'Complete'; }
-    if (filter === 'due1') { const d = daysSince(e.hire_date ?? ''); return d !== null && d >= 330 && e.review_1yr_status !== 'Complete'; }
-    if (filter === 'complete') return e.review_6mo_status === 'Complete' && e.review_1yr_status === 'Complete';
-    return true;
-  });
+  const upNext = upcoming[0];
+  const thenDue = upcoming.slice(1, 4);
 
-  const complete6 = employees.filter(e => e.review_6mo_status === 'Complete').length;
-  const complete1 = employees.filter(e => e.review_1yr_status === 'Complete').length;
-  const due6 = employees.filter(e => { const d = daysSince(e.hire_date ?? ''); return d !== null && d >= 150 && e.review_6mo_status !== 'Complete'; }).length;
-  const due1 = employees.filter(e => { const d = daysSince(e.hire_date ?? ''); return d !== null && d >= 330 && e.review_1yr_status !== 'Complete'; }).length;
+  const allStatuses = employees.flatMap(e => [e.review_6mo_status ?? 'Not Started', e.review_1yr_status ?? 'Not Started']);
+  const total = allStatuses.length;
+  const counts = {
+    Complete: allStatuses.filter(s => s === 'Complete').length,
+    'In progress': allStatuses.filter(s => s === 'In Progress').length,
+    Scheduled: allStatuses.filter(s => s === 'Scheduled').length,
+    'Not started': allStatuses.filter(s => s === 'Not Started').length,
+  };
+
+  const depts = [...new Set(employees.map(e => e.dept))].filter(Boolean);
+  const byDept = depts.map(dept => {
+    const group = employees.filter(e => e.dept === dept);
+    const done = group.flatMap(e => [e.review_6mo_status, e.review_1yr_status]).filter(s => s === 'Complete').length;
+    return { dept, pct: Math.round((done / (group.length * 2)) * 100) };
+  }).sort((a, b) => b.pct - a.pct);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
-        <p className="text-sm text-text-muted mt-0.5">{complete6} / {employees.length} 6-month · {complete1} / {employees.length} 1-year complete</p>
+        <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees</p>
       </header>
 
-      <div className="grid grid-cols-4 gap-4 px-8 py-5 flex-shrink-0">
-        {[
-          { label: 'Total Staff', value: employees.length, color: undefined },
-          { label: '6-Mo Complete', value: complete6, color: '#2f7d5b' },
-          { label: '1-Yr Complete', value: complete1, color: '#3f6b8a' },
-          { label: 'Past Due', value: due6 + due1, color: '#b0412f' },
-        ].map(s => (
-          <div key={s.label} className="bg-white border border-border rounded-card px-5 py-4">
-            <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-1">{s.label}</div>
-            <div className="text-3xl font-spectral font-semibold" style={{ color: s.color ?? '#1b2230' }}>{s.value}</div>
+      <div className="px-8 py-3 bg-white border-b border-border flex-shrink-0 flex items-center gap-3 text-sm">
+        <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; meeting docs directly.</span>
+        <input
+          value={dashUrl}
+          onChange={e => setDashUrl(e.target.value)}
+          placeholder="https://your-live-dashboard..."
+          className="flex-1 max-w-xs border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
+        />
+        <button
+          onClick={() => { if (dashUrl) { setLinkedUrl(dashUrl); showToast('Dashboard linked'); } }}
+          className="bg-ink text-white text-sm font-semibold px-4 py-1.5 rounded-ctrl hover:bg-ink-dark transition-colors"
+        >Link</button>
+      </div>
+
+      <div className="flex-1 overflow-auto px-8 py-6">
+        <div className="grid grid-cols-[1fr_288px] gap-6 items-start">
+          <div className="flex flex-col gap-4">
+            {upNext ? (
+              <div className="bg-ink rounded-card p-6 text-white">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="flex gap-6 items-start">
+                    <div className="text-center min-w-[52px]">
+                      <div className="text-5xl font-spectral font-semibold text-gold leading-none">{Math.abs(upNext.days)}</div>
+                      <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">DAYS</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">UP NEXT</div>
+                      <div className="font-spectral text-[19px] font-semibold leading-tight">
+                        {upNext.employee.name} — {upNext.type}
+                      </div>
+                      <div className="text-sm text-white/50 mt-1">
+                        {formatDate(upNext.date)} · reviewer M. Ellison
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => showToast('Reminder sent!')}
+                    className="shrink-0 bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors"
+                  >Send reminder</button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-ink rounded-card p-6 text-white/50 text-sm">All reviews are up to date.</div>
+            )}
+
+            {thenDue.length > 0 && (
+              <div className="bg-white border border-border rounded-card p-5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">THEN DUE</div>
+                <div className="flex flex-col gap-2.5">
+                  {thenDue.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-text-primary">{r.employee.name}</span>
+                      <span className="text-text-muted">in {Math.abs(r.days)}d</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {linkedUrl && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-[#eef5f1] border border-[#c3dfd3] rounded-card text-sm">
+                <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
+                <span className="text-[#2f7d5b] font-semibold">Live dashboard connected</span>
+                <span className="text-text-muted truncate">{linkedUrl}</span>
+                <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
+                  className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
+                <button onClick={() => { setLinkedUrl(''); setDashUrl(''); showToast('Disconnected'); }}
+                  className="shrink-0 text-xs font-semibold text-text-muted hover:text-litred-alt border border-border-light px-3 py-1 rounded-ctrl">Disconnect</button>
+              </div>
+            )}
           </div>
-        ))}
-      </div>
 
-      <div className="flex gap-1 px-8 pb-3 flex-shrink-0">
-        {([['all','All'],['due6','6-Mo Due'],['due1','1-Yr Due'],['complete','Complete']] as const).map(([f, l]) => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${filter === f ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
-            {l}
-          </button>
-        ))}
-      </div>
+          <div className="flex flex-col gap-4">
+            <div className="bg-white border border-border rounded-card p-5">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">
+                Status breakdown · {total} reviews
+              </div>
+              {(Object.entries(counts) as [string, number][]).map(([label, count]) => (
+                <div key={label} className="mb-3 last:mb-0">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-text-secondary">{label}</span>
+                    <span className="font-semibold text-text-primary">{count}</span>
+                  </div>
+                  <div className="h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{
+                      width: `${total ? (count / total) * 100 : 0}%`,
+                      background: label === 'Complete' ? '#2f7d5b' : label === 'In progress' ? '#c9a24a' : label === 'Scheduled' ? '#3f6b8a' : '#ddd5c6',
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
 
-      <div className="flex-1 overflow-auto px-8 pb-6">
-        <div className="bg-white border border-border rounded-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#f1ece3] border-b border-border">
-              <tr>{['Name','Role','Dept','Hire Date','Tenure','6-Mo Review','1-Yr Review'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody>
-              {filtered.map(e => {
-                const days = daysSince(e.hire_date ?? '');
-                const tenure = days !== null ? (days >= 365 ? `${Math.floor(days / 365)}y ${Math.floor((days % 365) / 30)}m` : `${Math.floor(days / 30)}mo`) : '—';
-                return (
-                  <>
-                    <tr key={e.id} onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                      className="border-t border-[#f1ece3] hover:bg-canvas transition-colors cursor-pointer">
-                      <td className="px-4 py-3 font-medium text-text-primary">{e.name}</td>
-                      <td className="px-4 py-3 text-text-secondary">{e.role}</td>
-                      <td className="px-4 py-3 text-text-secondary">{e.dept}</td>
-                      <td className="px-4 py-3 text-text-muted">{e.hire_date || '—'}</td>
-                      <td className="px-4 py-3 text-text-muted">{tenure}</td>
-                      <td className="px-4 py-3">
-                        <select value={e.review_6mo_status ?? 'Not Started'} disabled={updating === e.id + 'review_6mo_status'}
-                          onClick={ev => ev.stopPropagation()}
-                          onChange={ev => updateReview(e.id, 'review_6mo_status', ev.target.value)}
-                          className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full border-0 focus:outline-none cursor-pointer', statusStyle(e.review_6mo_status ?? 'Not Started'))}>
-                          {REVIEW_STATUSES.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <select value={e.review_1yr_status ?? 'Not Started'} disabled={updating === e.id + 'review_1yr_status'}
-                          onClick={ev => ev.stopPropagation()}
-                          onChange={ev => updateReview(e.id, 'review_1yr_status', ev.target.value)}
-                          className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full border-0 focus:outline-none cursor-pointer', statusStyle(e.review_1yr_status ?? 'Not Started'))}>
-                          {REVIEW_STATUSES.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                    {expanded === e.id && (
-                      <tr key={e.id + '-notes'} className="bg-[#fbfaf7]">
-                        <td colSpan={7} className="px-6 py-3 text-sm text-text-secondary">{e.review_notes ?? 'No notes yet.'}</td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-              {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-text-muted">No employees match this filter</td></tr>}
-            </tbody>
-          </table>
+            <div className="bg-white border border-border rounded-card p-5">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">Completion by group</div>
+              {byDept.map(({ dept, pct }) => (
+                <div key={dept} className="mb-3 last:mb-0">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-text-secondary">{dept}</span>
+                    <span className="font-semibold text-text-primary">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-[#2f7d5b] transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
