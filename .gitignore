@@ -5,3 +5,4 @@ db/seed.js
 *.env*.local
 db/data.db-shm
 db/data.db-wal
+.env
