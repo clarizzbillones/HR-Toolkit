@@ -156,6 +156,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const c = ctx;
     ctx.clearRect(0, 0, SIZE, SIZE);
     drawBackground(ctx);
     drawLitson(ctx);
@@ -168,39 +169,35 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
       function finishBirthday() {
         const textStart = hasPhoto ? photoY + photoR + 60 : 320;
-        // "Happy" script
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `italic 110px 'Great Vibes', cursive`;
-        ctx.fillText('Happy', SIZE / 2, textStart);
-        // "BIRTHDAY" Anton
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold 160px 'Anton', Impact, sans-serif`;
-        ctx.fillText('BIRTHDAY', SIZE / 2, textStart + 155);
-        // Name
-        ctx.fillStyle = '#c9a24a';
-        ctx.font = `bold 58px Georgia, serif`;
-        ctx.fillText(name || 'NAME', SIZE / 2, textStart + 260);
-        // Greeting
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.font = `26px Georgia, serif`;
-        wrapText(ctx, greeting, SIZE / 2, 800, 40, textStart + 325);
+        c.textAlign = 'center';
+        c.fillStyle = '#ffffff';
+        c.font = `italic 110px 'Great Vibes', cursive`;
+        c.fillText('Happy', SIZE / 2, textStart);
+        c.fillStyle = '#ffffff';
+        c.font = `bold 160px 'Anton', Impact, sans-serif`;
+        c.fillText('BIRTHDAY', SIZE / 2, textStart + 155);
+        c.fillStyle = '#c9a24a';
+        c.font = `bold 58px Georgia, serif`;
+        c.fillText(name || 'NAME', SIZE / 2, textStart + 260);
+        c.fillStyle = 'rgba(255,255,255,0.6)';
+        c.font = `26px Georgia, serif`;
+        wrapText(c, greeting, SIZE / 2, 800, 40, textStart + 325);
       }
 
       if (photoUrl) {
         const img = new Image();
         img.onload = () => {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
-          ctx.restore();
-          ctx.strokeStyle = '#c9a24a';
-          ctx.lineWidth = 5;
-          ctx.beginPath();
-          ctx.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
-          ctx.stroke();
+          c.save();
+          c.beginPath();
+          c.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
+          c.clip();
+          c.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
+          c.restore();
+          c.strokeStyle = '#c9a24a';
+          c.lineWidth = 5;
+          c.beginPath();
+          c.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
+          c.stroke();
           finishBirthday();
         };
         img.src = photoUrl;
@@ -218,67 +215,59 @@ export default function DesignClient({ employees }: { employees: { name: string 
         const yr = parseInt(years) || 1;
         const suffix = ordSuffix(yr);
 
-        // CELEBRATING
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '500 26px Georgia, serif';
-        // spaced manually
+        c.textAlign = 'center';
+        c.fillStyle = 'rgba(255,255,255,0.4)';
+        c.font = '500 26px Georgia, serif';
         const cel = 'CELEBRATING'.split('');
         let cx2 = SIZE / 2 - (cel.length * 14) / 2;
-        cel.forEach(l => { ctx.fillText(l, cx2, topY); cx2 += 14; });
+        cel.forEach(l => { c.fillText(l, cx2, topY); cx2 += 14; });
 
-        // WORK ANNIVERSARY
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold 96px 'Anton', Impact, sans-serif`;
-        ctx.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
+        c.fillStyle = '#ffffff';
+        c.font = `bold 96px 'Anton', Impact, sans-serif`;
+        c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
 
-        // Year number (huge red)
         const numStr = String(yr);
-        ctx.font = `bold 280px 'Anton', Impact, sans-serif`;
-        const numW = ctx.measureText(numStr).width;
-        ctx.fillStyle = '#c8102e';
-        ctx.fillText(numStr, SIZE / 2 - suffix.length * 18, topY + 390);
+        c.font = `bold 280px 'Anton', Impact, sans-serif`;
+        const numW = c.measureText(numStr).width;
+        c.fillStyle = '#c8102e';
+        c.fillText(numStr, SIZE / 2 - suffix.length * 18, topY + 390);
 
-        // Ordinal suffix (smaller, top-right of number)
-        ctx.font = `bold 80px 'Anton', Impact, sans-serif`;
-        ctx.fillStyle = '#c9a24a';
-        ctx.textAlign = 'left';
-        ctx.fillText(suffix, SIZE / 2 - suffix.length * 18 + numW / 2 + 8, topY + 250);
+        c.font = `bold 80px 'Anton', Impact, sans-serif`;
+        c.fillStyle = '#c9a24a';
+        c.textAlign = 'left';
+        c.fillText(suffix, SIZE / 2 - suffix.length * 18 + numW / 2 + 8, topY + 250);
 
-        // YEARS WITH THE FIRM
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '500 22px Georgia, serif';
+        c.textAlign = 'center';
+        c.fillStyle = 'rgba(255,255,255,0.4)';
+        c.font = '500 22px Georgia, serif';
         const ytf = 'YEARS WITH THE FIRM'.split('');
         let yx = SIZE / 2 - (ytf.length * 11) / 2;
-        ytf.forEach(l => { ctx.fillText(l, yx, topY + 450); yx += 11; });
+        ytf.forEach(l => { c.fillText(l, yx, topY + 450); yx += 11; });
 
-        // Name
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#c9a24a';
-        ctx.font = `bold 60px Georgia, serif`;
-        ctx.fillText(name || 'NAME', SIZE / 2, topY + 530);
+        c.textAlign = 'center';
+        c.fillStyle = '#c9a24a';
+        c.font = `bold 60px Georgia, serif`;
+        c.fillText(name || 'NAME', SIZE / 2, topY + 530);
 
-        // Greeting
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.font = `24px Georgia, serif`;
-        wrapText(ctx, greeting, SIZE / 2, 820, 38, topY + 595);
+        c.fillStyle = 'rgba(255,255,255,0.6)';
+        c.font = `24px Georgia, serif`;
+        wrapText(c, greeting, SIZE / 2, 820, 38, topY + 595);
       }
 
       if (photoUrl) {
         const img = new Image();
         img.onload = () => {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
-          ctx.restore();
-          ctx.strokeStyle = '#c9a24a';
-          ctx.lineWidth = 5;
-          ctx.beginPath();
-          ctx.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
-          ctx.stroke();
+          c.save();
+          c.beginPath();
+          c.arc(SIZE / 2, photoY, photoR, 0, Math.PI * 2);
+          c.clip();
+          c.drawImage(img, SIZE / 2 - photoR, photoY - photoR, photoR * 2, photoR * 2);
+          c.restore();
+          c.strokeStyle = '#c9a24a';
+          c.lineWidth = 5;
+          c.beginPath();
+          c.arc(SIZE / 2, photoY, photoR + 4, 0, Math.PI * 2);
+          c.stroke();
           finishAnniversary();
         };
         img.src = photoUrl;
