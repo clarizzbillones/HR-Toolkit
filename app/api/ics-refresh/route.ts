@@ -1,7 +1,6 @@
-export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const runtime = 'edge';
+export const maxDuration = 30;
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
 
 function parseDate(val: string): string {
   const d = val.replace(/[TZ]/g, '').slice(0, 8);
@@ -43,21 +42,27 @@ function parseIcs(text: string) {
   return events;
 }
 
-// Called by Vercel Cron and also by the "Refresh" button in the UI
 export async function GET(req: Request) {
-  // Verify cron secret to prevent public abuse
-  const auth = req.headers.get('authorization');
-  const secret = process.env.CRON_SECRET;
-  if (secret && auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const { searchParams, origin } = new URL(req.url);
+  const urlParam = searchParams.get('url');
 
-  // Get the saved calendar URL
-  const rows = await sql`SELECT calendar_url FROM app_settings WHERE id = 'singleton'`;
-  const calUrl = (rows as any[])[0]?.calendar_url;
+  // Get the calendar URL — either passed as param or read from connections API
+  let calUrl = urlParam ?? '';
+  if (!calUrl) {
+    try {
+      const conn = await fetch(`${origin}/api/connections`, { signal: AbortSignal.timeout(5000) });
+      const data = await conn.json();
+      calUrl = data.calendar_url ?? '';
+    } catch {
+      return NextResponse.json({ error: 'Could not read calendar URL' }, { status: 500 });
+    }
+  }
   if (!calUrl) return NextResponse.json({ skipped: 'no calendar_url configured' });
 
   const icsUrl = calUrl.replace(/^webcal:/, 'https:');
+  const allowed = /^https?:\/\/(outlook\.|calendar\.|webcal\.|[a-z0-9-]+\.office\.com|[a-z0-9-]+\.office365\.com|outlook\.live\.com|outlook\.cloud\.microsoft)/i;
+  if (!allowed.test(icsUrl)) return NextResponse.json({ error: 'URL not allowed' }, { status: 400 });
+
   try {
     const res = await fetch(icsUrl, {
       headers: {
@@ -65,16 +70,23 @@ export async function GET(req: Request) {
         'Accept': 'text/calendar, text/html, */*',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
       },
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(25000),
       redirect: 'follow',
     });
     if (!res.ok) return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 502 });
     const text = await res.text();
     if (!text.includes('BEGIN:VCALENDAR')) return NextResponse.json({ error: 'Not a valid ICS feed' }, { status: 422 });
     const events = parseIcs(text);
-    await sql`UPDATE app_settings SET calendar_events = ${JSON.stringify(events)} WHERE id = 'singleton'`;
+
+    // Save back to DB via connections PATCH (Node.js route, fast DB write only)
+    await fetch(`${origin}/api/connections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendar_url: calUrl, calendar_events: events }),
+      signal: AbortSignal.timeout(5000),
+    });
+
     return NextResponse.json({ ok: true, events: events.length, refreshed: new Date().toISOString() });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? 'Fetch failed' }, { status: 502 });

@@ -1,5 +1,5 @@
-export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const runtime = 'edge';
+export const maxDuration = 30;
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
       },
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(25000),
       redirect: 'follow',
     });
     if (!res.ok) return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 502 });

@@ -96,7 +96,7 @@ function mapPtoRows(rows: Record<string, string>[]): Omit<PtoEntry, 'id' | 'stat
       end_date: endDate ? endDate.toISOString().slice(0, 10) : startDate ? startDate.toISOString().slice(0, 10) : '',
       days, type: r[typeCol] ?? 'Vacation', notes: '',
     };
-  }).filter(r => r.employee && r.start_date && r.days >= 1);
+  }).filter(r => r.employee && r.start_date);
 }
 
 function detectTag(title: string): string {
@@ -193,9 +193,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       // Last resort: trigger server-side refresh (saves directly to DB)
       setCalStatus('Trying alternate fetch…');
       try {
-        // Save URL first so refresh endpoint can use it
-        await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim() }) });
-        const res = await fetch('/api/ics-refresh', { signal: AbortSignal.timeout(62000) });
+        const res = await fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(32000) });
         const data = await res.json();
         if (res.ok && data.ok) {
           const conn = await fetch('/api/connections').then(r => r.json());
@@ -240,7 +238,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setCalLoading(true);
     setCalStatus('Refreshing from Office 365…');
     try {
-      const res = await fetch('/api/ics-refresh', { signal: AbortSignal.timeout(62000) });
+      const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
+      const res = await fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(32000) });
       const data = await res.json();
       if (!res.ok) {
         setCalStatus('');
