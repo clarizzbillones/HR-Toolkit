@@ -524,10 +524,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
         {/* Stats */}
         {merged.length > 0 && (
-          <div className="grid grid-cols-3 gap-3 px-8 pb-4">
+          <div className="grid grid-cols-2 gap-3 px-8 pb-4">
             <Stat label="Out Today" value={outToday.length} color="#b0412f" sub={`employees on leave as of ${fmtShort(today)}`} />
             <Stat label="Employees with Leave" value={totalInPeriod} color="#3f6b8a" sub={`unique people · ${activePeriodLabel}`} />
-            <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub={`in calendar, no HR report entry · ${activePeriodLabel}`} />
           </div>
         )}
 
@@ -554,31 +553,40 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                 })}
               </div>
             </div>
-            {/* Summary table */}
+            {/* Summary by leave category */}
             <div className="bg-white border border-border rounded-card overflow-hidden">
               <div className="p-4 pb-2">
-                <div className="text-xs font-bold uppercase tracking-wider text-text-muted">Summary</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted">Leaves by Category</div>
                 <div className="text-[11px] text-text-faint mt-0.5">{activePeriodLabel} · working days only</div>
               </div>
               <table className="w-full text-xs">
                 <thead className="bg-[#f1ece3]">
                   <tr>
-                    <th className="text-left px-4 py-2 font-bold text-text-secondary">Employee</th>
+                    <th className="text-left px-4 py-2 font-bold text-text-secondary">Leave Type</th>
                     <th className="text-right px-4 py-2 font-bold text-text-secondary">Entries</th>
                     <th className="text-right px-4 py-2 font-bold text-text-secondary">Days</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {chartData.map(([name, days]) => {
-                    const count = filtered.filter(r => r.employee === name).length;
-                    return (
-                      <tr key={name} className="border-t border-[#f1ece3]">
-                        <td className="px-4 py-2 text-text-primary font-medium">{name}</td>
-                        <td className="px-4 py-2 text-text-secondary text-right">{count}</td>
-                        <td className="px-4 py-2 font-semibold text-text-primary text-right">{days}</td>
-                      </tr>
-                    );
-                  })}
+                  {(() => {
+                    const byType: Record<string, { count: number; days: number }> = {};
+                    filtered.forEach(r => {
+                      if (!byType[r.type]) byType[r.type] = { count: 0, days: 0 };
+                      byType[r.type].count++;
+                      byType[r.type].days += r.days;
+                    });
+                    return Object.entries(byType)
+                      .sort((a, b) => b[1].days - a[1].days)
+                      .map(([type, { count, days }]) => (
+                        <tr key={type} className="border-t border-[#f1ece3]">
+                          <td className="px-4 py-2">
+                            <span className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full', typeChip(type))}>{type}</span>
+                          </td>
+                          <td className="px-4 py-2 text-text-secondary text-right">{count}</td>
+                          <td className="px-4 py-2 font-semibold text-text-primary text-right">{days}</td>
+                        </tr>
+                      ));
+                  })()}
                   <tr className="border-t-2 border-border bg-[#f1ece3]">
                     <td className="px-4 py-2 font-bold text-text-primary">Total</td>
                     <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.length}</td>
