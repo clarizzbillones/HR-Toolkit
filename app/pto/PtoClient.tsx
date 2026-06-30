@@ -372,10 +372,17 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     return true;
   }), [merged, filterNames, filterTypes, filterStatuses, filterSources, filterFrom, filterTo, filterCalEvent]);
 
+  // "Out today" always uses ALL merged data (not filtered) — who is actually out right now
   const outToday = merged.filter(r => r.start <= today && r.end >= today);
   const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
   const reportOnlyCount = filtered.filter(r => r.source === 'report').length;
   const bothCount = filtered.filter(r => r.source === 'both').length;
+
+  const activePeriodLabel = filterFrom && filterTo
+    ? `${fmtShort(filterFrom)} – ${fmtShort(filterTo)}`
+    : filterFrom ? `From ${fmtShort(filterFrom)}`
+    : filterTo ? `Up to ${fmtShort(filterTo)}`
+    : 'All dates';
   const names = [...new Set(merged.map(r => r.employee))].sort();
   const types = [...new Set(merged.map(r => r.type))].sort();
   const statuses = [...new Set(merged.map(r => r.status))].sort();
@@ -517,10 +524,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         {/* Stats */}
         {merged.length > 0 && (
           <div className="grid grid-cols-4 gap-3 px-8 pb-4">
-            <Stat label="Out Today" value={outToday.length} color="#b0412f" sub="employees currently on leave" />
-            <Stat label="Confirmed in Both" value={bothCount} color="#2f7d5b" sub="matched in report & calendar" />
-            <Stat label="Report Only" value={reportOnlyCount} color="#3f6b8a" sub="in HR report, not in calendar" />
-            <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub="in calendar, no HR report entry" />
+            <Stat label="Out Today" value={outToday.length} color="#b0412f" sub={`as of ${fmtShort(today)} · all time`} />
+            <Stat label="Matched in Both" value={bothCount} color="#2f7d5b" sub={`same entry found in HR report AND calendar · ${activePeriodLabel}`} />
+            <Stat label="Report Only" value={reportOnlyCount} color="#3f6b8a" sub={`in HR report, no calendar match · ${activePeriodLabel}`} />
+            <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub={`in calendar only, no HR report entry · ${activePeriodLabel}`} />
           </div>
         )}
 
@@ -530,7 +537,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {/* Bar chart */}
             <div className="bg-white border border-border rounded-card p-5">
               <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-1">Working Days Off by Employee</div>
-              <div className="text-[11px] text-text-faint mb-4">Weekends excluded · based on current filters</div>
+              <div className="text-[11px] text-text-faint mb-4">Weekends excluded · {activePeriodLabel}</div>
               <div className="space-y-2">
                 {chartData.map(([name, days]) => {
                   const max = chartData[0][1];
@@ -549,7 +556,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             </div>
             {/* Summary table */}
             <div className="bg-white border border-border rounded-card overflow-hidden">
-              <div className="text-xs font-bold uppercase tracking-wider text-text-muted p-4 pb-2">Summary</div>
+              <div className="p-4 pb-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted">Summary</div>
+                <div className="text-[11px] text-text-faint mt-0.5">{activePeriodLabel} · working days only</div>
+              </div>
               <table className="w-full text-xs">
                 <thead className="bg-[#f1ece3]">
                   <tr>
