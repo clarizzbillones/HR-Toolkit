@@ -10,8 +10,8 @@ async function getStats() {
   const [{ n: doneCount }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status = 'done'`;
   const [{ n: dueToday }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE due_tag = 'Today' AND status != 'done'`;
   // DB report entries: exclude WFH / Personal leave types
-  const ptoDbRows = await sql<{ employee: string; type: string }>`
-    SELECT employee, type FROM pto_entries
+  const ptoDbRows = await sql`
+    SELECT employee FROM pto_entries
     WHERE start_date <= ${today} AND end_date >= ${today}
       AND status = 'Approved'
       AND type NOT ILIKE '%wfh%'
@@ -20,7 +20,8 @@ async function getStats() {
   `;
 
   // Calendar events stored in app_settings
-  const [settingsRow] = await sql<{ calendar_events: string | null }>`SELECT calendar_events FROM app_settings WHERE id = 'singleton'`;
+  const settingsRows = await sql`SELECT calendar_events FROM app_settings WHERE id = 'singleton'`;
+  const settingsRow = settingsRows[0];
   let calEventsRaw: { name: string; tag: string; start: string; end: string; title: string }[] = [];
   try { calEventsRaw = settingsRow?.calendar_events ? JSON.parse(settingsRow.calendar_events) : []; } catch { calEventsRaw = []; }
 
