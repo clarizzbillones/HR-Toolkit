@@ -47,7 +47,10 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, account }) {
-      if (user) token.role = (user as any).role ?? 'hr';
+      if (user) {
+        token.role = (user as any).role ?? 'hr';
+        if (user.name) token.name = user.name;
+      }
       if (account?.access_token) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -60,6 +63,7 @@ export const authOptions: NextAuthOptions = {
       (session as any).accessToken = token.accessToken;
       (session as any).provider = token.provider;
       (session.user as any).role = token.role ?? 'hr';
+      if (token.name) session.user!.name = token.name as string;
       return session;
     },
   },
