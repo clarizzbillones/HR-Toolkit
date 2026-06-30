@@ -1,7 +1,6 @@
 export const runtime = 'edge';
 export const maxDuration = 30;
 import { NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
 
 function parseDate(val: string): string {
   const d = val.replace(/[TZ]/g, '').slice(0, 8);
@@ -43,29 +42,8 @@ function parseIcs(text: string) {
   return events;
 }
 
-async function fetchAndSave(icsUrl: string, origin: string) {
-  const res = await fetch(icsUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept': 'text/calendar, text/html, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache',
-    },
-    redirect: 'follow',
-  });
-  if (!res.ok) return;
-  const text = await res.text();
-  if (!text.includes('BEGIN:VCALENDAR')) return;
-  const events = parseIcs(text);
-  await fetch(`${origin}/api/connections`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ calendar_events: events }),
-  });
-}
-
 export async function GET(req: Request) {
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
   const urlParam = searchParams.get('url') ?? '';
   if (!urlParam) return NextResponse.json({ error: 'Missing url' }, { status: 400 });
 
@@ -73,7 +51,23 @@ export async function GET(req: Request) {
   const icsUrl = urlParam.replace(/^webcal:/, 'https:');
   if (!allowed.test(icsUrl)) return NextResponse.json({ error: 'URL not allowed' }, { status: 400 });
 
-  // Respond immediately — waitUntil keeps the fetch running after response is sent
-  waitUntil(fetchAndSave(icsUrl, origin));
-  return NextResponse.json({ started: true });
+  try {
+    const res = await fetch(icsUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/calendar, text/html, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
+      signal: AbortSignal.timeout(25000),
+      redirect: 'follow',
+    });
+    if (!res.ok) return NextResponse.json({ error: `Upstream ${res.status}` }, { status: 502 });
+    const text = await res.text();
+    if (!text.includes('BEGIN:VCALENDAR')) return NextResponse.json({ error: 'Not a calendar' }, { status: 422 });
+    const events = parseIcs(text);
+    return NextResponse.json({ events });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message ?? 'Failed' }, { status: 502 });
+  }
 }

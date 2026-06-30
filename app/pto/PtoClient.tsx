@@ -171,26 +171,21 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }
 
   async function fetchAndSaveIcs(icsUrl: string): Promise<boolean> {
-    // Clear stale events so the poll below can detect genuinely fresh data
-    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) });
-
-    // Fire background Edge job (responds instantly, fetches ICS in waitUntil)
     setCalStatus('Syncing calendar… (up to 30s)');
-    fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`).catch(() => {});
-
-    // Poll DB until events appear (Edge job finishes within ~15s)
-    for (let i = 0; i < 15; i++) {
-      await new Promise(r => setTimeout(r, 3000));
-      try {
-        const conn = await fetch('/api/connections').then(r => r.json());
-        if (conn.calendar_events?.length) {
-          setCalEvents(conn.calendar_events);
+    try {
+      const r = await fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`, {
+        signal: AbortSignal.timeout(28000),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.events?.length) {
+          await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: icsUrl, calendar_events: d.events }) });
+          setCalEvents(d.events);
           setCalConnected(true);
           return true;
         }
-      } catch { /* keep polling */ }
-    }
-
+      }
+    } catch { /* fall through */ }
     return false;
   }
 
