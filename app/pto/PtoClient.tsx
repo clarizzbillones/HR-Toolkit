@@ -246,9 +246,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     const rows: MergedRow[] = [];
     const usedCalIds = new Set<string>();
 
-    // Start with report entries
+    // Start with report entries — skip half-day / partial entries (< 1 day)
     entries.forEach(e => {
-      // Find matching calendar event (same person, overlapping dates)
+      const days = e.days || workingDays(e.start_date, e.end_date);
+      if (days < 1) return; // skip partial / half-day leave
+
+      // Find matching calendar event (same person, overlapping dates) — mark as duplicate
       const calMatch = calEvents.find(c =>
         normName(c.name) === normName(e.employee) && datesOverlap(e.start_date, e.end_date, c.start, c.end)
       );
@@ -258,7 +261,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         employee: e.employee,
         start: e.start_date,
         end: e.end_date,
-        days: e.days || workingDays(e.start_date, e.end_date),
+        days,
         type: e.type,
         status: e.status,
         source: calMatch ? 'both' : 'report',
@@ -270,12 +273,14 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     calEvents.forEach(c => {
       if (usedCalIds.has(c.id)) return;
       if (c.end < '2026-06-01') return;
+      const days = workingDays(c.start, c.end);
+      if (days < 1) return; // skip partial / half-day calendar events
       rows.push({
         key: c.id,
         employee: c.name,
         start: c.start,
         end: c.end,
-        days: workingDays(c.start, c.end),
+        days,
         type: c.tag,
         status: 'Calendar',
         source: 'calendar',
