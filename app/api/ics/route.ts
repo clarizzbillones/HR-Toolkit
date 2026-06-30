@@ -1,4 +1,5 @@
 export const runtime = 'edge';
+export const maxDuration = 30;
 import { NextResponse } from 'next/server';
 
 interface IcsEvent {
@@ -85,7 +86,8 @@ export async function POST(req: Request) {
     const icsUrl = url.replace(/^webcal:/, 'https:');
     const res = await fetch(icsUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LitsonHRToolkit/1.0)', 'Accept': 'text/calendar, */*' },
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(28000),
+      redirect: 'follow',
     });
     if (!res.ok) return NextResponse.json({ error: `Fetch failed: ${res.status}` }, { status: 502 });
     const text = await res.text();

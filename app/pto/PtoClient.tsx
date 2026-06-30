@@ -114,6 +114,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [calConnected, setCalConnected] = useState(false);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+  const [calStatus, setCalStatus] = useState('');
 
   // Load saved calendar URL + cached events from DB (no live fetch on refresh)
   useEffect(() => {
@@ -163,55 +164,34 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
+    setCalStatus('Contacting Office 365…');
     const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
-    let icsText: string | null = null;
 
-    // 1. Try browser-side fetch (25s — O365 can be slow)
     try {
-      const r = await fetch(icsUrl, { signal: AbortSignal.timeout(25000) });
-      if (r.ok) {
-        const text = await r.text();
-        if (text.includes('BEGIN:VCALENDAR')) icsText = text;
-      }
-    } catch { /* CORS blocked → fall through to server */ }
-
-    // 2. Server-side fetch via Edge function (no Vercel 10s cap)
-    if (!icsText) {
-      try {
-        const res = await fetch('/api/ics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: icsUrl }),
-        });
-        const data = await res.json();
-        if (res.ok && data.events) {
-          const events = data.events ?? [];
-          setCalEvents(events);
-          setCalConnected(true);
-          await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
-          showToast(`Connected — ${events.length} events loaded`);
-          setCalLoading(false);
-          return;
-        }
-        showToast(data.error ?? 'Could not load calendar — try uploading the .ics file instead');
-      } catch {
-        showToast('Could not load calendar — try uploading the .ics file instead');
-      }
-      setCalLoading(false);
-      return;
-    }
-
-    // Browser fetch succeeded — parse via server
-    try {
-      const res = await fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsText }) });
+      // Server-side fetch via Edge function (maxDuration=30s, follows redirects)
+      setCalStatus('Fetching calendar — please wait up to 30 seconds…');
+      const res = await fetch('/api/ics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: icsUrl }),
+        signal: AbortSignal.timeout(32000),
+      });
       const data = await res.json();
+      if (!res.ok) {
+        setCalStatus('');
+        showToast(data.error ?? 'Failed to connect — try uploading the .ics file instead');
+        setCalLoading(false);
+        return;
+      }
       const events = data.events ?? [];
       setCalEvents(events);
       setCalConnected(true);
+      setCalStatus('');
       await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
       showToast(`Connected — ${events.length} events loaded`);
     } catch {
-      showToast('Failed to parse calendar');
+      setCalStatus('');
+      showToast('Connection timed out — try uploading the .ics file instead');
     }
     setCalLoading(false);
   }
@@ -423,7 +403,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                     {calLoading ? 'Connecting…' : 'Connect'}
                   </button>
                 </div>
-                {calLoading && <p className="text-[11px] text-[#3f6b8a]">Fetching calendar from Office 365 — this may take up to 30 seconds…</p>}
+                {calStatus && <p className="text-[11px] text-[#3f6b8a]">{calStatus}</p>}
                 <div className="flex items-center gap-2"><div className="flex-1 h-px bg-border" /><span className="text-xs text-text-faint">or</span><div className="flex-1 h-px bg-border" /></div>
                 <button onClick={() => uploadIcsRef.current?.click()} disabled={calLoading}
                   className="w-full border border-dashed border-border text-text-muted text-xs font-semibold py-2 rounded-ctrl hover:border-ink hover:text-ink disabled:opacity-40">
