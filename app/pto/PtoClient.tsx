@@ -137,9 +137,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   // Filters
   const [filterName, setFilterName] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [filterSource, setFilterSource] = useState<'' | Source>('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [filterCalEvent, setFilterCalEvent] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -286,20 +289,25 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   // Apply filters
   const filtered = useMemo(() => merged.filter(r => {
     if (filterName && normName(r.employee) !== normName(filterName)) return false;
+    if (filterType && r.type !== filterType) return false;
+    if (filterStatus && r.status !== filterStatus) return false;
     if (filterSource && r.source !== filterSource) return false;
     if (filterFrom || filterTo) {
       const ms = filterFrom || '0000-01-01';
       const me = filterTo || '9999-12-31';
       if (r.start < ms || r.start > me) return false;
     }
+    if (filterCalEvent && !r.calTitle?.toLowerCase().includes(filterCalEvent.toLowerCase())) return false;
     return true;
-  }), [merged, filterName, filterSource, filterFrom, filterTo]);
+  }), [merged, filterName, filterType, filterStatus, filterSource, filterFrom, filterTo, filterCalEvent]);
 
   const outToday = merged.filter(r => r.start <= today && r.end >= today);
   const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
   const reportOnlyCount = filtered.filter(r => r.source === 'report').length;
   const bothCount = filtered.filter(r => r.source === 'both').length;
   const names = [...new Set(merged.map(r => r.employee))].sort();
+  const types = [...new Set(merged.map(r => r.type))].sort();
+  const statuses = [...new Set(merged.map(r => r.status))].sort();
 
   // Chart data: days per employee from filtered rows
   const chartData = useMemo(() => {
@@ -502,47 +510,75 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
         {/* Filters */}
         {merged.length > 0 && (
-          <div className="flex items-center gap-3 px-8 pb-3 flex-wrap">
-            <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Filter:</span>
-            <select value={filterName} onChange={e => setFilterName(e.target.value)}
-              className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-              <option value="">All people</option>
-              {names.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <select value={filterSource} onChange={e => setFilterSource(e.target.value as '' | Source)}
-              className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-              <option value="">All sources</option>
-              <option value="both">✓ In both</option>
-              <option value="report">Report only</option>
-              <option value="calendar">Calendar only</option>
-            </select>
-            <div className="flex items-center gap-1.5">
-              <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-                className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
-              <span className="text-text-muted text-xs">to</span>
-              <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-                className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+          <div className="flex flex-col gap-2 px-8 pb-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Filter:</span>
+              {/* Employee */}
+              <select value={filterName} onChange={e => setFilterName(e.target.value)}
+                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">All employees</option>
+                {names.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              {/* PTO Type */}
+              <select value={filterType} onChange={e => setFilterType(e.target.value)}
+                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">All types</option>
+                {types.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {/* Status */}
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">All statuses</option>
+                {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {/* Source */}
+              <select value={filterSource} onChange={e => setFilterSource(e.target.value as '' | Source)}
+                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">All sources</option>
+                <option value="both">✓ In both</option>
+                <option value="report">Report only</option>
+                <option value="calendar">Calendar only</option>
+              </select>
             </div>
-            {/* Quick month shortcuts */}
-            <div className="flex items-center gap-1">
-              {['Jun','Jul','Aug','Sep'].map((label, i) => {
-                const y = 2026; const m = i + 6;
-                const from = `${y}-${String(m).padStart(2,'0')}-01`;
-                const to = new Date(y, m, 0).toISOString().slice(0,10);
-                const active = filterFrom === from && filterTo === to;
-                return (
-                  <button key={label} onClick={() => { setFilterFrom(from); setFilterTo(to); }}
-                    className={`text-xs font-semibold px-2 py-1 rounded-ctrl transition-colors ${active ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
-                    {label}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Date range */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-text-muted font-semibold">From</span>
+                <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+                  className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+                <span className="text-text-muted text-xs">to</span>
+                <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+                  className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+              </div>
+              {/* Quick month shortcuts */}
+              <div className="flex items-center gap-1">
+                {['Jun','Jul','Aug','Sep'].map((label, i) => {
+                  const y = 2026; const m = i + 6;
+                  const from = `${y}-${String(m).padStart(2,'0')}-01`;
+                  const to = new Date(y, m, 0).toISOString().slice(0,10);
+                  const active = filterFrom === from && filterTo === to;
+                  return (
+                    <button key={label} onClick={() => { setFilterFrom(from); setFilterTo(to); }}
+                      className={`text-xs font-semibold px-2 py-1 rounded-ctrl transition-colors ${active ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Calendar event search */}
+              <input
+                type="text"
+                value={filterCalEvent}
+                onChange={e => setFilterCalEvent(e.target.value)}
+                placeholder="Search calendar event…"
+                className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink w-48"
+              />
+              {(filterName || filterType || filterStatus || filterSource || filterFrom || filterTo || filterCalEvent) && (
+                <button onClick={() => { setFilterName(''); setFilterType(''); setFilterStatus(''); setFilterSource(''); setFilterFrom(''); setFilterTo(''); setFilterCalEvent(''); }}
+                  className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear all</button>
+              )}
+              <span className="ml-auto text-xs text-text-muted font-semibold">{filtered.length} of {merged.length} entries</span>
             </div>
-            {(filterName || filterSource || filterFrom || filterTo) && (
-              <button onClick={() => { setFilterName(''); setFilterSource(''); setFilterFrom(''); setFilterTo(''); }}
-                className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>
-            )}
-            <span className="ml-auto text-xs text-text-muted font-semibold">{filtered.length} of {merged.length} entries</span>
           </div>
         )}
 
