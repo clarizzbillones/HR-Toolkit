@@ -173,25 +173,61 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
-    setCalStatus('Contacting Office 365…');
     const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
 
+    let icsText: string | null = null;
+
+    // Try browser fetch first — no timeout limits, no server hop
     try {
-      // Server-side fetch via Edge function (maxDuration=30s, follows redirects)
-      setCalStatus('Fetching calendar — please wait up to 30 seconds…');
-      const res = await fetch('/api/ics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: icsUrl }),
-        signal: AbortSignal.timeout(32000),
-      });
-      const data = await res.json();
-      if (!res.ok) {
+      setCalStatus('Fetching calendar…');
+      const res = await fetch(icsUrl, { signal: AbortSignal.timeout(20000) });
+      const text = await res.text();
+      if (text.includes('BEGIN:VCALENDAR')) icsText = text;
+    } catch { /* fall through to server fetch */ }
+
+    // Fall back to server-side Edge fetch
+    if (!icsText) {
+      try {
+        setCalStatus('Trying server fetch — please wait up to 30 seconds…');
+        const res = await fetch('/api/ics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: icsUrl }),
+          signal: AbortSignal.timeout(32000),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setCalStatus('');
+          showToast(data.error ?? 'Failed to connect — try uploading the .ics file instead');
+          setCalLoading(false);
+          return;
+        }
+        icsText = null; // server already parsed, use data.events directly
+        const events = data.events ?? [];
+        setCalEvents(events);
+        setCalConnected(true);
         setCalStatus('');
-        showToast(data.error ?? 'Failed to connect — try uploading the .ics file instead');
+        await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
+        showToast(`Connected — ${events.length} events loaded`);
+        setCalLoading(false);
+        return;
+      } catch {
+        setCalStatus('');
+        showToast('Connection timed out — try uploading the .ics file instead');
         setCalLoading(false);
         return;
       }
+    }
+
+    // Browser fetch succeeded — parse via API
+    try {
+      const res = await fetch('/api/ics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icsText }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? 'Invalid calendar data'); setCalLoading(false); return; }
       const events = data.events ?? [];
       setCalEvents(events);
       setCalConnected(true);
@@ -199,8 +235,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
       showToast(`Connected — ${events.length} events loaded`);
     } catch {
-      setCalStatus('');
-      showToast('Connection timed out — try uploading the .ics file instead');
+      showToast('Failed to parse calendar');
     }
     setCalLoading(false);
   }
@@ -295,8 +330,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const names = [...new Set(merged.map(r => r.employee))].sort();
 
   function exportCsv() {
-    const EXPORT_FROM = '2026-06-01';
-    const exportRows = filtered.filter(r => r.end >= EXPORT_FROM);
+    const exportRows = filtered.filter(r => r.days >= 1);
     const headers = ['Employee','Start','End','Days','Type','Status','Source','Calendar Event'];
     const rows = exportRows.map(r => [
       r.employee, r.start, r.end, r.days, r.type, r.status,
@@ -304,8 +338,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     ].join(','));
     const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `pto-report-jun2026-onwards.csv`; a.click();
-    showToast(`Exported ${exportRows.length} entries from June 2026 onwards`);
+    a.download = `pto-report.csv`; a.click();
+    showToast(`Exported ${exportRows.length} entries`);
   }
 
   return (
