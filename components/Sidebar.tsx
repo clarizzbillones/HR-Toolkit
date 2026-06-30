@@ -8,11 +8,10 @@ import clsx from 'clsx';
 const navItems = [
   { href: '/',          label: 'Dashboard' },
   { href: '/tasks',     label: 'Open HR Tasks', badgeKey: 'tasks' },
-  { href: '/pto',       label: 'PTO Reports' },
+  { href: '/pto',       label: 'PTO & Calendar' },
   { href: '/offers',    label: 'Offer Letters' },
   { href: '/sop',       label: 'SOP Builder' },
   { href: '/payroll',   label: 'Payroll' },
-  { href: '/calendar',  label: 'Outlook Calendar' },
   { href: '/trips',     label: 'Trip Help Desk' },
   { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/reports',   label: 'Reports' },

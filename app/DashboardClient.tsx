@@ -59,9 +59,9 @@ const modules = [
     badgeFn: (p: Props) => p.cutoffToday ? 'Cutoff today' : null, badgeColor: '#b07d2a',
   },
   {
-    href: '/calendar', label: 'Outlook Calendar',
+    href: '/pto', label: 'Outlook Calendar',
     icon: <CalIcon />, iconBg: 'bg-[#e8f0f8]', iconColor: 'text-[#3f6b8a]',
-    descFn: () => 'Sync PTO with the shared Outlook firm calendar.',
+    descFn: () => 'Connect Litson Availability — combined with PTO report.',
     badgeFn: () => null,
   },
   {
