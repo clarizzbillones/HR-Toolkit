@@ -18,14 +18,30 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));
-    // Load PTO entries and find who's out today
-    fetch('/api/pto').then(r => r.json()).then(d => {
-      const entries: { employee: string; start_date: string; end_date: string; type: string }[] = d.entries ?? [];
-      const out = entries
+    // Load PTO entries + calendar events and find who's out today
+    Promise.all([
+      fetch('/api/pto').then(r => r.json()).catch(() => ({ entries: [] })),
+      fetch('/api/connections').then(r => r.json()).catch(() => ({})),
+    ]).then(([ptoData, connData]) => {
+      const entries: { employee: string; start_date: string; end_date: string; type: string }[] = ptoData.entries ?? [];
+      const calEvents: { name: string; tag: string; start: string; end: string; title: string }[] = connData.calendar_events ?? [];
+
+      const names = new Set<string>();
+
+      entries
         .filter(e => e.start_date <= todayIso && e.end_date >= todayIso && !/wfh|work from home|personal/i.test(e.type))
-        .map(e => e.employee);
-      setPtoToday([...new Set(out)]);
-    }).catch(() => {});
+        .forEach(e => names.add(e.employee));
+
+      calEvents
+        .filter(c =>
+          c.start <= todayIso && c.end >= todayIso &&
+          !/wfh|work from home/i.test(c.tag) &&
+          !/interview|in office|meeting|call|training|travel|fundraiser|conference|in \w+ for|\w+ in \w+/i.test(c.title)
+        )
+        .forEach(c => names.add(c.name));
+
+      setPtoToday([...names]);
+    });
   }, []);
 
   const done = tasks.filter(t => t.status === 'done');
