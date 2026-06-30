@@ -1,6 +1,7 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 
 const NAME_ALIASES: [RegExp, string][] = [
   [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
