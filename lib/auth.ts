@@ -18,10 +18,11 @@ const azureProvider = process.env.AZURE_AD_CLIENT_ID
     })()
   : null;
 
-// Users: set HR_PASSWORD and ADMIN_PASSWORD env vars in Vercel to secure these
+// Single shared password — set APP_PASSWORD env var in Vercel (defaults to ADMIN)
+const PWD = process.env.APP_PASSWORD ?? 'ADMIN';
 const USERS = [
-  { id: 'hr-1',    name: 'Clarizz Alon',  email: 'clarizz@litson.co',  password: process.env.HR_PASSWORD    ?? 'litson2026', role: 'hr' },
-  { id: 'admin-1', name: 'Admin Viewer',  email: 'admin@litson.co',     password: process.env.ADMIN_PASSWORD ?? 'admin2026',  role: 'admin' },
+  { id: 'hr-1',    name: 'Clarizz Alon', email: 'clarizz@litson.co', password: PWD, role: 'hr' },
+  { id: 'admin-1', name: 'Admin Viewer', email: 'admin@litson.co',    password: PWD, role: 'admin' },
 ];
 
 export const authOptions: NextAuthOptions = {
