@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Employee {
@@ -26,6 +26,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [employees] = useState<Employee[]>(initialEmployees);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
+
+  useEffect(() => {
+    fetch('/api/connections').then(r => r.json()).then(data => {
+      if (data.reviews_url) { setLinkedUrl(data.reviews_url); setDashUrl(data.reviews_url); }
+    }).catch(() => {});
+  }, []);
+
+  async function connectDash() {
+    if (!dashUrl) return;
+    setLinkedUrl(dashUrl);
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviews_url: dashUrl }) });
+    showToast('Dashboard linked');
+  }
+
+  async function disconnectDash() {
+    setLinkedUrl(''); setDashUrl('');
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviews_url: null }) });
+    showToast('Disconnected');
+  }
 
   const upcoming = employees
     .flatMap(e => {
@@ -70,17 +89,27 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       </header>
 
       <div className="px-8 py-3 bg-white border-b border-border flex-shrink-0 flex items-center gap-3 text-sm">
-        <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; meeting docs directly.</span>
-        <input
-          value={dashUrl}
-          onChange={e => setDashUrl(e.target.value)}
-          placeholder="https://your-live-dashboard..."
-          className="flex-1 max-w-xs border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
-        />
-        <button
-          onClick={() => { if (dashUrl) { setLinkedUrl(dashUrl); showToast('Dashboard linked'); } }}
-          className="bg-ink text-white text-sm font-semibold px-4 py-1.5 rounded-ctrl hover:bg-ink-dark transition-colors"
-        >Link</button>
+        {linkedUrl ? (
+          <>
+            <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
+            <span className="text-[#2f7d5b] font-semibold shrink-0">Dashboard connected</span>
+            <span className="text-text-muted truncate">{linkedUrl}</span>
+            <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
+              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
+            <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
+          </>
+        ) : (
+          <>
+            <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; meeting docs directly.</span>
+            <input
+              value={dashUrl}
+              onChange={e => setDashUrl(e.target.value)}
+              placeholder="https://your-live-dashboard..."
+              className="flex-1 max-w-xs border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
+            />
+            <button onClick={connectDash} className="bg-ink text-white text-sm font-semibold px-4 py-1.5 rounded-ctrl hover:bg-ink-dark transition-colors">Link</button>
+          </>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto px-8 py-6">
@@ -135,7 +164,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <span className="text-text-muted truncate">{linkedUrl}</span>
                 <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
                   className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
-                <button onClick={() => { setLinkedUrl(''); setDashUrl(''); showToast('Disconnected'); }}
+                <button onClick={disconnectDash}
                   className="shrink-0 text-xs font-semibold text-text-muted hover:text-litred-alt border border-border-light px-3 py-1 rounded-ctrl">Disconnect</button>
               </div>
             )}

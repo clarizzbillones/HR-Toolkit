@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
@@ -114,6 +114,18 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
+  // Load saved calendar URL on mount and auto-connect
+  useEffect(() => {
+    fetch('/api/connections').then(r => r.json()).then(data => {
+      if (data.calendar_url) {
+        setCalUrl(data.calendar_url);
+        // Auto-reconnect silently
+        fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: data.calendar_url }) })
+          .then(r => r.json()).then(d => { if (d.events) { setCalEvents(d.events); setCalConnected(true); } });
+      }
+    }).catch(() => {});
+  }, []);
+
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterSource, setFilterSource] = useState<'' | Source>('');
@@ -166,11 +178,20 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       }
       setCalEvents(data.events ?? []);
       setCalConnected(true);
+      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim() }) });
       showToast(`Connected — ${(data.events ?? []).length} events loaded`);
     } catch {
       showToast('Failed to fetch calendar');
     }
     setCalLoading(false);
+  }
+
+  async function disconnectCalendar() {
+    setCalConnected(false);
+    setCalEvents([]);
+    setCalUrl('');
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: null }) });
+    showToast('Calendar disconnected');
   }
 
   // --- Merge & dedup ---
@@ -335,7 +356,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {calConnected ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
-                <button onClick={() => { setCalConnected(false); setCalEvents([]); setCalUrl(''); }}
+                <button onClick={disconnectCalendar}
                   className="text-xs text-text-muted hover:text-litred-alt font-semibold">Disconnect</button>
               </div>
             ) : (

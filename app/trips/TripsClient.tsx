@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
 
@@ -23,6 +23,25 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
   const [saving, setSaving] = useState(false);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
+
+  useEffect(() => {
+    fetch('/api/connections').then(r => r.json()).then(data => {
+      if (data.trips_url) { setLinkedUrl(data.trips_url); setDashUrl(data.trips_url); }
+    }).catch(() => {});
+  }, []);
+
+  async function connectDash() {
+    if (!dashUrl) return;
+    setLinkedUrl(dashUrl);
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trips_url: dashUrl }) });
+    showToast('Dashboard linked');
+  }
+
+  async function disconnectDash() {
+    setLinkedUrl(''); setDashUrl('');
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trips_url: null }) });
+    showToast('Disconnected');
+  }
 
   async function submit() {
     if (!form.who || !form.detail) return;
@@ -62,7 +81,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
           <span className="text-text-muted truncate">{linkedUrl}</span>
           <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
             className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
-          <button onClick={() => { setLinkedUrl(''); setDashUrl(''); showToast('Disconnected'); }}
+          <button onClick={disconnectDash}
             className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
         </div>
       ) : (
@@ -71,7 +90,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
           <input value={dashUrl} onChange={e => setDashUrl(e.target.value)}
             placeholder="https://your-dashboard..."
             className="flex-1 max-w-xs border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink" />
-          <button onClick={() => { if (dashUrl) { setLinkedUrl(dashUrl); showToast('Dashboard linked'); } }}
+          <button onClick={connectDash}
             className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">Connect</button>
         </div>
       )}
