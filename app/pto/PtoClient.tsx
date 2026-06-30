@@ -401,7 +401,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const chartData = useMemo(() => {
     const map: Record<string, number> = {};
     filtered.forEach(r => { map[r.employee] = (map[r.employee] ?? 0) + clampedDays(r); });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [filtered, filterFrom, filterTo]);
 
   function exportCsv() {
@@ -560,6 +560,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                     </div>
                   );
                 })}
+              </div>
+              <div className="mt-3 pt-3 border-t border-border flex justify-between text-xs">
+                <span className="font-bold text-text-primary">Total</span>
+                <span className="font-bold text-text-primary">{chartData.reduce((s, [, d]) => s + d, 0)}d</span>
               </div>
             </div>
             {/* Summary by leave category */}
