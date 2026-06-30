@@ -135,14 +135,20 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }).catch(() => {});
   }, []);
 
-  // Filters
-  const [filterName, setFilterName] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterSource, setFilterSource] = useState<'' | Source>('');
+  // Filters — empty Set = show all; non-empty = include only those checked
+  const [filterNames, setFilterNames] = useState<Set<string>>(new Set());
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
+  const [filterStatuses, setFilterStatuses] = useState<Set<string>>(new Set());
+  const [filterSources, setFilterSources] = useState<Set<Source>>(new Set());
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterCalEvent, setFilterCalEvent] = useState('');
+
+  function toggleSet<T>(set: Set<T>, val: T): Set<T> {
+    const next = new Set(set);
+    next.has(val) ? next.delete(val) : next.add(val);
+    return next;
+  }
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -293,10 +299,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   // Apply filters
   const filtered = useMemo(() => merged.filter(r => {
-    if (filterName && normName(r.employee) !== normName(filterName)) return false;
-    if (filterType && r.type !== filterType) return false;
-    if (filterStatus && r.status !== filterStatus) return false;
-    if (filterSource && r.source !== filterSource) return false;
+    if (filterNames.size && !filterNames.has(r.employee)) return false;
+    if (filterTypes.size && !filterTypes.has(r.type)) return false;
+    if (filterStatuses.size && !filterStatuses.has(r.status)) return false;
+    if (filterSources.size && !filterSources.has(r.source)) return false;
     if (filterFrom || filterTo) {
       const ms = filterFrom || '0000-01-01';
       const me = filterTo || '9999-12-31';
@@ -304,7 +310,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }
     if (filterCalEvent && !r.calTitle?.toLowerCase().includes(filterCalEvent.toLowerCase())) return false;
     return true;
-  }), [merged, filterName, filterType, filterStatus, filterSource, filterFrom, filterTo, filterCalEvent]);
+  }), [merged, filterNames, filterTypes, filterStatuses, filterSources, filterFrom, filterTo, filterCalEvent]);
 
   const outToday = merged.filter(r => r.start <= today && r.end >= today);
   const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
@@ -518,35 +524,14 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
           <div className="flex flex-col gap-2 px-8 pb-3">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Filter:</span>
-              {/* Employee */}
-              <select value={filterName} onChange={e => setFilterName(e.target.value)}
-                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="">All employees</option>
-                {names.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              {/* PTO Type */}
-              <select value={filterType} onChange={e => setFilterType(e.target.value)}
-                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="">All types</option>
-                {types.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              {/* Status */}
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="">All statuses</option>
-                {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              {/* Source */}
-              <select value={filterSource} onChange={e => setFilterSource(e.target.value as '' | Source)}
-                className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="">All sources</option>
-                <option value="both">✓ In both</option>
-                <option value="report">Report only</option>
-                <option value="calendar">Calendar only</option>
-              </select>
+              <CheckFilter label="Employee" options={names} selected={filterNames} onChange={setFilterNames} />
+              <CheckFilter label="PTO Type" options={types} selected={filterTypes} onChange={setFilterTypes} />
+              <CheckFilter label="Status" options={statuses} selected={filterStatuses} onChange={setFilterStatuses} />
+              <CheckFilter<Source> label="Source" options={['both','report','calendar']} selected={filterSources}
+                onChange={setFilterSources}
+                renderOption={v => v === 'both' ? '✓ Both' : v === 'report' ? 'Report only' : 'Calendar only'} />
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Date range */}
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-text-muted font-semibold">From</span>
                 <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
@@ -555,7 +540,6 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                 <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
                   className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
               </div>
-              {/* Quick month shortcuts */}
               <div className="flex items-center gap-1">
                 {['Jun','Jul','Aug','Sep'].map((label, i) => {
                   const y = 2026; const m = i + 6;
@@ -570,18 +554,13 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                   );
                 })}
               </div>
-              {/* Calendar event search */}
-              <input
-                type="text"
-                value={filterCalEvent}
-                onChange={e => setFilterCalEvent(e.target.value)}
+              <input type="text" value={filterCalEvent} onChange={e => setFilterCalEvent(e.target.value)}
                 placeholder="Search calendar event…"
-                className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink w-48"
-              />
-              {(filterName || filterType || filterStatus || filterSource || filterFrom || filterTo || filterCalEvent) && (
-                <button onClick={() => { setFilterName(''); setFilterType(''); setFilterStatus(''); setFilterSource(''); setFilterFrom(''); setFilterTo(''); setFilterCalEvent(''); }}
+                className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink w-48" />
+              {(filterNames.size || filterTypes.size || filterStatuses.size || filterSources.size || filterFrom || filterTo || filterCalEvent) ? (
+                <button onClick={() => { setFilterNames(new Set()); setFilterTypes(new Set()); setFilterStatuses(new Set()); setFilterSources(new Set()); setFilterFrom(''); setFilterTo(''); setFilterCalEvent(''); }}
                   className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear all</button>
-              )}
+              ) : null}
               <span className="ml-auto text-xs text-text-muted font-semibold">{filtered.length} of {merged.length} entries</span>
             </div>
           </div>
@@ -633,6 +612,65 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CheckFilter<T extends string>({
+  label, options, selected, onChange, renderOption,
+}: {
+  label: string;
+  options: T[];
+  selected: Set<T>;
+  onChange: (next: Set<T>) => void;
+  renderOption?: (v: T) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function close(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  function toggle(v: T) {
+    const next = new Set(selected);
+    next.has(v) ? next.delete(v) : next.add(v);
+    onChange(next);
+  }
+
+  const count = selected.size;
+  const label_ = count === 0 ? `All ${label}s` : count === 1 ? [...selected][0] : `${label} (${count})`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(o => !o)}
+        className={clsx(
+          'flex items-center gap-1.5 border rounded-ctrl px-3 py-1.5 text-sm bg-white focus:outline-none transition-colors',
+          count > 0 ? 'border-ink font-semibold text-ink' : 'border-border-light text-text-secondary hover:border-ink'
+        )}>
+        {label_}
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 4l4 4 4-4"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 bg-white border border-border rounded-card shadow-lg min-w-[160px] py-1 max-h-60 overflow-y-auto">
+          {count > 0 && (
+            <button onClick={() => { onChange(new Set()); setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-text-muted hover:bg-canvas font-semibold border-b border-border mb-1">
+              Clear selection
+            </button>
+          )}
+          {options.map(v => (
+            <label key={v} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-canvas cursor-pointer">
+              <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)}
+                className="accent-ink w-3.5 h-3.5 rounded" />
+              <span className="text-sm text-text-primary">{renderOption ? renderOption(v) : v}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
