@@ -177,49 +177,26 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
     let icsText: string | null = null;
 
-    // Try browser fetch first — no timeout limits, no server hop
+    // Fetch via our server proxy (handles CORS + redirects + browser-like headers)
+    setCalStatus('Fetching calendar — this may take up to 30 seconds…');
     try {
-      setCalStatus('Fetching calendar…');
-      const res = await fetch(icsUrl, { signal: AbortSignal.timeout(20000) });
-      const text = await res.text();
-      if (text.includes('BEGIN:VCALENDAR')) icsText = text;
-    } catch { /* fall through to server fetch */ }
-
-    // Fall back to server-side Edge fetch
-    if (!icsText) {
-      try {
-        setCalStatus('Trying server fetch — please wait up to 30 seconds…');
-        const res = await fetch('/api/ics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: icsUrl }),
-          signal: AbortSignal.timeout(32000),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setCalStatus('');
-          showToast(data.error ?? 'Failed to connect — try uploading the .ics file instead');
-          setCalLoading(false);
-          return;
-        }
-        icsText = null; // server already parsed, use data.events directly
-        const events = data.events ?? [];
-        setCalEvents(events);
-        setCalConnected(true);
-        setCalStatus('');
-        await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
-        showToast(`Connected — ${events.length} events loaded`);
-        setCalLoading(false);
-        return;
-      } catch {
-        setCalStatus('');
-        showToast('Connection timed out — try uploading the .ics file instead');
-        setCalLoading(false);
-        return;
+      const proxyRes = await fetch(`/api/ics-proxy?url=${encodeURIComponent(icsUrl)}`, {
+        signal: AbortSignal.timeout(58000),
+      });
+      if (proxyRes.ok) {
+        const text = await proxyRes.text();
+        if (text.includes('BEGIN:VCALENDAR')) icsText = text;
       }
+    } catch { /* fall through */ }
+
+    if (!icsText) {
+      setCalStatus('');
+      showToast('Could not reach the calendar — try uploading the .ics file instead');
+      setCalLoading(false);
+      return;
     }
 
-    // Browser fetch succeeded — parse via API
+    // Parse the ICS text
     try {
       const res = await fetch('/api/ics', {
         method: 'POST',
