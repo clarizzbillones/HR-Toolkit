@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 
 interface IcsEvent {
