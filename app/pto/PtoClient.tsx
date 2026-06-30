@@ -237,12 +237,17 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const names = [...new Set(merged.map(r => r.employee))].sort();
 
   function exportCsv() {
+    const EXPORT_FROM = '2026-06-01';
+    const exportRows = filtered.filter(r => r.end >= EXPORT_FROM);
     const headers = ['Employee','Start','End','Days','Type','Status','Source','Calendar Event'];
-    const rows = filtered.map(r => [r.employee, r.start, r.end, r.days, r.type, r.status, SOURCE_LABEL[r.source], r.calTitle ?? ''].join(','));
+    const rows = exportRows.map(r => [
+      r.employee, r.start, r.end, r.days, r.type, r.status,
+      SOURCE_LABEL[r.source], r.calTitle ?? ''
+    ].join(','));
     const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `pto-report-${today}.csv`; a.click();
-    showToast('Report exported');
+    a.download = `pto-report-jun2026-onwards.csv`; a.click();
+    showToast(`Exported ${exportRows.length} entries from June 2026 onwards`);
   }
 
   return (
