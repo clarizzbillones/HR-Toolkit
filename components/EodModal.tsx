@@ -9,12 +9,23 @@ interface Task {
 export default function EodModal({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [ptoToday, setPtoToday] = useState<string[]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
   const [notes, setNotes] = useState('');
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   useEffect(() => {
     fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));
+    // Load PTO entries and find who's out today
+    fetch('/api/pto').then(r => r.json()).then(d => {
+      const entries: { employee: string; start_date: string; end_date: string; type: string }[] = d.entries ?? [];
+      const out = entries
+        .filter(e => e.start_date <= todayIso && e.end_date >= todayIso && !/wfh|work from home|personal/i.test(e.type))
+        .map(e => e.employee);
+      setPtoToday([...new Set(out)]);
+    }).catch(() => {});
   }, []);
 
   const done = tasks.filter(t => t.status === 'done');
@@ -56,7 +67,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
         <div style="background:#eef5f1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#2f7d5b;text-transform:uppercase">Tasks Done</div><div style="font-size:28px;font-weight:700;color:#2f7d5b">${done.length}</div></div>
         <div style="background:#f7efe1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b07d2a;text-transform:uppercase">Pending</div><div style="font-size:28px;font-weight:700;color:#b07d2a">${pending.length}</div></div>
-        <div style="background:#e9f0f5;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase">On PTO</div><div style="font-size:28px;font-weight:700;color:#3f6b8a">—</div></div>
+        <div style="background:#e9f0f5;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase">On PTO Today</div><div style="font-size:28px;font-weight:700;color:#3f6b8a">${ptoToday.length}</div>${ptoToday.length ? `<div style="font-size:11px;color:#3f6b8a;margin-top:4px">${ptoToday.join(', ')}</div>` : ''}</div>
         <div style="background:#fdeaea;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b0412f;text-transform:uppercase">Open Items</div><div style="font-size:28px;font-weight:700;color:#b0412f">${pending.length}</div></div>
       </div>
       <table><thead><tr><th>Task</th><th>Status</th><th>Due</th><th>Notes</th></tr></thead><tbody>${taskRows}</tbody></table>
@@ -119,7 +130,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-4 gap-3 mb-6">
             <StatCard label="Tasks Done" value={done.length} color="#2f7d5b" bg="#eef5f1" />
             <StatCard label="Pending" value={pending.length} color="#b07d2a" bg="#f7efe1" />
-            <StatCard label="On PTO" value="—" color="#3f6b8a" bg="#e9f0f5" />
+            <StatCard label="On PTO Today" value={ptoToday.length} color="#3f6b8a" bg="#e9f0f5" sub={ptoToday.join(', ') || undefined} />
             <StatCard label="Open Items" value={pending.length} color="#b0412f" bg="#fdeaea" />
           </div>
 
@@ -176,11 +187,12 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function StatCard({ label, value, color, bg }: { label: string; value: string|number; color: string; bg: string }) {
+function StatCard({ label, value, color, bg, sub }: { label: string; value: string|number; color: string; bg: string; sub?: string }) {
   return (
     <div className="rounded-card p-4" style={{ background: bg }}>
       <div className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{label}</div>
       <div className="text-3xl font-bold mt-1 font-spectral" style={{ color }}>{value}</div>
+      {sub && <div className="text-xs mt-1 leading-snug" style={{ color, opacity: 0.8 }}>{sub}</div>}
     </div>
   );
 }
