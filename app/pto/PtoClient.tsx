@@ -107,6 +107,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [preview, setPreview] = useState<Omit<PtoEntry, 'id' | 'status'>[] | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadIcsRef = useRef<HTMLInputElement>(null);
 
   // Calendar connection state
   const [calUrl, setCalUrl] = useState('');
@@ -215,9 +216,28 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   async function disconnectCalendar() {
     setCalConnected(false);
     setCalEvents([]);
-    // Keep the URL in state so they can reconnect, but clear cached events from DB
     await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) });
     showToast('Calendar disconnected');
+  }
+
+  async function handleIcsFile(file: File) {
+    setCalLoading(true);
+    try {
+      const icsText = await file.text();
+      const res = await fetch('/api/ics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icsText }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? 'Invalid ICS file'); setCalLoading(false); return; }
+      const events = data.events ?? [];
+      setCalEvents(events);
+      setCalConnected(true);
+      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: events }) });
+      showToast(`Loaded — ${events.length} events from ICS file`);
+    } catch { showToast('Failed to read ICS file'); }
+    setCalLoading(false);
   }
 
   // --- Merge & dedup ---
@@ -308,6 +328,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         <div className="ml-auto flex items-center gap-2.5">
           <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          <input ref={uploadIcsRef} type="file" accept=".ics" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) { handleIcsFile(e.target.files[0]); e.target.value = ''; } }} />
           <EditGate>
             <button onClick={() => fileRef.current?.click()} disabled={uploading}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
@@ -382,19 +404,30 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {calConnected ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
-                <button onClick={connectCalendar} disabled={calLoading}
-                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Refreshing…' : 'Refresh'}</button>
+                <button onClick={uploadIcsRef.current ? () => uploadIcsRef.current!.click() : undefined}
+                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold">Re-upload</button>
                 <button onClick={disconnectCalendar}
                   className="text-xs text-text-muted hover:text-litred-alt font-semibold">Disconnect</button>
               </div>
             ) : (
-              <div className="flex gap-2 mt-1">
-                <input value={calUrl} onChange={e => setCalUrl(e.target.value)}
-                  placeholder="Paste ICS link from Outlook → Share calendar → Publish…"
-                  className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink" />
-                <button onClick={connectCalendar} disabled={calLoading || !calUrl.trim()}
-                  className="bg-[#0F6CBD] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:opacity-90 disabled:opacity-40 whitespace-nowrap">
-                  {calLoading ? 'Connecting…' : 'Connect'}
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex gap-2">
+                  <input value={calUrl} onChange={e => setCalUrl(e.target.value)}
+                    placeholder="Paste Outlook ICS publish URL…"
+                    className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink" />
+                  <button onClick={connectCalendar} disabled={calLoading || !calUrl.trim()}
+                    className="bg-[#0F6CBD] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:opacity-90 disabled:opacity-40 whitespace-nowrap">
+                    {calLoading ? 'Connecting…' : 'Connect'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-text-faint">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                <button onClick={() => uploadIcsRef.current?.click()} disabled={calLoading}
+                  className="w-full border border-dashed border-[#0F6CBD] text-[#0F6CBD] text-xs font-semibold py-2 rounded-ctrl hover:bg-[#e8f0f8] disabled:opacity-40">
+                  {calLoading ? 'Loading…' : '↑ Upload .ics file (download from Outlook first)'}
                 </button>
               </div>
             )}
