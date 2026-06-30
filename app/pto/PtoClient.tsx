@@ -99,16 +99,6 @@ function detectTag(title: string): string {
   return 'Other';
 }
 
-// Demo calendar events matching the Litson Availability calendar screenshot
-const DEMO_CAL_EVENTS: CalEvent[] = [
-  { id:'c1', name:'Ridwan', tag:'OOO', start:'2026-06-22', end:'2026-07-03', title:'Ridwan - OOO (Bar Study)' },
-  { id:'c2', name:'Alicia', tag:'PTO', start:'2026-06-30', end:'2026-06-30', title:'Alicia - PTO' },
-  { id:'c3', name:'Amy', tag:'WFH', start:'2026-06-29', end:'2026-07-05', title:'Amy WFH' },
-  { id:'c4', name:'Paula', tag:'OOO', start:'2026-06-30', end:'2026-06-30', title:'Paula OOO' },
-  { id:'c5', name:'Ted', tag:'OOO', start:'2026-07-02', end:'2026-07-04', title:'Ted OOO - Sea Island' },
-  { id:'c6', name:'Ally', tag:'PTO', start:'2026-07-03', end:'2026-07-03', title:'Ally PTO' },
-  { id:'c7', name:'Caitlin', tag:'PTO', start:'2026-06-30', end:'2026-07-01', title:'Caitlin PTO' },
-];
 
 export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry[] }) {
   const { showToast } = useToast();
@@ -158,15 +148,29 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setImporting(false);
   }
 
-  // --- Calendar connect ---
+  // --- Calendar connect (real ICS fetch) ---
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    setCalEvents(DEMO_CAL_EVENTS);
-    setCalConnected(true);
+    try {
+      const res = await fetch('/api/ics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: calUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? 'Failed to connect calendar');
+        setCalLoading(false);
+        return;
+      }
+      setCalEvents(data.events ?? []);
+      setCalConnected(true);
+      showToast(`Connected — ${(data.events ?? []).length} events loaded`);
+    } catch {
+      showToast('Failed to fetch calendar');
+    }
     setCalLoading(false);
-    showToast('Litson Availability calendar connected');
   }
 
   // --- Merge & dedup ---
@@ -332,7 +336,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             ) : (
               <div className="flex gap-2 mt-1">
                 <input value={calUrl} onChange={e => setCalUrl(e.target.value)}
-                  placeholder="Paste Litson Availability calendar URL…"
+                  placeholder="Paste ICS link from Outlook → Share calendar → Publish…"
                   className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink" />
                 <button onClick={connectCalendar} disabled={calLoading || !calUrl.trim()}
                   className="bg-[#0F6CBD] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:opacity-90 disabled:opacity-40 whitespace-nowrap">
