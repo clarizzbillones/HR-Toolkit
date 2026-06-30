@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from './Toast';
 
 interface Task {
@@ -9,6 +9,7 @@ interface Task {
 export default function EodModal({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const reportRef = useRef<HTMLDivElement>(null);
   const [notes, setNotes] = useState('');
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -70,6 +71,19 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
     w.print();
   }
 
+  async function takeScreenshot() {
+    if (!reportRef.current) return;
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const link = document.createElement('a');
+      link.download = `EOD-Report-${new Date().toISOString().slice(0,10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('Screenshot saved');
+    } catch { showToast('Screenshot failed'); }
+  }
+
   async function sendPartners() {
     const res = await fetch('/api/tasks/eod-send', {
       method: 'POST',
@@ -100,7 +114,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="overflow-auto flex-1 p-7">
+        <div className="overflow-auto flex-1 p-7" ref={reportRef}>
           {/* Stat cards */}
           <div className="grid grid-cols-4 gap-3 mb-6">
             <StatCard label="Tasks Done" value={done.length} color="#2f7d5b" bg="#eef5f1" />
@@ -146,6 +160,9 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-3 px-7 py-4 border-t border-border flex-shrink-0">
           <button onClick={printPdf} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors">
             ⤓ PDF
+          </button>
+          <button onClick={takeScreenshot} className="bg-white border border-border text-text-primary text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
+            📷 Screenshot
           </button>
           <button onClick={sendPartners} className="bg-white border border-border text-text-primary text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
             Send to Partners
