@@ -298,9 +298,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       });
     });
 
-    // Add calendar-only events (no match in report)
+    // Add calendar-only events (no match in report) — skip anything ending before June 2026
     calEvents.forEach(c => {
       if (usedCalIds.has(c.id)) return;
+      if (c.end < '2026-06-01') return;
       rows.push({
         key: c.id,
         employee: c.name,
@@ -330,10 +331,17 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }), [merged, filterName, filterSource, filterFrom, filterTo]);
 
   const outToday = merged.filter(r => r.start <= today && r.end >= today);
-  const calOnlyCount = merged.filter(r => r.source === 'calendar').length;
-  const reportOnlyCount = merged.filter(r => r.source === 'report').length;
-  const bothCount = merged.filter(r => r.source === 'both').length;
+  const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
+  const reportOnlyCount = filtered.filter(r => r.source === 'report').length;
+  const bothCount = filtered.filter(r => r.source === 'both').length;
   const names = [...new Set(merged.map(r => r.employee))].sort();
+
+  // Chart data: days per employee from filtered rows
+  const chartData = useMemo(() => {
+    const map: Record<string, number> = {};
+    filtered.forEach(r => { map[r.employee] = (map[r.employee] ?? 0) + r.days; });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  }, [filtered]);
 
   function exportCsv() {
     const exportRows = filtered.filter(r => r.days >= 1);
@@ -469,6 +477,61 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             <Stat label="In Both Sources" value={bothCount} color="#2f7d5b" />
             <Stat label="Report Only" value={reportOnlyCount} color="#3f6b8a" sub="not in calendar" />
             <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub="not in report" />
+          </div>
+        )}
+
+        {/* Chart + summary table */}
+        {filtered.length > 0 && chartData.length > 0 && (
+          <div className="grid grid-cols-2 gap-4 px-8 pb-4">
+            {/* Bar chart */}
+            <div className="bg-white border border-border rounded-card p-5">
+              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-4">Days Off by Employee</div>
+              <div className="space-y-2">
+                {chartData.map(([name, days]) => {
+                  const max = chartData[0][1];
+                  const pct = Math.round((days / max) * 100);
+                  return (
+                    <div key={name} className="flex items-center gap-2">
+                      <div className="w-24 text-xs text-text-secondary truncate text-right flex-shrink-0">{name.split(' ')[0]}</div>
+                      <div className="flex-1 bg-[#f1ece3] rounded-full h-5 overflow-hidden">
+                        <div className="h-full bg-[#b0412f] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="w-8 text-xs font-semibold text-text-primary text-right flex-shrink-0">{days}d</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Summary table */}
+            <div className="bg-white border border-border rounded-card overflow-hidden">
+              <div className="text-xs font-bold uppercase tracking-wider text-text-muted p-4 pb-2">Summary</div>
+              <table className="w-full text-xs">
+                <thead className="bg-[#f1ece3]">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-bold text-text-secondary">Employee</th>
+                    <th className="text-right px-4 py-2 font-bold text-text-secondary">Entries</th>
+                    <th className="text-right px-4 py-2 font-bold text-text-secondary">Days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chartData.map(([name, days]) => {
+                    const count = filtered.filter(r => r.employee === name).length;
+                    return (
+                      <tr key={name} className="border-t border-[#f1ece3]">
+                        <td className="px-4 py-2 text-text-primary font-medium">{name}</td>
+                        <td className="px-4 py-2 text-text-secondary text-right">{count}</td>
+                        <td className="px-4 py-2 font-semibold text-text-primary text-right">{days}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="border-t-2 border-border bg-[#f1ece3]">
+                    <td className="px-4 py-2 font-bold text-text-primary">Total</td>
+                    <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.length}</td>
+                    <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.reduce((s, r) => s + r.days, 0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
