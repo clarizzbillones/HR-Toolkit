@@ -332,7 +332,35 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       });
     });
 
-    return rows.sort((a, b) => a.start.localeCompare(b.start));
+    // Post-merge dedup: collapse rows for the same canonical person with overlapping dates.
+    // Keep the report row (source='report') and mark it 'both' if a calendar row overlaps.
+    const deduped: MergedRow[] = [];
+    const usedKeys = new Set<string>();
+
+    // First pass: for each report row, absorb any calendar-only row that overlaps
+    const calOnlyRows = rows.filter(r => r.source === 'calendar');
+    const reportRows = rows.filter(r => r.source !== 'calendar');
+
+    for (const rep of reportRows) {
+      const calOverlap = calOnlyRows.find(c =>
+        !usedKeys.has(c.key) &&
+        normName(c.employee) === normName(rep.employee) &&
+        datesOverlap(rep.start, rep.end, c.start, c.end)
+      );
+      if (calOverlap) {
+        usedKeys.add(calOverlap.key);
+        deduped.push({ ...rep, source: 'both', calTitle: rep.calTitle ?? calOverlap.calTitle });
+      } else {
+        deduped.push(rep);
+      }
+    }
+
+    // Second pass: add remaining calendar-only rows that weren't absorbed
+    for (const cal of calOnlyRows) {
+      if (!usedKeys.has(cal.key)) deduped.push(cal);
+    }
+
+    return deduped.sort((a, b) => a.start.localeCompare(b.start));
   }, [entries, calEvents]);
 
   // Apply filters
