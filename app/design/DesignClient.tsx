@@ -209,32 +209,38 @@ export default function DesignClient({ employees }: { employees: { name: string 
       const yr = parseInt(years) || 1;
       const suffix = ordSuffix(yr);
       c.textAlign = 'center';
+      // CELEBRATING
       c.fillStyle = 'rgba(255,255,255,0.4)';
       c.font = '400 28px Georgia, serif';
-      const celStr = 'C E L E B R A T I N G';
-      c.fillText(celStr, SIZE / 2, topY);
-      c.fillStyle = '#ffffff';
-      c.font = `400 88px 'Anton', Impact, sans-serif`;
-      c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 100);
+      c.fillText('C E L E B R A T I N G', SIZE / 2, topY);
+      // Number (big, red)
       const numStr = String(yr);
       c.font = `400 260px 'Anton', Impact, sans-serif`;
       const numW = c.measureText(numStr).width;
       c.fillStyle = '#c8102e';
-      c.fillText(numStr, SIZE / 2 - suffix.length * 16, topY + 375);
+      c.fillText(numStr, SIZE / 2 - suffix.length * 16, topY + 260);
+      // Ordinal suffix (gold, superscript)
       c.font = `400 76px 'Anton', Impact, sans-serif`;
       c.fillStyle = '#c9a24a';
       c.textAlign = 'left';
-      c.fillText(suffix, SIZE / 2 - suffix.length * 16 + numW / 2 + 6, topY + 240);
+      c.fillText(suffix, SIZE / 2 - suffix.length * 16 + numW / 2 + 6, topY + 120);
       c.textAlign = 'center';
+      // WORK ANNIVERSARY (below number)
+      c.fillStyle = '#ffffff';
+      c.font = `400 88px 'Anton', Impact, sans-serif`;
+      c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 360);
+      // YEARS WITH THE FIRM
       c.fillStyle = 'rgba(255,255,255,0.4)';
       c.font = '400 24px Georgia, serif';
-      c.fillText('Y E A R S   W I T H   T H E   F I R M', SIZE / 2, topY + 435);
+      c.fillText('Y E A R S   W I T H   T H E   F I R M', SIZE / 2, topY + 430);
+      // Name
       c.fillStyle = '#c9a24a';
       c.font = `600 58px Georgia, serif`;
-      c.fillText(name || 'NAME', SIZE / 2, topY + 510);
+      c.fillText(name || 'NAME', SIZE / 2, topY + 505);
+      // Greeting
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `24px Georgia, serif`;
-      wrapText(c, greeting, SIZE / 2, 820, 38, topY + 570);
+      wrapText(c, greeting, SIZE / 2, 820, 38, topY + 565);
     }
 
     if (eventType === 'birthday') {
