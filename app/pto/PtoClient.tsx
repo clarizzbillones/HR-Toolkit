@@ -160,41 +160,49 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setImporting(false);
   }
 
-  // URL connect is kept for completeness but Office 365 blocks direct fetches.
-  // Primary path is handleIcsFile (file upload).
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
+    const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
+    let icsText: string | null = null;
+
+    // 1. Try browser-side fetch (25s — O365 can be slow)
     try {
-      const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
-      let icsText: string | null = null;
+      const r = await fetch(icsUrl, { signal: AbortSignal.timeout(25000) });
+      if (r.ok) {
+        const text = await r.text();
+        if (text.includes('BEGIN:VCALENDAR')) icsText = text;
+      }
+    } catch { /* CORS blocked → fall through to server */ }
 
-      // Try browser-side fetch with Accept header and 5s timeout
+    // 2. Server-side fetch via Edge function (no Vercel 10s cap)
+    if (!icsText) {
       try {
-        const r = await fetch(icsUrl, {
-          signal: AbortSignal.timeout(5000),
-          headers: { 'Accept': 'text/calendar, */*' },
+        const res = await fetch('/api/ics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: icsUrl }),
         });
-        if (r.ok) {
-          const text = await r.text();
-          if (text.includes('BEGIN:VCALENDAR')) icsText = text;
+        const data = await res.json();
+        if (res.ok && data.events) {
+          const events = data.events ?? [];
+          setCalEvents(events);
+          setCalConnected(true);
+          await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
+          showToast(`Connected — ${events.length} events loaded`);
+          setCalLoading(false);
+          return;
         }
-      } catch { /* CORS or timeout */ }
-
-      // Try without headers (some servers reject custom headers cross-origin)
-      if (!icsText) {
-        try {
-          const r = await fetch(icsUrl, { signal: AbortSignal.timeout(5000), mode: 'no-cors' });
-          // no-cors returns opaque response — can't read body, but worth trying
-        } catch { /* blocked */ }
+        showToast(data.error ?? 'Could not load calendar — try uploading the .ics file instead');
+      } catch {
+        showToast('Could not load calendar — try uploading the .ics file instead');
       }
+      setCalLoading(false);
+      return;
+    }
 
-      if (!icsText) {
-        showToast('Cannot reach URL directly — ask the calendar owner to export the .ics file and upload it here');
-        setCalLoading(false);
-        return;
-      }
-
+    // Browser fetch succeeded — parse via server
+    try {
       const res = await fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsText }) });
       const data = await res.json();
       const events = data.events ?? [];
@@ -203,7 +211,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
       showToast(`Connected — ${events.length} events loaded`);
     } catch {
-      showToast('Office 365 blocked the URL fetch — use the Upload .ics file option below');
+      showToast('Failed to parse calendar');
     }
     setCalLoading(false);
   }
@@ -399,20 +407,28 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {calConnected ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
-                <button onClick={() => uploadIcsRef.current?.click()} disabled={calLoading}
-                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Loading…' : 'Re-upload'}</button>
+                <button onClick={connectCalendar} disabled={calLoading}
+                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Syncing…' : 'Refresh'}</button>
                 <button onClick={disconnectCalendar}
                   className="text-xs text-text-muted hover:text-litred-alt font-semibold">Disconnect</button>
               </div>
             ) : (
               <div className="flex flex-col gap-2 mt-1">
+                <div className="flex gap-2">
+                  <input value={calUrl} onChange={e => setCalUrl(e.target.value)}
+                    placeholder="Paste published Outlook ICS link…"
+                    className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink" />
+                  <button onClick={connectCalendar} disabled={calLoading || !calUrl.trim()}
+                    className="bg-[#0F6CBD] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:opacity-90 disabled:opacity-40 whitespace-nowrap min-w-[80px] text-center">
+                    {calLoading ? 'Connecting…' : 'Connect'}
+                  </button>
+                </div>
+                {calLoading && <p className="text-[11px] text-[#3f6b8a]">Fetching calendar from Office 365 — this may take up to 30 seconds…</p>}
+                <div className="flex items-center gap-2"><div className="flex-1 h-px bg-border" /><span className="text-xs text-text-faint">or</span><div className="flex-1 h-px bg-border" /></div>
                 <button onClick={() => uploadIcsRef.current?.click()} disabled={calLoading}
-                  className="w-full bg-[#0F6CBD] text-white text-xs font-semibold py-2.5 rounded-ctrl hover:opacity-90 disabled:opacity-40">
-                  {calLoading ? 'Loading…' : '↑ Upload .ics file from Outlook'}
+                  className="w-full border border-dashed border-border text-text-muted text-xs font-semibold py-2 rounded-ctrl hover:border-ink hover:text-ink disabled:opacity-40">
+                  ↑ Upload .ics file (if link doesn't work)
                 </button>
-                <p className="text-[11px] text-text-faint leading-snug">
-                  Ask the <strong>Litson Availability</strong> calendar owner to export it as a .ics file (Outlook → calendar three-dot menu → <strong>Export calendar</strong>) and share with you. Then upload here.
-                </p>
               </div>
             )}
           </div>
