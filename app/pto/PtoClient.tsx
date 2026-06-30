@@ -388,12 +388,21 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const types = [...new Set(merged.map(r => r.type))].sort();
   const statuses = [...new Set(merged.map(r => r.status))].sort();
 
-  // Chart data: days per employee from filtered rows
+  // Clamp working days to the active filter window (so June filter can't show > 21 days)
+  function clampedDays(r: MergedRow): number {
+    const winStart = filterFrom || r.start;
+    const winEnd = filterTo || r.end;
+    const clampStart = r.start > winStart ? r.start : winStart;
+    const clampEnd = r.end < winEnd ? r.end : winEnd;
+    return clampStart <= clampEnd ? workingDays(clampStart, clampEnd) : 0;
+  }
+
+  // Chart data: days per employee from filtered rows, clamped to filter window
   const chartData = useMemo(() => {
     const map: Record<string, number> = {};
-    filtered.forEach(r => { map[r.employee] = (map[r.employee] ?? 0) + r.days; });
+    filtered.forEach(r => { map[r.employee] = (map[r.employee] ?? 0) + clampedDays(r); });
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 15);
-  }, [filtered]);
+  }, [filtered, filterFrom, filterTo]);
 
   function exportCsv() {
     const exportRows = filtered.filter(r => r.days >= 1);
@@ -573,7 +582,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                     filtered.forEach(r => {
                       if (!byType[r.type]) byType[r.type] = { count: 0, days: 0 };
                       byType[r.type].count++;
-                      byType[r.type].days += r.days;
+                      byType[r.type].days += clampedDays(r);
                     });
                     return Object.entries(byType)
                       .sort((a, b) => b[1].days - a[1].days)
@@ -590,7 +599,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                   <tr className="border-t-2 border-border bg-[#f1ece3]">
                     <td className="px-4 py-2 font-bold text-text-primary">Total</td>
                     <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.length}</td>
-                    <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.reduce((s, r) => s + r.days, 0)}</td>
+                    <td className="px-4 py-2 font-bold text-text-primary text-right">{filtered.reduce((s, r) => s + clampedDays(r), 0)}</td>
                   </tr>
                 </tbody>
               </table>
