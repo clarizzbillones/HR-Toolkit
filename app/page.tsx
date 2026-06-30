@@ -9,7 +9,32 @@ async function getStats() {
   const [{ n: pendingCount }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
   const [{ n: doneCount }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status = 'done'`;
   const [{ n: dueToday }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE due_tag = 'Today' AND status != 'done'`;
-  const [{ n: ptoToday }] = await sql`SELECT COUNT(*)::int as n FROM pto_entries WHERE start_date <= ${today} AND end_date >= ${today} AND status = 'Approved'`;
+  // DB report entries: exclude WFH / Personal leave types
+  const ptoDbRows = await sql<{ employee: string; type: string }>`
+    SELECT employee, type FROM pto_entries
+    WHERE start_date <= ${today} AND end_date >= ${today}
+      AND status = 'Approved'
+      AND type NOT ILIKE '%wfh%'
+      AND type NOT ILIKE '%work from home%'
+      AND type NOT ILIKE '%personal%'
+  `;
+
+  // Calendar events stored in app_settings
+  const [settingsRow] = await sql<{ calendar_events: string | null }>`SELECT calendar_events FROM app_settings WHERE id = 'singleton'`;
+  let calEventsRaw: { name: string; tag: string; start: string; end: string; title: string }[] = [];
+  try { calEventsRaw = settingsRow?.calendar_events ? JSON.parse(settingsRow.calendar_events) : []; } catch { calEventsRaw = []; }
+
+  const EXCLUDED_TYPES_RE = /wfh|work\s+from\s+home|personal\s+leave|personal/i;
+  const EXCLUDED_TITLE_RE = /interview|in\s+office|\bwfh\b|work\s+from\s+home|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one|\bin\s+\w+\s+for\b|[\w']+\s+in\s+\w+|fundraiser|conference|summit|trip\s+to|travel\s+to|visiting|event|gala|retreat/i;
+
+  const names = new Set<string>(ptoDbRows.map(r => r.employee.trim().toLowerCase()));
+  for (const c of calEventsRaw) {
+    if (c.start > today || c.end < today) continue;
+    if (EXCLUDED_TYPES_RE.test(c.tag)) continue;
+    if (EXCLUDED_TITLE_RE.test(c.title)) continue;
+    names.add(c.name.trim().toLowerCase());
+  }
+  const ptoToday = names.size;
   const [nextPayroll] = await sql`SELECT run_date, cutoff FROM payroll_periods WHERE run_date >= ${today} ORDER BY run_date ASC LIMIT 1`;
   const [{ n: empCount }] = await sql`SELECT COUNT(*)::int as n FROM employees`;
   const [{ n: reviewsDone }] = await sql`SELECT COUNT(*)::int as n FROM employees WHERE review_6mo_status = 'Complete'`;
