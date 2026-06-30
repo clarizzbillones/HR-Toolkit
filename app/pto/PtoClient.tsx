@@ -56,7 +56,16 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
   [/^(mrg|matt|mg|matt\s+gibbs)$/i, 'Matt Gibbs'],
   [/^(syerra|syerra\s+ryan)$/i, 'Syerra Ryan'],
-  [/^(sl|clarizz(\s+\w+)?)$/i, 'Clarizz'],
+  [/^(sl|clarizz|cb|clarizz\s+ann\s+billones|clarizz\s+ann\s+alon|clarizz\s+alon)$/i, 'Clarizz Billones'],
+  [/^(jr|jrg|john\s+glover)$/i, 'John Glover'],
+  [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
+  [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
+  [/^(carly|carly\s+crotty)$/i, 'Carly Crotty'],
+  [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
+  [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
+  [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
+  [/^(amy|amy\s+green)$/i, 'Amy Green'],
+  [/^(alicia|avh|alicia\s+van\s+huizen)$/i, 'Alicia Van Huizen'],
 ];
 
 function resolveAlias(n: string): string {
