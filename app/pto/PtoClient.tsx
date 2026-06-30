@@ -72,7 +72,7 @@ const NAME_ALIASES: [RegExp, string][] = [
 const EXCLUDED_TYPES = /^(wfh|work\s+from\s+home)$/i;
 
 // Calendar event title patterns that indicate it's NOT a time-off entry
-const EXCLUDED_TITLE = /interview|in\s+office|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one/i;
+const EXCLUDED_TITLE = /interview|in\s+office|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one|\bin\s+\w+\s+for\b|fundraiser|conference|summit|trip\s+to|travel\s+to|visiting|event|gala|retreat/i;
 
 function resolveAlias(n: string): string {
   const t = n.trim();
