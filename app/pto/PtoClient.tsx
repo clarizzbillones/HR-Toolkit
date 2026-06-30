@@ -52,7 +52,22 @@ const SOURCE_LABEL: Record<Source, string> = {
   calendar: 'Calendar only',
 };
 
-function normName(n: string) { return n.trim().toLowerCase().replace(/\s+/g, ' '); }
+const NAME_ALIASES: [RegExp, string][] = [
+  [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
+  [/^(mrg|matt|mg|matt\s+gibbs)$/i, 'Matt Gibbs'],
+  [/^(syerra|syerra\s+ryan)$/i, 'Syerra Ryan'],
+  [/^(sl|clarizz(\s+\w+)?)$/i, 'Clarizz'],
+];
+
+function resolveAlias(n: string): string {
+  const t = n.trim();
+  for (const [re, canonical] of NAME_ALIASES) {
+    if (re.test(t)) return canonical;
+  }
+  return t;
+}
+
+function normName(n: string) { return resolveAlias(n).trim().toLowerCase().replace(/\s+/g, ' '); }
 
 function workingDays(start: string, end: string) {
   let count = 0;
@@ -257,6 +272,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       const days = e.days || workingDays(e.start_date, e.end_date);
       if (days < 1) return; // skip partial / half-day leave
 
+      const canonicalEmployee = resolveAlias(e.employee);
       // Find matching calendar event (same person, overlapping dates) — mark as duplicate
       const calMatch = calEvents.find(c =>
         normName(c.name) === normName(e.employee) && datesOverlap(e.start_date, e.end_date, c.start, c.end)
@@ -264,7 +280,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       if (calMatch) usedCalIds.add(calMatch.id);
       rows.push({
         key: e.id,
-        employee: e.employee,
+        employee: canonicalEmployee,
         start: e.start_date,
         end: e.end_date,
         days,
@@ -283,7 +299,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       if (days < 1) return; // skip partial / half-day calendar events
       rows.push({
         key: c.id,
-        employee: c.name,
+        employee: resolveAlias(c.name),
         start: c.start,
         end: c.end,
         days,
