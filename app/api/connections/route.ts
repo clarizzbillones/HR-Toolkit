@@ -9,12 +9,14 @@ async function ensureColumns() {
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS reviews_url TEXT`;
 }
 
+const DEFAULT_CALENDAR_URL = 'https://outlook.office365.com/owa/calendar/b98af16d6adf4dcbab00e6267e7b56ef@litson.co/3595b6d02e0248e49850dbf12bf9e4be2311203059642998248/calendar.ics';
+
 export async function GET() {
   await ensureColumns();
   const rows = await sql`SELECT calendar_url, trips_url, reviews_url FROM app_settings WHERE id = 'singleton'`;
   const row = (rows as any[])[0] ?? {};
   return NextResponse.json({
-    calendar_url: row.calendar_url ?? null,
+    calendar_url: row.calendar_url ?? DEFAULT_CALENDAR_URL,
     trips_url: row.trips_url ?? null,
     reviews_url: row.reviews_url ?? null,
   });

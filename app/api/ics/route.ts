@@ -58,6 +58,8 @@ function parseIcs(text: string): IcsEvent[] {
       d.setDate(d.getDate() - 1);
       end = d.toISOString().slice(0, 10);
     }
+    // Only include events ending June 2026 or later
+    if (end < '2026-06-01') continue;
     events.push({
       id: uid || `${i}`,
       name: extractName(summary),
