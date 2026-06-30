@@ -332,35 +332,29 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       });
     });
 
-    // Post-merge dedup: collapse rows for the same canonical person with overlapping dates.
-    // Keep the report row (source='report') and mark it 'both' if a calendar row overlaps.
-    const deduped: MergedRow[] = [];
-    const usedKeys = new Set<string>();
+    // Full dedup: sort by source priority (report/both beat calendar), then eliminate
+    // any row whose canonical name + date range overlaps a higher-priority row.
+    const SOURCE_RANK: Record<Source, number> = { both: 0, report: 1, calendar: 2 };
+    const sorted = rows.sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
 
-    // First pass: for each report row, absorb any calendar-only row that overlaps
-    const calOnlyRows = rows.filter(r => r.source === 'calendar');
-    const reportRows = rows.filter(r => r.source !== 'calendar');
-
-    for (const rep of reportRows) {
-      const calOverlap = calOnlyRows.find(c =>
-        !usedKeys.has(c.key) &&
-        normName(c.employee) === normName(rep.employee) &&
-        datesOverlap(rep.start, rep.end, c.start, c.end)
+    const kept: MergedRow[] = [];
+    for (const row of sorted) {
+      const canon = normName(row.employee);
+      const duplicate = kept.find(k =>
+        normName(k.employee) === canon &&
+        datesOverlap(row.start, row.end, k.start, k.end)
       );
-      if (calOverlap) {
-        usedKeys.add(calOverlap.key);
-        deduped.push({ ...rep, source: 'both', calTitle: rep.calTitle ?? calOverlap.calTitle });
+      if (duplicate) {
+        // Absorb calendar title if the kept row doesn't have one
+        if (!duplicate.calTitle && row.calTitle) duplicate.calTitle = row.calTitle;
+        // Upgrade source to 'both' if the incoming row adds a different source
+        if (duplicate.source !== row.source) duplicate.source = 'both';
       } else {
-        deduped.push(rep);
+        kept.push({ ...row });
       }
     }
 
-    // Second pass: add remaining calendar-only rows that weren't absorbed
-    for (const cal of calOnlyRows) {
-      if (!usedKeys.has(cal.key)) deduped.push(cal);
-    }
-
-    return deduped.sort((a, b) => a.start.localeCompare(b.start));
+    return kept.sort((a, b) => a.start.localeCompare(b.start));
   }, [entries, calEvents]);
 
   // Apply filters
