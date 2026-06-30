@@ -171,48 +171,15 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }
 
   async function fetchAndSaveIcs(icsUrl: string): Promise<boolean> {
-    // Try 1: allorigins CORS proxy (browser-side, no Vercel limits)
-    try {
-      setCalStatus('Fetching calendar… (step 1/3)');
-      const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(20000) });
-      if (r.ok) {
-        const text = await r.text();
-        if (text.includes('BEGIN:VCALENDAR')) {
-          const p = await fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsText: text }) });
-          const d = await p.json();
-          if (p.ok && d.events?.length) {
-            await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: icsUrl, calendar_events: d.events }) });
-            setCalEvents(d.events);
-            setCalConnected(true);
-            return true;
-          }
-        }
-      }
-    } catch { /* fall through */ }
+    // Clear stale events so the poll below can detect genuinely fresh data
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) });
 
-    // Try 2: our server proxy (Edge, 30s)
-    try {
-      setCalStatus('Fetching calendar… (step 2/3)');
-      const r = await fetch(`/api/ics-proxy?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(28000) });
-      if (r.ok) {
-        const text = await r.text();
-        if (text.includes('BEGIN:VCALENDAR')) {
-          const p = await fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsText: text }) });
-          const d = await p.json();
-          if (p.ok && d.events?.length) {
-            await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: icsUrl, calendar_events: d.events }) });
-            setCalEvents(d.events);
-            setCalConnected(true);
-            return true;
-          }
-        }
-      }
-    } catch { /* fall through */ }
-
-    // Try 3: fire-and-poll via waitUntil refresh endpoint
-    setCalStatus('Fetching calendar… (step 3/3, up to 30s)');
+    // Fire background Edge job (responds instantly, fetches ICS in waitUntil)
+    setCalStatus('Syncing calendar… (up to 30s)');
     fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`).catch(() => {});
-    for (let i = 0; i < 12; i++) {
+
+    // Poll DB until events appear (Edge job finishes within ~15s)
+    for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 3000));
       try {
         const conn = await fetch('/api/connections').then(r => r.json());
@@ -235,7 +202,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     const ok = await fetchAndSaveIcs(icsUrl);
     setCalStatus('');
     if (ok) showToast(`Connected — ${calEvents.length || '?'} events loaded`);
-    else showToast('Could not connect — please upload the .ics file instead');
+    else showToast('Sync is running in background — refresh the page in a minute');
     setCalLoading(false);
   }
 
@@ -245,7 +212,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     const ok = await fetchAndSaveIcs(icsUrl);
     setCalStatus('');
     if (ok) showToast(`Refreshed — ${calEvents.length} events`);
-    else showToast('Refresh failed — try uploading the .ics file');
+    else showToast('Sync running in background — refresh the page in a minute');
     setCalLoading(false);
   }
 
