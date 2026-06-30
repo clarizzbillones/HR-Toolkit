@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const { status, note } = await req.json();
+  const { status, note, due_tag } = await req.json();
   const [task] = await sql`SELECT * FROM tasks WHERE id = ${params.id}`;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -17,6 +17,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const notes = JSON.parse(task.notes || '[]');
     notes.push({ date: new Date().toLocaleDateString('en-US'), text: note });
     await sql`UPDATE tasks SET notes = ${JSON.stringify(notes)} WHERE id = ${params.id}`;
+  }
+
+  if (due_tag !== undefined) {
+    await sql`UPDATE tasks SET due_tag = ${due_tag || null} WHERE id = ${params.id}`;
   }
 
   const [updated] = await sql`SELECT * FROM tasks WHERE id = ${params.id}`;

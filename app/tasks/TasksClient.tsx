@@ -20,9 +20,14 @@ function pillLabel(status: string) {
   if (status === 'doing') return 'In Progress';
   return 'Pending';
 }
-function tagStyle(tag: string | null) {
-  if (!tag) return null;
-  return `text-xs font-semibold rounded-full px-2 py-0.5 ${tag === 'Today' ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f1ece3] text-[#8b8478]'}`;
+function dueDateChip(due: string | null): { label: string; cls: string } | null {
+  if (!due) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  if (due < today) return { label: 'Overdue', cls: 'bg-[#fdeaea] text-[#b0412f]' };
+  if (due === today) return { label: 'Due today', cls: 'bg-[#fdeaea] text-[#b0412f]' };
+  const d = new Date(due + 'T12:00:00');
+  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return { label, cls: 'bg-[#f7efe1] text-[#b07d2a]' };
 }
 
 const COLS = [
@@ -58,6 +63,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [view, setView] = useState<'board' | 'list'>('board');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [newDue, setNewDue] = useState('');
   const [selected, setSelected] = useState<Task | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [showEod, setShowEod] = useState(false);
@@ -82,10 +88,11 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
 
   async function addTask() {
     if (!newTitle.trim()) return;
-    const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
+    const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle, dueTag: newDue || null }) });
     const { task } = await res.json();
     setTasks(prev => [task, ...prev]);
     setNewTitle('');
+    setNewDue('');
     setShowAdd(false);
     showToast('Task added');
   }
@@ -109,6 +116,13 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     setTasks(prev => prev.filter(t => !ids.includes(t.id)));
     clearChecked();
     showToast(`Deleted ${ids.length} task${ids.length > 1 ? 's' : ''}`);
+  }
+
+  async function updateDueDate(id: string, due: string) {
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ due_tag: due || null }) });
+    const { task } = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? task : t));
+    if (selected?.id === id) setSelected(task);
   }
 
   async function addNote(id: string) {
@@ -153,14 +167,16 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
       </header>
 
       {showAdd && (
-        <div className="flex gap-2.5 items-center px-8 py-3.5 bg-warm-deep border-b border-border flex-shrink-0">
+        <div className="flex gap-2.5 items-center px-8 py-3.5 bg-warm-deep border-b border-border flex-shrink-0 flex-wrap">
           <input
             value={newTitle} onChange={e => setNewTitle(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addTask()}
             placeholder="New task title — press Enter to add…"
-            className="flex-1 max-w-xl border border-border-light rounded-ctrl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-ink"
+            className="flex-1 min-w-48 border border-border-light rounded-ctrl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-ink"
             autoFocus
           />
+          <input type="date" value={newDue} onChange={e => setNewDue(e.target.value)}
+            className="border border-border-light rounded-ctrl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-ink bg-white" />
           <button onClick={addTask} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl">Add</button>
         </div>
       )}
@@ -240,7 +256,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                             <div className="text-sm text-text-primary font-semibold leading-snug">{t.title}</div>
                             {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                             <div className="flex items-center gap-2 mt-2">
-                              {t.due_tag && <span className={tagStyle(t.due_tag) ?? ''}>{t.due_tag}</span>}
+                              {(() => { const c = dueDateChip(t.due_tag); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                               {notesArr.length > 0 && <span className="text-xs text-text-muted flex items-center gap-1">📝 {notesArr.length}</span>}
                             </div>
                           </div>
@@ -281,7 +297,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                     {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                   </div>
                   {notesArr.length > 0 && <span className="text-xs text-text-muted self-center">📝 {notesArr.length}</span>}
-                  {t.due_tag && <span className={tagStyle(t.due_tag) ?? ''}>{t.due_tag}</span>}
+                  {(() => { const c = dueDateChip(t.due_tag); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                 </div>
               );
             })}
@@ -325,6 +341,15 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
               <button onClick={() => setSelected(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>
             <div className="overflow-auto flex-1 p-6">
+              <div className="mb-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Due Date</div>
+                <input type="date" defaultValue={selected.due_tag || ''} onBlur={e => updateDueDate(selected.id, e.target.value)}
+                  className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink bg-white" />
+                {selected.due_tag && (
+                  <button onClick={() => updateDueDate(selected.id, '')} className="ml-2 text-xs text-text-muted hover:text-litred-alt">Clear</button>
+                )}
+              </div>
+
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Status</div>
                 <div className="flex gap-2">
