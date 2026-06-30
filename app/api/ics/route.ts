@@ -85,8 +85,11 @@ export async function POST(req: Request) {
   try {
     const icsUrl = url.replace(/^webcal:/, 'https:');
     const res = await fetch(icsUrl, {
-      headers: { 'User-Agent': 'LitsonHRToolkit/1.0' },
-      signal: AbortSignal.timeout(10000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; LitsonHRToolkit/1.0)',
+        'Accept': 'text/calendar, */*',
+      },
+      signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) return NextResponse.json({ error: `Fetch failed: ${res.status}` }, { status: 502 });
     const text = await res.text();
