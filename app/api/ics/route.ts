@@ -11,7 +11,6 @@ interface IcsEvent {
 }
 
 function parseDate(val: string): string {
-  // DTSTART;VALUE=DATE:20260630  or  DTSTART:20260630T000000Z
   const d = val.replace(/[TZ]/g, '').slice(0, 8);
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
 }
@@ -25,13 +24,12 @@ function detectTag(summary: string): string {
 }
 
 function extractName(summary: string): string {
-  // Patterns: "Amy WFH", "JRG - WFH", "Paula OOO", "Ted OOO - Sea Island"
   return summary
     .replace(/\b(OOO|PTO|WFH|OUT OF OFFICE|VACATION|LEAVE|REMOTE|WORK FROM HOME)\b/gi, '')
     .replace(/[-–—]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .split(' ')[0] // first word = first name / initials
+    .split(' ')[0]
     || summary.trim();
 }
 
@@ -50,34 +48,35 @@ function parseIcs(text: string): IcsEvent[] {
     const uid = get('UID');
     if (!summary || !dtstart) continue;
     const start = parseDate(dtstart);
-    // DTEND for all-day events is exclusive (next day), subtract 1
     let end = dtend ? parseDate(dtend) : start;
     if (dtend && !dtend.includes('T')) {
-      // All-day: DTEND is exclusive, move back 1 day
       const d = new Date(end + 'T12:00:00');
       d.setDate(d.getDate() - 1);
       end = d.toISOString().slice(0, 10);
     }
-    // Only include events ending June 2026 or later
     if (end < '2026-06-01') continue;
-    events.push({
-      id: uid || `${i}`,
-      name: extractName(summary),
-      tag: detectTag(summary),
-      start,
-      end,
-      title: summary,
-    });
+    events.push({ id: uid || `${i}`, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
   }
   return events;
 }
 
 export async function POST(req: Request) {
-  const { url } = await req.json();
-  if (!url || typeof url !== 'string') {
-    return NextResponse.json({ error: 'Missing url' }, { status: 400 });
+  const body = await req.json();
+
+  // Mode 1: client sends raw ICS text (avoids Vercel's 10s function limit)
+  if (body.icsText) {
+    const text = String(body.icsText);
+    if (!text.includes('BEGIN:VCALENDAR')) {
+      return NextResponse.json({ error: 'Not a valid ICS feed' }, { status: 422 });
+    }
+    return NextResponse.json({ events: parseIcs(text) });
   }
-  // Only allow .ics / webcal / outlook URLs
+
+  // Mode 2: server fetches the URL (fallback)
+  const { url } = body;
+  if (!url || typeof url !== 'string') {
+    return NextResponse.json({ error: 'Missing url or icsText' }, { status: 400 });
+  }
   const allowed = /^https?:\/\/(outlook\.|calendar\.|webcal\.|[a-z0-9-]+\.office\.com|[a-z0-9-]+\.office365\.com|outlook\.live\.com|outlook\.cloud\.microsoft)/i;
   if (!allowed.test(url.replace(/^webcal:/, 'https:'))) {
     return NextResponse.json({ error: 'URL not allowed' }, { status: 400 });
@@ -85,19 +84,15 @@ export async function POST(req: Request) {
   try {
     const icsUrl = url.replace(/^webcal:/, 'https:');
     const res = await fetch(icsUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; LitsonHRToolkit/1.0)',
-        'Accept': 'text/calendar, */*',
-      },
-      signal: AbortSignal.timeout(30000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LitsonHRToolkit/1.0)', 'Accept': 'text/calendar, */*' },
+      signal: AbortSignal.timeout(25000),
     });
     if (!res.ok) return NextResponse.json({ error: `Fetch failed: ${res.status}` }, { status: 502 });
     const text = await res.text();
     if (!text.includes('BEGIN:VCALENDAR')) {
       return NextResponse.json({ error: 'Not a valid ICS feed' }, { status: 422 });
     }
-    const events = parseIcs(text);
-    return NextResponse.json({ events });
+    return NextResponse.json({ events: parseIcs(text) });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? 'Failed to fetch calendar' }, { status: 502 });
   }

@@ -159,26 +159,51 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setImporting(false);
   }
 
-  // --- Calendar connect / refresh (live ICS fetch, saves events to DB) ---
+  // --- Calendar connect / refresh ---
+  // Fetch ICS directly from the browser (avoids Vercel's 10s server function limit),
+  // then send the raw text to /api/ics for parsing only.
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
     try {
-      const res = await fetch('/api/ics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: calUrl.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error ?? 'Failed to connect calendar');
-        setCalLoading(false);
-        return;
+      const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
+      let icsText: string | null = null;
+
+      // Try browser-side fetch first (no server timeout)
+      try {
+        const r = await fetch(icsUrl);
+        if (r.ok) icsText = await r.text();
+      } catch {
+        // CORS blocked — fall through to server-side fetch
       }
+
+      let data: any;
+      if (icsText && icsText.includes('BEGIN:VCALENDAR')) {
+        // Parse via server (no network call on server)
+        const res = await fetch('/api/ics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ icsText }),
+        });
+        data = await res.json();
+      } else {
+        // Fall back to server-side fetch
+        const res = await fetch('/api/ics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: icsUrl }),
+        });
+        data = await res.json();
+        if (!res.ok) {
+          showToast(data.error ?? 'Failed to connect calendar');
+          setCalLoading(false);
+          return;
+        }
+      }
+
       const events = data.events ?? [];
       setCalEvents(events);
       setCalConnected(true);
-      // Save URL + events to DB so refresh loads from cache
       await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
       showToast(`Connected — ${events.length} events loaded`);
     } catch {
