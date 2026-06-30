@@ -68,6 +68,12 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(alicia|avh|alicia\s+van\s+huizen)$/i, 'Alicia Van Huizen'],
 ];
 
+// Types to exclude entirely
+const EXCLUDED_TYPES = /^(wfh|work\s+from\s+home)$/i;
+
+// Calendar event title patterns that indicate it's NOT a time-off entry
+const EXCLUDED_TITLE = /interview|in\s+office|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one/i;
+
 function resolveAlias(n: string): string {
   const t = n.trim();
   for (const [re, canonical] of NAME_ALIASES) {
@@ -276,8 +282,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     const rows: MergedRow[] = [];
     const usedCalIds = new Set<string>();
 
-    // Start with report entries — skip half-day / partial entries (< 1 day)
+    // Start with report entries — skip WFH, half-day / partial entries (< 1 day)
     entries.forEach(e => {
+      if (EXCLUDED_TYPES.test(e.type)) return; // skip WFH
       const days = e.days || workingDays(e.start_date, e.end_date);
       if (days < 1) return; // skip partial / half-day leave
 
@@ -300,10 +307,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       });
     });
 
-    // Add calendar-only events (no match in report) — skip anything ending before June 2026
+    // Add calendar-only events — skip WFH, non-PTO titles, < 1 day, old events
     calEvents.forEach(c => {
       if (usedCalIds.has(c.id)) return;
       if (c.end < '2026-06-01') return;
+      if (EXCLUDED_TYPES.test(c.tag)) return; // skip WFH
+      if (EXCLUDED_TITLE.test(c.title)) return; // skip meetings/notes/interviews
       const days = workingDays(c.start, c.end);
       if (days < 1) return; // skip partial / half-day calendar events
       rows.push({
