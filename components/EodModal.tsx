@@ -31,7 +31,43 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   }
 
   function printPdf() {
-    window.print();
+    const taskRows = tasks.map(t => {
+      const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
+      return `<tr style="border-bottom:1px solid #f4efe6">
+        <td style="padding:8px 4px;font-size:13px;font-weight:500">${t.title}${t.sub ? `<br><span style="font-size:11px;color:#888">${t.sub}</span>` : ''}</td>
+        <td style="padding:8px 4px;font-size:11px">${statusLabel(t.status)}</td>
+        <td style="padding:8px 4px;font-size:11px;color:#666">${t.due_tag || '—'}</td>
+        <td style="padding:8px 4px;font-size:11px;color:#666">${taskNotes.map(n=>n.text).join('; ') || '—'}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><title>EOD Report – ${today}</title>
+    <style>body{font-family:Georgia,serif;margin:0;padding:0}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#999;padding:6px 4px;border-bottom:2px solid #e0d9ce}
+    </style></head><body>
+    <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:.15em">LITSON</div>
+      <div style="font-size:10px;color:#cdd7e2;letter-spacing:.1em;margin-top:2px">ATTORNEYS AT LAW · NASHVILLE, TENNESSEE</div></div>
+      <div style="text-align:right;font-size:11px;color:#cdd7e2;line-height:1.6">End-of-Day Report<br>${today}</div>
+    </div>
+    <div style="padding:24px 32px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+        <div style="background:#eef5f1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#2f7d5b;text-transform:uppercase">Tasks Done</div><div style="font-size:28px;font-weight:700;color:#2f7d5b">${done.length}</div></div>
+        <div style="background:#f7efe1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b07d2a;text-transform:uppercase">Pending</div><div style="font-size:28px;font-weight:700;color:#b07d2a">${pending.length}</div></div>
+        <div style="background:#e9f0f5;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase">On PTO</div><div style="font-size:28px;font-weight:700;color:#3f6b8a">—</div></div>
+        <div style="background:#fdeaea;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b0412f;text-transform:uppercase">Open Items</div><div style="font-size:28px;font-weight:700;color:#b0412f">${pending.length}</div></div>
+      </div>
+      <table><thead><tr><th>Task</th><th>Status</th><th>Due</th><th>Notes</th></tr></thead><tbody>${taskRows}</tbody></table>
+      ${notes ? `<div style="margin-top:24px;padding:16px;background:#fafaf8;border:1px solid #e8e3da;border-radius:6px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#999;margin-bottom:8px">Notes for Reviewer</div><div style="font-size:13px;color:#333">${notes}</div></div>` : ''}
+    </div></body></html>`;
+
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   }
 
   async function sendPartners() {
