@@ -94,7 +94,7 @@ const modules = [
 export default function DashboardClient(props: Props) {
   const { data: session } = useSession();
   const [showEod, setShowEod] = useState(false);
-  const [ptoToday, setPtoToday] = useState(ptoToday);
+  const [ptoToday, setPtoToday] = useState<number>(props.ptoToday);
 
   useEffect(() => {
     fetch('/api/pto/today').then(r => r.json()).then(d => {
