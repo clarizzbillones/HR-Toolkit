@@ -22,9 +22,35 @@ function pillLabel(status: string) {
 }
 function tagStyle(tag: string | null) {
   if (!tag) return null;
-  const c = tag === 'Today' ? '#b0412f' : '#8b8478';
   return `text-xs font-semibold rounded-full px-2 py-0.5 ${tag === 'Today' ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f1ece3] text-[#8b8478]'}`;
 }
+
+const COLS = [
+  {
+    key: 'todo',
+    label: 'Not started',
+    headColor: '#92826d',
+    bg: 'bg-[#f0ece5]',
+    cardBorder: 'border-l-[#c0b09a]',
+    dot: 'bg-[#c0b09a]',
+  },
+  {
+    key: 'doing',
+    label: 'In progress',
+    headColor: '#2a5f8a',
+    bg: 'bg-[#e8f0f7]',
+    cardBorder: 'border-l-[#3f6b8a]',
+    dot: 'bg-[#3f6b8a]',
+  },
+  {
+    key: 'done',
+    label: 'Completed',
+    headColor: '#1f6b4a',
+    bg: 'bg-[#e6f3ec]',
+    cardBorder: 'border-l-[#2f7d5b]',
+    dot: 'bg-[#2f7d5b]',
+  },
+];
 
 export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) {
   const { showToast } = useToast();
@@ -35,11 +61,24 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [selected, setSelected] = useState<Task | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [showEod, setShowEod] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const dragId = useRef<string | null>(null);
 
   const pending = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
-  const todayDate = new Date().toLocaleDateString('en-US');
+
+  const hasChecked = checkedIds.size > 0;
+
+  function toggleCheck(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function clearChecked() { setCheckedIds(new Set()); }
 
   async function addTask() {
     if (!newTitle.trim()) return;
@@ -58,6 +97,20 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     if (selected?.id === id) setSelected(task);
   }
 
+  async function bulkMove(status: string) {
+    await Promise.all([...checkedIds].map(id => updateStatus(id, status)));
+    clearChecked();
+    showToast(`Moved ${checkedIds.size} task${checkedIds.size > 1 ? 's' : ''}`);
+  }
+
+  async function bulkDelete() {
+    const ids = [...checkedIds];
+    await Promise.all(ids.map(id => fetch(`/api/tasks/${id}`, { method: 'DELETE' })));
+    setTasks(prev => prev.filter(t => !ids.includes(t.id)));
+    clearChecked();
+    showToast(`Deleted ${ids.length} task${ids.length > 1 ? 's' : ''}`);
+  }
+
   async function addNote(id: string) {
     if (!noteInput.trim()) return;
     const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: noteInput }) });
@@ -74,12 +127,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     setSelected(null);
     showToast('Task deleted');
   }
-
-  const boardCols = [
-    { key: 'todo', label: 'Not started', headColor: '#8b8478' },
-    { key: 'doing', label: 'In progress', headColor: '#3f6b8a' },
-    { key: 'done', label: 'Completed', headColor: '#2f7d5b' },
-  ];
 
   function onDragStart(id: string) { dragId.current = id; }
   function onDrop(status: string) {
@@ -118,42 +165,92 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {hasChecked && (
+        <div className="flex items-center gap-3 px-8 py-2.5 bg-[#1a2233] text-white flex-shrink-0 flex-wrap">
+          <span className="text-sm font-semibold">{checkedIds.size} selected</span>
+          <span className="text-white/30 text-sm">·</span>
+          <span className="text-xs text-white/60 font-medium">Move to:</span>
+          {COLS.map(col => (
+            <button key={col.key} onClick={() => bulkMove(col.key)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20 hover:bg-white/10 transition-colors">
+              {col.label}
+            </button>
+          ))}
+          <button onClick={bulkDelete}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#b0412f]/80 hover:bg-[#b0412f] transition-colors ml-1">
+            Delete
+          </button>
+          <button onClick={clearChecked} className="ml-auto text-xs text-white/50 hover:text-white/80 transition-colors">
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
       {/* Board */}
       {view === 'board' && (
         <div className="flex-1 overflow-auto p-8">
           <div className="grid grid-cols-3 gap-4 items-start">
-            {boardCols.map(col => {
+            {COLS.map(col => {
               const colTasks = tasks.filter(t => t.status === col.key);
               return (
                 <div
                   key={col.key}
-                  className="bg-[#f1ece3] rounded-xl p-3.5 flex flex-col gap-2.5 min-h-48"
+                  className={clsx('rounded-xl p-3.5 flex flex-col gap-2.5 min-h-48', col.bg)}
                   onDrop={() => onDrop(col.key)}
                   onDragOver={e => e.preventDefault()}
                 >
-                  <div className="flex items-center px-1">
+                  <div className="flex items-center gap-2 px-1 pb-1 border-b border-black/5">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.headColor }} />
                     <span className="text-sm font-bold" style={{ color: col.headColor }}>{col.label}</span>
-                    <span className="ml-auto text-xs text-text-muted font-semibold">{colTasks.length}</span>
+                    <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full bg-black/8 text-black/40">{colTasks.length}</span>
                   </div>
                   {colTasks.map(t => {
                     const notesArr = JSON.parse(t.notes || '[]');
+                    const isChecked = checkedIds.has(t.id);
                     return (
                       <div
                         key={t.id}
                         draggable
                         onDragStart={() => onDragStart(t.id)}
-                        onClick={() => setSelected(t)}
-                        className="bg-white border border-[#e6e0d5] rounded-[10px] px-3.5 py-3 cursor-pointer shadow-sm hover:shadow-card transition-shadow"
+                        onClick={() => !hasChecked && setSelected(t)}
+                        className={clsx(
+                          'group bg-white border rounded-[10px] px-3.5 py-3 shadow-sm hover:shadow-card transition-all border-l-4',
+                          col.cardBorder,
+                          isChecked ? 'ring-2 ring-[#3f6b8a] ring-offset-1' : 'border-[#e6e0d5]',
+                          hasChecked ? 'cursor-pointer' : 'cursor-pointer'
+                        )}
                       >
-                        <div className="text-sm text-text-primary font-semibold leading-snug">{t.title}</div>
-                        {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
-                        <div className="flex items-center gap-2 mt-2.5">
-                          {t.due_tag && <span className={tagStyle(t.due_tag) ?? ''}>{t.due_tag}</span>}
-                          {notesArr.length > 0 && <span className="text-xs text-text-muted flex items-center gap-1">📝 {notesArr.length}</span>}
+                        <div className="flex items-start gap-2.5">
+                          {/* Checkbox */}
+                          <button
+                            onClick={e => toggleCheck(t.id, e)}
+                            className={clsx(
+                              'flex-shrink-0 mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
+                              isChecked
+                                ? 'bg-[#3f6b8a] border-[#3f6b8a]'
+                                : 'border-[#c0b9aa] bg-white opacity-0 group-hover:opacity-100'
+                            )}
+                          >
+                            {isChecked && (
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><polyline points="5 12 10 17 19 7"/></svg>
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-text-primary font-semibold leading-snug">{t.title}</div>
+                            {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
+                            <div className="flex items-center gap-2 mt-2">
+                              {t.due_tag && <span className={tagStyle(t.due_tag) ?? ''}>{t.due_tag}</span>}
+                              {notesArr.length > 0 && <span className="text-xs text-text-muted flex items-center gap-1">📝 {notesArr.length}</span>}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
                   })}
+                  {colTasks.length === 0 && (
+                    <div className="text-xs text-center text-black/25 py-6 italic">Drop tasks here</div>
+                  )}
                 </div>
               );
             })}
@@ -168,9 +265,17 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           <div className="bg-white border border-border rounded-card overflow-hidden mb-6">
             {pending.map(t => {
               const notesArr = JSON.parse(t.notes || '[]');
+              const isChecked = checkedIds.has(t.id);
               return (
-                <div key={t.id} className="flex items-start gap-3.5 px-4.5 py-4 border-b border-[#f1ece3] last:border-0">
-                  <button onClick={() => updateStatus(t.id, 'done')} className="w-5 h-5 rounded-md border-2 border-[#c0b9aa] flex-shrink-0 mt-0.5 hover:border-ink transition-colors" />
+                <div key={t.id} className={clsx('group flex items-start gap-3.5 px-4.5 py-4 border-b border-[#f1ece3] last:border-0', isChecked && 'bg-[#f0f5fa]')}>
+                  <button
+                    onClick={e => toggleCheck(t.id, e)}
+                    className={clsx('w-5 h-5 rounded-md border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all',
+                      isChecked ? 'bg-[#3f6b8a] border-[#3f6b8a]' : 'border-[#c0b9aa] hover:border-ink'
+                    )}
+                  >
+                    {isChecked && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><polyline points="5 12 10 17 19 7"/></svg>}
+                  </button>
                   <div onClick={() => setSelected(t)} className="flex-1 cursor-pointer">
                     <div className="text-sm text-text-primary font-medium">{t.title}</div>
                     {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
@@ -184,14 +289,25 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           </div>
           <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-2.5">Completed today</div>
           <div className="bg-white border border-border rounded-card overflow-hidden">
-            {done.map(t => (
-              <div key={t.id} className="flex items-center gap-3.5 px-4.5 py-3.5 border-b border-[#f1ece3] last:border-0">
-                <div className="w-5 h-5 rounded-md bg-[#2f7d5b] flex items-center justify-center flex-shrink-0">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="5 12 10 17 19 7"/></svg>
+            {done.map(t => {
+              const isChecked = checkedIds.has(t.id);
+              return (
+                <div key={t.id} className={clsx('group flex items-center gap-3.5 px-4.5 py-3.5 border-b border-[#f1ece3] last:border-0', isChecked && 'bg-[#f0f5fa]')}>
+                  <button
+                    onClick={e => toggleCheck(t.id, e)}
+                    className={clsx('w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-all',
+                      isChecked ? 'bg-[#3f6b8a] border-[#3f6b8a]' : 'bg-[#2f7d5b] border-[#2f7d5b]'
+                    )}
+                  >
+                    {isChecked
+                      ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><polyline points="5 12 10 17 19 7"/></svg>
+                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="5 12 10 17 19 7"/></svg>
+                    }
+                  </button>
+                  <div onClick={() => setSelected(t)} className="flex-1 text-sm text-text-muted line-through cursor-pointer">{t.title}</div>
                 </div>
-                <div onClick={() => setSelected(t)} className="flex-1 text-sm text-text-muted line-through cursor-pointer">{t.title}</div>
-              </div>
-            ))}
+              );
+            })}
             {done.length === 0 && <div className="px-4.5 py-4 text-sm text-text-muted">None yet today</div>}
           </div>
         </div>
@@ -209,7 +325,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
               <button onClick={() => setSelected(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>
             <div className="overflow-auto flex-1 p-6">
-              {/* Status switcher */}
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Status</div>
                 <div className="flex gap-2">
@@ -218,8 +333,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                   ))}
                 </div>
               </div>
-
-              {/* History */}
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Status History</div>
                 {JSON.parse(selected.status_history || '[]').map((h: any, i: number) => (
@@ -228,8 +341,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                   </div>
                 ))}
               </div>
-
-              {/* Notes */}
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Notes</div>
                 {JSON.parse(selected.notes || '[]').map((n: any, i: number) => (
@@ -242,7 +353,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                   <button onClick={() => addNote(selected.id)} className="bg-ink text-white text-sm font-semibold px-3 py-2 rounded-ctrl">Add</button>
                 </div>
               </div>
-
               <button onClick={() => deleteTask(selected.id)} className="text-sm text-litred-alt font-semibold hover:underline">Delete task</button>
             </div>
           </div>
