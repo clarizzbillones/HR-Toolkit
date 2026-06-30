@@ -169,18 +169,28 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
       let icsText: string | null = null;
 
-      // Try browser-side fetch with 8s timeout
+      // Try browser-side fetch with Accept header and 5s timeout
       try {
-        const r = await fetch(icsUrl, { signal: AbortSignal.timeout(8000) });
+        const r = await fetch(icsUrl, {
+          signal: AbortSignal.timeout(5000),
+          headers: { 'Accept': 'text/calendar, */*' },
+        });
         if (r.ok) {
           const text = await r.text();
           if (text.includes('BEGIN:VCALENDAR')) icsText = text;
         }
-      } catch { /* CORS or timeout — fall through */ }
+      } catch { /* CORS or timeout */ }
+
+      // Try without headers (some servers reject custom headers cross-origin)
+      if (!icsText) {
+        try {
+          const r = await fetch(icsUrl, { signal: AbortSignal.timeout(5000), mode: 'no-cors' });
+          // no-cors returns opaque response — can't read body, but worth trying
+        } catch { /* blocked */ }
+      }
 
       if (!icsText) {
-        // Office 365 blocks server fetches — tell user to use file upload
-        showToast('Office 365 blocked the URL fetch — use the Upload .ics file option below');
+        showToast('Cannot reach URL directly — ask the calendar owner to export the .ics file and upload it here');
         setCalLoading(false);
         return;
       }
@@ -401,7 +411,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                   {calLoading ? 'Loading…' : '↑ Upload .ics file from Outlook'}
                 </button>
                 <p className="text-[11px] text-text-faint leading-snug">
-                  In Outlook: open the <strong>Litson Availability</strong> calendar → click the three-dot menu → <strong>Export calendar</strong> → save the .ics file → upload here.
+                  Ask the <strong>Litson Availability</strong> calendar owner to export it as a .ics file (Outlook → calendar three-dot menu → <strong>Export calendar</strong>) and share with you. Then upload here.
                 </p>
               </div>
             )}
