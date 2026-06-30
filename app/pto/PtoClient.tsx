@@ -96,7 +96,7 @@ function mapPtoRows(rows: Record<string, string>[]): Omit<PtoEntry, 'id' | 'stat
       end_date: endDate ? endDate.toISOString().slice(0, 10) : startDate ? startDate.toISOString().slice(0, 10) : '',
       days, type: r[typeCol] ?? 'Vacation', notes: '',
     };
-  }).filter(r => r.employee && r.start_date);
+  }).filter(r => r.employee && r.start_date && r.days >= 1);
 }
 
 function detectTag(title: string): string {
@@ -190,6 +190,25 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     } catch { /* fall through */ }
 
     if (!icsText) {
+      // Last resort: trigger server-side refresh (saves directly to DB)
+      setCalStatus('Trying alternate fetch…');
+      try {
+        // Save URL first so refresh endpoint can use it
+        await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim() }) });
+        const res = await fetch('/api/ics-refresh', { signal: AbortSignal.timeout(62000) });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          const conn = await fetch('/api/connections').then(r => r.json());
+          if (conn.calendar_events?.length) {
+            setCalEvents(conn.calendar_events);
+            setCalConnected(true);
+            setCalStatus('');
+            showToast(`Connected — ${data.events} events loaded`);
+            setCalLoading(false);
+            return;
+          }
+        }
+      } catch { /* fall through */ }
       setCalStatus('');
       showToast('Could not reach the calendar — try uploading the .ics file instead');
       setCalLoading(false);
@@ -213,6 +232,30 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       showToast(`Connected — ${events.length} events loaded`);
     } catch {
       showToast('Failed to parse calendar');
+    }
+    setCalLoading(false);
+  }
+
+  async function refreshCalendar() {
+    setCalLoading(true);
+    setCalStatus('Refreshing from Office 365…');
+    try {
+      const res = await fetch('/api/ics-refresh', { signal: AbortSignal.timeout(62000) });
+      const data = await res.json();
+      if (!res.ok) {
+        setCalStatus('');
+        showToast(data.error ?? 'Refresh failed — try uploading the .ics file');
+        setCalLoading(false);
+        return;
+      }
+      // Reload the updated events from DB
+      const conn = await fetch('/api/connections').then(r => r.json());
+      if (conn.calendar_events?.length) setCalEvents(conn.calendar_events);
+      setCalStatus('');
+      showToast(`Refreshed — ${data.events} events`);
+    } catch {
+      setCalStatus('');
+      showToast('Refresh timed out — try uploading the .ics file');
     }
     setCalLoading(false);
   }
@@ -406,8 +449,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {calConnected ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
-                <button onClick={connectCalendar} disabled={calLoading}
-                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Syncing…' : 'Refresh'}</button>
+                <button onClick={refreshCalendar} disabled={calLoading}
+                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Refreshing…' : 'Refresh'}</button>
                 <button onClick={disconnectCalendar}
                   className="text-xs text-text-muted hover:text-litred-alt font-semibold">Disconnect</button>
               </div>
