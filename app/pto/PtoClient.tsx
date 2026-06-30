@@ -177,36 +177,32 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
     let icsText: string | null = null;
 
-    // Fetch via our server proxy (handles CORS + redirects + browser-like headers)
-    setCalStatus('Fetching calendar — this may take up to 30 seconds…');
+    // Step 1: browser-side fetch via public CORS proxy (bypasses Vercel IP blocks)
+    setCalStatus('Connecting to calendar…');
     try {
-      const proxyRes = await fetch(`/api/ics-proxy?url=${encodeURIComponent(icsUrl)}`, {
-        signal: AbortSignal.timeout(58000),
-      });
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(icsUrl)}`;
+      const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
       if (proxyRes.ok) {
         const text = await proxyRes.text();
         if (text.includes('BEGIN:VCALENDAR')) icsText = text;
       }
     } catch { /* fall through */ }
 
+    // Step 2: try our own server proxy
     if (!icsText) {
-      // Last resort: trigger server-side refresh (saves directly to DB)
-      setCalStatus('Trying alternate fetch…');
+      setCalStatus('Trying server fetch…');
       try {
-        const res = await fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(32000) });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-          const conn = await fetch('/api/connections').then(r => r.json());
-          if (conn.calendar_events?.length) {
-            setCalEvents(conn.calendar_events);
-            setCalConnected(true);
-            setCalStatus('');
-            showToast(`Connected — ${data.events} events loaded`);
-            setCalLoading(false);
-            return;
-          }
+        const proxyRes = await fetch(`/api/ics-proxy?url=${encodeURIComponent(icsUrl)}`, {
+          signal: AbortSignal.timeout(28000),
+        });
+        if (proxyRes.ok) {
+          const text = await proxyRes.text();
+          if (text.includes('BEGIN:VCALENDAR')) icsText = text;
         }
       } catch { /* fall through */ }
+    }
+
+    if (!icsText) {
       setCalStatus('');
       showToast('Could not reach the calendar — try uploading the .ics file instead');
       setCalLoading(false);
@@ -236,26 +232,36 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   async function refreshCalendar() {
     setCalLoading(true);
-    setCalStatus('Refreshing from Office 365…');
+    setCalStatus('Refreshing…');
+    const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
+    let icsText: string | null = null;
     try {
-      const icsUrl = calUrl.trim().replace(/^webcal:/, 'https:');
-      const res = await fetch(`/api/ics-refresh?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(32000) });
-      const data = await res.json();
-      if (!res.ok) {
-        setCalStatus('');
-        showToast(data.error ?? 'Refresh failed — try uploading the .ics file');
-        setCalLoading(false);
-        return;
-      }
-      // Reload the updated events from DB
-      const conn = await fetch('/api/connections').then(r => r.json());
-      if (conn.calendar_events?.length) setCalEvents(conn.calendar_events);
-      setCalStatus('');
-      showToast(`Refreshed — ${data.events} events`);
-    } catch {
-      setCalStatus('');
-      showToast('Refresh timed out — try uploading the .ics file');
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(icsUrl)}`;
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
+      if (res.ok) { const t = await res.text(); if (t.includes('BEGIN:VCALENDAR')) icsText = t; }
+    } catch { /* fall through */ }
+    if (!icsText) {
+      try {
+        const res = await fetch(`/api/ics-proxy?url=${encodeURIComponent(icsUrl)}`, { signal: AbortSignal.timeout(28000) });
+        if (res.ok) { const t = await res.text(); if (t.includes('BEGIN:VCALENDAR')) icsText = t; }
+      } catch { /* fall through */ }
     }
+    if (!icsText) {
+      setCalStatus('');
+      showToast('Refresh failed — try uploading the .ics file');
+      setCalLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsText }) });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? 'Parse error'); setCalLoading(false); return; }
+      const events = data.events ?? [];
+      setCalEvents(events);
+      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: events }) });
+      setCalStatus('');
+      showToast(`Refreshed — ${events.length} events`);
+    } catch { showToast('Failed to parse calendar'); }
     setCalLoading(false);
   }
 
