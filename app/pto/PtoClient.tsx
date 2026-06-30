@@ -656,12 +656,16 @@ function CheckFilter<T extends string>({
       </button>
       {open && (
         <div className="absolute z-50 top-full mt-1 left-0 bg-white border border-border rounded-card shadow-lg min-w-[160px] py-1 max-h-60 overflow-y-auto">
-          {count > 0 && (
-            <button onClick={() => { onChange(new Set()); setOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-text-muted hover:bg-canvas font-semibold border-b border-border mb-1">
-              Clear selection
+          <div className="flex border-b border-border mb-1">
+            <button onClick={() => onChange(new Set(options))}
+              className="flex-1 px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-canvas text-left">
+              Select all
             </button>
-          )}
+            <button onClick={() => onChange(new Set())}
+              className="flex-1 px-3 py-1.5 text-xs font-semibold text-text-muted hover:bg-canvas text-left border-l border-border">
+              Clear
+            </button>
+          </div>
           {options.map(v => (
             <label key={v} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-canvas cursor-pointer">
               <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)}
