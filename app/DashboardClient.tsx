@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import EodModal from '@/components/EodModal';
 
@@ -94,6 +94,13 @@ const modules = [
 export default function DashboardClient(props: Props) {
   const { data: session } = useSession();
   const [showEod, setShowEod] = useState(false);
+  const [ptoToday, setPtoToday] = useState(ptoToday);
+
+  useEffect(() => {
+    fetch('/api/pto/today').then(r => r.json()).then(d => {
+      if (typeof d.count === 'number') setPtoToday(d.count);
+    }).catch(() => {});
+  }, []);
   const userName = session?.user?.name ?? 'there';
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -128,7 +135,7 @@ export default function DashboardClient(props: Props) {
             accent="#3f6b8a" href="/tasks"
           />
           <KpiCard
-            label="PTO Today" value={props.ptoToday}
+            label="PTO Today" value={ptoToday}
             sub="out of office"
             accent="#2f7d5b" href="/calendar"
           />
@@ -185,7 +192,7 @@ export default function DashboardClient(props: Props) {
           <div className="flex-1">
             <div className="font-spectral text-[17px] font-semibold text-white">End-of-Day Report</div>
             <div className="text-sm text-[#9aa6b6] mt-0.5">
-              {props.doneCount} tasks done · {props.pendingCount} pending · {props.ptoToday} on PTO — ready to compile.
+              {props.doneCount} tasks done · {props.pendingCount} pending · {ptoToday} on PTO — ready to compile.
             </div>
           </div>
           <div className="bg-gold text-ink font-bold text-sm px-5 py-2.5 rounded-ctrl flex-shrink-0 whitespace-nowrap">
