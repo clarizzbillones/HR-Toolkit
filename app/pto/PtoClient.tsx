@@ -54,8 +54,16 @@ const SOURCE_LABEL: Record<Source, string> = {
 
 function normName(n: string) { return n.trim().toLowerCase().replace(/\s+/g, ' '); }
 
-function daysSpan(start: string, end: string) {
-  return Math.round((new Date(end + 'T12:00:00').getTime() - new Date(start + 'T12:00:00').getTime()) / 86400000) + 1;
+function workingDays(start: string, end: string) {
+  let count = 0;
+  const cur = new Date(start + 'T12:00:00');
+  const last = new Date(end + 'T12:00:00');
+  while (cur <= last) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count || 1;
 }
 
 function fmtShort(iso: string) {
@@ -81,7 +89,7 @@ function mapPtoRows(rows: Record<string, string>[]): Omit<PtoEntry, 'id' | 'stat
     const startDate = startStr ? new Date(startStr) : null;
     const endDate = endStr ? new Date(endStr) : null;
     let days = daysCol ? Number(r[daysCol]) || 0 : 0;
-    if (!days && startDate && endDate) days = Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+    if (!days && startDate && endDate) days = workingDays(startDate.toISOString().slice(0,10), endDate.toISOString().slice(0,10));
     return {
       employee: r[nameCol] ?? '',
       start_date: startDate ? startDate.toISOString().slice(0, 10) : '',
@@ -241,7 +249,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         employee: e.employee,
         start: e.start_date,
         end: e.end_date,
-        days: e.days || daysSpan(e.start_date, e.end_date),
+        days: e.days || workingDays(e.start_date, e.end_date),
         type: e.type,
         status: e.status,
         source: calMatch ? 'both' : 'report',
@@ -257,7 +265,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         employee: c.name,
         start: c.start,
         end: c.end,
-        days: daysSpan(c.start, c.end),
+        days: workingDays(c.start, c.end),
         type: c.tag,
         status: 'Calendar',
         source: 'calendar',
@@ -275,7 +283,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     if (filterFrom || filterTo) {
       const ms = filterFrom || '0000-01-01';
       const me = filterTo || '9999-12-31';
-      if (r.end < ms || r.start > me) return false;
+      if (r.start < ms || r.start > me) return false;
     }
     return true;
   }), [merged, filterName, filterSource, filterFrom, filterTo]);
