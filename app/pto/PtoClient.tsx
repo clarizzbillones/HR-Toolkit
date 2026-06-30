@@ -114,14 +114,13 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
-  // Load saved calendar URL on mount and auto-connect
+  // Load saved calendar URL + cached events from DB (no live fetch on refresh)
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
-      if (data.calendar_url) {
-        setCalUrl(data.calendar_url);
-        // Auto-reconnect silently
-        fetch('/api/ics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: data.calendar_url }) })
-          .then(r => r.json()).then(d => { if (d.events) { setCalEvents(d.events); setCalConnected(true); } });
+      if (data.calendar_url) setCalUrl(data.calendar_url);
+      if (data.calendar_events?.length) {
+        setCalEvents(data.calendar_events);
+        setCalConnected(true);
       }
     }).catch(() => {});
   }, []);
@@ -160,7 +159,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setImporting(false);
   }
 
-  // --- Calendar connect (real ICS fetch) ---
+  // --- Calendar connect / refresh (live ICS fetch, saves events to DB) ---
   async function connectCalendar() {
     if (!calUrl.trim()) return;
     setCalLoading(true);
@@ -176,10 +175,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         setCalLoading(false);
         return;
       }
-      setCalEvents(data.events ?? []);
+      const events = data.events ?? [];
+      setCalEvents(events);
       setCalConnected(true);
-      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim() }) });
-      showToast(`Connected — ${(data.events ?? []).length} events loaded`);
+      // Save URL + events to DB so refresh loads from cache
+      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: calUrl.trim(), calendar_events: events }) });
+      showToast(`Connected — ${events.length} events loaded`);
     } catch {
       showToast('Failed to fetch calendar');
     }
@@ -189,8 +190,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   async function disconnectCalendar() {
     setCalConnected(false);
     setCalEvents([]);
-    setCalUrl('');
-    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: null }) });
+    // Keep the URL in state so they can reconnect, but clear cached events from DB
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) });
     showToast('Calendar disconnected');
   }
 
@@ -356,6 +357,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             {calConnected ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
+                <button onClick={connectCalendar} disabled={calLoading}
+                  className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Refreshing…' : 'Refresh'}</button>
                 <button onClick={disconnectCalendar}
                   className="text-xs text-text-muted hover:text-litred-alt font-semibold">Disconnect</button>
               </div>
