@@ -70,6 +70,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
   [/^(amy|amy\s+green)$/i, 'Amy Green'],
   [/^(alicia|avh|alicia\s+van\s+huizen)$/i, 'Alicia Van Huizen'],
+  [/^(paula|paula\s+valle)$/i, 'Paula Valle'],
 ];
 
 // Types to exclude — partial match (covers "Personal Leave (Commonly used for Half day OOO)" etc.)
