@@ -97,7 +97,7 @@ function workingDays(start: string, end: string) {
     if (dow !== 0 && dow !== 6) count++;
     cur.setDate(cur.getDate() + 1);
   }
-  return count || 1;
+  return count;
 }
 
 function fmtShort(iso: string) {
@@ -517,10 +517,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         {/* Stats */}
         {merged.length > 0 && (
           <div className="grid grid-cols-4 gap-3 px-8 pb-4">
-            <Stat label="Out Today" value={outToday.length} color="#b0412f" />
-            <Stat label="In Both Sources" value={bothCount} color="#2f7d5b" />
-            <Stat label="Report Only" value={reportOnlyCount} color="#3f6b8a" sub="not in calendar" />
-            <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub="not in report" />
+            <Stat label="Out Today" value={outToday.length} color="#b0412f" sub="employees currently on leave" />
+            <Stat label="Confirmed in Both" value={bothCount} color="#2f7d5b" sub="matched in report & calendar" />
+            <Stat label="Report Only" value={reportOnlyCount} color="#3f6b8a" sub="in HR report, not in calendar" />
+            <Stat label="Calendar Only" value={calOnlyCount} color="#b07d2a" sub="in calendar, no HR report entry" />
           </div>
         )}
 
@@ -529,14 +529,15 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
           <div className="grid grid-cols-2 gap-4 px-8 pb-4">
             {/* Bar chart */}
             <div className="bg-white border border-border rounded-card p-5">
-              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-4">Days Off by Employee</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-1">Working Days Off by Employee</div>
+              <div className="text-[11px] text-text-faint mb-4">Weekends excluded · based on current filters</div>
               <div className="space-y-2">
                 {chartData.map(([name, days]) => {
                   const max = chartData[0][1];
                   const pct = Math.round((days / max) * 100);
                   return (
                     <div key={name} className="flex items-center gap-2">
-                      <div className="w-24 text-xs text-text-secondary truncate text-right flex-shrink-0">{name.split(' ')[0]}</div>
+                      <div className="w-28 text-xs text-text-secondary truncate text-right flex-shrink-0" title={name}>{name}</div>
                       <div className="flex-1 bg-[#f1ece3] rounded-full h-5 overflow-hidden">
                         <div className="h-full bg-[#b0412f] rounded-full transition-all" style={{ width: `${pct}%` }} />
                       </div>
