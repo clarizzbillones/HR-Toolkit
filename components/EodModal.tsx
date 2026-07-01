@@ -38,44 +38,76 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
     return 'Pending';
   }
 
+  function pillBg(status: string) {
+    if (status === 'done') return 'background:#eef5f1;color:#2f7d5b';
+    if (status === 'doing') return 'background:#e9f0f5;color:#3f6b8a';
+    return 'background:#f7efe1;color:#b07d2a';
+  }
+
   function printPdf() {
     const taskRows = tasks.map(t => {
       const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
       return `<tr style="border-bottom:1px solid #f4efe6">
-        <td style="padding:8px 4px;font-size:13px;font-weight:500">${t.title}${t.sub ? `<br><span style="font-size:11px;color:#888">${t.sub}</span>` : ''}</td>
-        <td style="padding:8px 4px;font-size:11px">${statusLabel(t.status)}</td>
-        <td style="padding:8px 4px;font-size:11px;color:#666">${t.due_tag || '—'}</td>
-        <td style="padding:8px 4px;font-size:11px;color:#666">${taskNotes.map(n=>n.text).join('; ') || '—'}</td>
+        <td style="padding:10px 8px;font-size:13px;font-weight:500;color:#1a1a1a">${t.title}${t.sub ? `<br><span style="font-size:11px;color:#888">${t.sub}</span>` : ''}</td>
+        <td style="padding:10px 8px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;${pillBg(t.status)}">${statusLabel(t.status)}</span></td>
+        <td style="padding:10px 8px;font-size:12px;color:#555">${t.due_tag || '—'}</td>
+        <td style="padding:10px 8px;font-size:12px;color:#555">${taskNotes.map(n=>n.text).join('; ') || '—'}</td>
       </tr>`;
     }).join('');
 
     const html = `<!DOCTYPE html><html><head><title>EOD Report – ${today}</title>
-    <style>body{font-family:Georgia,serif;margin:0;padding:0}
-    table{width:100%;border-collapse:collapse}
-    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#999;padding:6px 4px;border-bottom:2px solid #e0d9ce}
+    <style>
+      *{box-sizing:border-box}
+      body{font-family:Georgia,serif;margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      table{width:100%;border-collapse:collapse}
+      th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#999;padding:8px 8px 6px;border-bottom:2px solid #e0d9ce;font-family:Arial,sans-serif}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
     </style></head><body>
     <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:.15em">LITSON</div>
-      <div style="font-size:10px;color:#cdd7e2;letter-spacing:.1em;margin-top:2px">ATTORNEYS AT LAW · NASHVILLE, TENNESSEE</div></div>
-      <div style="text-align:right;font-size:11px;color:#cdd7e2;line-height:1.6">End-of-Day Report<br>${today}</div>
+      <div>
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:.15em;font-family:Georgia,serif">LITSON</div>
+        <div style="font-size:10px;color:#c9a24a;letter-spacing:.12em;margin-top:3px;font-family:Arial,sans-serif">ATTORNEYS AT LAW · NASHVILLE, TENNESSEE</div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:#cdd7e2;line-height:1.7;font-family:Arial,sans-serif">End-of-Day Report<br><strong style="color:#fff">${today}</strong></div>
     </div>
     <div style="padding:24px 32px">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
-        <div style="background:#eef5f1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#2f7d5b;text-transform:uppercase">Tasks Done</div><div style="font-size:28px;font-weight:700;color:#2f7d5b">${done.length}</div></div>
-        <div style="background:#f7efe1;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b07d2a;text-transform:uppercase">Pending</div><div style="font-size:28px;font-weight:700;color:#b07d2a">${pending.length}</div></div>
-        <div style="background:#e9f0f5;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase">On PTO Today</div><div style="font-size:28px;font-weight:700;color:#3f6b8a">${ptoToday.length}</div>${ptoToday.length ? `<div style="font-size:11px;color:#3f6b8a;margin-top:4px">${ptoToday.join(', ')}</div>` : ''}</div>
-        <div style="background:#fdeaea;padding:14px;border-radius:6px"><div style="font-size:10px;font-weight:700;color:#b0412f;text-transform:uppercase">Open Items</div><div style="font-size:28px;font-weight:700;color:#b0412f">${pending.length}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+        <div style="background:#eef5f1;padding:16px;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;color:#2f7d5b;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">Tasks Done</div>
+          <div style="font-size:32px;font-weight:700;color:#2f7d5b;margin-top:4px;font-family:Georgia,serif">${done.length}</div>
+        </div>
+        <div style="background:#f7efe1;padding:16px;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;color:#b07d2a;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">Pending</div>
+          <div style="font-size:32px;font-weight:700;color:#b07d2a;margin-top:4px;font-family:Georgia,serif">${pending.length}</div>
+        </div>
+        <div style="background:#e9f0f5;padding:16px;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">On PTO Today</div>
+          <div style="font-size:32px;font-weight:700;color:#3f6b8a;margin-top:4px;font-family:Georgia,serif">${ptoToday.length}</div>
+          ${ptoToday.length ? `<div style="font-size:11px;color:#3f6b8a;margin-top:4px;font-family:Arial,sans-serif">${ptoToday.join(', ')}</div>` : ''}
+        </div>
+        <div style="background:#fdeaea;padding:16px;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;color:#b0412f;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">Open Items</div>
+          <div style="font-size:32px;font-weight:700;color:#b0412f;margin-top:4px;font-family:Georgia,serif">${pending.length}</div>
+        </div>
       </div>
-      <table><thead><tr><th>Task</th><th>Status</th><th>Due</th><th>Notes</th></tr></thead><tbody>${taskRows}</tbody></table>
-      ${notes ? `<div style="margin-top:24px;padding:16px;background:#fafaf8;border:1px solid #e8e3da;border-radius:6px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#999;margin-bottom:8px">Notes for Reviewer</div><div style="font-size:13px;color:#333">${notes}</div></div>` : ''}
+      <table>
+        <thead><tr>
+          <th style="width:35%">Task</th>
+          <th style="width:15%">Status</th>
+          <th style="width:15%">Due</th>
+          <th>Notes</th>
+        </tr></thead>
+        <tbody>${taskRows}</tbody>
+      </table>
+      ${notes ? `<div style="margin-top:24px;padding:16px;background:#fafaf8;border:1px solid #e8e3da;border-radius:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#999;margin-bottom:8px;font-family:Arial,sans-serif;letter-spacing:.08em">Notes for Reviewer</div><div style="font-size:13px;color:#333;line-height:1.6">${notes}</div></div>` : ''}
     </div></body></html>`;
 
-    const w = window.open('', '_blank', 'width=900,height=700');
+    const w = window.open('', '_blank', 'width=960,height=750');
     if (!w) return;
     w.document.write(html);
     w.document.close();
     w.focus();
-    w.print();
+    setTimeout(() => w.print(), 300);
   }
 
   async function takeScreenshot() {
