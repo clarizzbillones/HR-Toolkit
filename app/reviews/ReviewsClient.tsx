@@ -394,7 +394,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         }`}>
                           {(next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) ?? 'Not Started'}
                         </span>
-                      ) : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">All complete</span>}
+                      ) : last
+                        ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">All complete</span>
+                        : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-muted">Not Started</span>}
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
                       <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
