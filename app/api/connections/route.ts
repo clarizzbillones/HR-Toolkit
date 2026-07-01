@@ -14,6 +14,7 @@ async function ensureColumns() {
 }
 
 const DEFAULT_CALENDAR_URL = 'https://outlook.office365.com/owa/calendar/b98af16d6adf4dcbab00e6267e7b56ef@litson.co/3595b6d02e0248e49850dbf12bf9e4be2311203059642998248/calendar.ics';
+const DEFAULT_REVIEWS_URL = 'https://firm-evaluator.lovable.app/admin/reports';
 
 export async function GET() {
   await ensureColumns();
@@ -27,7 +28,7 @@ export async function GET() {
     calendar_url: row.calendar_url ?? DEFAULT_CALENDAR_URL,
     calendar_events: calEvents,
     trips_url: row.trips_url ?? null,
-    reviews_url: row.reviews_url ?? null,
+    reviews_url: row.reviews_url ?? DEFAULT_REVIEWS_URL,
   });
 }
 
