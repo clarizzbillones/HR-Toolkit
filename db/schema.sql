@@ -166,6 +166,7 @@ INSERT INTO employees (id,name,role,dept,birthday,hire_date,review_6mo_status,re
 INSERT INTO employees (id,name,role,dept,birthday,hire_date,review_6mo_status,review_1yr_status,review_notes) VALUES ('ctb6dxs96bvmqzjodg5','Monica Turner','Marketing Coordinator','Operations','1981-07-03',NULL,'Scheduled','Pending',NULL) ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept,birthday,hire_date,review_6mo_status,review_1yr_status,review_notes) VALUES ('c4oqes3f5uimqzjodg5','Sean Fletcher','Records Manager','Operations','1982-08-04',NULL,'Not started','Scheduled',NULL) ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept,birthday,hire_date,review_6mo_status,review_1yr_status,review_notes) VALUES ('cmqz8l5xiw8qmqzjodg5','Lori Chambers','Administrative Assistant','Operations','1975-09-05',NULL,'Complete','Not started',NULL) ON CONFLICT (id) DO NOTHING;
+INSERT INTO employees (id,name,role,dept,hire_date,review_6mo_date,review_6mo_status,review_1yr_status) VALUES ('caitlin_toole_2026','Caitlin Toole','Director of Operations','Operations','2026-01-02','2026-07-02','Scheduled',NULL) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO payroll_periods (id,run_date,period,cutoff,status) VALUES ('cvzrfewhps4mqzjodgp','2026-06-30','Jun 16–30','2026-06-26','Processing') ON CONFLICT (id) DO NOTHING;
 INSERT INTO payroll_periods (id,run_date,period,cutoff,status) VALUES ('civnaf7688asmqzjodgp','2026-07-15','Jul 1–15','2026-07-11','Upcoming') ON CONFLICT (id) DO NOTHING;

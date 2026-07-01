@@ -4,13 +4,26 @@ import { useToast } from '@/components/Toast';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
-  review_6mo_status: string | null; review_1yr_status: string | null; review_notes: string | null;
+  review_6mo_status: string | null; review_6mo_date: string | null;
+  review_1yr_status: string | null; review_1yr_date: string | null;
+  review_notes: string | null;
+}
+
+interface ReviewItem {
+  employee: Employee;
+  type: '6-month review' | '1-year review';
+  date: Date;
+  days: number;
 }
 
 function reviewDate(hireDate: string, months: number): Date {
-  const d = new Date(hireDate);
+  const d = new Date(hireDate + 'T12:00:00');
   d.setMonth(d.getMonth() + months);
   return d;
+}
+
+function parseDate(s: string): Date {
+  return new Date(s + (s.includes('T') ? '' : 'T12:00:00'));
 }
 
 function daysUntil(date: Date): number {
@@ -23,9 +36,12 @@ function formatDate(d: Date) {
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
   const { showToast } = useToast();
-  const [employees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' as '6mo' | '1yr' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -46,17 +62,50 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     showToast('Disconnected');
   }
 
-  const upcoming = employees
+  async function scheduleReview() {
+    if (!form.name || !form.date) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, string> = { name: form.name, role: form.role || 'Employee', dept: form.dept };
+      if (form.type === '6mo') payload.review_6mo_date = form.date;
+      else payload.review_1yr_date = form.date;
+      const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.employee) {
+        setEmployees(prev => [...prev, data.employee]);
+        setShowSchedule(false);
+        setForm({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' });
+        showToast(`${form.name}'s review scheduled for ${form.date}`);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateStatus(emp: Employee, field: 'review_6mo_status' | 'review_1yr_status', value: string) {
+    await fetch(`/api/employees/${emp.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    });
+    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, [field]: value } : e));
+    showToast('Status updated');
+  }
+
+  const upcoming: ReviewItem[] = employees
     .flatMap(e => {
-      if (!e.hire_date) return [];
-      const out = [];
+      const out: ReviewItem[] = [];
       if (e.review_6mo_status !== 'Complete') {
-        const d = reviewDate(e.hire_date, 6);
-        out.push({ employee: e, type: '6-month review', date: d, days: daysUntil(d) });
+        const d = e.review_6mo_date
+          ? parseDate(e.review_6mo_date)
+          : e.hire_date ? reviewDate(e.hire_date, 6) : null;
+        if (d) out.push({ employee: e, type: '6-month review', date: d, days: daysUntil(d) });
       }
       if (e.review_1yr_status !== 'Complete') {
-        const d = reviewDate(e.hire_date, 12);
-        out.push({ employee: e, type: '1-year review', date: d, days: daysUntil(d) });
+        const d = e.review_1yr_date
+          ? parseDate(e.review_1yr_date)
+          : e.hire_date ? reviewDate(e.hire_date, 12) : null;
+        if (d) out.push({ employee: e, type: '1-year review', date: d, days: daysUntil(d) });
       }
       return out;
     })
@@ -84,8 +133,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
-        <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
-        <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
+            <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees</p>
+          </div>
+          <button
+            onClick={() => setShowSchedule(true)}
+            className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
+          >+ Schedule Review</button>
+        </div>
       </header>
 
       <div className="px-8 py-3 bg-white border-b border-border flex-shrink-0 flex items-center gap-3 text-sm">
@@ -120,8 +177,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex gap-6 items-start">
                     <div className="text-center min-w-[52px]">
-                      <div className="text-5xl font-spectral font-semibold text-gold leading-none">{Math.abs(upNext.days)}</div>
-                      <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">DAYS</div>
+                      <div className="text-5xl font-spectral font-semibold text-gold leading-none">
+                        {upNext.days < 0 ? 'OD' : upNext.days === 0 ? 'TD' : upNext.days}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
+                        {upNext.days < 0 ? 'OVERDUE' : upNext.days === 0 ? 'TODAY' : 'DAYS'}
+                      </div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">UP NEXT</div>
@@ -129,14 +190,31 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         {upNext.employee.name} — {upNext.type}
                       </div>
                       <div className="text-sm text-white/50 mt-1">
-                        {formatDate(upNext.date)} · reviewer M. Ellison
+                        {formatDate(upNext.date)} · {upNext.employee.role}
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => showToast('Reminder sent!')}
-                    className="shrink-0 bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors"
-                  >Send reminder</button>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <button
+                      onClick={() => showToast('Reminder sent!')}
+                      className="bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors"
+                    >Send reminder</button>
+                    {linkedUrl && (
+                      <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-center bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
+                        Open form
+                      </a>
+                    )}
+                    <select
+                      value={upNext.employee.review_6mo_status ?? 'Not Started'}
+                      onChange={e => updateStatus(upNext.employee, 'review_6mo_status', e.target.value)}
+                      className="text-xs bg-white/10 text-white border border-white/20 rounded-ctrl px-2 py-1.5"
+                    >
+                      {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => (
+                        <option key={s} value={s} className="text-ink">{s}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -149,8 +227,13 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <div className="flex flex-col gap-2.5">
                   {thenDue.map((r, i) => (
                     <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-text-primary">{r.employee.name}</span>
-                      <span className="text-text-muted">in {Math.abs(r.days)}d</span>
+                      <div>
+                        <span className="font-medium text-text-primary">{r.employee.name}</span>
+                        <span className="text-text-muted ml-2 text-xs">{r.type}</span>
+                      </div>
+                      <span className="text-text-muted">
+                        {r.days < 0 ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? 'Today' : `in ${r.days}d`}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -208,6 +291,57 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           </div>
         </div>
       </div>
+
+      {showSchedule && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowSchedule(false)}>
+          <div className="bg-white rounded-card p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-4">Schedule a Review</h2>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee Name</label>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Full name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Role</label>
+                <input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                  placeholder="e.g. Associate" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Department</label>
+                <select value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink">
+                  <option>Operations</option>
+                  <option>Attorneys</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review Type</label>
+                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as '6mo' | '1yr' }))}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink">
+                  <option value="6mo">6-Month Review</option>
+                  <option value="1yr">1-Year Review</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review Date</label>
+                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setShowSchedule(false)}
+                className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover transition-colors">
+                Cancel
+              </button>
+              <button onClick={scheduleReview} disabled={saving || !form.name || !form.date}
+                className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
+                {saving ? 'Saving…' : 'Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
