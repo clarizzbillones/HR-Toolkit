@@ -128,6 +128,18 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     return employee as Employee | undefined;
   }
 
+  async function deleteEmployee(emp: Employee) {
+    if (!confirm(`Remove ${emp.name} from the review roster? This can't be undone.`)) return;
+    const res = await fetch(`/api/employees/${emp.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setEmployees(prev => prev.filter(e => e.id !== emp.id));
+      if (detail?.id === emp.id) setDetail(null);
+      showToast(`${emp.name} removed`);
+    } else {
+      showToast('Could not remove employee');
+    }
+  }
+
   // ---- Upcoming reviews across all employees ----
   const upcoming: ReviewItem[] = employees
     .flatMap(e => {
@@ -384,8 +396,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         </span>
                       ) : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">All complete</span>}
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
                       <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                      <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                     </td>
                   </tr>
                 );
@@ -454,6 +467,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           employee={detail}
           linkedUrl={linkedUrl}
           onClose={() => setDetail(null)}
+          onDelete={() => deleteEmployee(detail)}
           onSave={async (fields) => {
             const updated = await patchEmployee(detail.id, fields);
             if (updated) setDetail(updated);
@@ -466,12 +480,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 }
 
 // ---- Detail drawer component ----
-function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
+function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   employee: Employee;
   linkedUrl: string;
   onClose: () => void;
   onSave: (fields: Record<string, string | null>) => Promise<void>;
+  onDelete: () => void;
 }) {
+  const [name, setName] = useState(employee.name);
+  const [role, setRole] = useState(employee.role);
+  const [dept, setDept] = useState(employee.dept);
   const [hire, setHire] = useState(employee.hire_date?.slice(0, 10) ?? '');
   const [d6, setD6] = useState(employee.review_6mo_date?.slice(0, 10) ?? '');
   const [s6, setS6] = useState(employee.review_6mo_status ?? 'Not Started');
@@ -486,6 +504,9 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
     setBusy(true);
     try {
       await onSave({
+        name: name.trim() || employee.name,
+        role: role.trim() || employee.role,
+        dept: dept.trim() || employee.dept,
         hire_date: hire || null,
         review_6mo_date: d6 || null,
         review_6mo_status: s6,
@@ -510,6 +531,27 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
         </div>
 
         <div className="px-6 py-5 flex flex-col gap-5">
+          {/* Identity */}
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Name</label>
+              <input value={name} onChange={e => setName(e.target.value)}
+                className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Role</label>
+                <input value={role} onChange={e => setRole(e.target.value)}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Department</label>
+                <input value={dept} onChange={e => setDept(e.target.value)}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+            </div>
+          </div>
+
           {/* Quick summary */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -569,6 +611,7 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
         </div>
 
         <div className="px-6 py-4 border-t border-border flex gap-2 sticky bottom-0 bg-white">
+          <button onClick={onDelete} className="text-sm font-semibold text-litred-alt border border-border-light px-4 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
           <button onClick={onClose} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover">Close</button>
           <button onClick={save} disabled={busy} className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">
             {busy ? 'Saving…' : 'Save changes'}
