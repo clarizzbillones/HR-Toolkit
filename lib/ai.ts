@@ -48,24 +48,20 @@ Via Email
 
 Re: 1099 Independent Contractor Offer — ${p.role}
 
-${p.name}
-${p.email ? p.email : ''}
+${p.name}${p.email ? '\n' + p.email : ''}
 
 Dear ${first},
 
 On behalf of ${p.firm}, PLLC, I am pleased to extend this offer for you to serve as an independent contractor in the role of ${p.role}${p.dept ? ` (${p.dept})` : ''}, based ${loc}. We have been impressed with your background and look forward to working together.
 
 Engagement Terms
-
 Start Date: ${startDisplay}
 Compensation: $${sal} per month, invoiced monthly
-Classification: 1099 Independent Contractor
-${p.notes ? '\n' + p.notes + '\n' : ''}
-As an independent contractor, you will not be an employee of ${p.firm}, PLLC and will not be entitled to employee benefits, including health insurance, retirement plans, or paid leave. You will be responsible for your own taxes and business expenses as agreed.
+Classification: 1099 Independent Contractor${p.notes ? '\n' + p.notes : ''}
 
-Either party may terminate this engagement with seven (7) days' written notice.
+As an independent contractor, you will not be an employee of ${p.firm}, PLLC and will not be entitled to employee benefits. You will be responsible for your own taxes and business expenses. Either party may terminate this engagement with seven (7) days' written notice.
 
-Please sign and return this letter by ${signByDate()} to indicate your acceptance of these terms. We are excited about the work ahead and look forward to your contributions.
+Please sign and return this letter by ${signByDate()} to indicate your acceptance. We look forward to your contributions.
 
 Very truly yours,
 
@@ -82,22 +78,20 @@ Via Email
 
 Re: Offer of Employment — ${p.role}
 
-${p.name}
-${p.email ? p.email : ''}
+${p.name}${p.email ? '\n' + p.email : ''}
 
 Dear ${first},
 
 On behalf of ${p.firm}, PLLC, I am delighted to extend an offer of employment for the position of ${p.role}${p.dept ? `, ${p.dept}` : ''}, located in ${loc}. The partners were impressed by your experience and believe you will be a valued addition to our team.
 
 Compensation & Benefits
-
 Start Date: ${startDisplay}
 Annual Salary: $${sal}, paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule
 Classification: W-2 Employee${p.dept ? '\nDepartment: ' + p.dept : ''}${p.notes ? '\n' + p.notes : ''}
 
-As a member of the firm you will be eligible for our benefits program, including health, dental, and vision insurance, a 401(k) plan with firm match, and our paid-time-off policy. Employment with ${p.firm} is at-will, meaning either party may end the relationship at any time, with or without cause.
+As a member of the firm you will be eligible for our benefits program, including health, dental, and vision insurance, a 401(k) plan with firm match, and paid time off. Employment with ${p.firm} is at-will.
 
-To accept this offer, please sign and return this letter by ${signByDate()}. We are genuinely excited about the prospect of you joining ${p.firm} and look forward to your response.
+Please sign and return this letter by ${signByDate()}. We look forward to welcoming you to the team.
 
 Very truly yours,
 

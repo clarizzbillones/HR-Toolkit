@@ -55,34 +55,41 @@ export default function OffersClient() {
     const win = window.open('', '_blank');
     if (!win) return;
     const sigTriggers = ['Alex Little', 'J. Alex Little'];
-    const lines = draft.split('\n').map((l, i, arr) => {
+    // Collapse runs of 3+ blank lines into 2, to keep single-page
+    const draftCompact = draft.replace(/\n{3,}/g, '\n\n');
+    const lines = draftCompact.split('\n').map((l, i, arr) => {
       const safe = l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const isSigName = sigTriggers.some(t => l.trim() === t) && i > 0 && arr[i-1].trim() === '';
       if (isSigName) {
-        return `<div style="margin-top:6px;margin-bottom:0"><img src="${SIG_B64}" width="140" height="47" style="display:block" alt="signature"/></div><div style="min-height:1em">${safe}</div>`;
+        return `<div style="margin-top:4px;margin-bottom:0"><img src="${SIG_B64}" width="130" height="43" style="display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact" alt=""/></div><div>${safe}</div>`;
       }
-      return `<div style="min-height:1.65em">${safe || '&nbsp;'}</div>`;
+      return `<div style="min-height:1.1em">${safe || '&nbsp;'}</div>`;
     }).join('');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${form.name}</title>
-    <style>
-      *{box-sizing:border-box}
-      body{font-family:${BODY_FONT};margin:0 auto;padding:0;color:#1b2230;max-width:816px;font-size:12pt;line-height:1.65;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      .page{padding:52px 64px 44px}
-      @media print{.page{padding:44px 56px 36px}}
-    </style></head><body><div class="page">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px">
-      <img src="${LOGO_B64}" width="220" height="73" alt="Litson" style="display:block"/>
-      <div style="text-align:right;font-size:9.5pt;color:#333;line-height:1.7;font-family:Arial,sans-serif;margin-top:6px">
-        <strong>J. Alex Little</strong><br>Managing Member<br>615.985.8189<br>alex@litson.co
-      </div>
-    </div>
-    <div style="font-family:${BODY_FONT};color:#1b2230">${lines}</div>
-    <div style="margin-top:52px;padding-top:8px;border-top:1px solid #bbb;font-family:Arial,sans-serif;font-size:8.5pt;color:#999;letter-spacing:0.02em">
-      Litson PLLC &nbsp;&bull;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&bull;&nbsp; Nashville, TN 37209 &nbsp;&bull;&nbsp; www.litson.co
-    </div>
-    </div></body></html>`);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${form.name}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  @page{size:letter;margin:0.7in 0.75in 0.6in}
+  body{font-family:${BODY_FONT};color:#1b2230;font-size:11pt;line-height:1.42;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22pt}
+  .contact{text-align:right;font-size:8.5pt;color:#333;line-height:1.6;font-family:Arial,sans-serif;margin-top:4pt}
+  .ft{margin-top:auto;padding-top:6pt;border-top:0.5pt solid #bbb;font-family:Arial,sans-serif;font-size:8pt;color:#999;letter-spacing:0.02em;margin-top:18pt}
+  img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+</style></head><body>
+<div class="hd">
+  <img src="${LOGO_B64}" width="190" height="63" alt="Litson"/>
+  <div class="contact"><strong>J. Alex Little</strong><br>Managing Member<br>615.985.8189<br>alex@litson.co</div>
+</div>
+<div>${lines}</div>
+<div class="ft">Litson PLLC &nbsp;&bull;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&bull;&nbsp; Nashville, TN 37209 &nbsp;&bull;&nbsp; www.litson.co</div>
+<script>
+  var imgs=document.images,loaded=0;
+  function tryPrint(){loaded++;if(loaded>=imgs.length)window.print();}
+  if(imgs.length===0){window.print();}
+  else{for(var i=0;i<imgs.length;i++){if(imgs[i].complete){tryPrint();}else{imgs[i].onload=tryPrint;imgs[i].onerror=tryPrint;}}}
+</script>
+</body></html>`;
+    win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 400);
   }
 
   function downloadTxt() {
