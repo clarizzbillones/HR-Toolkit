@@ -6,6 +6,46 @@ interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string; notes: string;
 }
 
+const NAME_ALIASES: [RegExp, string][] = [
+  [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
+  [/^(mrg|matt|mg|matt\s+gibbs)$/i, 'Matt Gibbs'],
+  [/^(syerra|syerra\s+ryan)$/i, 'Syerra Ryan'],
+  [/^(sl|clarizz|cb|clarizz\s+ann\s+billones|clarizz\s+ann\s+alon|clarizz\s+alon)$/i, 'Clarizz Billones'],
+  [/^(jr'?|jrg|john\s+glover)$/i, 'John Glover'],
+  [/^(clint|clint\s+palmer)$/i, 'Clint Palmer'],
+  [/^(caitlin|caitlin\s+giuliano)$/i, 'Caitlin Giuliano'],
+  [/^(shannen|shannen\s+sharpe)$/i, 'Shannen Sharpe'],
+  [/^(simran|simran\s+mohini)$/i, 'Simran Mohini'],
+  [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
+  [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
+  [/^(carly|carly\s+crotty)$/i, 'Carly Crotty'],
+  [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
+  [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
+  [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
+  [/^(amy|amy\s+green)$/i, 'Amy Green'],
+  [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
+  [/^(paula|paula\s+valle)$/i, 'Paula Valle'],
+  [/^(ridwan|ridwan\s+ahmed)$/i, 'Ridwan Ahmed'],
+];
+
+function resolveAlias(n: string): string {
+  const t = n.trim();
+  for (const [re, canonical] of NAME_ALIASES) {
+    if (re.test(t)) return canonical;
+  }
+  return t;
+}
+
+function dedupeNames(names: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const n of names) {
+    const resolved = resolveAlias(n);
+    const key = resolved.trim().toLowerCase();
+    if (!seen.has(key)) seen.set(key, resolved);
+  }
+  return [...seen.values()];
+}
+
 export default function EodModal({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -20,7 +60,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
     fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));
     fetch(`/api/pto/today?date=${todayIso}`)
       .then(r => r.json())
-      .then(d => { if (Array.isArray(d.names)) setPtoToday(d.names); })
+      .then(d => { if (Array.isArray(d.names)) setPtoToday(dedupeNames(d.names)); })
       .catch(() => {});
   }, []);
 
