@@ -60,12 +60,12 @@ function reviewDateStr(e: Employee, kind: '6mo' | '1yr'): string | null {
   return null;
 }
 
-// Build reports URL from the connected dashboard link
+// Open the connected dashboard link directly. We don't append a path because
+// the external dashboard's routing is unknown (guessing a path caused 404s).
+// If you want a deep link to a specific reports page, paste that exact URL when
+// connecting the dashboard.
 function reportsUrl(base: string): string {
-  if (!base) return '';
-  const b = base.replace(/\/+$/, '');
-  if (/\/reports\/?$/i.test(b)) return b;
-  return `${b}/reports`;
+  return base || '';
 }
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
@@ -212,7 +212,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <span className="text-[#2f7d5b] font-semibold shrink-0">Dashboard connected</span>
             <span className="text-text-muted truncate">{linkedUrl}</span>
             <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open Reports</a>
+              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open dashboard</a>
             <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
           </>
         ) : (
@@ -516,7 +516,7 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
               {linkedUrl && (
                 <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open in Reports ↗</a>
+                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open dashboard ↗</a>
               )}
             </div>
             {!hasExternalSync && (
