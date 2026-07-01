@@ -95,10 +95,12 @@ export default function DashboardClient(props: Props) {
   const { data: session } = useSession();
   const [showEod, setShowEod] = useState(false);
   const [ptoToday, setPtoToday] = useState<number>(props.ptoToday);
+  const [ptoNames, setPtoNames] = useState<string[]>([]);
 
   useEffect(() => {
     fetch('/api/pto/today').then(r => r.json()).then(d => {
       if (typeof d.count === 'number') setPtoToday(d.count);
+      if (Array.isArray(d.names)) setPtoNames(d.names);
     }).catch(() => {});
   }, []);
   const userName = session?.user?.name ?? 'there';
@@ -136,8 +138,8 @@ export default function DashboardClient(props: Props) {
           />
           <KpiCard
             label="PTO Today" value={ptoToday}
-            sub="out of office"
-            accent="#2f7d5b" href="/calendar"
+            sub={ptoNames.length ? ptoNames.join(', ') : 'out of office'}
+            accent="#2f7d5b" href="/pto"
           />
           <KpiCard
             label="Next Payroll"
