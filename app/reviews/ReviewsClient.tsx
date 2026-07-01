@@ -77,6 +77,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' as '6mo' | '1yr' });
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
+  const [showEmbed, setShowEmbed] = useState(false);
 
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -223,8 +224,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
             <span className="text-[#2f7d5b] font-semibold shrink-0">Dashboard connected</span>
             <span className="text-text-muted truncate">{linkedUrl}</span>
-            <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open dashboard</a>
+            <button onClick={() => setShowEmbed(true)}
+              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open Reports</button>
             <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
           </>
         ) : (
@@ -268,10 +269,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   </div>
                   <div className="flex flex-col gap-2 shrink-0 w-[130px]">
                     {linkedUrl && (
-                      <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+                      <button onClick={() => setShowEmbed(true)}
                         className="text-center bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors">
                         Open form
-                      </a>
+                      </button>
                     )}
                     <button
                       onClick={() => showToast('Reminder sent!')}
@@ -477,6 +478,28 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           }}
         />
       )}
+
+      {/* ---- Embedded Reports (Lovable link) ---- */}
+      {showEmbed && linkedUrl && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f1ece3] border-b border-border flex-shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
+            <span className="text-sm font-semibold text-text-primary shrink-0">Performance Review Reports</span>
+            <span className="text-xs text-text-muted truncate flex-1">{reportsUrl(linkedUrl)}</span>
+            <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+              className="shrink-0 text-xs font-semibold text-text-secondary hover:text-ink border border-border-light bg-white px-3 py-1 rounded-ctrl">↗ Open in new tab</a>
+            <button onClick={() => setShowEmbed(false)}
+              className="shrink-0 text-xs font-semibold text-white bg-ink px-3 py-1 rounded-ctrl hover:bg-ink-dark">✕ Close</button>
+          </div>
+          <iframe
+            src={reportsUrl(linkedUrl)}
+            className="flex-1 w-full border-0"
+            title="Performance Review Reports"
+            allow="clipboard-read; clipboard-write"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -560,7 +583,7 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
               {linkedUrl && (
                 <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open dashboard ↗</a>
+                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
               )}
             </div>
             {!hasExternalSync && (
