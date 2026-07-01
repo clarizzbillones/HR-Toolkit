@@ -106,8 +106,14 @@ export async function GET(req: Request) {
     debugIncluded.push({ source: 'cal', employee: c.name, type: c.tag });
   }
 
-  const nameList = [...names].map(n => resolveAlias(n));
-  const resp: Record<string, unknown> = { count: names.size, names: nameList };
-  if (debug) { resp.included = debugIncluded; resp.excluded = debugExcluded; }
+  // Final dedup: resolve all normNames to canonical, then deduplicate again by canonical name
+  const canonical = new Map<string, string>();
+  for (const n of names) {
+    const resolved = resolveAlias(n);
+    canonical.set(resolved.trim().toLowerCase(), resolved);
+  }
+  const nameList = [...canonical.values()];
+  const resp: Record<string, unknown> = { count: nameList.length, names: nameList };
+  if (debug) { resp.included = debugIncluded; resp.excluded = debugExcluded; resp.rawNames = [...names]; }
   return NextResponse.json(resp);
 }
