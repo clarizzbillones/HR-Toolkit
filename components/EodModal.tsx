@@ -148,8 +148,16 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
             <div className="font-spectral text-2xl font-bold tracking-widest text-white">LITSON</div>
             <div className="text-xs tracking-widest text-gold mt-0.5">ATTORNEYS AT LAW · NASHVILLE, TENNESSEE</div>
           </div>
-          <div className="text-right text-xs text-[#cdd7e2] leading-relaxed">
-            End-of-Day Report<br />{today}
+          <div className="flex items-start gap-6">
+            <div className="text-right text-xs text-[#cdd7e2] leading-relaxed">
+              End-of-Day Report<br />{today}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-[#cdd7e2] hover:text-white text-xl leading-none mt-0.5 flex-shrink-0"
+              aria-label="Close"
+            >✕</button>
           </div>
         </div>
 
@@ -206,7 +214,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
           <button onClick={sendPartners} className="bg-white border border-border text-text-primary text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
             Send to Partners
           </button>
-          <button onClick={onClose} className="ml-auto text-sm text-text-secondary hover:text-text-primary">
+          <button type="button" onClick={onClose} className="ml-auto text-sm font-semibold text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border transition-colors">
             Close
           </button>
         </div>
