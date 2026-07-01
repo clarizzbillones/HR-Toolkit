@@ -54,65 +54,96 @@ export default function OffersClient() {
   function printPdf() {
     const win = window.open('', '_blank');
     if (!win) return;
-    const draftCompact = draft.replace(/\n{3,}/g, '\n\n');
-    const linesArr = draftCompact.split('\n');
 
-    // Find where closing block starts ("Very truly yours")
-    const closingIdx = linesArr.findIndex(l => /very truly yours/i.test(l.trim()));
-    // Find where cc: line is (stays left-aligned)
-    const ccIdx = linesArr.findIndex(l => /^cc:/i.test(l.trim()));
-
-    function safeLine(l: string) {
-      return l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    function esc(s: string) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
-    const bodyLines = (closingIdx >= 0 ? linesArr.slice(0, closingIdx) : linesArr)
-      .map(l => `<div style="min-height:1.1em">${safeLine(l) || '&nbsp;'}</div>`)
-      .join('');
+    const draftClean = draft.replace(/\n{3,}/g, '\n\n');
+    const linesArr = draftClean.split('\n');
 
+    // Detect structural markers
+    const ccBlockStart = linesArr.findIndex(l => /^\[CC_BLOCK\]/.test(l));
+    const ccBlockEnd = linesArr.findIndex(l => /^\[\/CC_BLOCK\]/.test(l));
+    const closingIdx = linesArr.findIndex(l => /^very truly yours/i.test(l.trim()));
+
+    // Separate cc block (contractor) from rest
+    let ccLines: string[] = [];
+    let bodyEnd = closingIdx >= 0 ? closingIdx : linesArr.length;
+    if (ccBlockStart >= 0 && ccBlockEnd >= 0) {
+      ccLines = linesArr.slice(ccBlockStart + 1, ccBlockEnd).filter(l => !l.startsWith('['));
+      bodyEnd = ccBlockStart;
+    }
+
+    const sigTriggers = ['Alex Little', 'J. Alex Little'];
+
+    // Build body HTML
+    let bodyHtml = '';
+    for (let i = 0; i < bodyEnd; i++) {
+      const l = linesArr[i];
+      if (l.startsWith('[DATE_CENTERED]')) {
+        bodyHtml += `<div style="text-align:center;margin-bottom:11pt">${esc(l.replace('[DATE_CENTERED]',''))}</div>`;
+      } else if (/^Via Email$/i.test(l.trim())) {
+        bodyHtml += `<div style="text-decoration:underline;font-weight:bold;margin-bottom:6pt">${esc(l)}</div>`;
+      } else if (/^\s*Re:\s+/i.test(l)) {
+        bodyHtml += `<div style="margin-left:2.5em;margin-bottom:6pt"><span style="font-weight:bold">Re:</span><span style="margin-left:2em;font-weight:bold">${esc(l.replace(/^\s*Re:\s+/i,''))}</span></div>`;
+      } else if (l.trim() === '') {
+        bodyHtml += `<div style="height:6pt"></div>`;
+      } else {
+        bodyHtml += `<div style="text-align:justify;margin-bottom:0">${esc(l)}</div>`;
+      }
+    }
+
+    // Closing block (right side)
     let closingHtml = '';
     if (closingIdx >= 0) {
-      const closingLines = linesArr.slice(closingIdx, ccIdx >= 0 ? ccIdx : undefined);
-      const sigTriggers = ['Alex Little', 'J. Alex Little'];
-      const closingContent = closingLines.map((l, i, arr) => {
-        const safe = safeLine(l);
-        const isSigName = sigTriggers.some(t => l.trim() === t) && i > 0 && arr[i-1].trim() === '';
+      const closingLines = linesArr.slice(closingIdx);
+      let inner = '';
+      for (let i = 0; i < closingLines.length; i++) {
+        const l = closingLines[i];
+        if (l.startsWith('[')) continue;
+        const isSigName = sigTriggers.some(t => l.trim() === t) && i > 0 && closingLines[i-1].trim() === '';
         if (isSigName) {
-          return `<div style="margin-top:2pt"><img src="${SIG_B64}" width="150" height="50" style="display:block" alt=""/></div><div>${safe}</div>`;
+          inner += `<div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin-bottom:1pt" alt=""/></div><div>${esc(l)}</div>`;
+        } else if (l.trim() === '') {
+          inner += `<div style="height:5pt"></div>`;
+        } else {
+          inner += `<div>${esc(l)}</div>`;
         }
-        return `<div style="min-height:1.1em">${safe || '&nbsp;'}</div>`;
-      }).join('');
-      closingHtml = `<div style="display:flex;justify-content:flex-end;margin-top:10pt"><div style="text-align:left">${closingContent}</div></div>`;
+      }
+      closingHtml = `<div style="display:flex;justify-content:flex-end;margin-top:12pt"><div style="text-align:left">${inner}</div></div>`;
     }
 
-    const ccHtml = ccIdx >= 0
-      ? linesArr.slice(ccIdx).map(l => `<div style="min-height:1.1em">${safeLine(l) || '&nbsp;'}</div>`).join('')
+    // cc block (left side, below closing)
+    const ccHtml = ccLines.length
+      ? `<div style="margin-top:2pt">${ccLines.map(l => `<div style="min-height:1em">${esc(l) || '&nbsp;'}</div>`).join('')}</div>`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${form.name}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${esc(form.name)}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  @page{size:letter;margin:0.7in 0.75in 0.6in}
-  body{font-family:${BODY_FONT};color:#1b2230;font-size:11pt;line-height:1.42;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:letter;margin:0.65in 0.8in 0.55in}
+  body{font-family:${BODY_FONT};color:#1a1a2e;font-size:11pt;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22pt">
-  <img src="${LOGO_B64}" width="190" height="63" alt="Litson"/>
-  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.6;font-family:Arial,sans-serif;margin-top:4pt">
-    <strong>J. Alex Little</strong><br>Managing Member<br>615.985.8189<br>alex@litson.co
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
+  <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
+  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
+    J. Alex Little<br>615.985.8189<br>alex@litson.co
   </div>
 </div>
-<div>${bodyLines}</div>
-${closingHtml}
-<div style="margin-top:4pt">${ccHtml}</div>
-<div style="margin-top:18pt;padding-top:6pt;border-top:0.5pt solid #bbb;font-family:Arial,sans-serif;font-size:8pt;color:#999;letter-spacing:0.02em">
-  Litson PLLC &nbsp;&bull;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&bull;&nbsp; Nashville, TN 37209 &nbsp;&bull;&nbsp; www.litson.co
+${bodyHtml}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:8pt">
+  <div style="max-width:55%">${ccHtml}</div>
+  ${closingHtml ? closingHtml.replace('display:flex;justify-content:flex-end;margin-top:12pt','display:flex;justify-content:flex-end') : ''}
+</div>
+<div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
+  Litson PLLC<br>54 Music Square East, Suite 300<br>Nashville, TN 37203<br>www.litson.co
 </div>
 <script>
-  var imgs=document.images,loaded=0;
-  function tryPrint(){loaded++;if(loaded>=imgs.length)window.print();}
-  if(imgs.length===0){window.print();}
-  else{for(var i=0;i<imgs.length;i++){if(imgs[i].complete){tryPrint();}else{imgs[i].onload=tryPrint;imgs[i].onerror=tryPrint;}}}
+  var imgs=document.images,n=imgs.length,done=0;
+  function go(){done++;if(done>=n)window.print();}
+  if(!n){window.print();}else{for(var i=0;i<n;i++){if(imgs[i].complete)go();else{imgs[i].onload=go;imgs[i].onerror=go;}}}
 </script>
 </body></html>`;
     win.document.write(html);
@@ -234,7 +265,7 @@ ${closingHtml}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={SIG_B64} alt="Alex Little signature" width={130} height={43} className="block my-0.5" />
                     <p className="text-[13px] leading-snug" style={{ fontFamily: BODY_FONT }}>
-                      Alex Little<br />Managing Member<br />Litson PLLC
+                      Alex Little<br />Founding &amp; Managing Partner<br />Litson PLLC
                     </p>
                   </div>
                 </div>
