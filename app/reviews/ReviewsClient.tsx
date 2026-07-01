@@ -4,34 +4,68 @@ import { useToast } from '@/components/Toast';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
-  review_6mo_status: string | null; review_6mo_date: string | null;
-  review_1yr_status: string | null; review_1yr_date: string | null;
+  review_6mo_status: string | null; review_6mo_date: string | null; review_6mo_summary: string | null;
+  review_1yr_status: string | null; review_1yr_date: string | null; review_1yr_summary: string | null;
   review_notes: string | null;
 }
 
+type ReviewType = '6-month review' | '1-year review';
+
 interface ReviewItem {
   employee: Employee;
-  type: '6-month review' | '1-year review';
+  type: ReviewType;
   date: Date;
   days: number;
 }
 
-function reviewDate(hireDate: string, months: number): Date {
-  const d = new Date(hireDate + 'T12:00:00');
+// ---- Date helpers (CST / America/Chicago) ----
+function addMonths(dateStr: string, months: number): Date {
+  const d = new Date(dateStr.slice(0, 10) + 'T12:00:00');
   d.setMonth(d.getMonth() + months);
   return d;
 }
 
-function parseDate(s: string): Date {
-  return new Date(s + (s.includes('T') ? '' : 'T12:00:00'));
+function toYmd(d: Date): string {
+  return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
 }
 
-function daysUntil(date: Date): number {
-  return Math.floor((date.getTime() - Date.now()) / 86400000);
+// Calendar-day difference from "today in CST" to the given date, ignoring clock time.
+function daysUntilCST(dateStr: string): number {
+  const todayCst = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const a = Date.parse(todayCst + 'T00:00:00Z');
+  const b = Date.parse(dateStr.slice(0, 10) + 'T00:00:00Z');
+  return Math.round((b - a) / 86400000);
 }
 
-function formatDate(d: Date) {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function relLabel(days: number): string {
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `in ${days}d`;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Resolve the effective date string for a review (manual override wins, else hire_date + months)
+function reviewDateStr(e: Employee, kind: '6mo' | '1yr'): string | null {
+  if (kind === '6mo') {
+    if (e.review_6mo_date) return e.review_6mo_date.slice(0, 10);
+    if (e.hire_date) return toYmd(addMonths(e.hire_date, 6));
+  } else {
+    if (e.review_1yr_date) return e.review_1yr_date.slice(0, 10);
+    if (e.hire_date) return toYmd(addMonths(e.hire_date, 12));
+  }
+  return null;
+}
+
+// Build reports URL from the connected dashboard link
+function reportsUrl(base: string): string {
+  if (!base) return '';
+  const b = base.replace(/\/+$/, '');
+  if (/\/reports\/?$/i.test(b)) return b;
+  return `${b}/reports`;
 }
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
@@ -42,6 +76,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [showSchedule, setShowSchedule] = useState(false);
   const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' as '6mo' | '1yr' });
   const [saving, setSaving] = useState(false);
+  const [detail, setDetail] = useState<Employee | null>(null);
 
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -82,31 +117,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     }
   }
 
-  async function updateStatus(emp: Employee, field: 'review_6mo_status' | 'review_1yr_status', value: string) {
-    await fetch(`/api/employees/${emp.id}`, {
+  async function patchEmployee(id: string, fields: Record<string, string | null>) {
+    const res = await fetch(`/api/employees/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value }),
+      body: JSON.stringify(fields),
     });
-    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, [field]: value } : e));
-    showToast('Status updated');
+    const { employee } = await res.json();
+    if (employee) setEmployees(prev => prev.map(e => e.id === id ? employee : e));
+    return employee as Employee | undefined;
   }
 
+  // ---- Upcoming reviews across all employees ----
   const upcoming: ReviewItem[] = employees
     .flatMap(e => {
       const out: ReviewItem[] = [];
-      if (e.review_6mo_status !== 'Complete') {
-        const d = e.review_6mo_date
-          ? parseDate(e.review_6mo_date)
-          : e.hire_date ? reviewDate(e.hire_date, 6) : null;
-        if (d) out.push({ employee: e, type: '6-month review', date: d, days: daysUntil(d) });
-      }
-      if (e.review_1yr_status !== 'Complete') {
-        const d = e.review_1yr_date
-          ? parseDate(e.review_1yr_date)
-          : e.hire_date ? reviewDate(e.hire_date, 12) : null;
-        if (d) out.push({ employee: e, type: '1-year review', date: d, days: daysUntil(d) });
-      }
+      const d6 = reviewDateStr(e, '6mo');
+      if (d6 && e.review_6mo_status !== 'Complete') out.push({ employee: e, type: '6-month review', date: new Date(d6 + 'T12:00:00'), days: daysUntilCST(d6) });
+      const d12 = reviewDateStr(e, '1yr');
+      if (d12 && e.review_1yr_status !== 'Complete') out.push({ employee: e, type: '1-year review', date: new Date(d12 + 'T12:00:00'), days: daysUntilCST(d12) });
       return out;
     })
     .sort((a, b) => a.days - b.days);
@@ -130,13 +159,44 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     return { dept, pct: Math.round((done / (group.length * 2)) * 100) };
   }).sort((a, b) => b.pct - a.pct);
 
+  // ---- Per-employee "last" and "next" review computation for the roster table ----
+  function lastReview(e: Employee): { type: ReviewType; date: string } | null {
+    const done: { type: ReviewType; date: string }[] = [];
+    const d6 = reviewDateStr(e, '6mo');
+    if (d6 && e.review_6mo_status === 'Complete') done.push({ type: '6-month review', date: d6 });
+    const d12 = reviewDateStr(e, '1yr');
+    if (d12 && e.review_1yr_status === 'Complete') done.push({ type: '1-year review', date: d12 });
+    if (!done.length) return null;
+    return done.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  }
+  function nextReview(e: Employee): { type: ReviewType; date: string; days: number } | null {
+    const pend: { type: ReviewType; date: string; days: number }[] = [];
+    const d6 = reviewDateStr(e, '6mo');
+    if (d6 && e.review_6mo_status !== 'Complete') pend.push({ type: '6-month review', date: d6, days: daysUntilCST(d6) });
+    const d12 = reviewDateStr(e, '1yr');
+    if (d12 && e.review_1yr_status !== 'Complete') pend.push({ type: '1-year review', date: d12, days: daysUntilCST(d12) });
+    if (!pend.length) return null;
+    return pend.sort((a, b) => a.days - b.days)[0];
+  }
+
+  const roster = [...employees].sort((a, b) => {
+    const na = nextReview(a), nb = nextReview(b);
+    if (na && nb) return na.days - nb.days;
+    if (na) return -1;
+    if (nb) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const upNextStatusField = upNext ? (upNext.type === '6-month review' ? 'review_6mo_status' : 'review_1yr_status') : 'review_6mo_status';
+  const upNextStatusValue = upNext ? (upNext.type === '6-month review' ? upNext.employee.review_6mo_status : upNext.employee.review_1yr_status) : 'Not Started';
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
-            <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees</p>
+            <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees · times in CST</p>
           </div>
           <button
             onClick={() => setShowSchedule(true)}
@@ -151,13 +211,13 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
             <span className="text-[#2f7d5b] font-semibold shrink-0">Dashboard connected</span>
             <span className="text-text-muted truncate">{linkedUrl}</span>
-            <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
-              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
+            <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+              className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open Reports</a>
             <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
           </>
         ) : (
           <>
-            <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; meeting docs directly.</span>
+            <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; report directly.</span>
             <input
               value={dashUrl}
               onChange={e => setDashUrl(e.target.value)}
@@ -176,38 +236,38 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <div className="bg-ink rounded-card p-6 text-white">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex gap-6 items-start">
-                    <div className="text-center min-w-[52px]">
-                      <div className="text-5xl font-spectral font-semibold text-gold leading-none">
-                        {upNext.days < 0 ? 'OD' : upNext.days === 0 ? 'TD' : upNext.days}
+                    <div className="text-center min-w-[64px]">
+                      <div className="text-4xl font-spectral font-semibold text-gold leading-none">
+                        {upNext.days < 0 ? Math.abs(upNext.days) : upNext.days}
                       </div>
                       <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
-                        {upNext.days < 0 ? 'OVERDUE' : upNext.days === 0 ? 'TODAY' : 'DAYS'}
+                        {upNext.days < 0 ? 'DAYS OVERDUE' : upNext.days === 0 ? 'TODAY' : upNext.days === 1 ? 'DAY (TMRW)' : 'DAYS'}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">UP NEXT</div>
-                      <div className="font-spectral text-[19px] font-semibold leading-tight">
+                      <button onClick={() => setDetail(upNext.employee)} className="font-spectral text-[19px] font-semibold leading-tight text-left hover:text-gold transition-colors">
                         {upNext.employee.name} — {upNext.type}
-                      </div>
+                      </button>
                       <div className="text-sm text-white/50 mt-1">
-                        {formatDate(upNext.date)} · {upNext.employee.role}
+                        {formatDate(toYmd(upNext.date))} · {upNext.employee.role}
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <button
-                      onClick={() => showToast('Reminder sent!')}
-                      className="bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors"
-                    >Send reminder</button>
+                  <div className="flex flex-col gap-2 shrink-0 w-[130px]">
                     {linkedUrl && (
-                      <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-center bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
+                      <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+                        className="text-center bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors">
                         Open form
                       </a>
                     )}
+                    <button
+                      onClick={() => showToast('Reminder sent!')}
+                      className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors"
+                    >Send reminder</button>
                     <select
-                      value={upNext.employee.review_6mo_status ?? 'Not Started'}
-                      onChange={e => updateStatus(upNext.employee, 'review_6mo_status', e.target.value)}
+                      value={upNextStatusValue ?? 'Not Started'}
+                      onChange={e => patchEmployee(upNext.employee.id, { [upNextStatusField]: e.target.value })}
                       className="text-xs bg-white/10 text-white border border-white/20 rounded-ctrl px-2 py-1.5"
                     >
                       {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => (
@@ -228,27 +288,13 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   {thenDue.map((r, i) => (
                     <div key={i} className="flex items-center justify-between text-sm">
                       <div>
-                        <span className="font-medium text-text-primary">{r.employee.name}</span>
+                        <button onClick={() => setDetail(r.employee)} className="font-medium text-text-primary hover:text-ink hover:underline">{r.employee.name}</button>
                         <span className="text-text-muted ml-2 text-xs">{r.type}</span>
                       </div>
-                      <span className="text-text-muted">
-                        {r.days < 0 ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? 'Today' : `in ${r.days}d`}
-                      </span>
+                      <span className="text-text-muted">{relLabel(r.days)}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {linkedUrl && (
-              <div className="flex items-center gap-3 px-4 py-3 bg-[#eef5f1] border border-[#c3dfd3] rounded-card text-sm">
-                <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
-                <span className="text-[#2f7d5b] font-semibold">Live dashboard connected</span>
-                <span className="text-text-muted truncate">{linkedUrl}</span>
-                <a href={linkedUrl} target="_blank" rel="noopener noreferrer"
-                  className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open</a>
-                <button onClick={disconnectDash}
-                  className="shrink-0 text-xs font-semibold text-text-muted hover:text-litred-alt border border-border-light px-3 py-1 rounded-ctrl">Disconnect</button>
               </div>
             )}
           </div>
@@ -290,8 +336,66 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             </div>
           </div>
         </div>
+
+        {/* ---- All employees roster ---- */}
+        <div className="mt-6 bg-white border border-border rounded-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">All employees · reviews</div>
+            <span className="text-xs text-text-muted">Click a name to view summary &amp; edit dates</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-[#f1ece3]">
+              <tr>{['Employee', 'Department', 'Last review', 'Next review', 'Status', ''].map(h => (
+                <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {roster.map(e => {
+                const last = lastReview(e);
+                const next = nextReview(e);
+                return (
+                  <tr key={e.id} className="border-t border-[#f1ece3] hover:bg-canvas transition-colors">
+                    <td className="px-5 py-3">
+                      <button onClick={() => setDetail(e)} className="font-medium text-text-primary hover:text-ink hover:underline text-left">{e.name}</button>
+                      <div className="text-xs text-text-muted">{e.role}</div>
+                    </td>
+                    <td className="px-5 py-3 text-text-secondary">{e.dept}</td>
+                    <td className="px-5 py-3 text-text-muted">
+                      {last ? <><span className="text-text-secondary">{formatDate(last.date)}</span><span className="text-xs block text-text-muted">{last.type}</span></> : '—'}
+                    </td>
+                    <td className="px-5 py-3">
+                      {next ? (
+                        <>
+                          <span className="text-text-primary font-medium">{formatDate(next.date)}</span>
+                          <span className={`text-xs block ${next.days < 0 ? 'text-litred-alt' : next.days <= 1 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
+                            {next.type} · {relLabel(next.days)}
+                          </span>
+                        </>
+                      ) : <span className="text-text-muted">—</span>}
+                    </td>
+                    <td className="px-5 py-3">
+                      {next ? (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          (next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) === 'In Progress' ? 'bg-[#f7efe1] text-[#b07d2a]' :
+                          (next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) === 'Scheduled' ? 'bg-[#e9f0f5] text-[#3f6b8a]' :
+                          'bg-[#f1ece3] text-text-muted'
+                        }`}>
+                          {(next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) ?? 'Not Started'}
+                        </span>
+                      ) : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">All complete</span>}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      {/* ---- Schedule new review modal ---- */}
       {showSchedule && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowSchedule(false)}>
           <div className="bg-white rounded-card p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
@@ -342,6 +446,135 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           </div>
         </div>
       )}
+
+      {/* ---- Employee detail / summary drawer ---- */}
+      {detail && (
+        <EmployeeDetail
+          key={detail.id}
+          employee={detail}
+          linkedUrl={linkedUrl}
+          onClose={() => setDetail(null)}
+          onSave={async (fields) => {
+            const updated = await patchEmployee(detail.id, fields);
+            if (updated) setDetail(updated);
+            showToast('Saved');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- Detail drawer component ----
+function EmployeeDetail({ employee, linkedUrl, onClose, onSave }: {
+  employee: Employee;
+  linkedUrl: string;
+  onClose: () => void;
+  onSave: (fields: Record<string, string | null>) => Promise<void>;
+}) {
+  const [hire, setHire] = useState(employee.hire_date?.slice(0, 10) ?? '');
+  const [d6, setD6] = useState(employee.review_6mo_date?.slice(0, 10) ?? '');
+  const [s6, setS6] = useState(employee.review_6mo_status ?? 'Not Started');
+  const [d12, setD12] = useState(employee.review_1yr_date?.slice(0, 10) ?? '');
+  const [s12, setS12] = useState(employee.review_1yr_status ?? 'Not Started');
+  const [summary, setSummary] = useState(employee.review_notes ?? '');
+  const [busy, setBusy] = useState(false);
+
+  const hasExternalSync = Boolean(employee.review_6mo_summary || employee.review_1yr_summary);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await onSave({
+        hire_date: hire || null,
+        review_6mo_date: d6 || null,
+        review_6mo_status: s6,
+        review_1yr_date: d12 || null,
+        review_1yr_status: s12,
+        review_notes: summary || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
+      <div className="bg-white w-full max-w-md h-full overflow-auto shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-5 border-b border-border flex items-start justify-between">
+          <div>
+            <h2 className="font-spectral text-[20px] font-semibold text-text-primary">{employee.name}</h2>
+            <p className="text-sm text-text-muted">{employee.role} · {employee.dept}</p>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+        </div>
+
+        <div className="px-6 py-5 flex flex-col gap-5">
+          {/* Quick summary */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
+              {linkedUrl && (
+                <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open in Reports ↗</a>
+              )}
+            </div>
+            {!hasExternalSync && (
+              <div className="mb-2 text-xs text-[#b07d2a] bg-[#f7efe1] border border-[#e8d5b0] rounded-ctrl px-3 py-2">
+                Not yet synced from the review dashboard — the link may have been created recently. Add a quick summary below in the meantime.
+              </div>
+            )}
+            <textarea
+              value={summary}
+              onChange={e => setSummary(e.target.value)}
+              rows={5}
+              placeholder="Add a short summary of this employee's performance / review notes…"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none"
+            />
+            {(employee.review_6mo_summary || employee.review_1yr_summary) && (
+              <div className="mt-2 text-xs text-text-secondary space-y-1">
+                {employee.review_6mo_summary && <p><span className="font-semibold">6-mo:</span> {employee.review_6mo_summary}</p>}
+                {employee.review_1yr_summary && <p><span className="font-semibold">1-yr:</span> {employee.review_1yr_summary}</p>}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Hire date</label>
+            <input type="date" value={hire} onChange={e => setHire(e.target.value)}
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+            <p className="text-[11px] text-text-muted mt-1">If no manual dates are set, reviews auto-calculate from hire date (+6 / +12 months).</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">6-month date</label>
+              <input type="date" value={d6} onChange={e => setD6(e.target.value)}
+                className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
+              <select value={s6} onChange={e => setS6(e.target.value)}
+                className="w-full mt-2 border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
+                {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">1-year date</label>
+              <input type="date" value={d12} onChange={e => setD12(e.target.value)}
+                className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
+              <select value={s12} onChange={e => setS12(e.target.value)}
+                className="w-full mt-2 border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
+                {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-border flex gap-2 sticky bottom-0 bg-white">
+          <button onClick={onClose} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover">Close</button>
+          <button onClick={save} disabled={busy} className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">
+            {busy ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

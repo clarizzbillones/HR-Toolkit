@@ -9,6 +9,8 @@ export default async function ReviewsPage() {
   // Ensure review_6mo_date / review_1yr_date columns exist (idempotent)
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_6mo_date TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_date TEXT`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_6mo_summary TEXT`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_summary TEXT`;
   // Seed Caitlin if not present
   await sql`
     INSERT INTO employees (id, name, role, dept, hire_date, review_6mo_date, review_6mo_status)
