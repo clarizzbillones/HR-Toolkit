@@ -83,7 +83,11 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
       .catch(() => {});
   }, [selectedDate]);
 
-  const done = tasks.filter(t => t.completed_date === selectedDate);
+  // "Tasks Done" mirrors the board's Completed column: for today, count every
+  // task currently marked done; for a past date, count items completed on it.
+  const done = selectedDate === defaultIso
+    ? tasks.filter(t => t.status === 'done')
+    : tasks.filter(t => (t.status === 'done' || t.status === 'archived') && t.completed_date === selectedDate);
   // Open items = everything still open (In Progress + Not Started); Pending card = In Progress only
   const pending = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
   const inProgress = tasks.filter(t => t.status === 'doing');
