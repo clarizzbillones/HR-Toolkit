@@ -84,7 +84,9 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   }, [selectedDate]);
 
   const done = tasks.filter(t => t.completed_date === selectedDate);
+  // Open items = everything still open (In Progress + Not Started); Pending card = In Progress only
   const pending = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
+  const inProgress = tasks.filter(t => t.status === 'doing');
 
   function statusPill(status: string) {
     if (status === 'done') return 'bg-[#eef5f1] text-[#2f7d5b]';
@@ -137,7 +139,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
         </div>
         <div style="background:#f7efe1;padding:16px;border-radius:8px">
           <div style="font-size:10px;font-weight:700;color:#b07d2a;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">Pending</div>
-          <div style="font-size:32px;font-weight:700;color:#b07d2a;margin-top:4px;font-family:Georgia,serif">${pending.length}</div>
+          <div style="font-size:32px;font-weight:700;color:#b07d2a;margin-top:4px;font-family:Georgia,serif">${inProgress.length}</div>
         </div>
         <div style="background:#e9f0f5;padding:16px;border-radius:8px">
           <div style="font-size:10px;font-weight:700;color:#3f6b8a;text-transform:uppercase;letter-spacing:.08em;font-family:Arial,sans-serif">On PTO Today</div>
@@ -233,7 +235,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
           {/* Stat cards */}
           <div className="grid grid-cols-4 gap-3 mb-6">
             <StatCard label="Tasks Done" value={done.length} color="#2f7d5b" bg="#eef5f1" />
-            <StatCard label="Pending" value={pending.length} color="#b07d2a" bg="#f7efe1" />
+            <StatCard label="Pending" value={inProgress.length} color="#b07d2a" bg="#f7efe1" />
             <StatCard label="On PTO Today" value={ptoToday.length} color="#3f6b8a" bg="#e9f0f5" sub={ptoToday.join(', ') || undefined} />
             <StatCard label="Open Items" value={pending.length} color="#b0412f" bg="#fdeaea" />
           </div>
