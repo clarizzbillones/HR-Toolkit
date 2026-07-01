@@ -203,9 +203,6 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
 
       {/* Bulk action bar */}
       <div className={clsx('flex items-center gap-3 px-8 py-2.5 bg-[#1a2233] text-white flex-shrink-0 flex-wrap transition-all', hasChecked ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 py-0 overflow-hidden')}>
-        <button onClick={selectAll} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-white/30 hover:bg-white/10 transition-colors">
-          Select all
-        </button>
         <span className="text-sm font-semibold">{checkedIds.size} selected</span>
         <span className="text-white/30 text-sm">·</span>
         <span className="text-xs text-white/60 font-medium">Move to:</span>
@@ -241,11 +238,34 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                   onDrop={() => onDrop(col.key)}
                   onDragOver={e => e.preventDefault()}
                 >
-                  <div className="flex items-center gap-2 px-1 pb-1 border-b border-black/5">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.headColor }} />
-                    <span className="text-sm font-bold" style={{ color: col.headColor }}>{col.label}</span>
-                    <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full bg-black/8 text-black/40">{colTasks.length}</span>
-                  </div>
+                  {(() => {
+                    const allChecked = colTasks.length > 0 && colTasks.every(t => checkedIds.has(t.id));
+                    const someChecked = colTasks.some(t => checkedIds.has(t.id));
+                    return (
+                      <div className="flex items-center gap-2 px-1 pb-1 border-b border-black/5">
+                        <button
+                          onClick={() => {
+                            setCheckedIds(prev => {
+                              const next = new Set(prev);
+                              if (allChecked) { colTasks.forEach(t => next.delete(t.id)); }
+                              else { colTasks.forEach(t => next.add(t.id)); }
+                              return next;
+                            });
+                          }}
+                          className={clsx('w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all',
+                            allChecked ? 'border-transparent' : someChecked ? 'border-transparent' : 'border-black/20 hover:border-black/40'
+                          )}
+                          style={allChecked || someChecked ? { backgroundColor: col.headColor, borderColor: col.headColor } : {}}
+                          title={allChecked ? 'Deselect all' : 'Select all'}
+                        >
+                          {allChecked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><polyline points="5 12 10 17 19 7"/></svg>}
+                          {!allChecked && someChecked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+                        </button>
+                        <span className="text-sm font-bold" style={{ color: col.headColor }}>{col.label}</span>
+                        <span className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full bg-black/8 text-black/40">{colTasks.length}</span>
+                      </div>
+                    );
+                  })()}
                   {colTasks.map(t => {
                     const notesArr = JSON.parse(t.notes || '[]');
                     const isChecked = checkedIds.has(t.id);
