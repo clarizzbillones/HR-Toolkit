@@ -76,6 +76,7 @@ Alex Little
 Founding & Managing Partner`;
   }
 
+  const bonusNote = p.notes ? p.notes : `a first-year bonus subject to the firm's performance, with further discretionary bonus based on individual performance and firm profitability`;
   return `[DATE_CENTERED]${todayStr()}
 
 Via Email
@@ -84,15 +85,15 @@ ${p.name}${p.email ? '\n' + p.email : ''}
 
     Re:    Offer of Employment
 
-Dear ${salutation},
+Dear ${nameParts[0]},
 
-${p.firm} PLLC is pleased to offer you the position of ${p.role}${p.dept ? ` in the ${p.dept} department` : ''}, located in ${loc}, with an annual salary of $${sal} paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule.
+We are pleased to extend an offer for you to join ${p.firm} PLLC as ${p.role === p.role.toLowerCase() ? 'a' : 'an'} ${p.role}. This letter is to confirm the details of our employment offer in writing.
 
-As a member of the firm you will be eligible for our benefits program, including health, dental, and vision insurance, a 401(k) plan with firm match, and paid time off. Employment with ${p.firm} is at-will, meaning either party may end the relationship at any time, with or without cause.
+Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. ${bonusNote ? `Over the first calendar year, we also expect to pay you a bonus, which is subject to the firm's performance. You also may receive further bonus pay at ${p.firm}'s discretion based on your performance and the firm's profitability.` : ''} Your benefits will include health, dental, and life insurance, towards which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have been employed for a period of one year. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time.
 
-We anticipate your start date to be on or before ${startDisplay}. Please confirm your acceptance of this offer in writing.${p.notes ? '\n\n' + p.notes : ''}
+We anticipate your start date to be no later than ${startDisplay}, but we hope you can join much sooner. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us.
 
-We are excited about welcoming you to the team. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself.
+Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns.
 
 Very truly yours,
 
@@ -159,7 +160,22 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
     if (p.employeeType === 'contractor') {
       prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with monthly compensation of $${sal} payable monthly; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Return ONLY the letter text, no preamble.`;
     } else {
-      prompt = `Draft a formal W-2 employment offer letter for ${p.firm}, PLLC, a law firm in Nashville, Tennessee. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the role of ${p.role}${p.dept ? ' in the ' + p.dept + ' department' : ''}, located in ${loc}, with annual salary of $${sal} paid ${(p.cadence || 'semi-monthly').toLowerCase()}; blank line; benefits paragraph: eligible for health, dental, and vision insurance, 401(k) with firm match, and paid time off; employment is at-will; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing${p.notes ? '; ' + p.notes : ''}; blank line; paragraph: excited about welcoming to the team; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Candidate: ${p.name}. Return ONLY the letter text, no preamble.`;
+      prompt = `Draft a W-2 employment offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Match this exact structure and tone:
+
+Line 1: centered date
+"Via Email"
+candidate full name
+candidate email
+"    Re:    Offer of Employment"
+"Dear ${nameParts[0]},"
+Paragraph 1: "We are pleased to extend an offer for you to join ${p.firm} PLLC as ${p.role}. This letter is to confirm the details of our employment offer in writing."
+Paragraph 2: "Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. Over the first calendar year, we also expect to pay you a bonus, which is subject to the firm's performance. You also may receive further bonus pay at ${p.firm}'s discretion based on your performance and the firm's profitability. Your benefits will include health, dental, and life insurance, towards which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have been employed for a period of one year. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time."${p.notes ? ' Also include: ' + p.notes + '.' : ''}
+Paragraph 3: "We anticipate your start date to be no later than ${startDisplay}, but we hope you can join much sooner. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us."
+Paragraph 4: "Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns."
+"Very truly yours,"
+"Alex Little"
+"Founding & Managing Partner"
+Return ONLY the letter text.`;
     }
   } else {
     const p = params as SopParams;
