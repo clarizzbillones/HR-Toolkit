@@ -5,7 +5,7 @@ import DesignClient from './DesignClient';
 export const dynamic = 'force-dynamic';
 
 export default async function DesignPage() {
-  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status NOT IN ('done', 'archived')`;
   const employees = await sql`SELECT name, birthday FROM employees ORDER BY name`;
   return (
     <ModuleLayout pendingTaskCount={n ?? 0}>

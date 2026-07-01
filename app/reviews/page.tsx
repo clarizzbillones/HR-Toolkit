@@ -40,7 +40,7 @@ const ROSTER: [string, string, string, string][] = [
 ];
 
 export default async function ReviewsPage() {
-  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status NOT IN ('done', 'archived')`;
   // Ensure review_6mo_date / review_1yr_date columns exist (idempotent)
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_6mo_date TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_date TEXT`;

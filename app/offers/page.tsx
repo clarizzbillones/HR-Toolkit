@@ -5,7 +5,7 @@ import OffersClient from './OffersClient';
 export const dynamic = 'force-dynamic';
 
 export default async function OffersPage() {
-  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
+  const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status NOT IN ('done', 'archived')`;
   return (
     <ModuleLayout pendingTaskCount={n ?? 0}>
       <OffersClient />
