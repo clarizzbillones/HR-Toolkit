@@ -92,6 +92,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   }
 
   function clearChecked() { setCheckedIds(new Set()); }
+  function selectAll() { setCheckedIds(new Set(tasks.filter(t => t.status !== 'archived').map(t => t.id))); }
 
   async function addTask() {
     if (!newTitle.trim()) return;
@@ -107,8 +108,13 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   async function updateStatus(id: string, status: string) {
     const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
     const { task } = await res.json();
-    setTasks(prev => prev.map(t => t.id === id ? task : t));
-    if (selected?.id === id) setSelected(task);
+    if (status === 'archived') {
+      setTasks(prev => prev.filter(t => t.id !== id));
+      if (selected?.id === id) setSelected(null);
+    } else {
+      setTasks(prev => prev.map(t => t.id === id ? task : t));
+      if (selected?.id === id) setSelected(task);
+    }
   }
 
   async function bulkMove(status: string) {
@@ -196,26 +202,31 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
       )}
 
       {/* Bulk action bar */}
-      {hasChecked && (
-        <div className="flex items-center gap-3 px-8 py-2.5 bg-[#1a2233] text-white flex-shrink-0 flex-wrap">
-          <span className="text-sm font-semibold">{checkedIds.size} selected</span>
-          <span className="text-white/30 text-sm">·</span>
-          <span className="text-xs text-white/60 font-medium">Move to:</span>
-          {COLS.map(col => (
-            <button key={col.key} onClick={() => bulkMove(col.key)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20 hover:bg-white/10 transition-colors">
-              {col.label}
-            </button>
-          ))}
-          <button onClick={bulkDelete}
-            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#b0412f]/80 hover:bg-[#b0412f] transition-colors ml-1">
-            Delete
+      <div className={clsx('flex items-center gap-3 px-8 py-2.5 bg-[#1a2233] text-white flex-shrink-0 flex-wrap transition-all', hasChecked ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 py-0 overflow-hidden')}>
+        <button onClick={selectAll} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-white/30 hover:bg-white/10 transition-colors">
+          Select all
+        </button>
+        <span className="text-sm font-semibold">{checkedIds.size} selected</span>
+        <span className="text-white/30 text-sm">·</span>
+        <span className="text-xs text-white/60 font-medium">Move to:</span>
+        {COLS.map(col => (
+          <button key={col.key} onClick={() => bulkMove(col.key)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20 hover:bg-white/10 transition-colors">
+            {col.label}
           </button>
-          <button onClick={clearChecked} className="ml-auto text-xs text-white/50 hover:text-white/80 transition-colors">
-            ✕ Clear
-          </button>
-        </div>
-      )}
+        ))}
+        <button onClick={() => bulkMove('archived')}
+          className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[#c9a24a]/60 text-[#c9a24a] hover:bg-[#c9a24a]/10 transition-colors">
+          Archive
+        </button>
+        <button onClick={bulkDelete}
+          className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#b0412f]/80 hover:bg-[#b0412f] transition-colors ml-1">
+          Delete
+        </button>
+        <button onClick={clearChecked} className="ml-auto text-xs text-white/50 hover:text-white/80 transition-colors">
+          ✕ Clear
+        </button>
+      </div>
 
       {/* Board */}
       {view === 'board' && (

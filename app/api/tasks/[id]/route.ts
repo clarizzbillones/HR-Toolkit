@@ -10,7 +10,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (status) {
     const history = JSON.parse(task.status_history || '[]');
     history.push({ status, timestamp: new Date().toISOString() });
-    if (status === 'done') {
+    if (status === 'done' || status === 'archived') {
       const completedDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
       await sql`UPDATE tasks SET status = ${status}, status_history = ${JSON.stringify(history)}, completed_date = ${completedDate} WHERE id = ${params.id}`;
     } else {
