@@ -65,17 +65,23 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   const [ptoToday, setPtoToday] = useState<string[]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
   const [notes, setNotes] = useState('');
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const defaultIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const [selectedDate, setSelectedDate] = useState(defaultIso);
 
-  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const reportDateLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
   useEffect(() => {
     fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));
-    fetch(`/api/pto/today?date=${todayIso}`)
+  }, []);
+
+  useEffect(() => {
+    fetch(`/api/pto/today?date=${selectedDate}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.names)) setPtoToday(dedupeNames(d.names)); })
       .catch(() => {});
-  }, []);
+  }, [selectedDate]);
 
   const done = tasks.filter(t => t.status === 'done');
   const pending = tasks.filter(t => t.status !== 'done');
@@ -108,7 +114,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
       </tr>`;
     }).join('');
 
-    const html = `<!DOCTYPE html><html><head><title>EOD Report – ${today}</title>
+    const html = `<!DOCTYPE html><html><head><title>EOD Report – ${reportDateLabel}</title>
     <style>
       *{box-sizing:border-box}
       body{font-family:Georgia,serif;margin:0;padding:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -121,7 +127,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
         <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:.15em;font-family:Georgia,serif">LITSON</div>
         <div style="font-size:10px;color:#c9a24a;letter-spacing:.12em;margin-top:3px;font-family:Arial,sans-serif">ATTORNEYS AT LAW · NASHVILLE, TENNESSEE</div>
       </div>
-      <div style="text-align:right;font-size:11px;color:#cdd7e2;line-height:1.7;font-family:Arial,sans-serif">End-of-Day Report<br><strong style="color:#fff">${today}</strong></div>
+      <div style="text-align:right;font-size:11px;color:#cdd7e2;line-height:1.7;font-family:Arial,sans-serif">End-of-Day Report<br><strong style="color:#fff">${reportDateLabel}</strong></div>
     </div>
     <div style="padding:24px 32px">
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
@@ -203,7 +209,16 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex items-start gap-6">
             <div className="text-right text-xs text-[#cdd7e2] leading-relaxed">
-              End-of-Day Report<br />{today}
+              End-of-Day Report<br />
+              <span>{reportDateLabel}</span>
+              <br />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                className="mt-1 text-xs bg-transparent border border-[#4a6a8a] rounded px-1.5 py-0.5 text-[#cdd7e2] cursor-pointer focus:outline-none focus:border-[#c9a24a] no-print"
+                style={{ colorScheme: 'dark' }}
+              />
             </div>
             <button
               type="button"
