@@ -44,9 +44,12 @@ export function localOffer(p: OfferParams): string {
   if (p.employeeType === 'contractor') {
     return `${todayStr()}
 
-${p.name}
-${p.email ? p.email + '\n' : ''}
+Via Email
+
 Re: 1099 Independent Contractor Offer — ${p.role}
+
+${p.name}
+${p.email ? p.email : ''}
 
 Dear ${first},
 
@@ -64,21 +67,23 @@ Either party may terminate this engagement with seven (7) days' written notice.
 
 Please sign and return this letter by ${signByDate()} to indicate your acceptance of these terms. We are excited about the work ahead and look forward to your contributions.
 
-Sincerely,
+Very truly yours,
 
-J. Alex Little
-Founding & Managing Partner
+Alex Little
+Managing Member
 ${p.firm}, PLLC
 
-cc: Zack Lawson
-    Catie Toole`;
+cc: Zack Lawson, Member`;
   }
 
   return `${todayStr()}
 
-${p.name}
-${p.email ? p.email + '\n' : ''}
+Via Email
+
 Re: Offer of Employment — ${p.role}
+
+${p.name}
+${p.email ? p.email : ''}
 
 Dear ${first},
 
@@ -88,16 +93,16 @@ Compensation & Benefits
 
 Start Date: ${startDisplay}
 Annual Salary: $${sal}, paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule
-Classification: W-2 Employee${p.notes ? '\n' + p.notes : ''}
+Classification: W-2 Employee${p.dept ? '\nDepartment: ' + p.dept : ''}${p.notes ? '\n' + p.notes : ''}
 
 As a member of the firm you will be eligible for our benefits program, including health, dental, and vision insurance, a 401(k) plan with firm match, and our paid-time-off policy. Employment with ${p.firm} is at-will, meaning either party may end the relationship at any time, with or without cause.
 
 To accept this offer, please sign and return this letter by ${signByDate()}. We are genuinely excited about the prospect of you joining ${p.firm} and look forward to your response.
 
-Sincerely,
+Very truly yours,
 
-J. Alex Little
-Founding & Managing Partner
+Alex Little
+Managing Member
 ${p.firm}, PLLC`;
 }
 
@@ -155,9 +160,9 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
       : '[Start Date TBD]';
     const sal = Number(p.salary).toLocaleString('en-US');
     if (p.employeeType === 'contractor') {
-      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Structure: date; candidate name and email; "Re: 1099 Independent Contractor Offer — [role]"; greeting; opening offering the contractor role; "Engagement Terms" section listing Start Date (${startDisplay}), Compensation ($${sal} per month invoiced monthly), Classification (1099 Independent Contractor)${p.notes ? ', and: ' + p.notes : ''}; paragraph clarifying no employee benefits and self-responsibility for taxes; termination clause (7 days written notice by either party); instructions to sign and return by ${signByDate()}; closing signed by J. Alex Little, Founding & Managing Partner, ${p.firm}, PLLC; cc line for Zack Lawson and Catie Toole. Candidate: ${p.name}${p.email ? ' (' + p.email + ')' : ''}. Role: ${p.role}. Location: ${loc}. Keep it professional and concise, about 220 words. Return ONLY the letter text.`;
+      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Structure: date; blank line; "Via Email"; blank line; "Re: 1099 Independent Contractor Offer — ${p.role}"; blank line; candidate name and email on separate lines; blank line; greeting "Dear ${first},"; opening paragraph offering the contractor role; "Engagement Terms" section (label bold) listing Start Date (${startDisplay}), Compensation ($${sal} per month invoiced monthly), Classification (1099 Independent Contractor)${p.notes ? ', and additional notes: ' + p.notes : ''}; paragraph clarifying no employee benefits and self-responsibility for taxes; termination clause (7 days written notice by either party); instructions to sign and return by ${signByDate()}; blank line; "Very truly yours,"; blank lines for signature; "Alex Little"; "Managing Member"; "${p.firm}, PLLC"; blank line; "cc: Zack Lawson, Member". Location: ${loc}. Keep it professional and concise, about 220 words. Return ONLY the letter text.`;
     } else {
-      prompt = `Draft a formal W-2 employment offer letter for ${p.firm}, PLLC, a law firm in Nashville, Tennessee. Today is ${todayStr()}. Structure: date; candidate name and email; "Re: Offer of Employment — [role]"; greeting; opening offering the position; "Compensation & Benefits" section listing Start Date (${startDisplay}), Annual Salary ($${sal} paid ${(p.cadence || 'semi-monthly').toLowerCase()}), Classification (W-2 Employee)${p.dept ? ', Department: ' + p.dept : ''}${p.notes ? ', and: ' + p.notes : ''}; benefits paragraph (health/dental/vision, 401k with match, PTO); at-will employment statement; instructions to sign and return by ${signByDate()}; closing signed by J. Alex Little, Founding & Managing Partner, ${p.firm}, PLLC. Candidate: ${p.name}${p.email ? ' (' + p.email + ')' : ''}. Role: ${p.role}. Location: ${loc}. Keep it warm but professional, about 230 words. Return ONLY the letter text.`;
+      prompt = `Draft a formal W-2 employment offer letter for ${p.firm}, PLLC, a law firm in Nashville, Tennessee. Today is ${todayStr()}. Structure: date; blank line; "Via Email"; blank line; "Re: Offer of Employment — ${p.role}"; blank line; candidate name and email on separate lines; blank line; greeting "Dear ${first},"; opening paragraph offering the position; "Compensation & Benefits" section listing Start Date (${startDisplay}), Annual Salary ($${sal} paid ${(p.cadence || 'semi-monthly').toLowerCase()}), Classification (W-2 Employee)${p.dept ? ', Department: ' + p.dept : ''}${p.notes ? ', additional: ' + p.notes : ''}; benefits paragraph (health/dental/vision, 401k with match, PTO); at-will employment statement; instructions to sign and return by ${signByDate()}; blank line; "Very truly yours,"; blank lines for signature; "Alex Little"; "Managing Member"; "${p.firm}, PLLC". Candidate: ${p.name}${p.email ? ' (' + p.email + ')' : ''}. Role: ${p.role}. Location: ${loc}. Keep it warm but professional, about 230 words. Return ONLY the letter text.`;
     }
   } else {
     const p = params as SopParams;
