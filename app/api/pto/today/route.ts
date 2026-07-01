@@ -20,7 +20,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
   [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
   [/^(amy|amy\s+green)$/i, 'Amy Green'],
-  [/^(alicia|avh|alicia\s+van\s+huizen)$/i, 'Alicia Van Huizen'],
+  [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
   [/^(paula|paula\s+valle)$/i, 'Paula Valle'],
 ];
 
