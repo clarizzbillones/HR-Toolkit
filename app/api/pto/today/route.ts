@@ -77,9 +77,16 @@ export async function GET(req: Request) {
   let calEvents: { name: string; tag: string; start: string; end: string; title: string }[] = [];
   try { calEvents = settingsRows[0]?.calendar_events ? JSON.parse(settingsRows[0].calendar_events) : []; } catch { calEvents = []; }
 
-  const names = new Set<string>();
-  const debugIncluded: { source: string; employee: string; type: string; reason?: string }[] = [];
+  // Single-pass dedup: key = canonical lowercase, value = canonical display name
+  const canonical = new Map<string, string>();
+  const debugIncluded: { source: string; employee: string; type: string }[] = [];
   const debugExcluded: { source: string; employee: string; type: string; reason: string }[] = [];
+
+  function addName(raw: string, source: string, type: string) {
+    const display = resolveAlias(raw);
+    canonical.set(display.trim().toLowerCase(), display);
+    debugIncluded.push({ source, employee: raw, type });
+  }
 
   for (const r of ptoRows) {
     if (EXCLUDED_TYPES.test(r.type)) {
@@ -91,8 +98,7 @@ export async function GET(req: Request) {
       debugExcluded.push({ source: 'db', employee: r.employee, type: r.type, reason: `days=${days} < 1` });
       continue;
     }
-    names.add(normName(r.employee));
-    debugIncluded.push({ source: 'db', employee: r.employee, type: r.type });
+    addName(r.employee, 'db', r.type);
   }
 
   for (const c of calEvents) {
@@ -115,18 +121,11 @@ export async function GET(req: Request) {
       debugExcluded.push({ source: 'cal', employee: c.name, type: c.tag, reason: `days=${days} < 1` });
       continue;
     }
-    names.add(normName(c.name));
-    debugIncluded.push({ source: 'cal', employee: c.name, type: c.tag });
+    addName(c.name, 'cal', c.tag);
   }
 
-  // Final dedup: resolve all normNames to canonical, then deduplicate again by canonical name
-  const canonical = new Map<string, string>();
-  for (const n of names) {
-    const resolved = resolveAlias(n);
-    canonical.set(resolved.trim().toLowerCase(), resolved);
-  }
   const nameList = [...canonical.values()];
   const resp: Record<string, unknown> = { count: nameList.length, names: nameList };
-  if (debug) { resp.included = debugIncluded; resp.excluded = debugExcluded; resp.rawNames = [...names]; }
+  if (debug) { resp.included = debugIncluded; resp.excluded = debugExcluded; }
   return NextResponse.json(resp);
 }
