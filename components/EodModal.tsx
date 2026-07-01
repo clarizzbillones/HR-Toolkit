@@ -29,7 +29,12 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
       const names = new Set<string>();
 
       entries
-        .filter(e => e.start_date <= todayIso && e.end_date >= todayIso && !/wfh|work from home|personal/i.test(e.type))
+        .filter(e =>
+          e.start_date <= todayIso && e.end_date >= todayIso &&
+          (e as any).status === 'Approved' &&
+          !/wfh|work\s+from\s+home|personal\s+leave|personal/i.test(e.type) &&
+          ((e as any).days == null || Number((e as any).days) >= 1)
+        )
         .forEach(e => names.add(e.employee));
 
       calEvents

@@ -42,6 +42,7 @@ export async function GET() {
   const ptoRows = await sql`
     SELECT employee, type, days FROM pto_entries
     WHERE start_date <= ${today} AND end_date >= ${today}
+      AND status = 'Approved'
   `;
 
   const settingsRows = await sql`SELECT calendar_events FROM app_settings WHERE id = 'singleton'`;
