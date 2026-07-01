@@ -170,6 +170,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }).catch(() => {});
   }, []);
 
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+
   // Out today: fetch from the canonical /api/pto/today endpoint
   const [outTodayCount, setOutTodayCount] = useState(0);
   const [outTodayNames, setOutTodayNames] = useState<string[]>([]);
@@ -194,8 +196,6 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     next.has(val) ? next.delete(val) : next.add(val);
     return next;
   }
-
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
   // --- CSV upload ---
   async function handleFile(file: File) {
