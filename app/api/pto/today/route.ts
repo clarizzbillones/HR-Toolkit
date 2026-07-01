@@ -22,6 +22,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(amy|amy\s+green)$/i, 'Amy Green'],
   [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
   [/^(paula|paula\s+valle)$/i, 'Paula Valle'],
+  [/^(ridwan|ridwan\s+ahmed)$/i, 'Ridwan Ahmed'],
 ];
 
 function resolveAlias(n: string): string {
