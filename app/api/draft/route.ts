@@ -11,7 +11,19 @@ export async function POST(req: Request) {
   const cadence = settings?.payroll_cadence ?? 'Semi-monthly';
   try {
     if (kind === 'offer') {
-      const text = await generateDraft('offer', { ...params, firm, cadence });
+      const text = await generateDraft('offer', {
+        employeeType: params.employeeType ?? 'employee',
+        name: params.name ?? '',
+        email: params.email ?? '',
+        role: params.role ?? '',
+        dept: params.dept ?? '',
+        salary: params.salary ?? '',
+        startDate: params.startDate ?? '',
+        location: params.location ?? '',
+        notes: params.notes ?? '',
+        firm,
+        cadence,
+      });
       return NextResponse.json({ text });
     }
     if (kind === 'sop') {

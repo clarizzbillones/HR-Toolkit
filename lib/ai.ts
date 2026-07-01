@@ -3,11 +3,15 @@
 export type DraftKind = 'offer' | 'sop';
 
 export interface OfferParams {
+  employeeType: 'contractor' | 'employee';
   name: string;
+  email: string;
   role: string;
+  dept: string;
   salary: string;
-  start: string;
-  type: string;
+  startDate: string;
+  location: string;
+  notes: string;
   firm: string;
   cadence: string;
 }
@@ -32,15 +36,59 @@ function signByDate() {
 export function localOffer(p: OfferParams): string {
   const first = (p.name || 'Candidate').split(' ')[0];
   const sal = Number(p.salary).toLocaleString('en-US');
-  return `${todayStr()}
+  const loc = p.location || (p.employeeType === 'contractor' ? 'Remote' : 'Nashville, TN');
+  const startDisplay = p.startDate
+    ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '[Start Date TBD]';
+
+  if (p.employeeType === 'contractor') {
+    return `${todayStr()}
 
 ${p.name}
+${p.email ? p.email + '\n' : ''}
+Re: 1099 Independent Contractor Offer — ${p.role}
 
 Dear ${first},
 
-On behalf of ${p.firm}, PLLC, I am delighted to extend an offer for the position of ${p.role} with our firm in Nashville, Tennessee. The partners were impressed by your experience and believe you will be a valued addition to our team.
+On behalf of ${p.firm}, PLLC, I am pleased to extend this offer for you to serve as an independent contractor in the role of ${p.role}${p.dept ? ` (${p.dept})` : ''}, based ${loc}. We have been impressed with your background and look forward to working together.
 
-Your starting annual salary will be $${sal}, paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule. This is a ${(p.type || 'Full-time').toLowerCase()} position with an anticipated start date of ${p.start}.
+Engagement Terms
+
+Start Date: ${startDisplay}
+Compensation: $${sal} per month, invoiced monthly
+Classification: 1099 Independent Contractor
+${p.notes ? '\n' + p.notes + '\n' : ''}
+As an independent contractor, you will not be an employee of ${p.firm}, PLLC and will not be entitled to employee benefits, including health insurance, retirement plans, or paid leave. You will be responsible for your own taxes and business expenses as agreed.
+
+Either party may terminate this engagement with seven (7) days' written notice.
+
+Please sign and return this letter by ${signByDate()} to indicate your acceptance of these terms. We are excited about the work ahead and look forward to your contributions.
+
+Sincerely,
+
+J. Alex Little
+Founding & Managing Partner
+${p.firm}, PLLC
+
+cc: Zack Lawson
+    Catie Toole`;
+  }
+
+  return `${todayStr()}
+
+${p.name}
+${p.email ? p.email + '\n' : ''}
+Re: Offer of Employment — ${p.role}
+
+Dear ${first},
+
+On behalf of ${p.firm}, PLLC, I am delighted to extend an offer of employment for the position of ${p.role}${p.dept ? `, ${p.dept}` : ''}, located in ${loc}. The partners were impressed by your experience and believe you will be a valued addition to our team.
+
+Compensation & Benefits
+
+Start Date: ${startDisplay}
+Annual Salary: $${sal}, paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule
+Classification: W-2 Employee${p.notes ? '\n' + p.notes : ''}
 
 As a member of the firm you will be eligible for our benefits program, including health, dental, and vision insurance, a 401(k) plan with firm match, and our paid-time-off policy. Employment with ${p.firm} is at-will, meaning either party may end the relationship at any time, with or without cause.
 
@@ -48,8 +96,8 @@ To accept this offer, please sign and return this letter by ${signByDate()}. We 
 
 Sincerely,
 
-Renee Mathis
-HR Administrator
+J. Alex Little
+Founding & Managing Partner
 ${p.firm}, PLLC`;
 }
 
@@ -101,7 +149,16 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
   let prompt: string;
   if (kind === 'offer') {
     const p = params as OfferParams;
-    prompt = `Draft a formal job offer letter for ${p.firm}, PLLC, a law firm in Nashville, Tennessee. Today is ${todayStr()}. Use this structure: date; candidate name; greeting; statement offering the position; compensation (annual salary, paid on the firm's ${(p.cadence || 'semi-monthly').toLowerCase()} schedule); employment type and start date; a brief benefits summary (health/dental/vision, 401k with match, PTO); an at-will employment statement; instructions to sign and return within 7 business days; and a closing signed by Renee Mathis, HR Administrator. Candidate: ${p.name}. Position: ${p.role}. Annual salary: $${p.salary}. Start date: ${p.start}. Employment type: ${p.type}. Keep it warm but professional, about 230 words. Return ONLY the letter text, no preamble.`;
+    const loc = p.location || (p.employeeType === 'contractor' ? 'Remote' : 'Nashville, TN');
+    const startDisplay = p.startDate
+      ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : '[Start Date TBD]';
+    const sal = Number(p.salary).toLocaleString('en-US');
+    if (p.employeeType === 'contractor') {
+      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Structure: date; candidate name and email; "Re: 1099 Independent Contractor Offer — [role]"; greeting; opening offering the contractor role; "Engagement Terms" section listing Start Date (${startDisplay}), Compensation ($${sal} per month invoiced monthly), Classification (1099 Independent Contractor)${p.notes ? ', and: ' + p.notes : ''}; paragraph clarifying no employee benefits and self-responsibility for taxes; termination clause (7 days written notice by either party); instructions to sign and return by ${signByDate()}; closing signed by J. Alex Little, Founding & Managing Partner, ${p.firm}, PLLC; cc line for Zack Lawson and Catie Toole. Candidate: ${p.name}${p.email ? ' (' + p.email + ')' : ''}. Role: ${p.role}. Location: ${loc}. Keep it professional and concise, about 220 words. Return ONLY the letter text.`;
+    } else {
+      prompt = `Draft a formal W-2 employment offer letter for ${p.firm}, PLLC, a law firm in Nashville, Tennessee. Today is ${todayStr()}. Structure: date; candidate name and email; "Re: Offer of Employment — [role]"; greeting; opening offering the position; "Compensation & Benefits" section listing Start Date (${startDisplay}), Annual Salary ($${sal} paid ${(p.cadence || 'semi-monthly').toLowerCase()}), Classification (W-2 Employee)${p.dept ? ', Department: ' + p.dept : ''}${p.notes ? ', and: ' + p.notes : ''}; benefits paragraph (health/dental/vision, 401k with match, PTO); at-will employment statement; instructions to sign and return by ${signByDate()}; closing signed by J. Alex Little, Founding & Managing Partner, ${p.firm}, PLLC. Candidate: ${p.name}${p.email ? ' (' + p.email + ')' : ''}. Role: ${p.role}. Location: ${loc}. Keep it warm but professional, about 230 words. Return ONLY the letter text.`;
+    }
   } else {
     const p = params as SopParams;
     prompt = `Write a Standard Operating Procedure for ${p.firm}, PLLC, a law firm. Title: "${p.title}". Category: ${p.template}. Today is ${todayStr()}. Use this exact section structure with numbered headings: a header block (firm name, title, SOP ID, effective date, version 1.0, owner: HR Administrator), then 1. PURPOSE, 2. SCOPE, 3. RESPONSIBILITIES, 4. PROCEDURE (numbered steps), 5. RECORDS & REFERENCES, 6. REVISION HISTORY. ${p.notes ? `Incorporate these specifics: ${p.notes}.` : ''} Keep it concise and practical for a 33-person firm, about 250 words. Return ONLY the SOP text.`;
