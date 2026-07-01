@@ -6,3 +6,4 @@ db/seed.js
 db/data.db-shm
 db/data.db-wal
 .env
+tsconfig.tsbuildinfo
