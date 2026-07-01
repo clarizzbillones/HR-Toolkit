@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from './Toast';
 
 interface Task {
-  id: string; title: string; sub: string; due_tag: string; status: string; notes: string;
+  id: string; title: string; sub: string; due_tag: string; status: string; notes: string; completed_date?: string;
 }
 
 const NAME_ALIASES: [RegExp, string][] = [
@@ -73,8 +73,8 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   });
 
   useEffect(() => {
-    fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));
-  }, []);
+    fetch(`/api/tasks?eodDate=${selectedDate}`).then(r => r.json()).then(d => setTasks(d.tasks ?? []));
+  }, [selectedDate]);
 
   useEffect(() => {
     fetch(`/api/pto/today?date=${selectedDate}`)
@@ -83,8 +83,8 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
       .catch(() => {});
   }, [selectedDate]);
 
-  const done = tasks.filter(t => t.status === 'done');
-  const pending = tasks.filter(t => t.status !== 'done');
+  const done = tasks.filter(t => t.completed_date === selectedDate);
+  const pending = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
 
   function statusPill(status: string) {
     if (status === 'done') return 'bg-[#eef5f1] text-[#2f7d5b]';
@@ -104,7 +104,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   }
 
   function printPdf() {
-    const taskRows = tasks.map(t => {
+    const taskRows = [...done, ...pending].map(t => {
       const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
       return `<tr style="border-bottom:1px solid #f4efe6">
         <td style="padding:10px 8px;font-size:13px;font-weight:500;color:#1a1a1a">${t.title}${t.sub ? `<br><span style="font-size:11px;color:#888">${t.sub}</span>` : ''}</td>
@@ -243,7 +243,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
             <div className="grid grid-cols-[2fr_1fr_1fr_2fr] gap-2 py-2 border-b border-border-warm text-[10px] uppercase tracking-wider text-text-faint font-bold">
               <div>Task</div><div>Status</div><div>Due</div><div>Notes</div>
             </div>
-            {tasks.map((t) => {
+            {[...done, ...pending].map((t) => {
               const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
               return (
                 <div key={t.id} className="grid grid-cols-[2fr_1fr_1fr_2fr] gap-2 py-2.5 border-b border-[#f4efe6] items-start">

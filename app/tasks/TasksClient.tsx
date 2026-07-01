@@ -7,7 +7,7 @@ import EditGate from '@/components/EditGate';
 
 interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string;
-  status_history: string; notes: string; created_at: string;
+  status_history: string; notes: string; created_at: string; completed_date?: string;
 }
 
 function pill(status: string) {
@@ -59,7 +59,7 @@ const COLS = [
 export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) {
   const { showToast } = useToast();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [view, setView] = useState<'board' | 'list'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'archived'>('board');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
@@ -68,11 +68,17 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [showEod, setShowEod] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [overrideDate, setOverrideDate] = useState('');
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+  const [archivedDateFilter, setArchivedDateFilter] = useState('');
   const dragId = useRef<string | null>(null);
 
   const today = overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
-  const pending = tasks.filter(t => t.status !== 'done');
+  const pending = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
   const done = tasks.filter(t => t.status === 'done');
+
+  function loadArchived() {
+    fetch('/api/tasks?status=archived').then(r => r.json()).then(d => setArchivedTasks(d.tasks ?? []));
+  }
 
   const hasChecked = checkedIds.size > 0;
 
@@ -155,7 +161,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
       <header className="flex items-center gap-4 px-8 py-5 bg-white border-b border-border flex-shrink-0 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Open HR Tasks</h1>
-          <p className="text-sm text-text-muted mt-0.5">{pending.length} open · {done.length} completed today</p>
+          <p className="text-sm text-text-muted mt-0.5">{view === 'archived' ? `${archivedTasks.length} archived tasks` : `${pending.length} open · ${done.length} completed today`}</p>
         </div>
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -167,6 +173,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           <div className="flex gap-1 bg-[#f1ece3] p-1 rounded-ctrl">
             <button onClick={() => setView('board')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'board' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>Board</button>
             <button onClick={() => setView('list')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'list' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>List</button>
+            <button onClick={() => { setView('archived'); loadArchived(); }} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'archived' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>Archived</button>
           </div>
           <EditGate><button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">＋ Add task</button></EditGate>
           <button onClick={() => setShowEod(true)} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors">Generate EOD Report</button>
@@ -388,6 +395,47 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
               <button onClick={() => deleteTask(selected.id)} className="text-sm text-litred-alt font-semibold hover:underline">Delete task</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Archived view */}
+      {view === 'archived' && (
+        <div className="flex-1 overflow-auto px-8 py-6 max-w-3xl w-full">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xs font-bold text-text-muted uppercase tracking-widest">Filter by date</span>
+            <input type="date" value={archivedDateFilter} onChange={e => setArchivedDateFilter(e.target.value)}
+              className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+            {archivedDateFilter && <button onClick={() => setArchivedDateFilter('')} className="text-xs text-text-muted hover:text-text-primary font-semibold">Clear</button>}
+          </div>
+          {(() => {
+            const filtered = archivedDateFilter
+              ? archivedTasks.filter(t => t.completed_date === archivedDateFilter)
+              : archivedTasks;
+            if (filtered.length === 0) return <div className="text-sm text-text-muted">No archived tasks{archivedDateFilter ? ' for this date' : ''}.</div>;
+            // Group by completed_date
+            const groups: Record<string, Task[]> = {};
+            for (const t of filtered) {
+              const key = t.completed_date || 'Unknown';
+              if (!groups[key]) groups[key] = [];
+              groups[key].push(t);
+            }
+            return Object.entries(groups).sort(([a],[b]) => b.localeCompare(a)).map(([date, ts]) => (
+              <div key={date} className="mb-6">
+                <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-2">{date === 'Unknown' ? 'Unknown date' : new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                <div className="bg-white border border-border rounded-card overflow-hidden">
+                  {ts.map(t => (
+                    <div key={t.id} className="flex items-center gap-3.5 px-4.5 py-3.5 border-b border-[#f1ece3] last:border-0">
+                      <div className="w-5 h-5 rounded-md flex-shrink-0 flex items-center justify-center bg-[#c0b09a] border-[#c0b09a]">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="5 12 10 17 19 7"/></svg>
+                      </div>
+                      <div className="flex-1 text-sm text-text-muted line-through">{t.title}</div>
+                      {t.due_tag && <span className="text-xs text-text-muted">{t.due_tag}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       )}
 

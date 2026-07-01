@@ -10,7 +10,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (status) {
     const history = JSON.parse(task.status_history || '[]');
     history.push({ status, timestamp: new Date().toISOString() });
-    await sql`UPDATE tasks SET status = ${status}, status_history = ${JSON.stringify(history)} WHERE id = ${params.id}`;
+    if (status === 'done') {
+      const completedDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+      await sql`UPDATE tasks SET status = ${status}, status_history = ${JSON.stringify(history)}, completed_date = ${completedDate} WHERE id = ${params.id}`;
+    } else {
+      await sql`UPDATE tasks SET status = ${status}, status_history = ${JSON.stringify(history)}, completed_date = NULL WHERE id = ${params.id}`;
+    }
   }
 
   if (note) {
