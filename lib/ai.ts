@@ -167,7 +167,7 @@ Line 1: centered date
 candidate full name
 candidate email
 "    Re:    Offer of Employment"
-"Dear ${nameParts[0]},"
+"Dear ${first},"
 Paragraph 1: "We are pleased to extend an offer for you to join ${p.firm} PLLC as ${p.role}. This letter is to confirm the details of our employment offer in writing."
 Paragraph 2: "Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. Over the first calendar year, we also expect to pay you a bonus, which is subject to the firm's performance. You also may receive further bonus pay at ${p.firm}'s discretion based on your performance and the firm's profitability. Your benefits will include health, dental, and life insurance, towards which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have been employed for a period of one year. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time."${p.notes ? ' Also include: ' + p.notes + '.' : ''}
 Paragraph 3: "We anticipate your start date to be no later than ${startDisplay}, but we hope you can join much sooner. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us."
