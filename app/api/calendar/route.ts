@@ -18,7 +18,7 @@ export async function GET() {
     calEvents = await getCalendarEvents(accessToken, today, end);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const outToday = (ptoEntries as any[]).filter(e => e.start_date <= today && e.end_date >= today);
   const ptoNames = new Set((ptoEntries as any[]).map(e => e.employee));
   const calNames = new Set(calEvents.map(e => e.organizer?.emailAddress?.name ?? '').filter(Boolean));

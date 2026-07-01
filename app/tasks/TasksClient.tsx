@@ -70,7 +70,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [overrideDate, setOverrideDate] = useState('');
   const dragId = useRef<string | null>(null);
 
-  const today = overrideDate || new Date().toISOString().slice(0, 10);
+  const today = overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const pending = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
 

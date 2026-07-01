@@ -5,7 +5,7 @@ import DashboardClient from './DashboardClient';
 export const dynamic = 'force-dynamic';
 
 async function getStats() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const [{ n: pendingCount }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status != 'done'`;
   const [{ n: doneCount }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE status = 'done'`;
   const [{ n: dueToday }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE due_tag = 'Today' AND status != 'done'`;

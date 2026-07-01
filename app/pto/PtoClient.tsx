@@ -185,7 +185,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     return next;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
   // --- CSV upload ---
   async function handleFile(file: File) {

@@ -14,7 +14,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState('');
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
   useEffect(() => {
     fetch('/api/tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? []));

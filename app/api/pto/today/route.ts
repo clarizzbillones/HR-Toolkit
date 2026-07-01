@@ -38,7 +38,7 @@ const EXCLUDED_TITLE = /interview|in\s+office|\bwfh\b|work\s+from\s+home|meeting
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const today = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const today = url.searchParams.get('date') || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
   const ptoRows = await sql`
     SELECT employee, type, days FROM pto_entries

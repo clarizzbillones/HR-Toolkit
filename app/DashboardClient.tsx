@@ -98,7 +98,7 @@ export default function DashboardClient(props: Props) {
   const [ptoNames, setPtoNames] = useState<string[]>([]);
   const [overrideDate, setOverrideDate] = useState('');
 
-  const activeDate = overrideDate || new Date().toISOString().slice(0, 10);
+  const activeDate = overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
   useEffect(() => {
     fetch(`/api/pto/today?date=${activeDate}`).then(r => r.json()).then(d => {
