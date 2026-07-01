@@ -373,9 +373,11 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     return true;
   }), [merged, filterNames, filterTypes, filterStatuses, filterSources, filterFrom, filterTo, filterCalEvent]);
 
-  // Out today — exclude WFH, use all merged data (not filtered by date)
+  // Out today — Approved DB entries + calendar entries only, no WFH
   const outToday = merged.filter(r =>
-    r.start <= today && r.end >= today && !EXCLUDED_TYPES.test(r.type)
+    r.start <= today && r.end >= today &&
+    !EXCLUDED_TYPES.test(r.type) &&
+    (r.status === 'Approved' || r.status === 'Calendar' || r.source === 'calendar')
   );
   const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
   const totalInPeriod = [...new Set(filtered.map(r => r.employee))].length;

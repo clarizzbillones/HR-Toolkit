@@ -20,9 +20,8 @@ function pillLabel(status: string) {
   if (status === 'doing') return 'In Progress';
   return 'Pending';
 }
-function dueDateChip(due: string | null): { label: string; cls: string } | null {
+function dueDateChip(due: string | null, today: string): { label: string; cls: string } | null {
   if (!due) return null;
-  const today = new Date().toISOString().slice(0, 10);
   if (due < today) return { label: 'Overdue', cls: 'bg-[#fdeaea] text-[#b0412f]' };
   if (due === today) return { label: 'Due today', cls: 'bg-[#fdeaea] text-[#b0412f]' };
   const d = new Date(due + 'T12:00:00');
@@ -68,8 +67,10 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [noteInput, setNoteInput] = useState('');
   const [showEod, setShowEod] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [overrideDate, setOverrideDate] = useState('');
   const dragId = useRef<string | null>(null);
 
+  const today = overrideDate || new Date().toISOString().slice(0, 10);
   const pending = tasks.filter(t => t.status !== 'done');
   const done = tasks.filter(t => t.status === 'done');
 
@@ -157,6 +158,12 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           <p className="text-sm text-text-muted mt-0.5">{pending.length} open · {done.length} completed today</p>
         </div>
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted font-semibold">Date</span>
+            <input type="date" value={overrideDate} onChange={e => setOverrideDate(e.target.value)}
+              className="border border-border-light rounded-ctrl px-2.5 py-2 text-sm bg-white focus:outline-none focus:border-ink" />
+            {overrideDate && <button onClick={() => setOverrideDate('')} className="text-xs text-text-muted hover:text-text-primary font-semibold">Today</button>}
+          </div>
           <div className="flex gap-1 bg-[#f1ece3] p-1 rounded-ctrl">
             <button onClick={() => setView('board')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'board' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>Board</button>
             <button onClick={() => setView('list')} className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors', view === 'list' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}>List</button>
@@ -256,7 +263,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                             <div className="text-sm text-text-primary font-semibold leading-snug">{t.title}</div>
                             {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                             <div className="flex items-center gap-2 mt-2">
-                              {(() => { const c = dueDateChip(t.due_tag); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
+                              {(() => { const c = dueDateChip(t.due_tag, today); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                               {notesArr.length > 0 && <span className="text-xs text-text-muted flex items-center gap-1">📝 {notesArr.length}</span>}
                             </div>
                           </div>
@@ -297,7 +304,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                     {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                   </div>
                   {notesArr.length > 0 && <span className="text-xs text-text-muted self-center">📝 {notesArr.length}</span>}
-                  {(() => { const c = dueDateChip(t.due_tag); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
+                  {(() => { const c = dueDateChip(t.due_tag, today); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                 </div>
               );
             })}

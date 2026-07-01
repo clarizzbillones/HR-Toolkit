@@ -36,8 +36,9 @@ function normName(n: string) { return resolveAlias(n).trim().toLowerCase().repla
 const EXCLUDED_TYPES = /wfh|work\s+from\s+home|personal\s+leave|personal/i;
 const EXCLUDED_TITLE = /interview|in\s+office|\bwfh\b|work\s+from\s+home|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one|\bin\s+\w+\s+for\b|[\w']+\s+in\s+\w+|fundraiser|conference|summit|trip\s+to|travel\s+to|visiting|event|gala|retreat/i;
 
-export async function GET() {
-  const today = new Date().toISOString().slice(0, 10);
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const today = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
 
   const ptoRows = await sql`
     SELECT employee, type, days FROM pto_entries

@@ -96,13 +96,16 @@ export default function DashboardClient(props: Props) {
   const [showEod, setShowEod] = useState(false);
   const [ptoToday, setPtoToday] = useState<number>(props.ptoToday);
   const [ptoNames, setPtoNames] = useState<string[]>([]);
+  const [overrideDate, setOverrideDate] = useState('');
+
+  const activeDate = overrideDate || new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
-    fetch('/api/pto/today').then(r => r.json()).then(d => {
+    fetch(`/api/pto/today?date=${activeDate}`).then(r => r.json()).then(d => {
       if (typeof d.count === 'number') setPtoToday(d.count);
       if (Array.isArray(d.names)) setPtoNames(d.names);
     }).catch(() => {});
-  }, []);
+  }, [activeDate]);
   const userName = session?.user?.name ?? 'there';
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -115,6 +118,12 @@ export default function DashboardClient(props: Props) {
           <p className="text-sm text-text-muted mt-0.5">{today} · {props.empCount} employees</p>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted font-semibold">Date</span>
+            <input type="date" value={overrideDate} onChange={e => setOverrideDate(e.target.value)}
+              className="border border-border-light rounded-ctrl px-2.5 py-2 text-sm bg-white focus:outline-none focus:border-ink" />
+            {overrideDate && <button onClick={() => setOverrideDate('')} className="text-xs text-text-muted hover:text-text-primary font-semibold">Today</button>}
+          </div>
           <div className="flex items-center gap-2 bg-canvas border border-border rounded-ctrl px-4 py-2.5 w-56 text-text-faint text-sm">
             <SearchIcon /> Search people, tasks…
           </div>
