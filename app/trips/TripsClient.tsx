@@ -24,8 +24,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [activeTab, setActiveTab] = useState<'local' | 'report' | 'live'>('local');
-  const [repYear, setRepYear] = useState<string>('All');
-  const [repMonth, setRepMonth] = useState<string>('All');
+  const embedUrl = linkedUrl || 'https://trip-desk.lovable.app/';
 
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -64,65 +63,6 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
     const { trip } = await res.json();
     setTrips(prev => prev.map(t => t.id === id ? trip : t));
     showToast(`Marked ${status}`);
-  }
-
-  // ---- Monthly report computations (local data) ----
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const years = Array.from(new Set(trips.map(t => new Date(t.created_at).getFullYear()))).sort((a, b) => b - a);
-
-  const reportTrips = trips.filter(t => {
-    const d = new Date(t.created_at);
-    if (repYear !== 'All' && d.getFullYear() !== Number(repYear)) return false;
-    if (repMonth !== 'All' && d.getMonth() !== Number(repMonth)) return false;
-    return true;
-  });
-
-  const totalSpend = reportTrips.reduce((s, t) => s + (t.cost ?? 0), 0);
-  const approvedCount = reportTrips.filter(t => t.status === 'Approved').length;
-  const pendingCount = reportTrips.filter(t => t.status === 'Pending').length;
-
-  const byMonth = (() => {
-    const m = new Map<string, { count: number; spend: number }>();
-    for (const t of reportTrips) {
-      const d = new Date(t.created_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const cur = m.get(key) ?? { count: 0, spend: 0 };
-      cur.count += 1; cur.spend += t.cost ?? 0;
-      m.set(key, cur);
-    }
-    return [...m.entries()].sort(([a], [b]) => b.localeCompare(a));
-  })();
-
-  const byClient = (() => {
-    const m = new Map<string, { count: number; spend: number }>();
-    for (const t of reportTrips) {
-      const key = t.matter?.trim() || 'Unassigned';
-      const cur = m.get(key) ?? { count: 0, spend: 0 };
-      cur.count += 1; cur.spend += t.cost ?? 0;
-      m.set(key, cur);
-    }
-    return [...m.entries()].sort((a, b) => b[1].spend - a[1].spend);
-  })();
-
-  function fmt$(n: number) { return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
-
-  function exportReportCSV() {
-    const rows = [['Employee', 'Travel Details', 'Matter/Client', 'Est. Cost', 'Status', 'Date']];
-    for (const t of reportTrips) {
-      rows.push([
-        t.who, t.detail, t.matter ?? '', t.cost != null ? String(t.cost) : '',
-        t.status, new Date(t.created_at).toLocaleDateString('en-US'),
-      ]);
-    }
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    const scope = `${repYear === 'All' ? 'all' : repYear}${repMonth === 'All' ? '' : '-' + MONTHS[Number(repMonth)]}`;
-    a.download = `trip-report-${scope}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('Report exported');
   }
 
   return (
@@ -186,103 +126,21 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
           </div>
         </div>
       ) : activeTab === 'report' ? (
-        <div className="flex-1 overflow-auto px-8 py-6">
-          {/* Filters */}
-          <div className="flex items-center gap-3 mb-5 flex-wrap">
-            <span className="text-xs font-bold uppercase tracking-widest text-text-muted">Travel report</span>
-            <div className="flex items-center gap-2 ml-2">
-              <label className="text-xs text-text-muted">Year</label>
-              <select value={repYear} onChange={e => setRepYear(e.target.value)}
-                className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="All">All</option>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <label className="text-xs text-text-muted ml-1">Month</label>
-              <select value={repMonth} onChange={e => setRepMonth(e.target.value)}
-                className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                <option value="All">All</option>
-                {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-              </select>
-              {(repYear !== 'All' || repMonth !== 'All') && (
-                <button onClick={() => { setRepYear('All'); setRepMonth('All'); }}
-                  className="text-xs font-semibold text-text-muted hover:text-text-primary">Reset</button>
-              )}
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <span className="text-xs text-text-muted">{reportTrips.length} trips</span>
-              <button onClick={exportReportCSV}
-                className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⬇ Export CSV</button>
-            </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-2 bg-[#f1ece3] border-b border-border flex-shrink-0">
+            <span className="w-2 h-2 rounded-full bg-[#2f7d5b] shrink-0" />
+            <span className="text-xs font-semibold text-text-primary shrink-0">TripDesk · Manager view → Monthly report</span>
+            <span className="text-xs text-text-muted truncate flex-1">{embedUrl}</span>
+            <a href={embedUrl} target="_blank" rel="noopener noreferrer"
+              className="shrink-0 text-xs font-semibold text-text-secondary hover:text-ink border border-border-light bg-white px-3 py-1 rounded-ctrl">↗ Open in new tab</a>
           </div>
-
-          {/* KPI tiles */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white border border-border rounded-card p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Trips</div>
-              <div className="text-3xl font-spectral font-semibold text-text-primary mt-1">{reportTrips.length}</div>
-              <div className="text-xs text-text-muted mt-0.5">In range</div>
-            </div>
-            <div className="bg-white border border-border rounded-card p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Approved</div>
-              <div className="text-3xl font-spectral font-semibold text-[#2f7d5b] mt-1">{approvedCount}</div>
-              <div className="text-xs text-text-muted mt-0.5">Confirmed</div>
-            </div>
-            <div className="bg-white border border-border rounded-card p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Pending</div>
-              <div className="text-3xl font-spectral font-semibold text-[#b07d2a] mt-1">{pendingCount}</div>
-              <div className="text-xs text-text-muted mt-0.5">Awaiting action</div>
-            </div>
-            <div className="bg-white border border-border rounded-card p-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Total spend</div>
-              <div className="text-3xl font-spectral font-semibold text-ink mt-1">{fmt$(totalSpend)}</div>
-              <div className="text-xs text-text-muted mt-0.5">{reportTrips.length} requests</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Spend by month */}
-            <div className="bg-white border border-border rounded-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-text-muted">Spend by month</div>
-              <table className="w-full text-sm">
-                <thead className="bg-[#f1ece3]"><tr>
-                  {['Month', 'Trips', 'Total'].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {byMonth.map(([key, v]) => {
-                    const [y, m] = key.split('-');
-                    return (
-                      <tr key={key} className="border-t border-[#f1ece3]">
-                        <td className="px-4 py-2.5 font-medium text-text-primary">{MONTHS[Number(m) - 1]} {y}</td>
-                        <td className="px-4 py-2.5 text-text-muted">{v.count}</td>
-                        <td className="px-4 py-2.5 text-text-secondary">{fmt$(v.spend)}</td>
-                      </tr>
-                    );
-                  })}
-                  {byMonth.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-text-muted">No data</td></tr>}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Spend by client */}
-            <div className="bg-white border border-border rounded-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-text-muted">Spend by client / matter</div>
-              <table className="w-full text-sm">
-                <thead className="bg-[#f1ece3]"><tr>
-                  {['Client / Matter', 'Trips', 'Total'].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {byClient.map(([key, v]) => (
-                    <tr key={key} className="border-t border-[#f1ece3]">
-                      <td className="px-4 py-2.5 font-medium text-text-primary">{key}</td>
-                      <td className="px-4 py-2.5 text-text-muted">{v.count}</td>
-                      <td className="px-4 py-2.5 text-text-secondary">{fmt$(v.spend)}</td>
-                    </tr>
-                  ))}
-                  {byClient.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-text-muted">No data</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <iframe
+            src={embedUrl}
+            className="flex-1 w-full border-0"
+            title="TripDesk Monthly Report"
+            allow="clipboard-read; clipboard-write"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+          />
         </div>
       ) : (
         <>
