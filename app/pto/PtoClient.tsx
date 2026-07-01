@@ -170,6 +170,16 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }).catch(() => {});
   }, []);
 
+  // Out today: fetch from the canonical /api/pto/today endpoint
+  const [outTodayCount, setOutTodayCount] = useState(0);
+  const [outTodayNames, setOutTodayNames] = useState<string[]>([]);
+  useEffect(() => {
+    fetch(`/api/pto/today?date=${today}`).then(r => r.json()).then(d => {
+      if (typeof d.count === 'number') setOutTodayCount(d.count);
+      if (Array.isArray(d.names)) setOutTodayNames(d.names);
+    }).catch(() => {});
+  }, [today]);
+
   // Filters — empty Set = show all; non-empty = include only those checked
   const [filterNames, setFilterNames] = useState<Set<string>>(new Set());
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
@@ -373,12 +383,6 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     return true;
   }), [merged, filterNames, filterTypes, filterStatuses, filterSources, filterFrom, filterTo, filterCalEvent]);
 
-  // Out today — Approved DB entries + calendar entries only, no WFH
-  const outToday = merged.filter(r =>
-    r.start <= today && r.end >= today &&
-    !EXCLUDED_TYPES.test(r.type) &&
-    (r.status === 'Approved' || r.status === 'Calendar' || r.source === 'calendar')
-  );
   const calOnlyCount = filtered.filter(r => r.source === 'calendar').length;
   const totalInPeriod = [...new Set(filtered.map(r => r.employee))].length;
 
@@ -426,7 +430,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       <header className="flex items-center gap-4 px-8 py-5 bg-white border-b border-border flex-shrink-0 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">PTO Reports</h1>
-          <p className="text-sm text-text-muted mt-0.5">{merged.length} total entries · {outToday.length} out today</p>
+          <p className="text-sm text-text-muted mt-0.5">{merged.length} total entries · {outTodayCount} out today</p>
         </div>
         <div className="ml-auto flex items-center gap-2.5">
           <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
@@ -537,7 +541,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         {/* Stats */}
         {merged.length > 0 && (
           <div className="grid grid-cols-2 gap-3 px-8 pb-4">
-            <Stat label="Out Today" value={outToday.length} color="#b0412f" sub={`employees on leave as of ${fmtShort(today)}`} />
+            <Stat label="Out Today" value={outTodayCount} color="#b0412f" sub={outTodayNames.length ? outTodayNames.join(', ') : `employees on leave as of ${fmtShort(today)}`} />
             <Stat label="Employees with Leave" value={totalInPeriod} color="#3f6b8a" sub={`unique people · ${activePeriodLabel}`} />
           </div>
         )}
