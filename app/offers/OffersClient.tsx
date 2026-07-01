@@ -50,26 +50,38 @@ export default function OffersClient() {
   function printPdf() {
     const win = window.open('', '_blank');
     if (!win) return;
-    const lines = draft.split('\n').map(l =>
-      `<div style="min-height:1em">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') || '&nbsp;'}</div>`
-    ).join('');
+    const bodyFont = `"Century Schoolbook","Century","Book Antiqua",Georgia,serif`;
+    // Detect signature block and inject SVG signature above it
+    const sigLine = 'J. Alex Little';
+    const lines = draft.split('\n').map((l, i, arr) => {
+      const safe = l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (l.trim() === sigLine && i > 0 && arr[i-1].trim() === '') {
+        return `<div style="margin-top:28px;margin-bottom:2px">
+          <svg xmlns="http://www.w3.org/2000/svg" width="160" height="52" viewBox="0 0 160 52" style="display:block">
+            <path d="M12,38 C18,20 28,12 34,18 C38,22 30,32 26,36 C22,40 30,34 40,28 C50,22 56,20 58,24 C60,28 54,34 60,30 C66,26 72,22 76,26 C80,30 74,36 80,32 C86,28 92,24 96,28 C100,32 98,36 104,30 C108,26 114,22 118,26 C122,30 120,34 126,30 C132,26 138,24 144,28" stroke="#1b2230" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div style="min-height:1em">${safe}</div>`;
+      }
+      return `<div style="min-height:1em">${safe || '&nbsp;'}</div>`;
+    }).join('');
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${form.name}</title>
     <style>
       *{box-sizing:border-box}
-      body{font-family:Georgia,serif;margin:0;padding:40px 56px;color:#1b2230;max-width:820px;margin:0 auto;font-size:13.5px;line-height:1.75;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      @media print{body{padding:32px 48px}}
+      body{font-family:${bodyFont};margin:0 auto;padding:44px 60px;color:#1b2230;max-width:820px;font-size:13.5px;line-height:1.8;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      @media print{body{padding:36px 52px}}
     </style></head><body>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px">
-      <div style="background:#1b2a3d;padding:13px 20px;display:inline-flex;align-items:center">
-        <span style="font-family:Arial,sans-serif;font-size:21px;font-weight:700;letter-spacing:0.22em;color:#fff">LITSON</span><span style="color:#e63329;font-size:21px;font-weight:700">°</span>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px">
+      <div style="background:#1b2a3d;padding:14px 22px;display:inline-flex;align-items:center">
+        <span style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.22em;color:#fff">LITSON</span><span style="color:#e63329;font-size:22px;font-weight:700">°</span>
       </div>
-      <div style="text-align:right;font-size:11px;color:#333;line-height:1.7;font-family:Arial,sans-serif">
-        J. Alex Little<br>615.985.8189<br>alex@litson.co
+      <div style="text-align:right;font-size:10.5px;color:#3a3a3a;line-height:1.8;font-family:Arial,sans-serif;margin-top:4px">
+        <strong style="font-size:11px">J. Alex Little</strong><br>Founding &amp; Managing Partner<br>615.985.8189<br>alex@litson.co
       </div>
     </div>
-    <div style="font-family:Georgia,serif;color:#1b2230">${lines}</div>
-    <div style="margin-top:40px;padding-top:10px;border-top:1px solid #ddd;font-family:Arial,sans-serif;font-size:10px;color:#777">
-      Litson PLLC · 54 Music Square East, Suite 300 · Nashville, TN 37203 · www.litson.co
+    <div style="font-family:${bodyFont};color:#1b2230">${lines}</div>
+    <div style="margin-top:48px;padding-top:8px;border-top:1px solid #ccc;font-family:Arial,sans-serif;font-size:9.5px;color:#888;letter-spacing:0.02em">
+      Litson PLLC &nbsp;·&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;·&nbsp; Nashville, TN 37209 &nbsp;·&nbsp; www.litson.co
     </div>
     </body></html>`);
     win.document.close();
@@ -160,12 +172,13 @@ export default function OffersClient() {
             <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
               {/* Letterhead */}
               <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
-                <div className="bg-[#1b2a3d] px-4 py-2.5 flex items-center">
-                  <span className="font-sans text-[19px] font-bold tracking-[0.22em] text-white">LITSON</span>
-                  <span className="text-[#e63329] text-[19px] font-bold">°</span>
+                <div className="bg-[#1b2a3d] px-4 py-3 flex items-center">
+                  <span className="font-sans text-[20px] font-bold tracking-[0.22em] text-white">LITSON</span>
+                  <span className="text-[#e63329] text-[20px] font-bold">°</span>
                 </div>
-                <div className="text-right text-[11px] text-text-muted leading-relaxed font-sans">
-                  J. Alex Little<br />615.985.8189<br />alex@litson.co
+                <div className="text-right text-[10.5px] text-text-muted leading-[1.8] font-sans mt-1">
+                  <span className="font-semibold text-[11px] text-text-primary">J. Alex Little</span><br />
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
               </div>
 
@@ -175,8 +188,8 @@ export default function OffersClient() {
                   <textarea
                     value={draft}
                     onChange={e => setDraft(e.target.value)}
-                    className="w-full text-[13.5px] leading-[1.75] text-text-primary resize-none focus:outline-none border-none bg-transparent"
-                    style={{ fontFamily: 'Georgia, serif', minHeight: '560px' }}
+                    className="w-full text-[13.5px] leading-[1.8] text-text-primary resize-none focus:outline-none border-none bg-transparent"
+                    style={{ fontFamily: '"Century Schoolbook","Century","Book Antiqua",Georgia,serif', minHeight: '560px' }}
                   />
                 </div>
               ) : (
@@ -186,9 +199,9 @@ export default function OffersClient() {
               )}
 
               {/* Footer */}
-              <div className="px-8 pt-3 pb-5 border-t border-[#e8e2d8]">
-                <p className="text-[10px] text-text-muted font-sans tracking-wide">
-                  Litson PLLC · 54 Music Square East, Suite 300 · Nashville, TN 37203 · www.litson.co
+              <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
+                <p className="text-[9.5px] text-text-muted font-sans tracking-wide">
+                  Litson PLLC &nbsp;·&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;·&nbsp; Nashville, TN 37209 &nbsp;·&nbsp; www.litson.co
                 </p>
               </div>
             </div>
