@@ -54,33 +54,60 @@ export default function OffersClient() {
   function printPdf() {
     const win = window.open('', '_blank');
     if (!win) return;
-    const sigTriggers = ['Alex Little', 'J. Alex Little'];
-    // Collapse runs of 3+ blank lines into 2, to keep single-page
     const draftCompact = draft.replace(/\n{3,}/g, '\n\n');
-    const lines = draftCompact.split('\n').map((l, i, arr) => {
-      const safe = l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const isSigName = sigTriggers.some(t => l.trim() === t) && i > 0 && arr[i-1].trim() === '';
-      if (isSigName) {
-        return `<div style="margin-top:4px;margin-bottom:0"><img src="${SIG_B64}" width="130" height="43" style="display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact" alt=""/></div><div>${safe}</div>`;
-      }
-      return `<div style="min-height:1.1em">${safe || '&nbsp;'}</div>`;
-    }).join('');
+    const linesArr = draftCompact.split('\n');
+
+    // Find where closing block starts ("Very truly yours")
+    const closingIdx = linesArr.findIndex(l => /very truly yours/i.test(l.trim()));
+    // Find where cc: line is (stays left-aligned)
+    const ccIdx = linesArr.findIndex(l => /^cc:/i.test(l.trim()));
+
+    function safeLine(l: string) {
+      return l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    const bodyLines = (closingIdx >= 0 ? linesArr.slice(0, closingIdx) : linesArr)
+      .map(l => `<div style="min-height:1.1em">${safeLine(l) || '&nbsp;'}</div>`)
+      .join('');
+
+    let closingHtml = '';
+    if (closingIdx >= 0) {
+      const closingLines = linesArr.slice(closingIdx, ccIdx >= 0 ? ccIdx : undefined);
+      const sigTriggers = ['Alex Little', 'J. Alex Little'];
+      const closingContent = closingLines.map((l, i, arr) => {
+        const safe = safeLine(l);
+        const isSigName = sigTriggers.some(t => l.trim() === t) && i > 0 && arr[i-1].trim() === '';
+        if (isSigName) {
+          return `<div style="margin-top:2pt"><img src="${SIG_B64}" width="150" height="50" style="display:block" alt=""/></div><div>${safe}</div>`;
+        }
+        return `<div style="min-height:1.1em">${safe || '&nbsp;'}</div>`;
+      }).join('');
+      closingHtml = `<div style="display:flex;justify-content:flex-end;margin-top:10pt"><div style="text-align:left">${closingContent}</div></div>`;
+    }
+
+    const ccHtml = ccIdx >= 0
+      ? linesArr.slice(ccIdx).map(l => `<div style="min-height:1.1em">${safeLine(l) || '&nbsp;'}</div>`).join('')
+      : '';
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offer Letter – ${form.name}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   @page{size:letter;margin:0.7in 0.75in 0.6in}
   body{font-family:${BODY_FONT};color:#1b2230;font-size:11pt;line-height:1.42;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22pt}
-  .contact{text-align:right;font-size:8.5pt;color:#333;line-height:1.6;font-family:Arial,sans-serif;margin-top:4pt}
-  .ft{margin-top:auto;padding-top:6pt;border-top:0.5pt solid #bbb;font-family:Arial,sans-serif;font-size:8pt;color:#999;letter-spacing:0.02em;margin-top:18pt}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-<div class="hd">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22pt">
   <img src="${LOGO_B64}" width="190" height="63" alt="Litson"/>
-  <div class="contact"><strong>J. Alex Little</strong><br>Managing Member<br>615.985.8189<br>alex@litson.co</div>
+  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.6;font-family:Arial,sans-serif;margin-top:4pt">
+    <strong>J. Alex Little</strong><br>Managing Member<br>615.985.8189<br>alex@litson.co
+  </div>
 </div>
-<div>${lines}</div>
-<div class="ft">Litson PLLC &nbsp;&bull;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&bull;&nbsp; Nashville, TN 37209 &nbsp;&bull;&nbsp; www.litson.co</div>
+<div>${bodyLines}</div>
+${closingHtml}
+<div style="margin-top:4pt">${ccHtml}</div>
+<div style="margin-top:18pt;padding-top:6pt;border-top:0.5pt solid #bbb;font-family:Arial,sans-serif;font-size:8pt;color:#999;letter-spacing:0.02em">
+  Litson PLLC &nbsp;&bull;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&bull;&nbsp; Nashville, TN 37209 &nbsp;&bull;&nbsp; www.litson.co
+</div>
 <script>
   var imgs=document.images,loaded=0;
   function tryPrint(){loaded++;if(loaded>=imgs.length)window.print();}
@@ -185,12 +212,12 @@ export default function OffersClient() {
 
               {/* Body */}
               {draft ? (
-                <div className="px-8 py-6 relative">
+                <div className="px-8 pt-6 pb-2">
                   <textarea
                     value={draft}
                     onChange={e => setDraft(e.target.value)}
-                    className="w-full text-[13px] leading-[1.65] text-text-primary resize-none focus:outline-none border-none bg-transparent"
-                    style={{ fontFamily: BODY_FONT, minHeight: '560px' }}
+                    className="w-full text-[13px] leading-[1.6] text-text-primary resize-none focus:outline-none border-none bg-transparent"
+                    style={{ fontFamily: BODY_FONT, minHeight: '440px' }}
                   />
                 </div>
               ) : (
@@ -199,12 +226,17 @@ export default function OffersClient() {
                 </div>
               )}
 
-              {/* Signature preview strip (when draft has closing) */}
-              {draft && ['Alex Little','J. Alex Little'].some(n => draft.includes(n)) && (
-                <div className="px-8 pb-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={SIG_B64} alt="Alex Little signature" width={120} height={40} className="block mb-0.5 opacity-90" />
-                  <p className="text-[11px] font-sans text-text-secondary leading-tight">J. Alex Little<br/>Managing Member<br/>Litson PLLC</p>
+              {/* Closing block — right-aligned with signature */}
+              {draft && /very truly yours/i.test(draft) && (
+                <div className="px-8 pb-5 flex justify-end">
+                  <div className="text-left">
+                    <p className="text-[13px] mb-1" style={{ fontFamily: BODY_FONT }}>Very truly yours,</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={SIG_B64} alt="Alex Little signature" width={130} height={43} className="block my-0.5" />
+                    <p className="text-[13px] leading-snug" style={{ fontFamily: BODY_FONT }}>
+                      Alex Little<br />Managing Member<br />Litson PLLC
+                    </p>
+                  </div>
                 </div>
               )}
 
