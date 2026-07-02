@@ -100,9 +100,27 @@ function buildSchedule(cadence: string): { period: string; pay_start: string; pa
   return out.filter(p => p.check_date >= todayIso);
 }
 
+export async function DELETE(req: Request) {
+  await ensureColumns();
+  const { id } = await req.json();
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  await sql`DELETE FROM payroll_periods WHERE id = ${id}`;
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: Request) {
   await ensureColumns();
   const body = await req.json();
+  // Restore a single period (used by undo)
+  if (body.action === 'restore' && body.period) {
+    const p = body.period;
+    const id = p.id || `pp${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    await sql`INSERT INTO payroll_periods (id, period, run_date, cutoff, check_date, status, schedule)
+      VALUES (${id}, ${p.period}, ${p.run_date ?? p.check_date}, ${p.cutoff}, ${p.check_date ?? null}, ${p.status ?? 'Upcoming'}, ${p.schedule ?? null})
+      ON CONFLICT (id) DO NOTHING`;
+    const period = (await sql`SELECT * FROM payroll_periods WHERE id = ${id}`)[0];
+    return NextResponse.json({ period });
+  }
   if (body.action !== 'generate') return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   // Generate one or many cadences; default = all regular schedules at once
   const cadences: string[] = Array.isArray(body.cadences) && body.cadences.length

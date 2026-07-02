@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { useUndo } from '@/components/UndoProvider';
 
 function money(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
@@ -94,6 +95,7 @@ function iso(d: Date) { return d.toLocaleDateString('en-CA'); }
 
 export default function PayrollClient({ initialPeriods, initialSettings }: { initialPeriods: Period[]; initialSettings: Settings }) {
   const { showToast } = useToast();
+  const { pushUndo } = useUndo();
   const [tab, setTab] = useState<'schedule' | 'contractors'>('schedule');
   const [periods, setPeriods] = useState<Period[]>(initialPeriods);
   const [settings, setSettings] = useState<Settings>(initialSettings);
@@ -201,6 +203,13 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   function viewSummary(p: Period) {
     if (!p.report_summary) return;
     try { setSummary(JSON.parse(p.report_summary)); setSummaryPeriod(p.period); } catch { showToast('Could not read stored totals'); }
+  }
+
+  async function deletePeriod(p: Period) {
+    await fetch('/api/payroll/periods', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+    setPeriods(prev => prev.filter(x => x.id !== p.id));
+    pushUndo({ label: `Delete payroll ${p.period}`, req: { url: '/api/payroll/periods', method: 'POST', body: { action: 'restore', period: p } } });
+    showToast('Deadline deleted — Ctrl+Z to undo');
   }
 
   async function addContractor() {
@@ -389,7 +398,10 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                               <button onClick={() => setEditingId(null)} className="text-xs text-text-muted hover:underline">Cancel</button>
                             </div>
                           ) : (
-                            <button onClick={() => startEdit(p!)} className="text-xs text-text-muted hover:text-ink font-medium">Edit dates</button>
+                            <div className="flex gap-3 justify-end">
+                              <button onClick={() => startEdit(p!)} className="text-xs text-text-muted hover:text-ink font-medium">Edit dates</button>
+                              <button onClick={() => deletePeriod(p!)} className="text-xs text-[#b0412f] hover:underline font-medium">Delete</button>
+                            </div>
                           )
                         ) : (
                           <div className="flex gap-2 justify-end">
