@@ -151,7 +151,7 @@ INSERT INTO employees (id,name,role,dept) VALUES ('emp_ridwan_ahmed','Ridwan Ahm
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_simran_jain','Simran Mohini Jain','Paralegal Associate','Legal Support') ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_isabella_ardila','Isabella Maria Ardila','Virtual Legal Assistant','Legal Support') ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_syerra_ryan','Syerra Ryan','Paralegal','Legal Support') ON CONFLICT (id) DO NOTHING;
-INSERT INTO employees (id,name,role,dept) VALUES ('emp_carly_crolly','Carly Crolly','Law Clerk','Legal Support') ON CONFLICT (id) DO NOTHING;
+INSERT INTO employees (id,name,role,dept) VALUES ('emp_carly_crolly','Carly Crotty','Law Clerk','Legal Support') ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_kelynn_enalls','Ke''Lynn Enalls','Summer Law Clerk','Legal Support') ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_amy_nelson','Amy Nelson','Strategist, Pardons and Clemency','Operations') ON CONFLICT (id) DO NOTHING;
 INSERT INTO employees (id,name,role,dept) VALUES ('emp_brittany_brewer','Brittany Brewer','Administrative Assistant','Operations') ON CONFLICT (id) DO NOTHING;

@@ -66,7 +66,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(simran|simran\s+mohini|simran\s+mohini\s+jain)$/i, 'Simran Mohini Jain'],
   [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
   [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
-  [/^(carly|carly\s+croll?y)$/i, 'Carly Crolly'],
+  [/^(carly|carly\s+cro(?:l{1,2}|tt)y)$/i, 'Carly Crotty'],
   [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
   [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
   [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
@@ -484,10 +484,11 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }, [filtered, filterFrom, filterTo]);
 
   function exportCsv() {
-    const exportRows = filtered.filter(r => r.days >= 1);
+    // Days reflect the active filter window (weekends already excluded)
+    const exportRows = filtered.filter(r => clampedDays(r) >= 1);
     const headers = ['Employee','Start','End','Days','Type','Status','Source','Calendar Event'];
     const rows = exportRows.map(r => [
-      r.employee, r.start, r.end, r.days, r.type, r.status,
+      r.employee, r.start, r.end, clampedDays(r), r.type, r.status,
       SOURCE_LABEL[r.source], r.calTitle ?? ''
     ].join(','));
     const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv' });
@@ -755,7 +756,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                     <td className="px-4 py-3"><span className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full', typeChip(r.type))}>{r.type}</span></td>
                     <td className="px-4 py-3 text-text-secondary">{fmtShort(r.start)}</td>
                     <td className="px-4 py-3 text-text-secondary">{fmtShort(r.end)}</td>
-                    <td className="px-4 py-3 text-text-secondary">{r.days}</td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {clampedDays(r)}
+                      {(filterFrom || filterTo) && clampedDays(r) !== r.days && (
+                        <span className="text-text-faint text-xs ml-1">/ {r.days} total</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full',
                         r.status === 'Approved' ? 'bg-[#eef5f1] text-[#2f7d5b]' :

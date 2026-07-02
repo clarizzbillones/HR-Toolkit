@@ -24,7 +24,7 @@ const ROSTER: [string, string, string, string][] = [
   ['emp_simran_jain', 'Simran Mohini Jain', 'Paralegal Associate', 'Legal Support'],
   ['emp_isabella_ardila', 'Isabella Maria Ardila', 'Virtual Legal Assistant', 'Legal Support'],
   ['emp_syerra_ryan', 'Syerra Ryan', 'Paralegal', 'Legal Support'],
-  ['emp_carly_crolly', 'Carly Crolly', 'Law Clerk', 'Legal Support'],
+  ['emp_carly_crolly', 'Carly Crotty', 'Law Clerk', 'Legal Support'],
   ['emp_kelynn_enalls', "Ke'Lynn Enalls", 'Summer Law Clerk', 'Legal Support'],
   ['emp_amy_nelson', 'Amy Nelson', 'Strategist, Pardons and Clemency', 'Operations'],
   ['emp_brittany_brewer', 'Brittany Brewer', 'Administrative Assistant', 'Operations'],
@@ -46,6 +46,7 @@ export default async function ReviewsPage() {
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_date TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_6mo_summary TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_summary TEXT`;
+  await sql`UPDATE employees SET name = 'Carly Crotty' WHERE name = 'Carly Crolly'`;
 
   // One-time reseed: replace placeholder roster with the real firm roster.
   // Gated on "Catie Toole" being absent, so it runs exactly once.
