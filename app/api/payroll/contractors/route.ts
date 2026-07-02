@@ -22,6 +22,8 @@ async function ensureTable() {
   try { await sql`ALTER TABLE contractor_payments ALTER COLUMN name DROP NOT NULL`; } catch { /* no such column */ }
   try { await sql`ALTER TABLE contractor_payments ALTER COLUMN due_date DROP NOT NULL`; } catch { /* no such column */ }
   try { await sql`ALTER TABLE contractor_payments ALTER COLUMN amount DROP NOT NULL`; } catch { /* no such column */ }
+  // Legacy amount was numeric — store as text so values like "1,706.66" save as entered
+  try { await sql`ALTER TABLE contractor_payments ALTER COLUMN amount TYPE text USING amount::text`; } catch { /* already text */ }
 }
 
 export async function GET() {
@@ -67,8 +69,12 @@ export async function POST(req: Request) {
   const { contractor, amount, pay_date, method, notes } = body;
   if (!contractor || !amount || !pay_date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   const id = cuid();
-  await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, notes)
-    VALUES (${id}, ${contractor}, ${amount}, ${pay_date}, ${method ?? 'ACH'}, ${notes ?? null})`;
+  try {
+    await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, status, notes)
+      VALUES (${id}, ${contractor}, ${String(amount)}, ${pay_date}, ${method ?? 'ACH'}, 'Pending', ${notes ?? null})`;
+  } catch (e) {
+    return NextResponse.json({ error: String((e as Error).message ?? e) }, { status: 500 });
+  }
   const [row] = await sql`SELECT * FROM contractor_payments WHERE id = ${id}`;
   return NextResponse.json({ row }, { status: 201 });
 }

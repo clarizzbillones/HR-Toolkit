@@ -215,8 +215,10 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   async function addContractor() {
     if (!newC.contractor || !newC.amount || !newC.pay_date) return showToast('Fill in contractor, amount, and date');
     const res = await fetch('/api/payroll/contractors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newC) });
-    const { row } = await res.json();
-    setContractors(prev => [row, ...prev]);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.row) { showToast(data.error ? `Could not add: ${data.error}` : 'Could not add payment'); return; }
+    setContractors(prev => [data.row, ...prev]);
+    pushUndo({ label: `Add contractor ${data.row.contractor}`, req: { url: '/api/payroll/contractors', method: 'DELETE', body: { id: data.row.id } } });
     setNewC({ contractor: '', amount: '', pay_date: '', method: 'ACH', notes: '' });
     setShowAddContractor(false);
     showToast('Contractor payment added');
