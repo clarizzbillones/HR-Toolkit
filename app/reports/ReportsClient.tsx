@@ -299,7 +299,6 @@ function tripMonthKey(t: any): string {
 
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
-  const [mode, setMode] = useState<'this' | 'last'>('this');
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
   const { pto, trips, contractors, employees, reviews, cashout } = data;
 
@@ -308,127 +307,166 @@ function MonthlyTab({ data }: { data: any }) {
   const last = new Date(thisY, thisM - 1, 1);
   const thisKey = `${thisY}-${String(thisM + 1).padStart(2, '0')}`;
   const lastKey = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}`;
-  const selKey = mode === 'this' ? thisKey : lastKey;
-  const selLabel = mode === 'this' ? monthLabel(thisY, thisM) : monthLabel(last.getFullYear(), last.getMonth());
+  const thisLabel = monthLabel(thisY, thisM);
+  const lastLabel = monthLabel(last.getFullYear(), last.getMonth());
 
-  // Contractor field helpers (schema varies)
   const cName = (c: any) => c.contractor ?? c.name ?? '—';
   const cDate = (c: any) => (c.pay_date ?? c.due_date ?? '');
   const cNote = (c: any) => c.notes ?? c.note ?? '';
-
-  // A trip counts for a month if its travel month OR logged month matches
   const tripInMonth = (t: any, k: string) => tripMonthKey(t) === k || ymOf(t.created_at) === k;
-  // Number of PTO entries in the month (all types — sick, bereavement, other, …),
-  // matching the PTO calendar dashboard.
-  const ptoNum = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k).length;
-  const tripCount = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).length;
-  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).reduce((s: number, t: any) => s + num(t.cost), 0);
-  const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
-  const reviewsDue = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k && r.status !== 'Complete').length;
-  const cashOut = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
+
+  // Month-parameterized row generators (single source per category)
+  const ptoOf = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k);
+  const tripOf = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k));
+  const contractorOf = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k);
+  const reviewOf = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const cashoutOf = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const cashTotalOf = (k: string) => cashoutOf(k).reduce((s: number, c: any) => s + num(c.amount), 0);
+  const birthdaysOf = (mi: number) => (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === mi + 1);
 
   const metrics = [
-    { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashOut(thisKey), lastV: cashOut(lastKey) },
-    { label: 'Number of PTOs', color: '#2f7d5b', money: false, thisV: ptoNum(thisKey), lastV: ptoNum(lastKey) },
-    { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripCount(thisKey), lastV: tripCount(lastKey) },
-    { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
-    { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorSpend(thisKey), lastV: contractorSpend(lastKey) },
-    { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewsDue(thisKey), lastV: reviewsDue(lastKey) },
+    { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashTotalOf(thisKey), lastV: cashTotalOf(lastKey) },
+    { label: 'Number of PTOs', color: '#2f7d5b', money: false, thisV: ptoOf(thisKey).length, lastV: ptoOf(lastKey).length },
+    { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripOf(thisKey).length, lastV: tripOf(lastKey).length },
+    { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripOf(thisKey).reduce((s: number, t: any) => s + num(t.cost), 0), lastV: tripOf(lastKey).reduce((s: number, t: any) => s + num(t.cost), 0) },
+    { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorOf(thisKey).reduce((s: number, c: any) => s + num(c.amount), 0), lastV: contractorOf(lastKey).reduce((s: number, c: any) => s + num(c.amount), 0) },
+    { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).filter(r => r.status !== 'Complete').length, lastV: reviewOf(lastKey).filter(r => r.status !== 'Complete').length },
   ];
 
-  // Selected-month rows
-  const ptoRows = (pto ?? []).filter((e: any) => ymOf(e.start_date) === selKey && num(e.days) >= 1);
-  const tripRows = (trips ?? []).filter((t: any) => tripInMonth(t, selKey));
-  const contractorRows = (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === selKey);
-  const reviewRowsSel = reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === selKey).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
-  const cashoutRows = (cashout ?? []).filter((c: any) => ymOf(c.date) === selKey).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
-  const cashoutTotal = cashoutRows.reduce((s: number, c: any) => s + num(c.amount), 0);
-  const birthdays = (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === (mode === 'this' ? thisM : last.getMonth()) + 1);
-
+  function csvSection(lines: string[], title: string, headers: string[], rowsThis: any[][], rowsLast: any[][]) {
+    lines.push('', `${title} — ${thisLabel}`, headers.join(','));
+    rowsThis.forEach(r => lines.push(r.map(x => `"${x ?? ''}"`).join(',')));
+    lines.push('', `${title} — ${lastLabel}`, headers.join(','));
+    rowsLast.forEach(r => lines.push(r.map(x => `"${x ?? ''}"`).join(',')));
+  }
   function downloadCsvPack() {
-    const lines: string[] = [];
-    lines.push(`LITSON HR — Monthly Pack — ${selLabel}`);
-    lines.push('');
-    lines.push('COMPARISON,This Month,Last Month');
+    const lines: string[] = [`LITSON HR — Monthly Pack — ${thisLabel} vs ${lastLabel}`, '', `COMPARISON,${thisLabel},${lastLabel}`];
     metrics.forEach(m => { const t = (m as any).approx ? '~' : ''; lines.push(`${m.label},${m.money ? t + fmt$(m.thisV) : m.thisV},${m.money ? t + fmt$(m.lastV) : m.lastV}`); });
-    lines.push('');
-    lines.push(`CASH OUT — Total ${fmt$(cashoutTotal)}`); lines.push('Date,Payee,Category,Amount,Note');
-    cashoutRows.forEach((c: any) => lines.push([c.date, c.payee, c.category, num(c.amount), c.note].map(x => `"${x ?? ''}"`).join(',')));
-    lines.push('');
-    lines.push('PTO'); lines.push('Employee,Type,Start,End,Days,Status');
-    ptoRows.forEach((e: any) => lines.push([e.employee, e.type, e.start_date, e.end_date, e.days, e.status].map(x => `"${x ?? ''}"`).join(',')));
-    lines.push(''); lines.push('TRIPS'); lines.push('Traveler,Details,Client,Cost,Status,Date');
-    tripRows.forEach((t: any) => lines.push([t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)].map(x => `"${x ?? ''}"`).join(',')));
-    lines.push(''); lines.push('CONTRACTOR PAYMENTS'); lines.push('Name,Date,Amount,Note');
-    contractorRows.forEach((c: any) => lines.push([cName(c), cDate(c), num(c.amount), cNote(c)].map(x => `"${x ?? ''}"`).join(',')));
-    lines.push(''); lines.push('PERFORMANCE REVIEWS'); lines.push('Employee,Role,Review,Date,Status');
-    reviewRowsSel.forEach(r => lines.push([r.name, r.role, r.type, r.date, r.status].map(x => `"${x ?? ''}"`).join(',')));
+    csvSection(lines, 'CASH OUT', ['Date', 'Payee', 'Category', 'Amount', 'Note'], cashoutOf(thisKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]), cashoutOf(lastKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]));
+    csvSection(lines, 'PTO', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoOf(thisKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]), ptoOf(lastKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]));
+    csvSection(lines, 'TRIPS', ['Traveler', 'Details', 'Client', 'Cost', 'Status', 'Month'], tripOf(thisKey).map((t: any) => [t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)]), tripOf(lastKey).map((t: any) => [t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)]));
+    csvSection(lines, 'CONTRACTOR PAYMENTS', ['Name', 'Date', 'Amount', 'Note'], contractorOf(thisKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]), contractorOf(lastKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]));
+    csvSection(lines, 'PERFORMANCE REVIEWS', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewOf(thisKey).map(r => [r.name, r.role, r.type, r.date, r.status]), reviewOf(lastKey).map(r => [r.name, r.role, r.type, r.date, r.status]));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `monthly-pack-${selKey}.csv`; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `monthly-pack-${thisKey}-vs-${lastKey}.csv`; a.click();
     showToast('CSV downloaded');
   }
 
   function printPack() {
-    const cmp = metrics.map(m => `<tr><td style="padding:8px 12px;font-weight:600">${m.label}</td><td style="padding:8px 12px;color:${m.color};font-weight:700">${m.money ? fmt$(m.thisV) : m.thisV}</td><td style="padding:8px 12px;color:#888">${m.money ? fmt$(m.lastV) : m.lastV}</td></tr>`).join('');
-    const tbl = (title: string, color: string, headers: string[], rows: string[][]) => `
+    const cmp = metrics.map(m => { const t = (m as any).approx ? '~' : ''; return `<tr><td style="padding:8px 12px;font-weight:600">${m.label}</td><td style="padding:8px 12px;color:${m.color};font-weight:700">${m.money ? t + fmt$(m.thisV) : m.thisV}</td><td style="padding:8px 12px;color:#888">${m.money ? t + fmt$(m.lastV) : m.lastV}</td></tr>`; }).join('');
+    const tbl = (color: string, monthLbl: string, headers: string[], rows: string[][]) => `
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:${color};margin:0 0 4px">${monthLbl} · ${rows.length}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:${color}18">${headers.map(h => `<th style="text-align:left;padding:5px 8px;color:${color};font-size:9px;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.length ? rows.map(r => `<tr style="border-bottom:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:10px;text-align:center;color:#999">None</td></tr>`}</tbody>
+        </table>
+      </div>`;
+    const pair = (title: string, color: string, headers: string[], mapper: (k: string) => string[][]) => `
       <h2 style="font-family:Georgia,serif;font-size:15px;color:${color};border-left:4px solid ${color};padding-left:8px;margin:22px 0 8px">${title}</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:${color}18">${headers.map(h => `<th style="text-align:left;padding:6px 10px;color:${color};font-size:10px;text-transform:uppercase;letter-spacing:.05em">${h}</th>`).join('')}</tr></thead>
-        <tbody>${rows.length ? rows.map(r => `<tr style="border-bottom:1px solid #eee">${r.map(c => `<td style="padding:6px 10px;color:#333">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:12px;text-align:center;color:#999">None</td></tr>`}</tbody>
-      </table>`;
-    const html = `<!DOCTYPE html><html><head><title>Monthly Pack — ${selLabel}</title></head>
+      <div style="display:flex;gap:16px;align-items:flex-start">${tbl(color, thisLabel, headers, mapper(thisKey))}${tbl(color, lastLabel, headers, mapper(lastKey))}</div>`;
+    const html = `<!DOCTYPE html><html><head><title>Monthly Pack — ${thisLabel} vs ${lastLabel}</title></head>
       <body style="font-family:Georgia,serif;margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:22px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:22px;font-weight:700;letter-spacing:.15em">LITSON</div>
-          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${selLabel.toUpperCase()}</div>
+          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${thisLabel.toUpperCase()} vs ${lastLabel.toUpperCase()}</div>
         </div>
         <div style="padding:24px 32px">
-          <h2 style="font-family:Georgia,serif;font-size:15px;color:#1b2a3d;margin:0 0 8px">Comparison — This Month vs Last Month</h2>
+          <h2 style="font-family:Georgia,serif;font-size:15px;color:#1b2a3d;margin:0 0 8px">Comparison</h2>
           <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px">
-            <thead><tr style="background:#f1ece3"><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">Category</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(thisY, thisM)}</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(last.getFullYear(), last.getMonth())}</th></tr></thead>
+            <thead><tr style="background:#f1ece3"><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">Category</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${thisLabel}</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${lastLabel}</th></tr></thead>
             <tbody>${cmp}</tbody>
           </table>
-          ${tbl(`Cash Out — Total ${fmt$(cashoutTotal)}`, '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], cashoutRows.map((c: any) => [c.date, c.payee, c.category, fmt$(num(c.amount)), c.note]))}
-          ${tbl('PTO', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoRows.map((e: any) => [e.employee, e.type, e.start_date, e.end_date, String(e.days ?? ''), e.status]))}
-          ${tbl('Trips', '#3f6b8a', ['Traveler', 'Details', 'Client', 'Cost', 'Status'], tripRows.map((t: any) => [t.who, t.detail, t.matter, fmt$(num(t.cost)), t.status]))}
-          ${tbl('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], contractorRows.map((c: any) => [cName(c), cDate(c), fmt$(num(c.amount)), cNote(c)]))}
-          ${tbl('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewRowsSel.map(r => [r.name, r.role, r.type, r.date ?? '', r.status]))}
+          ${pair('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [c.date, c.payee, c.category, fmt$(num(c.amount)), c.note]))}
+          ${pair('PTO', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], k => ptoOf(k).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, String(e.days ?? ''), e.status]))}
+          ${pair('Trips', '#3f6b8a', ['Traveler', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [t.who, t.detail, t.matter, fmt$(num(t.cost)), t.status]))}
+          ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [cName(c), cDate(c), fmt$(num(c.amount)), cNote(c)]))}
+          ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [r.name, r.role, r.type, r.date ?? '', r.status]))}
         </div>
         <script>window.onload=function(){window.print()}</script>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); }
   }
 
-  const SectionTable = ({ title, color, headers, children, empty }: any) => (
-    <section>
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
-        <div className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</div>
+  // Renders one category as two side-by-side month tables
+  const Compare = ({ title, color, headers, renderRow, rowsThis, rowsLast, subtitle }: any) => {
+    const Col = ({ label, rows }: { label: string; rows: any[] }) => (
+      <div className="bg-white border rounded-card overflow-hidden flex-1 min-w-0" style={{ borderColor: `${color}33`, borderTop: `3px solid ${color}` }}>
+        <div className="px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between" style={{ color, background: `${color}10` }}>
+          <span>{label}</span><span className="opacity-70">{rows.length}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead style={{ background: `${color}0a` }}><tr>
+              {headers.map((h: string) => <th key={h} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {rows.length ? rows.map(renderRow) : <tr><td colSpan={headers.length} className="px-3 py-6 text-center text-text-muted">None</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div className="bg-white border rounded-card overflow-hidden" style={{ borderColor: `${color}33`, borderTop: `3px solid ${color}` }}>
-        <table className="w-full text-sm">
-          <thead style={{ background: `${color}14` }}><tr>
-            {headers.map((h: string) => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider" style={{ color }}>{h}</th>)}
-          </tr></thead>
-          <tbody>{children}{empty}</tbody>
-        </table>
-      </div>
-    </section>
-  );
+    );
+    return (
+      <section>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
+          <div className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</div>
+          {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
+        </div>
+        <div className="flex flex-col lg:flex-row gap-4">
+          <Col label={thisLabel} rows={rowsThis} />
+          <Col label={lastLabel} rows={rowsLast} />
+        </div>
+      </section>
+    );
+  };
+
+  const cellRow = {
+    cash: (c: any) => (
+      <tr key={c.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 text-text-muted whitespace-nowrap">{c.date}</td>
+        <td className="px-3 py-2 font-medium">{c.payee}</td>
+        <td className="px-3 py-2"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#fdeaea] text-[#b0412f]">{c.category}</span></td>
+        <td className="px-3 py-2 font-semibold">{fmt$(num(c.amount))}</td>
+        <td className="px-3 py-2 text-text-muted">{c.note ?? '—'}</td>
+      </tr>
+    ),
+    pto: (e: any) => (
+      <tr key={e.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{e.employee}</td><td className="px-3 py-2 text-text-muted">{e.type}</td>
+        <td className="px-3 py-2 text-text-muted">{e.start_date}</td><td className="px-3 py-2 text-text-muted">{e.end_date}</td>
+        <td className="px-3 py-2 text-text-muted">{e.days}</td>
+        <td className="px-3 py-2"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
+      </tr>
+    ),
+    trip: (t: any) => (
+      <tr key={t.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{t.who}</td><td className="px-3 py-2 text-text-secondary">{t.detail}</td>
+        <td className="px-3 py-2 text-text-muted">{t.matter ?? '—'}</td><td className="px-3 py-2 text-text-muted">{t.cost != null ? fmt$(num(t.cost)) : '—'}</td>
+        <td className="px-3 py-2"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{t.status}</span></td>
+      </tr>
+    ),
+    contractor: (c: any) => (
+      <tr key={c.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{cName(c)}</td><td className="px-3 py-2 text-text-muted">{cDate(c)}</td>
+        <td className="px-3 py-2 text-text-muted">{fmt$(num(c.amount))}</td><td className="px-3 py-2 text-text-muted">{cNote(c)}</td>
+      </tr>
+    ),
+    review: (r: any) => (
+      <tr key={r.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{r.name}</td><td className="px-3 py-2 text-text-muted">{r.role}</td>
+        <td className="px-3 py-2 text-text-secondary">{r.type}</td><td className="px-3 py-2 text-text-muted">{r.date}</td>
+        <td className="px-3 py-2"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
+      </tr>
+    ),
+  };
 
   return (
     <div className="space-y-6">
-      {/* Controls */}
+      {/* Header + downloads */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex bg-[#f1ece3] rounded-ctrl p-0.5">
-          {(['this', 'last'] as const).map(mo => (
-            <button key={mo} onClick={() => setMode(mo)}
-              className={clsx('text-sm font-semibold px-4 py-1.5 rounded-ctrl transition-colors', mode === mo ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary')}>
-              {mo === 'this' ? monthLabel(thisY, thisM) : monthLabel(last.getFullYear(), last.getMonth())}
-            </button>
-          ))}
-        </div>
-        <span className="text-sm text-text-muted">Showing <span className="font-semibold text-text-primary">{selLabel}</span></span>
+        <span className="text-sm text-text-muted">Comparing <span className="font-semibold text-text-primary">{thisLabel}</span> vs <span className="font-semibold text-text-primary">{lastLabel}</span> — side by side</span>
         <div className="ml-auto flex gap-2">
           <button onClick={printPack} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
           <button onClick={downloadCsvPack} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Download XLS/CSV</button>
@@ -439,94 +477,46 @@ function MonthlyTab({ data }: { data: any }) {
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {metrics.map(m => {
           const delta = m.thisV - m.lastV;
-          const cur = mode === 'this' ? m.thisV : m.lastV;
-          const other = mode === 'this' ? m.lastV : m.thisV;
           const tilde = (m as any).approx ? '~' : '';
           return (
             <div key={m.label} className="bg-white border rounded-card px-4 py-3" style={{ borderTop: `3px solid ${m.color}` }}>
               <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{m.label}</div>
-              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? tilde + fmt$(cur) : cur}</div>
+              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? tilde + fmt$(m.thisV) : m.thisV}</div>
               <div className="text-[11px] text-text-muted mt-0.5">
-                {mode === 'this' ? 'Last mo' : 'This mo'}: {m.money ? tilde + fmt$(other) : other}
-                {delta !== 0 && <span className={mode === 'this' ? (delta > 0 ? 'text-[#b0412f] ml-1' : 'text-[#2f7d5b] ml-1') : 'ml-1'}>
-                  {mode === 'this' ? ` (${delta > 0 ? '+' : ''}${m.money ? fmt$(delta) : delta})` : ''}
-                </span>}
+                {lastLabel.split(' ')[0]}: {m.money ? tilde + fmt$(m.lastV) : m.lastV}
+                {delta !== 0 && <span className={delta > 0 ? 'text-[#b0412f] ml-1' : 'text-[#2f7d5b] ml-1'}>({delta > 0 ? '+' : ''}{m.money ? fmt$(delta) : delta})</span>}
               </div>
             </div>
           );
         })}
       </div>
 
-      <SectionTable title={`Cash Out — Total ${fmt$(cashoutTotal)}`} color="#b0412f" headers={['Date', 'Payee', 'Category', 'Amount', 'Note']}
-        empty={!cashoutRows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No cash-out entries in {selLabel}</td></tr>}>
-        {cashoutRows.map((c: any) => (
-          <tr key={c.id} className="border-t border-[#f1ece3]">
-            <td className="px-4 py-3 text-text-muted whitespace-nowrap">{c.date}</td>
-            <td className="px-4 py-3 font-medium">{c.payee}</td>
-            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#fdeaea] text-[#b0412f]">{c.category}</span></td>
-            <td className="px-4 py-3 font-semibold">{fmt$(num(c.amount))}</td>
-            <td className="px-4 py-3 text-text-muted">{c.note ?? '—'}</td>
-          </tr>
-        ))}
-      </SectionTable>
-
-      <SectionTable title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']}
-        empty={!ptoRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO in {selLabel}</td></tr>}>
-        {ptoRows.map((e: any) => (
-          <tr key={e.id} className="border-t border-[#f1ece3]">
-            <td className="px-4 py-3 font-medium">{e.employee}</td><td className="px-4 py-3 text-text-muted">{e.type}</td>
-            <td className="px-4 py-3 text-text-muted">{e.start_date}</td><td className="px-4 py-3 text-text-muted">{e.end_date}</td>
-            <td className="px-4 py-3 text-text-muted">{e.days}</td>
-            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
-          </tr>
-        ))}
-      </SectionTable>
-
-      <SectionTable title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Details', 'Client', 'Cost', 'Status', 'Date']}
-        empty={!tripRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No trips in {selLabel}</td></tr>}>
-        {tripRows.map((t: any) => (
-          <tr key={t.id} className="border-t border-[#f1ece3]">
-            <td className="px-4 py-3 font-medium">{t.who}</td><td className="px-4 py-3 text-text-secondary">{t.detail}</td>
-            <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td><td className="px-4 py-3 text-text-muted">{t.cost != null ? fmt$(num(t.cost)) : '—'}</td>
-            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{t.status}</span></td>
-            <td className="px-4 py-3 text-text-muted">{tripMonthKey(t)}</td>
-          </tr>
-        ))}
-      </SectionTable>
-
-      <SectionTable title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']}
-        empty={!contractorRows.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No contractor payments in {selLabel}</td></tr>}>
-        {contractorRows.map((c: any) => (
-          <tr key={c.id} className="border-t border-[#f1ece3]">
-            <td className="px-4 py-3 font-medium">{cName(c)}</td><td className="px-4 py-3 text-text-muted">{cDate(c)}</td>
-            <td className="px-4 py-3 text-text-muted">{fmt$(num(c.amount))}</td><td className="px-4 py-3 text-text-muted">{cNote(c)}</td>
-          </tr>
-        ))}
-      </SectionTable>
-
-      <SectionTable title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']}
-        empty={!reviewRowsSel.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reviews in {selLabel}</td></tr>}>
-        {reviewRowsSel.map(r => (
-          <tr key={r.id} className="border-t border-[#f1ece3]">
-            <td className="px-4 py-3 font-medium">{r.name}</td><td className="px-4 py-3 text-text-muted">{r.role}</td>
-            <td className="px-4 py-3 text-text-secondary">{r.type}</td><td className="px-4 py-3 text-text-muted">{r.date}</td>
-            <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
-          </tr>
-        ))}
-      </SectionTable>
+      <Compare title="Cash Out" color="#b0412f" subtitle={`${thisLabel}: ${fmt$(cashTotalOf(thisKey))} · ${lastLabel}: ${fmt$(cashTotalOf(lastKey))}`}
+        headers={['Date', 'Payee', 'Category', 'Amount', 'Note']} renderRow={cellRow.cash} rowsThis={cashoutOf(thisKey)} rowsLast={cashoutOf(lastKey)} />
+      <Compare title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']} renderRow={cellRow.pto} rowsThis={ptoOf(thisKey)} rowsLast={ptoOf(lastKey)} />
+      <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
+      <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)} />
+      <Compare title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']} renderRow={cellRow.review} rowsThis={reviewOf(thisKey)} rowsLast={reviewOf(lastKey)} />
 
       <section>
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#c9a24a]" />
           <div className="text-sm font-bold uppercase tracking-wider text-[#8a6d3b]">Birthdays</div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          {birthdays.length ? birthdays.map((e: any) => (
-            <div key={e.id} className="bg-white border border-border rounded-card px-4 py-3 text-sm">
-              <div className="font-semibold text-text-primary">{e.name}</div>
-              <div className="text-text-muted">{e.birthday}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[{ lbl: thisLabel, mi: thisM }, { lbl: lastLabel, mi: last.getMonth() }].map(({ lbl, mi }) => (
+            <div key={lbl}>
+              <div className="text-xs font-bold text-[#8a6d3b] mb-1.5">{lbl}</div>
+              <div className="flex flex-wrap gap-2">
+                {birthdaysOf(mi).length ? birthdaysOf(mi).map((e: any) => (
+                  <div key={e.id} className="bg-white border border-border rounded-card px-3 py-2 text-sm">
+                    <div className="font-semibold text-text-primary">{e.name}</div>
+                    <div className="text-text-muted text-xs">{e.birthday}</div>
+                  </div>
+                )) : <p className="text-sm text-text-muted">None</p>}
+              </div>
             </div>
-          )) : <p className="text-sm text-text-muted">No birthdays in {selLabel}</p>}
+          ))}
         </div>
       </section>
     </div>

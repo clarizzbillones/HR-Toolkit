@@ -36,6 +36,29 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const INVITE_PWD = 'litson2026';
   function copy(text: string) { navigator.clipboard?.writeText(text); }
 
+  // Draggable nav order, persisted in the browser
+  const [order, setOrder] = useState<string[]>(navItems.map(i => i.href));
+  const [dragHref, setDragHref] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('nav-order') || 'null');
+      if (Array.isArray(saved)) {
+        const known = navItems.map(i => i.href);
+        const merged = [...saved.filter((h: string) => known.includes(h)), ...known.filter(h => !saved.includes(h))];
+        setOrder(merged);
+      }
+    } catch { /* ignore */ }
+  }, []);
+  const orderedItems = order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems;
+  function onDrop(targetHref: string) {
+    if (!dragHref || dragHref === targetHref) { setDragHref(null); return; }
+    const next = [...order];
+    const from = next.indexOf(dragHref); const to = next.indexOf(targetHref);
+    next.splice(from, 1); next.splice(to, 0, dragHref);
+    setOrder(next); setDragHref(null);
+    try { localStorage.setItem('nav-order', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+
   const userName = session?.user?.name ?? 'Clarizz Alon';
   const userEmail = session?.user?.email ?? '';
   const role = (session?.user as any)?.role ?? 'hr';
@@ -69,15 +92,21 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-auto py-3.5 px-3.5 flex flex-col gap-0.5">
-        {navItems.map((item) => {
+        {orderedItems.map((item) => {
           const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
+              draggable
+              onDragStart={() => setDragHref(item.href)}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => onDrop(item.href)}
+              onDragEnd={() => setDragHref(null)}
               className={clsx(
-                'flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all duration-100',
-                active ? 'text-white font-semibold' : 'text-[#9aa6b6] hover:text-white hover:bg-white/6'
+                'group flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-all duration-100',
+                active ? 'text-white font-semibold' : 'text-[#9aa6b6] hover:text-white hover:bg-white/6',
+                dragHref === item.href && 'opacity-40'
               )}
               style={
                 active
@@ -85,6 +114,7 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
                   : { borderLeft: '3px solid transparent', paddingLeft: 9 }
               }
             >
+              <span className="cursor-grab select-none text-[#5c6b7e] opacity-0 group-hover:opacity-100 -ml-1" title="Drag to reorder">⠿</span>
               <span className="flex-1">{item.label}</span>
               {item.badgeKey === 'tasks' && (pendingTaskCount ?? 0) > 0 && (
                 <span className="bg-litred text-white text-xs font-semibold px-2 py-0.5 rounded-full leading-none">
