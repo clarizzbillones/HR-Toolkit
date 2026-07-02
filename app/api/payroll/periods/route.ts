@@ -142,8 +142,9 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   await ensureColumns();
-  const { id, run_date, cutoff, check_date, status } = await req.json();
+  const { id, run_date, cutoff, check_date, status, period: newPeriod } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  if (newPeriod !== undefined) await sql`UPDATE payroll_periods SET period = ${newPeriod} WHERE id = ${id}`;
   if (run_date) await sql`UPDATE payroll_periods SET run_date = ${run_date} WHERE id = ${id}`;
   if (cutoff) await sql`UPDATE payroll_periods SET cutoff = ${cutoff} WHERE id = ${id}`;
   if (check_date !== undefined) await sql`UPDATE payroll_periods SET check_date = ${check_date || null} WHERE id = ${id}`;

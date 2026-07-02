@@ -105,7 +105,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDates, setEditDates] = useState<{ cutoff: string; check_date: string }>({ cutoff: '', check_date: '' });
+  const [editDates, setEditDates] = useState<{ cutoff: string; check_date: string; period: string }>({ cutoff: '', check_date: '', period: '' });
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [contractorsLoaded, setContractorsLoaded] = useState(false);
   const [showAddContractor, setShowAddContractor] = useState(false);
@@ -172,13 +172,13 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
 
   function startEdit(p: Period) {
     setEditingId(p.id);
-    setEditDates({ cutoff: p.cutoff?.slice(0, 10) ?? '', check_date: p.check_date?.slice(0, 10) ?? '' });
+    setEditDates({ cutoff: p.cutoff?.slice(0, 10) ?? '', check_date: p.check_date?.slice(0, 10) ?? '', period: p.period ?? '' });
   }
 
   async function saveDates(id: string) {
     const res = await fetch('/api/payroll/periods', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, cutoff: editDates.cutoff, check_date: editDates.check_date }),
+      body: JSON.stringify({ id, cutoff: editDates.cutoff, check_date: editDates.check_date, period: editDates.period }),
     });
     const { period } = await res.json();
     setPeriods(prev => prev.map(p => p.id === id ? { ...p, ...period } : p));
@@ -348,8 +348,16 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_STYLE[r.type] ?? 'bg-[#f1ece3] text-text-muted'}`}>{r.type}</span>
                       </td>
                       <td className="px-5 py-3.5 font-medium text-text-primary">
-                        {r.coverage}
-                        {r.kind === 'contractor' && <span className="text-text-muted font-normal"> · {r.contractor?.contractor}</span>}
+                        {isEditing ? (
+                          <input type="text" value={editDates.period} onChange={e => setEditDates(d => ({ ...d, period: e.target.value }))}
+                            placeholder="e.g. Jun 16–30"
+                            className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink w-36" />
+                        ) : (
+                          <>
+                            {r.coverage}
+                            {r.kind === 'contractor' && <span className="text-text-muted font-normal"> · {r.contractor?.contractor}</span>}
+                          </>
+                        )}
                       </td>
                       <td className="px-5 py-3.5">
                         {isEditing ? (
