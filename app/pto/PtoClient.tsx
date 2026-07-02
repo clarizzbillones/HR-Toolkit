@@ -196,6 +196,50 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }).catch(() => {});
   }, [today]);
 
+  // Edit / delete (DB-backed report entries only)
+  const [editEntry, setEditEntry] = useState<PtoEntry | null>(null);
+  const [editForm, setEditForm] = useState({ employee: '', type: '', start_date: '', end_date: '', days: '', status: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function openEdit(id: string) {
+    const e = entries.find(x => x.id === id);
+    if (!e) { showToast('This entry comes from the calendar and can’t be edited here'); return; }
+    setEditEntry(e);
+    setEditForm({
+      employee: e.employee, type: e.type, start_date: e.start_date?.slice(0, 10) ?? '',
+      end_date: e.end_date?.slice(0, 10) ?? '', days: String(e.days ?? ''), status: e.status ?? 'Approved',
+    });
+  }
+
+  async function saveEdit() {
+    if (!editEntry) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/pto/${editEntry.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee: editForm.employee, type: editForm.type,
+          start_date: editForm.start_date || null, end_date: editForm.end_date || null,
+          days: editForm.days ? Number(editForm.days) : null, status: editForm.status,
+        }),
+      });
+      const { entry } = await res.json();
+      if (entry) setEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
+      setEditEntry(null);
+      showToast('Entry updated');
+    } finally { setSavingEdit(false); }
+  }
+
+  async function deletePto(id: string) {
+    if (!entries.find(x => x.id === id)) { showToast('Calendar entries can’t be deleted here — remove them in Outlook'); return; }
+    if (!confirm('Delete this PTO entry? This can’t be undone.')) return;
+    const res = await fetch(`/api/pto/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setEntries(prev => prev.filter(e => e.id !== id));
+      showToast('Entry deleted');
+    } else showToast('Could not delete entry');
+  }
+
   // Filters — empty Set = show all; non-empty = include only those checked
   const [filterNames, setFilterNames] = useState<Set<string>>(new Set());
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
@@ -685,8 +729,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             <table className="w-full text-sm">
               <thead className="bg-[#f1ece3] border-b border-border">
                 <tr>
-                  {['Employee','PTO Type','From','To','Days','Status','Source','Calendar Event'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>
+                  {['Employee','PTO Type','From','To','Days','Status','Source','Calendar Event',''].map((h, i) => (
+                    <th key={i} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -710,21 +754,86 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                       <span className={clsx('text-xs font-semibold px-2 py-0.5 rounded-full', SOURCE_STYLE[r.source])}>{SOURCE_LABEL[r.source]}</span>
                     </td>
                     <td className="px-4 py-3 text-text-muted text-xs max-w-[180px] truncate">{r.calTitle ?? '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {r.source === 'calendar' ? (
+                        <span className="text-xs text-text-faint">Outlook</span>
+                      ) : (
+                        <EditGate>
+                          <button onClick={() => openEdit(r.key)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                          <button onClick={() => deletePto(r.key)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                        </EditGate>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && merged.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-10 text-center text-text-muted">
+                  <tr><td colSpan={9} className="px-4 py-10 text-center text-text-muted">
                     Upload a CSV/XLSX report and/or connect the Outlook calendar to get started
                   </td></tr>
                 )}
                 {filtered.length === 0 && merged.length > 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-text-muted">No entries match the current filters</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-text-muted">No entries match the current filters</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {/* Edit modal */}
+      {editEntry && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setEditEntry(null)}>
+          <div className="bg-white rounded-card p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-4">Edit PTO Entry</h2>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee</label>
+                <input value={editForm.employee} onChange={e => setEditForm(f => ({ ...f, employee: e.target.value }))}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Type</label>
+                  <select value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
+                    {['Vacation','Sick','Personal','Bereavement','Maternity','Paternity','FMLA','OOO','PTO','WFH'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Status</label>
+                  <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
+                    {['Approved','Pending','Denied'].map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">From</label>
+                  <input type="date" value={editForm.start_date} onChange={e => setEditForm(f => ({ ...f, start_date: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">To</label>
+                  <input type="date" value={editForm.end_date} onChange={e => setEditForm(f => ({ ...f, end_date: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Days</label>
+                <input type="number" step="0.5" value={editForm.days} onChange={e => setEditForm(f => ({ ...f, days: e.target.value }))}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setEditEntry(null)} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
+              <button onClick={saveEdit} disabled={savingEdit} className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">
+                {savingEdit ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
