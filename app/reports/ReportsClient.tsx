@@ -24,6 +24,7 @@ function TripsReportTab() {
   const [trips, setTrips] = useState<any[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [q, setQ] = useState('');
 
   useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setTrips(d.trips ?? [])); }, []);
 
@@ -31,6 +32,10 @@ function TripsReportTab() {
     const d = (t.created_at ?? '').slice(0, 10);
     if (from && d < from) return false;
     if (to && d > to) return false;
+    if (q) {
+      const s = q.toLowerCase();
+      if (!(`${t.who ?? ''} ${t.detail ?? ''} ${t.matter ?? ''} ${t.status ?? ''}`.toLowerCase().includes(s))) return false;
+    }
     return true;
   });
   const totalSpend = filtered.reduce((s: number, t: any) => s + (Number(t.cost) || 0), 0);
@@ -57,7 +62,12 @@ function TripsReportTab() {
         <input type="date" value={to} onChange={e => setTo(e.target.value)}
           className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
         {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>}
-        <button onClick={exportCsv} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download trip pack (CSV)</button>
+        <div className="relative ml-auto">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">🔍</span>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search traveler, client, status…"
+            className="border border-border-light rounded-ctrl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-ink w-64" />
+        </div>
+        <button onClick={exportCsv} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download trip pack (CSV)</button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -273,107 +283,216 @@ function StatTile({ label, value, color }: { label: string; value: string; color
   );
 }
 
-// ---- Monthly tab ----
+// ---- Monthly tab (this month vs last month comparison pack) ----
+function ymOf(s: string) { return (s ?? '').slice(0, 7); }
+function monthLabel(y: number, m: number) { return new Date(y, m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); }
+function num(v: any) { const n = Number(String(v ?? '').replace(/[$,]/g, '')); return isFinite(n) ? n : 0; }
+
 function MonthlyTab({ data }: { data: any }) {
+  const { showToast } = useToast();
+  const [mode, setMode] = useState<'this' | 'last'>('this');
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, overtime, employees, reviews } = data;
+  const { pto, trips, contractors, employees, reviews } = data;
 
-  const today = new Date();
-  const birthdays = (employees ?? []).filter((e: any) => {
-    if (!e.birthday) return false;
-    const [, m, d] = e.birthday.split('-');
-    const now = new Date();
-    return parseInt(m) === now.getMonth() + 1;
-  });
+  const now = new Date();
+  const thisY = now.getFullYear(), thisM = now.getMonth();
+  const last = new Date(thisY, thisM - 1, 1);
+  const thisKey = `${thisY}-${String(thisM + 1).padStart(2, '0')}`;
+  const lastKey = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}`;
+  const selKey = mode === 'this' ? thisKey : lastKey;
+  const selLabel = mode === 'this' ? monthLabel(thisY, thisM) : monthLabel(last.getFullYear(), last.getMonth());
 
-  // Reviews due this month
-  const nowY = today.getFullYear(), nowM = today.getMonth();
-  const reviewsThisMonth = reviewRows(reviews ?? []).filter(r => {
-    if (!r.date || r.status === 'Complete') return false;
-    const d = new Date(r.date + 'T12:00:00');
-    return d.getFullYear() === nowY && d.getMonth() === nowM;
-  }).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  // Contractor field helpers (schema varies)
+  const cName = (c: any) => c.contractor ?? c.name ?? '—';
+  const cDate = (c: any) => (c.pay_date ?? c.due_date ?? '');
+  const cNote = (c: any) => c.notes ?? c.note ?? '';
+
+  // Per-month metric calculators
+  const ptoDays = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k).reduce((s: number, e: any) => s + num(e.days), 0);
+  const tripCount = (k: string) => (trips ?? []).filter((t: any) => ymOf(t.created_at) === k).length;
+  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => ymOf(t.created_at) === k).reduce((s: number, t: any) => s + num(t.cost), 0);
+  const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
+  const reviewsDue = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k && r.status !== 'Complete').length;
+
+  const metrics = [
+    { label: 'PTO Days', color: '#2f7d5b', money: false, thisV: ptoDays(thisKey), lastV: ptoDays(lastKey) },
+    { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripCount(thisKey), lastV: tripCount(lastKey) },
+    { label: 'Travel Spend', color: '#3f6b8a', money: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
+    { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorSpend(thisKey), lastV: contractorSpend(lastKey) },
+    { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewsDue(thisKey), lastV: reviewsDue(lastKey) },
+  ];
+
+  // Selected-month rows
+  const ptoRows = (pto ?? []).filter((e: any) => ymOf(e.start_date) === selKey);
+  const tripRows = (trips ?? []).filter((t: any) => ymOf(t.created_at) === selKey);
+  const contractorRows = (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === selKey);
+  const reviewRowsSel = reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === selKey).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const birthdays = (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === (mode === 'this' ? thisM : last.getMonth()) + 1);
+
+  function downloadCsvPack() {
+    const lines: string[] = [];
+    lines.push(`LITSON HR — Monthly Pack — ${selLabel}`);
+    lines.push('');
+    lines.push('COMPARISON,This Month,Last Month');
+    metrics.forEach(m => lines.push(`${m.label},${m.money ? fmt$(m.thisV) : m.thisV},${m.money ? fmt$(m.lastV) : m.lastV}`));
+    lines.push('');
+    lines.push('PTO'); lines.push('Employee,Type,Start,End,Days,Status');
+    ptoRows.forEach((e: any) => lines.push([e.employee, e.type, e.start_date, e.end_date, e.days, e.status].map(x => `"${x ?? ''}"`).join(',')));
+    lines.push(''); lines.push('TRIPS'); lines.push('Traveler,Details,Client,Cost,Status,Date');
+    tripRows.forEach((t: any) => lines.push([t.who, t.detail, t.matter, num(t.cost), t.status, ymOf(t.created_at)].map(x => `"${x ?? ''}"`).join(',')));
+    lines.push(''); lines.push('CONTRACTOR PAYMENTS'); lines.push('Name,Date,Amount,Note');
+    contractorRows.forEach((c: any) => lines.push([cName(c), cDate(c), num(c.amount), cNote(c)].map(x => `"${x ?? ''}"`).join(',')));
+    lines.push(''); lines.push('PERFORMANCE REVIEWS'); lines.push('Employee,Role,Review,Date,Status');
+    reviewRowsSel.forEach(r => lines.push([r.name, r.role, r.type, r.date, r.status].map(x => `"${x ?? ''}"`).join(',')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `monthly-pack-${selKey}.csv`; a.click();
+    showToast('CSV downloaded');
+  }
+
+  function printPack() {
+    const cmp = metrics.map(m => `<tr><td style="padding:8px 12px;font-weight:600">${m.label}</td><td style="padding:8px 12px;color:${m.color};font-weight:700">${m.money ? fmt$(m.thisV) : m.thisV}</td><td style="padding:8px 12px;color:#888">${m.money ? fmt$(m.lastV) : m.lastV}</td></tr>`).join('');
+    const tbl = (title: string, color: string, headers: string[], rows: string[][]) => `
+      <h2 style="font-family:Georgia,serif;font-size:15px;color:${color};border-left:4px solid ${color};padding-left:8px;margin:22px 0 8px">${title}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:${color}18">${headers.map(h => `<th style="text-align:left;padding:6px 10px;color:${color};font-size:10px;text-transform:uppercase;letter-spacing:.05em">${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows.length ? rows.map(r => `<tr style="border-bottom:1px solid #eee">${r.map(c => `<td style="padding:6px 10px;color:#333">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:12px;text-align:center;color:#999">None</td></tr>`}</tbody>
+      </table>`;
+    const html = `<!DOCTYPE html><html><head><title>Monthly Pack — ${selLabel}</title></head>
+      <body style="font-family:Georgia,serif;margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:22px 32px;border-bottom:4px solid #c9a24a;color:#fff">
+          <div style="font-size:22px;font-weight:700;letter-spacing:.15em">LITSON</div>
+          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${selLabel.toUpperCase()}</div>
+        </div>
+        <div style="padding:24px 32px">
+          <h2 style="font-family:Georgia,serif;font-size:15px;color:#1b2a3d;margin:0 0 8px">Comparison — This Month vs Last Month</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px">
+            <thead><tr style="background:#f1ece3"><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">Category</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(thisY, thisM)}</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(last.getFullYear(), last.getMonth())}</th></tr></thead>
+            <tbody>${cmp}</tbody>
+          </table>
+          ${tbl('PTO', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoRows.map((e: any) => [e.employee, e.type, e.start_date, e.end_date, String(e.days ?? ''), e.status]))}
+          ${tbl('Trips', '#3f6b8a', ['Traveler', 'Details', 'Client', 'Cost', 'Status'], tripRows.map((t: any) => [t.who, t.detail, t.matter, fmt$(num(t.cost)), t.status]))}
+          ${tbl('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], contractorRows.map((c: any) => [cName(c), cDate(c), fmt$(num(c.amount)), cNote(c)]))}
+          ${tbl('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewRowsSel.map(r => [r.name, r.role, r.type, r.date ?? '', r.status]))}
+        </div>
+        <script>window.onload=function(){window.print()}</script>
+      </body></html>`;
+    const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); }
+  }
+
+  const SectionTable = ({ title, color, headers, children, empty }: any) => (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
+        <div className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</div>
+      </div>
+      <div className="bg-white border rounded-card overflow-hidden" style={{ borderColor: `${color}33`, borderTop: `3px solid ${color}` }}>
+        <table className="w-full text-sm">
+          <thead style={{ background: `${color}14` }}><tr>
+            {headers.map((h: string) => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider" style={{ color }}>{h}</th>)}
+          </tr></thead>
+          <tbody>{children}{empty}</tbody>
+        </table>
+      </div>
+    </section>
+  );
 
   return (
     <div className="space-y-6">
-      <section>
-        <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-3">PTO This Month</div>
-        <div className="bg-white border border-border rounded-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#f1ece3]"><tr>
-              {['Employee','Type','Start','End','Days','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {(pto ?? []).slice(0, 20).map((e: any) => (
-                <tr key={e.id} className="border-t border-[#f1ece3]">
-                  <td className="px-4 py-3 font-medium">{e.employee}</td>
-                  <td className="px-4 py-3 text-text-muted">{e.type}</td>
-                  <td className="px-4 py-3 text-text-muted">{e.start_date}</td>
-                  <td className="px-4 py-3 text-text-muted">{e.end_date}</td>
-                  <td className="px-4 py-3 text-text-muted">{e.days}</td>
-                  <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
-                </tr>
-              ))}
-              {!(pto ?? []).length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO entries</td></tr>}
-            </tbody>
-          </table>
+      {/* Controls */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex bg-[#f1ece3] rounded-ctrl p-0.5">
+          {(['this', 'last'] as const).map(mo => (
+            <button key={mo} onClick={() => setMode(mo)}
+              className={clsx('text-sm font-semibold px-4 py-1.5 rounded-ctrl transition-colors', mode === mo ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary')}>
+              {mo === 'this' ? monthLabel(thisY, thisM) : monthLabel(last.getFullYear(), last.getMonth())}
+            </button>
+          ))}
         </div>
-      </section>
+        <span className="text-sm text-text-muted">Showing <span className="font-semibold text-text-primary">{selLabel}</span></span>
+        <div className="ml-auto flex gap-2">
+          <button onClick={printPack} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
+          <button onClick={downloadCsvPack} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Download XLS/CSV</button>
+        </div>
+      </div>
+
+      {/* Comparison band */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {metrics.map(m => {
+          const delta = m.thisV - m.lastV;
+          const cur = mode === 'this' ? m.thisV : m.lastV;
+          const other = mode === 'this' ? m.lastV : m.thisV;
+          return (
+            <div key={m.label} className="bg-white border rounded-card px-4 py-3" style={{ borderTop: `3px solid ${m.color}` }}>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{m.label}</div>
+              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? fmt$(cur) : cur}</div>
+              <div className="text-[11px] text-text-muted mt-0.5">
+                {mode === 'this' ? 'Last mo' : 'This mo'}: {m.money ? fmt$(other) : other}
+                {delta !== 0 && <span className={mode === 'this' ? (delta > 0 ? 'text-[#b0412f] ml-1' : 'text-[#2f7d5b] ml-1') : 'ml-1'}>
+                  {mode === 'this' ? ` (${delta > 0 ? '+' : ''}${m.money ? fmt$(delta) : delta})` : ''}
+                </span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <SectionTable title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']}
+        empty={!ptoRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO in {selLabel}</td></tr>}>
+        {ptoRows.map((e: any) => (
+          <tr key={e.id} className="border-t border-[#f1ece3]">
+            <td className="px-4 py-3 font-medium">{e.employee}</td><td className="px-4 py-3 text-text-muted">{e.type}</td>
+            <td className="px-4 py-3 text-text-muted">{e.start_date}</td><td className="px-4 py-3 text-text-muted">{e.end_date}</td>
+            <td className="px-4 py-3 text-text-muted">{e.days}</td>
+            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
+          </tr>
+        ))}
+      </SectionTable>
+
+      <SectionTable title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Details', 'Client', 'Cost', 'Status', 'Date']}
+        empty={!tripRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No trips in {selLabel}</td></tr>}>
+        {tripRows.map((t: any) => (
+          <tr key={t.id} className="border-t border-[#f1ece3]">
+            <td className="px-4 py-3 font-medium">{t.who}</td><td className="px-4 py-3 text-text-secondary">{t.detail}</td>
+            <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td><td className="px-4 py-3 text-text-muted">{t.cost != null ? fmt$(num(t.cost)) : '—'}</td>
+            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{t.status}</span></td>
+            <td className="px-4 py-3 text-text-muted">{ymOf(t.created_at)}</td>
+          </tr>
+        ))}
+      </SectionTable>
+
+      <SectionTable title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']}
+        empty={!contractorRows.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No contractor payments in {selLabel}</td></tr>}>
+        {contractorRows.map((c: any) => (
+          <tr key={c.id} className="border-t border-[#f1ece3]">
+            <td className="px-4 py-3 font-medium">{cName(c)}</td><td className="px-4 py-3 text-text-muted">{cDate(c)}</td>
+            <td className="px-4 py-3 text-text-muted">{fmt$(num(c.amount))}</td><td className="px-4 py-3 text-text-muted">{cNote(c)}</td>
+          </tr>
+        ))}
+      </SectionTable>
+
+      <SectionTable title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']}
+        empty={!reviewRowsSel.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reviews in {selLabel}</td></tr>}>
+        {reviewRowsSel.map(r => (
+          <tr key={r.id} className="border-t border-[#f1ece3]">
+            <td className="px-4 py-3 font-medium">{r.name}</td><td className="px-4 py-3 text-text-muted">{r.role}</td>
+            <td className="px-4 py-3 text-text-secondary">{r.type}</td><td className="px-4 py-3 text-text-muted">{r.date}</td>
+            <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
+          </tr>
+        ))}
+      </SectionTable>
 
       <section>
-        <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-3">Performance Reviews This Month</div>
-        <div className="bg-white border border-border rounded-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#f1ece3]"><tr>
-              {['Employee','Role','Review','Date','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {reviewsThisMonth.map(r => (
-                <tr key={r.id} className="border-t border-[#f1ece3]">
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
-                  <td className="px-4 py-3 text-text-muted">{r.role}</td>
-                  <td className="px-4 py-3 text-text-secondary">{r.type}</td>
-                  <td className="px-4 py-3 text-text-muted">{r.date}</td>
-                  <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
-                </tr>
-              ))}
-              {!reviewsThisMonth.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reviews due this month</td></tr>}
-            </tbody>
-          </table>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-2.5 h-6 rounded-full bg-[#c9a24a]" />
+          <div className="text-sm font-bold uppercase tracking-wider text-[#8a6d3b]">Birthdays</div>
         </div>
-      </section>
-
-      <section>
-        <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-3">Birthdays This Month</div>
         <div className="flex flex-wrap gap-3">
           {birthdays.length ? birthdays.map((e: any) => (
             <div key={e.id} className="bg-white border border-border rounded-card px-4 py-3 text-sm">
               <div className="font-semibold text-text-primary">{e.name}</div>
               <div className="text-text-muted">{e.birthday}</div>
             </div>
-          )) : <p className="text-sm text-text-muted">No birthdays this month</p>}
-        </div>
-      </section>
-
-      <section>
-        <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-3">Contractor Payments Due</div>
-        <div className="bg-white border border-border rounded-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#f1ece3]"><tr>
-              {['Name','Due Date','Amount','Note'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {(contractors ?? []).map((c: any) => (
-                <tr key={c.id} className="border-t border-[#f1ece3]">
-                  <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-text-muted">{c.due_date}</td>
-                  <td className="px-4 py-3 text-text-muted">${Number(c.amount).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-text-muted">{c.note}</td>
-                </tr>
-              ))}
-              {!(contractors ?? []).length && <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No contractor payments</td></tr>}
-            </tbody>
-          </table>
+          )) : <p className="text-sm text-text-muted">No birthdays in {selLabel}</p>}
         </div>
       </section>
     </div>
