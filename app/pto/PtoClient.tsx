@@ -173,6 +173,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [calLoading, setCalLoading] = useState(false);
   const [calStatus, setCalStatus] = useState('');
 
+  // Calendar-only entries the user has hidden here (not deleted from Outlook)
+  const [hiddenCalIds, setHiddenCalIds] = useState<Set<string>>(new Set());
+
   // Load saved calendar URL + cached events from DB (no live fetch on refresh)
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -181,6 +184,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         setCalEvents(data.calendar_events);
         setCalConnected(true);
       }
+      if (Array.isArray(data.hidden_cal_ids)) setHiddenCalIds(new Set(data.hidden_cal_ids));
     }).catch(() => {});
   }, []);
 
@@ -231,13 +235,22 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }
 
   async function deletePto(id: string) {
-    if (!entries.find(x => x.id === id)) { showToast('Calendar entries can’t be deleted here — remove them in Outlook'); return; }
-    if (!confirm('Delete this PTO entry? This can’t be undone.')) return;
-    const res = await fetch(`/api/pto/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setEntries(prev => prev.filter(e => e.id !== id));
-      showToast('Entry deleted');
-    } else showToast('Could not delete entry');
+    // DB-backed report entry → hard delete
+    if (entries.find(x => x.id === id)) {
+      if (!confirm('Delete this PTO entry? This can’t be undone.')) return;
+      const res = await fetch(`/api/pto/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEntries(prev => prev.filter(e => e.id !== id));
+        showToast('Entry deleted');
+      } else showToast('Could not delete entry');
+      return;
+    }
+    // Calendar-only entry → hide from the report only (Outlook is untouched)
+    if (!confirm('Remove this calendar entry from the report? It stays in the Outlook calendar and won’t reappear here on refresh.')) return;
+    const next = new Set(hiddenCalIds); next.add(id);
+    setHiddenCalIds(next);
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
+    showToast('Removed from report (kept in Outlook)');
   }
 
   // Filters — empty Set = show all; non-empty = include only those checked
@@ -383,6 +396,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     // Add calendar-only events — skip WFH, non-PTO titles, < 1 day, old events
     calEvents.forEach(c => {
       if (usedCalIds.has(c.id)) return;
+      if (hiddenCalIds.has(c.id)) return; // user removed it from the report (Outlook untouched)
       if (c.end < '2026-06-01') return;
       if (EXCLUDED_TYPES.test(c.tag)) return; // skip WFH
       if (EXCLUDED_TITLE.test(c.title)) return; // skip meetings/notes/interviews
@@ -424,7 +438,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     }
 
     return kept.sort((a, b) => a.start.localeCompare(b.start));
-  }, [entries, calEvents]);
+  }, [entries, calEvents, hiddenCalIds]);
 
   // Apply filters
   const filtered = useMemo(() => merged.filter(r => {

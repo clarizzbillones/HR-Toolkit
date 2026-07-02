@@ -10,6 +10,7 @@ async function ensureColumns() {
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS calendar_events TEXT`;
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS trips_url TEXT`;
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS reviews_url TEXT`;
+  await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS hidden_cal_ids TEXT`;
   columnsReady = true;
 }
 
@@ -19,17 +20,22 @@ const DEFAULT_TRIPS_URL = 'https://trip-desk.lovable.app/';
 
 export async function GET() {
   await ensureColumns();
-  const rows = await sql`SELECT calendar_url, calendar_events, trips_url, reviews_url FROM app_settings WHERE id = 'singleton'`;
+  const rows = await sql`SELECT calendar_url, calendar_events, trips_url, reviews_url, hidden_cal_ids FROM app_settings WHERE id = 'singleton'`;
   const row = (rows as any[])[0] ?? {};
   let calEvents = null;
   if (row.calendar_events) {
     try { calEvents = JSON.parse(row.calendar_events); } catch { calEvents = null; }
+  }
+  let hiddenCalIds: string[] = [];
+  if (row.hidden_cal_ids) {
+    try { hiddenCalIds = JSON.parse(row.hidden_cal_ids); } catch { hiddenCalIds = []; }
   }
   return NextResponse.json({
     calendar_url: row.calendar_url ?? DEFAULT_CALENDAR_URL,
     calendar_events: calEvents,
     trips_url: row.trips_url ?? DEFAULT_TRIPS_URL,
     reviews_url: row.reviews_url ?? DEFAULT_REVIEWS_URL,
+    hidden_cal_ids: hiddenCalIds,
   });
 }
 
@@ -56,6 +62,10 @@ export async function PATCH(req: Request) {
   if ('reviews_url' in body) {
     const val = body.reviews_url === null ? null : String(body.reviews_url);
     await sql`UPDATE app_settings SET reviews_url = ${val} WHERE id = 'singleton'`;
+  }
+  if ('hidden_cal_ids' in body) {
+    const val = body.hidden_cal_ids === null ? null : JSON.stringify(body.hidden_cal_ids);
+    await sql`UPDATE app_settings SET hidden_cal_ids = ${val} WHERE id = 'singleton'`;
   }
   return NextResponse.json({ ok: true });
 }
