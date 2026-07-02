@@ -5,14 +5,23 @@ import { sql, cuid } from '@/lib/db';
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS contractor_payments (
     id text PRIMARY KEY,
-    contractor text NOT NULL,
-    amount text NOT NULL,
-    pay_date text NOT NULL,
-    method text NOT NULL DEFAULT 'ACH',
-    status text NOT NULL DEFAULT 'Pending',
+    contractor text,
+    amount text,
+    pay_date text,
+    method text DEFAULT 'ACH',
+    status text DEFAULT 'Pending',
     notes text,
     created_at timestamptz DEFAULT now()
   )`;
+  // Reconcile with any legacy schema (name/due_date/note columns, NOT NULL constraints)
+  await sql`ALTER TABLE contractor_payments ADD COLUMN IF NOT EXISTS contractor text`;
+  await sql`ALTER TABLE contractor_payments ADD COLUMN IF NOT EXISTS pay_date text`;
+  await sql`ALTER TABLE contractor_payments ADD COLUMN IF NOT EXISTS method text`;
+  await sql`ALTER TABLE contractor_payments ADD COLUMN IF NOT EXISTS status text`;
+  await sql`ALTER TABLE contractor_payments ADD COLUMN IF NOT EXISTS notes text`;
+  try { await sql`ALTER TABLE contractor_payments ALTER COLUMN name DROP NOT NULL`; } catch { /* no such column */ }
+  try { await sql`ALTER TABLE contractor_payments ALTER COLUMN due_date DROP NOT NULL`; } catch { /* no such column */ }
+  try { await sql`ALTER TABLE contractor_payments ALTER COLUMN amount DROP NOT NULL`; } catch { /* no such column */ }
 }
 
 export async function GET() {
