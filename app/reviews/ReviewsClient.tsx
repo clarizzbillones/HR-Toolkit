@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
+import { useUndo } from '@/components/UndoProvider';
 import { reviewDateStr as sharedReviewDateStr } from '@/lib/reviews';
 
 interface Employee {
@@ -58,6 +59,7 @@ function reportsUrl(base: string): string {
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
   const { showToast } = useToast();
+  const { pushUndo } = useUndo();
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
@@ -118,12 +120,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   }
 
   async function deleteEmployee(emp: Employee) {
-    if (!confirm(`Remove ${emp.name} from the review roster? This can't be undone.`)) return;
     const res = await fetch(`/api/employees/${emp.id}`, { method: 'DELETE' });
     if (res.ok) {
       setEmployees(prev => prev.filter(e => e.id !== emp.id));
       if (detail?.id === emp.id) setDetail(null);
-      showToast(`${emp.name} removed`);
+      pushUndo({ label: `Delete ${emp.name}`, req: { url: '/api/employees', method: 'POST', body: { name: emp.name, role: emp.role, dept: emp.dept, hire_date: emp.hire_date, review_6mo_date: emp.review_6mo_date, review_1yr_date: emp.review_1yr_date } } });
+      showToast(`${emp.name} removed — Ctrl+Z to undo`);
     } else {
       showToast('Could not remove employee');
     }

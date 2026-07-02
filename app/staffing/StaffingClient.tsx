@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { useUndo } from '@/components/UndoProvider';
 
 interface Staff {
   id: string; name: string; position: string | null; dialpad: string | null;
@@ -117,6 +118,7 @@ function mapVendor(row: Record<string, any>): Partial<Vendor> {
 
 export default function StaffingClient({ initialRows, initialVendors, initialOffboarded }: { initialRows: Staff[]; initialVendors: Vendor[]; initialOffboarded: Staff[] }) {
   const { showToast } = useToast();
+  const { pushUndo } = useUndo();
   const [tab, setTab] = useState<TabKey>('employees');
   const [rows, setRows] = useState<Staff[]>(initialRows);
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
@@ -193,15 +195,19 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     } finally { setSaving(false); }
   }
   async function delStaff(kind: 'employees' | 'offboarded', id: string) {
-    if (!confirm('Remove this record?')) return;
     const url = kind === 'offboarded' ? '/api/offboarded' : '/api/staffing';
+    const row = (kind === 'offboarded' ? offboarded : rows).find(r => r.id === id);
     await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    (kind === 'offboarded' ? setOffboarded : setRows)(prev => prev.filter(r => r.id !== id)); showToast('Removed');
+    (kind === 'offboarded' ? setOffboarded : setRows)(prev => prev.filter(r => r.id !== id));
+    if (row) { const { id: _drop, ...data } = row as any; pushUndo({ label: `Delete ${row.name}`, req: { url, method: 'POST', body: data } }); }
+    showToast('Removed — Ctrl+Z to undo');
   }
   async function delVendor(id: string) {
-    if (!confirm('Remove this vendor/contact?')) return;
+    const row = vendors.find(r => r.id === id);
     await fetch('/api/vendors', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    setVendors(prev => prev.filter(r => r.id !== id)); showToast('Removed');
+    setVendors(prev => prev.filter(r => r.id !== id));
+    if (row) { const { id: _drop, ...data } = row as any; pushUndo({ label: `Delete ${row.entity ?? row.name}`, req: { url: '/api/vendors', method: 'POST', body: data } }); }
+    showToast('Removed — Ctrl+Z to undo');
   }
 
   function dl(name: string, csv: string) { const b = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); }

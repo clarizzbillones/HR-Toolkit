@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { useUndo } from '@/components/UndoProvider';
 import EodModal from '@/components/EodModal';
 import EditGate from '@/components/EditGate';
 
@@ -58,6 +59,7 @@ const COLS = [
 
 export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) {
   const { showToast } = useToast();
+  const { pushUndo } = useUndo();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [view, setView] = useState<'board' | 'list' | 'archived'>('board');
   const [showAdd, setShowAdd] = useState(false);
@@ -99,6 +101,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle, dueTag: newDue || null }) });
     const { task } = await res.json();
     setTasks(prev => [task, ...prev]);
+    pushUndo({ label: `Add task "${task.title}"`, req: { url: `/api/tasks/${task.id}`, method: 'DELETE' } });
     setNewTitle('');
     setNewDue('');
     setShowAdd(false);
@@ -125,8 +128,10 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
 
   async function bulkDelete() {
     const ids = [...checkedIds];
+    const removed = tasks.filter(t => ids.includes(t.id));
     await Promise.all(ids.map(id => fetch(`/api/tasks/${id}`, { method: 'DELETE' })));
     setTasks(prev => prev.filter(t => !ids.includes(t.id)));
+    removed.forEach(t => pushUndo({ label: `Delete task "${t.title}"`, req: { url: '/api/tasks', method: 'POST', body: { title: t.title, sub: t.sub, dueTag: t.due_tag } } }));
     clearChecked();
     showToast(`Deleted ${ids.length} task${ids.length > 1 ? 's' : ''}`);
   }
@@ -149,10 +154,12 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   }
 
   async function deleteTask(id: string) {
+    const t = tasks.find(x => x.id === id);
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
-    setTasks(prev => prev.filter(t => t.id !== id));
+    setTasks(prev => prev.filter(x => x.id !== id));
     setSelected(null);
-    showToast('Task deleted');
+    if (t) pushUndo({ label: `Delete task "${t.title}"`, req: { url: '/api/tasks', method: 'POST', body: { title: t.title, sub: t.sub, dueTag: t.due_tag } } });
+    showToast('Task deleted — Ctrl+Z to undo');
   }
 
   function onDragStart(id: string) { dragId.current = id; }

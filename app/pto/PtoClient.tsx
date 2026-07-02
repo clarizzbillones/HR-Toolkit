@@ -2,6 +2,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { useUndo } from '@/components/UndoProvider';
 import EditGate from '@/components/EditGate';
 
 interface PtoEntry {
@@ -205,39 +206,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [editForm, setEditForm] = useState({ employee: '', type: '', start_date: '', end_date: '', days: '', status: '' });
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // Undo stack for deletes (Ctrl/Cmd+Z)
-  const undoStack = useRef<({ kind: 'db'; entry: PtoEntry } | { kind: 'cal'; id: string })[]>([]);
-
-  async function undoLast() {
-    const action = undoStack.current.pop();
-    if (!action) { showToast('Nothing to undo'); return; }
-    if (action.kind === 'db') {
-      const e = action.entry;
-      const res = await fetch('/api/pto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [{ employee: e.employee, type: e.type, start_date: e.start_date, end_date: e.end_date, days: e.days, notes: e.notes ?? '' }] }) });
-      const data = await res.json();
-      if (data.entries) setEntries(data.entries);
-      showToast('Restored deleted entry');
-    } else {
-      const next = new Set(hiddenCalIds); next.delete(action.id);
-      setHiddenCalIds(next);
-      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
-      showToast('Restored calendar entry');
-    }
-  }
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
-        const t = e.target as HTMLElement;
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-        e.preventDefault();
-        undoLast();
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hiddenCalIds]);
+  const { pushUndo } = useUndo();
 
   function openEdit(id: string) {
     const e = entries.find(x => x.id === id);
@@ -274,17 +243,18 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     if (dbEntry) {
       const res = await fetch(`/api/pto/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        undoStack.current.push({ kind: 'db', entry: dbEntry });
         setEntries(prev => prev.filter(e => e.id !== id));
+        pushUndo({ label: `Delete PTO — ${dbEntry.employee}`, req: { url: '/api/pto', method: 'POST', body: { entries: [{ employee: dbEntry.employee, type: dbEntry.type, start_date: dbEntry.start_date, end_date: dbEntry.end_date, days: dbEntry.days, notes: dbEntry.notes ?? '' }] } } });
         showToast('Entry deleted — Ctrl+Z to undo');
       } else showToast('Could not delete entry');
       return;
     }
     // Calendar-only entry → hide from the report only (Outlook is untouched)
+    const before = [...hiddenCalIds];
     const next = new Set(hiddenCalIds); next.add(id);
     setHiddenCalIds(next);
     await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
-    undoStack.current.push({ kind: 'cal', id });
+    pushUndo({ label: 'Restore calendar entry', req: { url: '/api/connections', method: 'PATCH', body: { hidden_cal_ids: before } } });
     showToast('Removed from report (kept in Outlook) — Ctrl+Z to undo');
   }
 
@@ -551,10 +521,6 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
               {uploading ? 'Reading…' : '↑ Upload CSV / XLSX'}
             </button>
           </EditGate>
-          <button onClick={undoLast} title="Undo last delete (Ctrl+Z)"
-            className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
-            ↶ Undo
-          </button>
           {merged.length > 0 && (
             <button onClick={exportCsv}
               className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark transition-colors">
