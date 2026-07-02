@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
 
@@ -21,6 +21,8 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ who: '', detail: '', cost: '', matter: '' });
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [activeTab, setActiveTab] = useState<'local' | 'report' | 'live'>('local');
@@ -58,6 +60,37 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
     setSaving(false);
   }
 
+  // Import trips from a CSV/XLSX export (e.g. the Trip Desk monthly report).
+  // Column headers are matched flexibly, so most exports work as-is.
+  async function importFile(file: File) {
+    setImporting(true);
+    try {
+      const { read, utils } = await import('xlsx');
+      const wb = read(await file.arrayBuffer(), { type: 'array' });
+      const sheet = wb.SheetNames.find(n => /trip|travel|report/i.test(n)) ?? wb.SheetNames[0];
+      const json = utils.sheet_to_json<Record<string, any>>(wb.Sheets[sheet], { defval: '' });
+      const get = (r: Record<string, any>, keys: string[]) => {
+        for (const k of Object.keys(r)) if (keys.some(w => k.toLowerCase().replace(/[^a-z]/g, '').includes(w))) { const v = r[k]; if (v != null && v !== '') return v; }
+        return '';
+      };
+      const rows = json.map(r => {
+        const who = get(r, ['traveler', 'employee', 'name', 'who']) || '—';
+        const dest = get(r, ['destination', 'location', 'trip', 'title']);
+        const start = get(r, ['startdate', 'departdate', 'traveldate', 'date', 'depart']);
+        const end = get(r, ['enddate', 'returndate', 'return']);
+        const dateStr = start && end ? `${start} → ${end}` : (start || '');
+        const detail = [dest, dateStr].filter(Boolean).join(' · ') || dest || dateStr;
+        return { who, detail, cost: get(r, ['totalcost', 'cost', 'amount', 'total', 'spend']), matter: get(r, ['client', 'matter', 'purpose', 'reason']) || null, status: get(r, ['status', 'state']) || 'Approved' };
+      }).filter(r => (r.who && r.who !== '—') || r.detail);
+      if (!rows.length) { showToast('No trip rows found in file'); setImporting(false); return; }
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) });
+      const d = await res.json();
+      setTrips(d.trips ?? []);
+      showToast(`Imported ${d.inserted ?? rows.length} trips`);
+    } catch { showToast('Failed to read file'); }
+    setImporting(false);
+  }
+
   async function updateStatus(id: string, status: string) {
     const res = await fetch(`/api/trips/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
     const { trip } = await res.json();
@@ -93,6 +126,12 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
             )}
           </div>
           <EditGate>
+            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+              onChange={e => { if (e.target.files?.[0]) { importFile(e.target.files[0]); e.target.value = ''; } }} />
+            <button onClick={() => fileRef.current?.click()} disabled={importing}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
+              {importing ? 'Importing…' : '↑ Import CSV/XLSX'}
+            </button>
             <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
               ＋ New Request
             </button>
