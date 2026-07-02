@@ -18,12 +18,19 @@ const azureProvider = process.env.AZURE_AD_CLIENT_ID
     })()
   : null;
 
-// Single shared password — set APP_PASSWORD env var in Vercel (defaults to ADMIN)
-const PWD = process.env.APP_PASSWORD ?? 'ADMIN';
+// Single shared invite password — set APP_PASSWORD env var in Vercel (defaults to litson2026)
+const PWD = process.env.APP_PASSWORD ?? 'litson2026';
+// Known named accounts get a friendly name; any other invited email may log in
+// with the shared password too (see authorize below).
 const USERS = [
-  { id: 'hr-1',    name: 'Clarizz Alon', email: 'clarizz@litson.co', password: PWD, role: 'hr' },
-  { id: 'admin-1', name: 'Admin Viewer', email: 'admin@litson.co',    password: PWD, role: 'admin' },
+  { id: 'hr-1',    name: 'Clarizz Ann Billones', email: 'clarizz@litson.co', role: 'hr' },
+  { id: 'admin-1', name: 'Admin Viewer',         email: 'admin@litson.co',   role: 'admin' },
 ];
+
+function nameFromEmail(email: string) {
+  const local = email.split('@')[0].replace(/[._-]+/g, ' ');
+  return local.replace(/\b\w/g, c => c.toUpperCase());
+}
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET ?? 'dev-secret',
@@ -38,10 +45,15 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const user = USERS.find(
-          u => u.email === credentials?.email && u.password === credentials?.password
-        );
-        return user ?? null;
+        const email = (credentials?.email ?? '').trim().toLowerCase();
+        const password = credentials?.password ?? '';
+        // Shared invite password gates access
+        if (!email || password !== PWD) return null;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+        // Known account → keep its name/role; otherwise, any invited email is admin-viewer
+        const known = USERS.find(u => u.email === email);
+        if (known) return { id: known.id, name: known.name, email, role: known.role };
+        return { id: `inv-${email}`, name: nameFromEmail(email), email, role: 'hr' };
       },
     }),
     ...(azureProvider ? [azureProvider] : []),

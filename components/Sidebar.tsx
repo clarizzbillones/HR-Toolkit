@@ -29,7 +29,12 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const INVITE_PWD = 'litson2026';
+  function copy(text: string) { navigator.clipboard?.writeText(text); }
 
   const userName = session?.user?.name ?? 'Clarizz Alon';
   const userEmail = session?.user?.email ?? '';
@@ -105,6 +110,12 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
                 </span>
               </div>
             </div>
+            <button
+              onClick={() => { setMenuOpen(false); setInviteOpen(true); }}
+              className="w-full text-left px-4 py-3 text-sm text-[#9aa6b6] hover:text-white hover:bg-white/8 transition-colors border-b border-white/10"
+            >
+              Invite teammate
+            </button>
             {status === 'authenticated' ? (
               <button
                 onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/auth/signin' }); }}
@@ -143,6 +154,40 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
           </svg>
         </button>
       </div>
+
+      {/* Invite modal */}
+      {inviteOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-6" onClick={() => setInviteOpen(false)}>
+          <div className="bg-white rounded-card w-full max-w-md shadow-xl overflow-hidden text-text-primary" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-spectral text-[18px] font-semibold">Invite a teammate</h2>
+              <button onClick={() => setInviteOpen(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-4 text-sm">
+              <p className="text-text-secondary">Share these with anyone you want to give access. They sign in with <span className="font-semibold">their own email</span> and the shared password below.</p>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">App link</label>
+                <div className="flex gap-2">
+                  <input readOnly value={`${appUrl}/auth/signin`} className="flex-1 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas" />
+                  <button onClick={() => copy(`${appUrl}/auth/signin`)} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">Copy</button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Password</label>
+                <div className="flex gap-2">
+                  <input readOnly value={INVITE_PWD} className="flex-1 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas font-mono" />
+                  <button onClick={() => copy(INVITE_PWD)} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">Copy</button>
+                </div>
+              </div>
+              <a href={`mailto:?subject=${encodeURIComponent('LITSON HR Toolkit access')}&body=${encodeURIComponent(`You've been invited to the LITSON HR Toolkit.\n\nSign in: ${appUrl}/auth/signin\nUse your email and the password: ${INVITE_PWD}`)}`}
+                className="block text-center bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark">
+                ✉ Email this invite
+              </a>
+              <p className="text-xs text-text-muted">Tip: to change the shared password, set the <span className="font-mono">APP_PASSWORD</span> environment variable in Vercel.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
