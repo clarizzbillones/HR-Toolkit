@@ -5,7 +5,7 @@ import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 
 interface Staff {
-  id: string; name: string; position: string | null; dialpad: string | null;
+  id: string; name: string; worker_type?: string | null; position: string | null; dialpad: string | null;
   personal_phone: string | null; email: string | null; start_date: string | null;
   dob: string | null; favorite_color: string | null; favorite_treat: string | null;
   note: string | null; ktn: string | null; marriott: string | null; delta: string | null;
@@ -16,8 +16,9 @@ interface Vendor {
   email: string | null; website: string | null; notes: string | null;
 }
 
+const WORKER_TYPES = ['Employee', 'Contractor'];
 const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
-  { key: 'name', label: 'Name' }, { key: 'position', label: 'Position' },
+  { key: 'name', label: 'Name' }, { key: 'worker_type', label: 'Type' }, { key: 'position', label: 'Position' },
   { key: 'dialpad', label: 'Dialpad Number' }, { key: 'personal_phone', label: 'Personal Phone Number' },
   { key: 'email', label: 'Email' }, { key: 'start_date', label: 'Employment Start Date' },
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
@@ -26,7 +27,7 @@ const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'weight', label: 'Weight' },
 ];
 const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
-  { key: 'name', label: 'Name' }, { key: 'position', label: 'Position' },
+  { key: 'name', label: 'Name' }, { key: 'worker_type', label: 'Type' }, { key: 'position', label: 'Position' },
   { key: 'dialpad', label: 'Dialpad Number' }, { key: 'personal_phone', label: 'Personal Phone Number' },
   { key: 'email', label: 'Email' }, { key: 'start_date', label: 'Employment Start Date' },
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
@@ -81,8 +82,10 @@ function mapStaff(row: Record<string, any>, offboarded = false): Partial<Staff> 
   const get = (re: RegExp) => { const h = find(re); return h ? row[h] : ''; };
   const start = get(/start\s*date|employment\s*start/i);
   const dob = get(/dob|birth/i);
+  const typeRaw = String(get(/worker\s*type|^type$|employment\s*type|contractor/i) || '').toLowerCase();
   return {
     name: String(get(/^name/i) || get(/name/i) || '').trim(),
+    worker_type: /contractor|1099|vendor/.test(typeRaw) ? 'Contractor' : 'Employee',
     position: String(get(/position|title|role/i) || ''),
     dialpad: String(get(/dialpad/i) || ''),
     personal_phone: String(get(/personal\s*phone|cell|mobile/i) || ''),
@@ -245,6 +248,9 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                   className={`px-4 py-3 ${c.key === 'name' ? 'font-medium text-text-primary sticky left-0 z-10 bg-white group-hover:bg-canvas' : 'text-text-muted'}`}
                   style={c.key === 'name' ? { boxShadow: '2px 0 0 #f1ece3' } : undefined}>
                   {c.key === 'email' && r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>
+                    : c.key === 'worker_type' ? (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>
+                    )
                     : c.key === 'dob' ? (toMMDDYYYY(r.dob) || '—')
                     : (r[c.key] ?? '—') || '—'}
                 </td>
@@ -352,11 +358,18 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               {(editStaff.kind === 'offboarded' ? OFF_COLUMNS : EMP_COLUMNS).map(c => (
                 <div key={c.key} className={c.key === 'note' ? 'col-span-2' : ''}>
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">{c.label}</label>
-                  <input value={(editStaff.data[c.key] as string) ?? ''} onChange={e => setEditStaff(p => p && ({ ...p, data: { ...p.data, [c.key]: e.target.value } }))}
-                    type={c.key === 'start_date' || c.key === 'offboarded' ? 'date' : 'text'}
-                    placeholder={c.key === 'dob' ? 'MM/DD/YYYY' : undefined}
-                    onBlur={c.key === 'dob' ? (e => setEditStaff(p => p && ({ ...p, data: { ...p.data, dob: toMMDDYYYY(e.target.value) } }))) : undefined}
-                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  {c.key === 'worker_type' ? (
+                    <select value={(editStaff.data.worker_type as string) || 'Employee'} onChange={e => setEditStaff(p => p && ({ ...p, data: { ...p.data, worker_type: e.target.value } }))}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                      {WORKER_TYPES.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  ) : (
+                    <input value={(editStaff.data[c.key] as string) ?? ''} onChange={e => setEditStaff(p => p && ({ ...p, data: { ...p.data, [c.key]: e.target.value } }))}
+                      type={c.key === 'start_date' || c.key === 'offboarded' ? 'date' : 'text'}
+                      placeholder={c.key === 'dob' ? 'MM/DD/YYYY' : undefined}
+                      onBlur={c.key === 'dob' ? (e => setEditStaff(p => p && ({ ...p, data: { ...p.data, dob: toMMDDYYYY(e.target.value) } }))) : undefined}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  )}
                 </div>
               ))}
             </div>
