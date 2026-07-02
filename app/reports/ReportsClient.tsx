@@ -3,7 +3,173 @@ import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 
-type Tab = 'monthly' | 'insurance' | 'reimbursements' | 'cashout';
+type Tab = 'monthly' | 'trips' | 'pto' | 'insurance' | 'reimbursements' | 'cashout';
+
+function fmt$(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+
+function downloadCsv(filename: string, header: string[], rows: (string | number)[][]) {
+  const esc = (c: string | number) => `"${String(c ?? '').replace(/"/g, '""')}"`;
+  const csv = [header, ...rows].map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ---- Trips report tab (date-range filtered) ----
+function TripsReportTab() {
+  const { showToast } = useToast();
+  const [trips, setTrips] = useState<any[]>([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setTrips(d.trips ?? [])); }, []);
+
+  const filtered = trips.filter((t: any) => {
+    const d = (t.created_at ?? '').slice(0, 10);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+  const totalSpend = filtered.reduce((s: number, t: any) => s + (Number(t.cost) || 0), 0);
+  const approved = filtered.filter((t: any) => t.status === 'Approved').length;
+  const pending = filtered.filter((t: any) => t.status === 'Pending').length;
+
+  function exportCsv() {
+    const rows = filtered.map((t: any) => [
+      t.who, t.detail, t.matter ?? '', t.cost != null ? Number(t.cost) : '',
+      t.status, (t.created_at ?? '').slice(0, 10),
+    ]);
+    downloadCsv(`trip-report${from ? '-' + from : ''}${to ? '-to-' + to : ''}.csv`,
+      ['Traveler', 'Details', 'Matter/Client', 'Cost', 'Status', 'Date'], rows);
+    showToast(`Exported ${rows.length} trips`);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Trip range</span>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        <span className="text-text-muted text-xs">to</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>}
+        <button onClick={exportCsv} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download trip pack (CSV)</button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatTile label="Trips" value={String(filtered.length)} color="#1b2a3d" />
+        <StatTile label="Approved" value={String(approved)} color="#2f7d5b" />
+        <StatTile label="Pending" value={String(pending)} color="#b07d2a" />
+        <StatTile label="Total Spend" value={fmt$(totalSpend)} color="#1b2a3d" />
+      </div>
+
+      <div className="bg-white border border-border rounded-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[#f1ece3]"><tr>
+            {['Traveler','Details','Matter / Client','Cost','Status','Date'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.map((t: any) => (
+              <tr key={t.id} className="border-t border-[#f1ece3]">
+                <td className="px-4 py-3 font-medium">{t.who}</td>
+                <td className="px-4 py-3 text-text-secondary">{t.detail}</td>
+                <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td>
+                <td className="px-4 py-3 text-text-muted">{t.cost != null ? fmt$(Number(t.cost)) : '—'}</td>
+                <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-secondary">{t.status}</span></td>
+                <td className="px-4 py-3 text-text-muted">{(t.created_at ?? '').slice(0, 10)}</td>
+              </tr>
+            ))}
+            {!filtered.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No trips in this range</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---- PTO report tab (date-range filtered) ----
+function PtoReportTab() {
+  const { showToast } = useToast();
+  const [pto, setPto] = useState<any[]>([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setPto(d.pto ?? [])); }, []);
+
+  const filtered = pto.filter((e: any) => {
+    const d = (e.start_date ?? '').slice(0, 10);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+  const totalDays = filtered.reduce((s: number, e: any) => s + (Number(e.days) || 0), 0);
+  const people = new Set(filtered.map((e: any) => e.employee)).size;
+
+  function exportCsv() {
+    const rows = filtered.map((e: any) => [
+      e.employee, e.type, (e.start_date ?? '').slice(0, 10), (e.end_date ?? '').slice(0, 10),
+      Number(e.days) || 0, e.status,
+    ]);
+    downloadCsv(`pto-report${from ? '-' + from : ''}${to ? '-to-' + to : ''}.csv`,
+      ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], rows);
+    showToast(`Exported ${rows.length} PTO entries`);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <span className="text-xs font-bold uppercase tracking-wider text-text-muted">PTO range</span>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        <span className="text-text-muted text-xs">to</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>}
+        <button onClick={exportCsv} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download PTO pack (CSV)</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <StatTile label="Entries" value={String(filtered.length)} color="#1b2a3d" />
+        <StatTile label="Employees" value={String(people)} color="#3f6b8a" />
+        <StatTile label="Total Days" value={String(totalDays)} color="#b0412f" />
+      </div>
+
+      <div className="bg-white border border-border rounded-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[#f1ece3]"><tr>
+            {['Employee','Type','Start','End','Days','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.map((e: any) => (
+              <tr key={e.id} className="border-t border-[#f1ece3]">
+                <td className="px-4 py-3 font-medium">{e.employee}</td>
+                <td className="px-4 py-3 text-text-muted">{e.type}</td>
+                <td className="px-4 py-3 text-text-muted">{(e.start_date ?? '').slice(0, 10)}</td>
+                <td className="px-4 py-3 text-text-muted">{(e.end_date ?? '').slice(0, 10)}</td>
+                <td className="px-4 py-3 text-text-muted">{e.days}</td>
+                <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
+              </tr>
+            ))}
+            {!filtered.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO entries in this range</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-white border border-border rounded-card px-4 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</div>
+      <div className="font-spectral text-2xl font-semibold mt-1" style={{ color }}>{value}</div>
+    </div>
+  );
+}
 
 // ---- Monthly tab ----
 function MonthlyTab({ data }: { data: any }) {
@@ -299,6 +465,8 @@ function CashOutTab() {
 // ---- Main ----
 const TABS: { key: Tab; label: string }[] = [
   { key: 'monthly', label: 'Monthly Pack' },
+  { key: 'trips', label: 'Trips' },
+  { key: 'pto', label: 'PTO' },
   { key: 'insurance', label: 'Insurance' },
   { key: 'reimbursements', label: 'Reimbursements' },
   { key: 'cashout', label: 'Cash Out' },
@@ -327,6 +495,8 @@ export default function ReportsClient() {
       </div>
       <div className="flex-1 overflow-auto px-8 py-6">
         {tab === 'monthly' && <MonthlyTab data={monthlyData} />}
+        {tab === 'trips' && <TripsReportTab />}
+        {tab === 'pto' && <PtoReportTab />}
         {tab === 'insurance' && <InsuranceTab />}
         {tab === 'reimbursements' && <ReimbursementsTab />}
         {tab === 'cashout' && <CashOutTab />}
