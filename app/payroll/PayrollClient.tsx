@@ -52,7 +52,7 @@ async function parsePayroll(file: File): Promise<PayrollSummary | null> {
 
 interface Period {
   id: string; period: string; run_date: string; cutoff: string;
-  check_date?: string; status: string; report_name?: string; report_summary?: string;
+  check_date?: string; status: string; report_name?: string; report_summary?: string; schedule?: string;
 }
 interface Settings { id: string; cadence: string; reminder_toggles: string; }
 interface Contractor {
@@ -81,7 +81,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDates, setEditDates] = useState<{ run_date: string; check_date: string }>({ run_date: '', check_date: '' });
+  const [editDates, setEditDates] = useState<{ cutoff: string; check_date: string }>({ cutoff: '', check_date: '' });
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [contractorsLoaded, setContractorsLoaded] = useState(false);
   const [showAddContractor, setShowAddContractor] = useState(false);
@@ -146,13 +146,13 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
 
   function startEdit(p: Period) {
     setEditingId(p.id);
-    setEditDates({ run_date: p.run_date?.slice(0, 10) ?? '', check_date: p.check_date?.slice(0, 10) ?? '' });
+    setEditDates({ cutoff: p.cutoff?.slice(0, 10) ?? '', check_date: p.check_date?.slice(0, 10) ?? '' });
   }
 
   async function saveDates(id: string) {
     const res = await fetch('/api/payroll/periods', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, run_date: editDates.run_date, check_date: editDates.check_date }),
+      body: JSON.stringify({ id, cutoff: editDates.cutoff, check_date: editDates.check_date }),
     });
     const { period } = await res.json();
     setPeriods(prev => prev.map(p => p.id === id ? { ...p, ...period } : p));
@@ -235,65 +235,36 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
 
       {tab === 'schedule' && (
         <div className="flex-1 overflow-auto px-8 py-6">
-          <div className="grid grid-cols-[320px_1fr] gap-6 mb-6">
-            {/* Next payroll hero */}
-            <div className="bg-ink rounded-card p-6 text-white">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-3">NEXT PAYROLL RUN</div>
-              {nextDate ? (
-                <>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="font-spectral leading-tight">
-                      <div className="text-2xl text-white/80">{nextDate.toLocaleDateString('en-US', { month: 'long' })}</div>
-                      <div className="text-6xl font-semibold">{nextDate.getDate()},</div>
-                      <div className="text-4xl font-semibold text-white/70">{nextDate.getFullYear()}</div>
-                    </div>
-                    <span className="text-xs font-semibold bg-white/15 px-2.5 py-1 rounded-full shrink-0">
-                      {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'in 1 day' : daysLeft && daysLeft > 0 ? `in ${daysLeft} days` : 'Past'}
-                    </span>
-                  </div>
-                  {cutoffDate && (
-                    <div className={`mt-4 rounded-ctrl p-3 text-sm font-semibold ${cutoffToday ? 'bg-[#c9a24a]/20 border border-[#c9a24a]/30' : 'bg-white/10'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#c9a24a]">⚑</span>
-                        <div>
-                          <div className={cutoffToday ? 'text-[#c9a24a]' : 'text-white/80'}>
-                            Submission cutoff{cutoffToday ? ' today' : ''}, 5:00 PM
-                          </div>
-                          {!cutoffToday && <div className="text-xs text-white/40 font-normal">{cutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : <div className="text-white/50">No upcoming periods</div>}
-            </div>
-
-            {/* Reminders */}
-            <div className="bg-white border border-border rounded-card p-6">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-5">REMINDERS</div>
-              <div className="space-y-5">
-                {[
-                  { key: 'cutoff', label: 'Payroll cutoff reminder', sub: '9:00 AM on cutoff day' },
-                  { key: 'payrun', label: 'Pay run confirmation', sub: 'Morning of each run' },
-                  { key: 'timesheet', label: 'Timesheet nudge', sub: '2 days before cutoff' },
-                ].map(({ key, label, sub }) => (
-                  <div key={key} className="flex items-center justify-between gap-4 py-3 border-b border-[#f1ece3] last:border-0 last:pb-0">
-                    <div>
-                      <div className="text-sm font-semibold text-text-primary">{label}</div>
-                      <div className="text-xs text-text-muted mt-0.5">{sub}</div>
-                    </div>
-                    <Toggle on={Boolean(toggles[key])} onChange={v => saveToggles({ ...toggles, [key]: v })} />
-                  </div>
-                ))}
+          {/* Compact next-run banner + reminders */}
+          <div className="flex flex-wrap items-center gap-4 mb-5">
+            {nextDate && (
+              <div className="flex items-center gap-3 bg-ink text-white rounded-card px-4 py-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Next run</span>
+                <span className="font-spectral text-lg font-semibold">{nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <span className="text-xs font-semibold bg-white/15 px-2 py-0.5 rounded-full">
+                  {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'in 1 day' : daysLeft && daysLeft > 0 ? `in ${daysLeft} days` : 'Past'}
+                </span>
+                {cutoffDate && <span className="text-xs text-white/50">· cutoff {cutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, 5:00 PM</span>}
               </div>
-              {saving && <p className="text-xs text-text-muted mt-3">Saving…</p>}
+            )}
+            <div className="flex items-center gap-4 ml-auto">
+              {[
+                { key: 'cutoff', label: 'Cutoff reminder' },
+                { key: 'payrun', label: 'Pay run confirmation' },
+                { key: 'timesheet', label: 'Timesheet nudge' },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <Toggle on={Boolean(toggles[key])} onChange={v => saveToggles({ ...toggles, [key]: v })} />
+                  <span className="text-xs text-text-secondary">{label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Pay periods table */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">PAY PERIODS</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">UPCOMING PAYROLL</div>
               <button onClick={generateSchedule}
                 className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
                 ↻ Generate {settings?.cadence ?? 'Semi-monthly'} schedule
@@ -303,9 +274,9 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#f1ece3] text-xs font-bold uppercase tracking-wider text-text-muted">
-                    <th className="text-left px-5 py-3">Period</th>
-                    <th className="text-left px-5 py-3">Cutoff</th>
-                    <th className="text-left px-5 py-3">Run Date</th>
+                    <th className="text-left px-5 py-3">Payroll Type</th>
+                    <th className="text-left px-5 py-3">Pay Period</th>
+                    <th className="text-left px-5 py-3">Deadline to Run</th>
                     <th className="text-left px-5 py-3">Check Date</th>
                     <th className="text-left px-5 py-3">Status</th>
                     <th className="text-left px-5 py-3">Report</th>
@@ -315,18 +286,20 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                 <tbody>
                   {periods.map(p => {
                     const isEditing = editingId === p.id;
-                    const runDate = new Date(p.run_date + 'T12:00:00');
                     const checkDate = p.check_date ? new Date(p.check_date + 'T12:00:00') : null;
+                    const schedule = p.schedule || (settings?.cadence === 'Semi-monthly' ? 'Semimonthly' : settings?.cadence) || 'Semimonthly';
                     return (
                       <tr key={p.id} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
+                        <td className="px-5 py-3.5">
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{schedule}</span>
+                        </td>
                         <td className="px-5 py-3.5 font-medium text-text-primary">{p.period}</td>
-                        <td className="px-5 py-3.5 text-text-muted">{new Date(p.cutoff + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
                         <td className="px-5 py-3.5">
                           {isEditing ? (
-                            <input type="date" value={editDates.run_date} onChange={e => setEditDates(d => ({ ...d, run_date: e.target.value }))}
+                            <input type="date" value={editDates.cutoff} onChange={e => setEditDates(d => ({ ...d, cutoff: e.target.value }))}
                               className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
                           ) : (
-                            <span className="text-text-primary">{runDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span className="text-[#b0412f] font-medium">{new Date(p.cutoff + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5">
@@ -334,7 +307,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                             <input type="date" value={editDates.check_date} onChange={e => setEditDates(d => ({ ...d, check_date: e.target.value }))}
                               className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
                           ) : (
-                            <span className="text-text-muted">{checkDate ? checkDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                            <span className="text-text-primary">{checkDate ? checkDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5">

@@ -9,6 +9,7 @@ async function ensureColumns() {
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_name text`;
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_data text`;
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_summary text`;
+    await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS schedule text`;
   } catch { /* ignore */ }
 }
 
@@ -72,10 +73,11 @@ export async function POST(req: Request) {
   const sched = buildSchedule(cadence ?? 'Semi-monthly');
   // Replace future (Upcoming) periods; keep any Processing/Processed history
   await sql`DELETE FROM payroll_periods WHERE status NOT IN ('Processing','Processed')`;
+  const scheduleLabel = cadence === 'Semi-monthly' ? 'Semimonthly' : (cadence ?? 'Semi-monthly');
   for (const p of sched) {
     const id = `pp${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-    await sql`INSERT INTO payroll_periods (id, period, run_date, cutoff, check_date, status)
-      VALUES (${id}, ${p.period}, ${p.check_date}, ${p.due_date}, ${p.check_date}, 'Upcoming')`;
+    await sql`INSERT INTO payroll_periods (id, period, run_date, cutoff, check_date, status, schedule)
+      VALUES (${id}, ${p.period}, ${p.check_date}, ${p.due_date}, ${p.check_date}, 'Upcoming', ${scheduleLabel})`;
   }
   const periods = await sql`SELECT * FROM payroll_periods ORDER BY run_date ASC`;
   return NextResponse.json({ periods });
@@ -83,9 +85,10 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   await ensureColumns();
-  const { id, run_date, check_date, status } = await req.json();
+  const { id, run_date, cutoff, check_date, status } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   if (run_date) await sql`UPDATE payroll_periods SET run_date = ${run_date} WHERE id = ${id}`;
+  if (cutoff) await sql`UPDATE payroll_periods SET cutoff = ${cutoff} WHERE id = ${id}`;
   if (check_date !== undefined) await sql`UPDATE payroll_periods SET check_date = ${check_date || null} WHERE id = ${id}`;
   if (status) await sql`UPDATE payroll_periods SET status = ${status} WHERE id = ${id}`;
   const [period] = await sql`SELECT * FROM payroll_periods WHERE id = ${id}`;

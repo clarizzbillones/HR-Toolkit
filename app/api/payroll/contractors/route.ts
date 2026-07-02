@@ -28,29 +28,26 @@ export async function POST(req: Request) {
   await ensureTable();
   const body = await req.json();
 
-  // Generate a recurring monthly contractor schedule for the next 6 months
+  // Generate a recurring monthly contractor schedule for the next 6 months.
+  // Rule: pay on the 6th, covering the WHOLE PREVIOUS month, run by the 2nd.
   if (body.action === 'generate') {
     const today = new Date(); today.setHours(12, 0, 0, 0);
     const iso = (d: Date) => d.toLocaleDateString('en-CA');
+    const monthName = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const existing = await sql`SELECT contractor, pay_date FROM contractor_payments`;
     const seen = new Set((existing as any[]).map(r => `${r.contractor}|${r.pay_date}`));
     let created = 0;
     for (let i = 0; i < 6; i++) {
       const y = today.getFullYear(), m = today.getMonth() + i;
-      // 6th-of-month contractors
+      const payDate = iso(new Date(y, m, 6));          // pay day: 6th
+      const runBy = iso(new Date(y, m, 2));            // deadline to run: 2nd
+      const coverage = monthName(new Date(y, m - 1, 1)); // covers previous whole month
+      if (payDate < iso(today)) continue;
+      const note = `Covers ${coverage} · run by ${runBy} · pay 6th`;
       for (const name of SIXTH_OF_MONTH) {
-        const d = iso(new Date(y, m, 6));
-        if (d < iso(today)) continue;
-        if (seen.has(`${name}|${d}`)) continue;
+        if (seen.has(`${name}|${payDate}`)) continue;
         await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, status, notes)
-          VALUES (${cuid()}, ${name}, 'TBD', ${d}, 'ACH', 'Pending', 'Monthly — 6th')`;
-        created++;
-      }
-      // End-of-month general contractor run
-      const eom = iso(new Date(y, m + 1, 0));
-      if (eom >= iso(today) && !seen.has(`Contractors (general)|${eom}`)) {
-        await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, status, notes)
-          VALUES (${cuid()}, 'Contractors (general)', 'TBD', ${eom}, 'ACH', 'Pending', 'Monthly — end of month')`;
+          VALUES (${cuid()}, ${name}, 'TBD', ${payDate}, 'ACH', 'Pending', ${note})`;
         created++;
       }
     }
