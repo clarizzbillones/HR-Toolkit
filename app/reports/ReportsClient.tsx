@@ -310,7 +310,7 @@ function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState<'this' | 'last'>('this');
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, employees, reviews } = data;
+  const { pto, trips, contractors, employees, reviews, cashout } = data;
 
   const now = new Date();
   const thisY = now.getFullYear(), thisM = now.getMonth();
@@ -331,8 +331,10 @@ function MonthlyTab({ data }: { data: any }) {
   const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripMonthKey(t) === k).reduce((s: number, t: any) => s + num(t.cost), 0);
   const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
   const reviewsDue = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k && r.status !== 'Complete').length;
+  const cashOut = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
 
   const metrics = [
+    { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashOut(thisKey), lastV: cashOut(lastKey) },
     { label: 'PTO Days', color: '#2f7d5b', money: false, thisV: ptoDays(thisKey), lastV: ptoDays(lastKey) },
     { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripCount(thisKey), lastV: tripCount(lastKey) },
     { label: 'Travel Spend', color: '#3f6b8a', money: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
@@ -345,6 +347,8 @@ function MonthlyTab({ data }: { data: any }) {
   const tripRows = (trips ?? []).filter((t: any) => tripMonthKey(t) === selKey);
   const contractorRows = (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === selKey);
   const reviewRowsSel = reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === selKey).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const cashoutRows = (cashout ?? []).filter((c: any) => ymOf(c.date) === selKey).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const cashoutTotal = cashoutRows.reduce((s: number, c: any) => s + num(c.amount), 0);
   const birthdays = (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === (mode === 'this' ? thisM : last.getMonth()) + 1);
 
   function downloadCsvPack() {
@@ -353,6 +357,9 @@ function MonthlyTab({ data }: { data: any }) {
     lines.push('');
     lines.push('COMPARISON,This Month,Last Month');
     metrics.forEach(m => lines.push(`${m.label},${m.money ? fmt$(m.thisV) : m.thisV},${m.money ? fmt$(m.lastV) : m.lastV}`));
+    lines.push('');
+    lines.push(`CASH OUT — Total ${fmt$(cashoutTotal)}`); lines.push('Date,Payee,Category,Amount,Note');
+    cashoutRows.forEach((c: any) => lines.push([c.date, c.payee, c.category, num(c.amount), c.note].map(x => `"${x ?? ''}"`).join(',')));
     lines.push('');
     lines.push('PTO'); lines.push('Employee,Type,Start,End,Days,Status');
     ptoRows.forEach((e: any) => lines.push([e.employee, e.type, e.start_date, e.end_date, e.days, e.status].map(x => `"${x ?? ''}"`).join(',')));
@@ -387,6 +394,7 @@ function MonthlyTab({ data }: { data: any }) {
             <thead><tr style="background:#f1ece3"><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">Category</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(thisY, thisM)}</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${monthLabel(last.getFullYear(), last.getMonth())}</th></tr></thead>
             <tbody>${cmp}</tbody>
           </table>
+          ${tbl(`Cash Out — Total ${fmt$(cashoutTotal)}`, '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], cashoutRows.map((c: any) => [c.date, c.payee, c.category, fmt$(num(c.amount)), c.note]))}
           ${tbl('PTO', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoRows.map((e: any) => [e.employee, e.type, e.start_date, e.end_date, String(e.days ?? ''), e.status]))}
           ${tbl('Trips', '#3f6b8a', ['Traveler', 'Details', 'Client', 'Cost', 'Status'], tripRows.map((t: any) => [t.who, t.detail, t.matter, fmt$(num(t.cost)), t.status]))}
           ${tbl('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], contractorRows.map((c: any) => [cName(c), cDate(c), fmt$(num(c.amount)), cNote(c)]))}
@@ -434,7 +442,7 @@ function MonthlyTab({ data }: { data: any }) {
       </div>
 
       {/* Comparison band */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {metrics.map(m => {
           const delta = m.thisV - m.lastV;
           const cur = mode === 'this' ? m.thisV : m.lastV;
@@ -453,6 +461,19 @@ function MonthlyTab({ data }: { data: any }) {
           );
         })}
       </div>
+
+      <SectionTable title={`Cash Out — Total ${fmt$(cashoutTotal)}`} color="#b0412f" headers={['Date', 'Payee', 'Category', 'Amount', 'Note']}
+        empty={!cashoutRows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No cash-out entries in {selLabel}</td></tr>}>
+        {cashoutRows.map((c: any) => (
+          <tr key={c.id} className="border-t border-[#f1ece3]">
+            <td className="px-4 py-3 text-text-muted whitespace-nowrap">{c.date}</td>
+            <td className="px-4 py-3 font-medium">{c.payee}</td>
+            <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#fdeaea] text-[#b0412f]">{c.category}</span></td>
+            <td className="px-4 py-3 font-semibold">{fmt$(num(c.amount))}</td>
+            <td className="px-4 py-3 text-text-muted">{c.note ?? '—'}</td>
+          </tr>
+        ))}
+      </SectionTable>
 
       <SectionTable title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']}
         empty={!ptoRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO in {selLabel}</td></tr>}>
@@ -648,8 +669,8 @@ function CashOutTab() {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCat, setFilterCat] = useState('All');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ date: '', payee: '', category: 'Travel', amount: '', status: 'Pending' });
-  const CATEGORIES = ['Travel','Office Supplies','Legal Fees','Software','Marketing','Other'];
+  const [form, setForm] = useState({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
+  const CATEGORIES = ['Payroll','Guideline','Distribution','Reimbursement','Travel','Office Supplies','Legal Fees','Software','Marketing','Other'];
 
   function load() {
     const params = new URLSearchParams({ tab: 'cashout' });
@@ -664,7 +685,7 @@ function CashOutTab() {
     const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
-    setForm({ date: '', payee: '', category: 'Travel', amount: '', status: 'Pending' });
+    setForm({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
     setShowAdd(false);
     showToast('Entry added');
   }
@@ -683,7 +704,7 @@ function CashOutTab() {
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-3 gap-4">
-          {([['Date','date'],['Payee','payee'],['Category','category'],['Amount ($)','amount'],['Status','status']] as [string, keyof typeof form][]).map(([l, k]) => (
+          {([['Date','date'],['Payee','payee'],['Category','category'],['Amount ($)','amount'],['Status','status'],['Note','note']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
               {k === 'category' ? (
@@ -710,21 +731,22 @@ function CashOutTab() {
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Date','Payee','Category','Amount','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Date','Payee','Category','Amount','Status','Note'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
               <tr key={r.id} className="border-t border-[#f1ece3]">
-                <td className="px-4 py-3 text-text-muted">{r.date}</td>
+                <td className="px-4 py-3 text-text-muted whitespace-nowrap">{r.date}</td>
                 <td className="px-4 py-3 font-medium">{r.payee}</td>
-                <td className="px-4 py-3 text-text-muted">{r.category}</td>
-                <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
+                <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-secondary">{r.category}</span></td>
+                <td className="px-4 py-3 font-semibold">${Number(r.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.status === 'Paid' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{r.status}</span>
                 </td>
+                <td className="px-4 py-3 text-text-muted">{r.note ?? '—'}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
           </tbody>
         </table>
       </div>

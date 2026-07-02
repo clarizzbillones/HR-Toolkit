@@ -33,7 +33,8 @@ export async function GET(req: Request) {
   const overtime = await sql`SELECT * FROM overtime ORDER BY created_at DESC`;
   const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
   const reviews = await sql`SELECT id, name, role, dept, hire_date, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
-  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews });
+  const cashout = await sql`SELECT * FROM cashout_ledger ORDER BY date ASC`;
+  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews, cashout });
 }
 
 export async function POST(req: Request) {
@@ -56,9 +57,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ row }, { status: 201 });
   }
   if (tab === 'cashout') {
-    const { date, payee, category, amount, status } = body;
+    const { date, payee, category, amount, status, note, method } = body;
+    await sql`ALTER TABLE cashout_ledger ADD COLUMN IF NOT EXISTS note TEXT`;
+    await sql`ALTER TABLE cashout_ledger ADD COLUMN IF NOT EXISTS method TEXT`;
     const id = cuid();
-    await sql`INSERT INTO cashout_ledger (id,date,payee,category,amount,status) VALUES (${id},${date},${payee},${category},${amount},${status ?? 'Pending'})`;
+    await sql`INSERT INTO cashout_ledger (id,date,payee,category,amount,status,note,method) VALUES (${id},${date},${payee},${category},${amount},${status ?? 'Pending'},${note ?? null},${method ?? 'ACH'})`;
     const [row] = await sql`SELECT * FROM cashout_ledger WHERE id = ${id}`;
     return NextResponse.json({ row }, { status: 201 });
   }
