@@ -73,6 +73,8 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
   const usedCalIds = new Set<string>();
 
   (entries ?? []).forEach(e => {
+    // Match the PTO dashboard exactly: skip WFH/personal report entries too.
+    if (EXCLUDED_TYPES.test(e.type)) return;
     const calMatch = (calEvents ?? []).find(c => normName(c.name) === normName(e.employee) && datesOverlap(e.start_date, e.end_date, c.start, c.end));
     if (calMatch) usedCalIds.add(calMatch.id);
     const days = e.days || workingDays(e.start_date, e.end_date);
