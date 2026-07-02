@@ -20,6 +20,8 @@ export default async function StaffingPage() {
     start_date TEXT, dob TEXT, favorite_color TEXT, favorite_treat TEXT, note TEXT, ktn TEXT, marriott TEXT,
     delta TEXT, offboarded TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS southwest TEXT`;
+  await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS southwest TEXT`;
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;
   const vendors = await sql`SELECT * FROM vendor_contacts ORDER BY entity ASC, name ASC`;
   const offboarded = await sql`SELECT * FROM offboarded_staff ORDER BY name ASC`;

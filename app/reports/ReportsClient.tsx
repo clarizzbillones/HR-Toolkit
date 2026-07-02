@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { mergePto } from '@/lib/pto';
+import { reviewRows } from '@/lib/reviews';
 
 // Fetch DB PTO + calendar events + hidden ids, return the SAME merged rows the
 // PTO dashboard shows, mapped to the report row shape (single source of truth).
@@ -184,29 +185,7 @@ function PtoReportTab() {
   );
 }
 
-// ---- Review date helpers ----
-function addMonths(dateStr: string, months: number): string {
-  const d = new Date(dateStr.slice(0, 10) + 'T12:00:00');
-  d.setMonth(d.getMonth() + months);
-  return d.toLocaleDateString('en-CA');
-}
-function reviewDate(e: any, kind: '6mo' | '1yr'): string | null {
-  if (kind === '6mo') return e.review_6mo_date?.slice(0, 10) ?? (e.hire_date ? addMonths(e.hire_date, 6) : null);
-  return e.review_1yr_date?.slice(0, 10) ?? (e.hire_date ? addMonths(e.hire_date, 12) : null);
-}
-
-// Flatten employees into individual review rows
-function reviewRows(reviews: any[]) {
-  const rows: { id: string; name: string; role: string; dept: string; type: string; date: string | null; status: string }[] = [];
-  for (const e of reviews ?? []) {
-    const d6 = reviewDate(e, '6mo');
-    if (d6 || e.review_6mo_status) rows.push({ id: e.id + '-6', name: e.name, role: e.role, dept: e.dept, type: '6-month', date: d6, status: e.review_6mo_status ?? 'Not Started' });
-    const d12 = reviewDate(e, '1yr');
-    if (d12 || e.review_1yr_status) rows.push({ id: e.id + '-12', name: e.name, role: e.role, dept: e.dept, type: '1-year', date: d12, status: e.review_1yr_status ?? 'Not Started' });
-  }
-  return rows;
-}
-
+// Review row derivation is shared with the Reviews dashboard (lib/reviews)
 function reviewStatusChip(s: string) {
   if (s === 'Complete') return 'bg-[#eef5f1] text-[#2f7d5b]';
   if (s === 'In Progress') return 'bg-[#f7efe1] text-[#b07d2a]';

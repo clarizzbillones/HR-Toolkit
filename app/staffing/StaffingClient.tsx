@@ -8,7 +8,7 @@ interface Staff {
   personal_phone: string | null; email: string | null; start_date: string | null;
   dob: string | null; favorite_color: string | null; favorite_treat: string | null;
   note: string | null; ktn: string | null; marriott: string | null; delta: string | null;
-  weight?: string | null; offboarded?: string | null;
+  southwest?: string | null; weight?: string | null; offboarded?: string | null;
 }
 interface Vendor {
   id: string; entity: string | null; name: string | null; phone: string | null;
@@ -22,7 +22,7 @@ const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
   { key: 'favorite_treat', label: 'Favorite Treat' }, { key: 'note', label: 'Note' },
   { key: 'ktn', label: 'KTN' }, { key: 'marriott', label: 'Marriott' },
-  { key: 'delta', label: 'Delta' }, { key: 'weight', label: 'Weight' },
+  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'weight', label: 'Weight' },
 ];
 const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'name', label: 'Name' }, { key: 'position', label: 'Position' },
@@ -31,7 +31,7 @@ const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
   { key: 'favorite_treat', label: 'Favorite Treat' }, { key: 'note', label: 'Note' },
   { key: 'ktn', label: 'KTN' }, { key: 'marriott', label: 'Marriott' },
-  { key: 'delta', label: 'Delta' }, { key: 'offboarded', label: 'Offboarded' },
+  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'offboarded', label: 'Offboarded' },
 ];
 const VENDOR_COLUMNS: { key: keyof Vendor; label: string }[] = [
   { key: 'entity', label: 'Facility/Entity' }, { key: 'name', label: 'Name' },
@@ -54,6 +54,26 @@ function excelToDate(v: any): string {
   return String(v ?? '').trim();
 }
 
+// Normalize any date value (excel serial, ISO, m/d/yy) to MM/DD/YYYY
+function toMMDDYYYY(v: any): string {
+  if (v == null || v === '') return '';
+  let y: number, m: number, d: number;
+  if (typeof v === 'number' && v > 20000 && v < 60000) {
+    const dt = new Date(Math.round((v - 25569) * 86400 * 1000));
+    y = dt.getUTCFullYear(); m = dt.getUTCMonth() + 1; d = dt.getUTCDate();
+  } else {
+    const s = String(v).trim();
+    let mo = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // ISO
+    if (mo) { y = +mo[1]; m = +mo[2]; d = +mo[3]; }
+    else {
+      mo = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);    // m/d/y
+      if (mo) { m = +mo[1]; d = +mo[2]; y = +mo[3]; if (y < 100) y += 1900 + (y < 30 ? 100 : 0); }
+      else return s;
+    }
+  }
+  return `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}/${y}`;
+}
+
 function mapStaff(row: Record<string, any>, offboarded = false): Partial<Staff> {
   const headers = Object.keys(row);
   const find = (re: RegExp) => headers.find(h => re.test(h));
@@ -67,13 +87,14 @@ function mapStaff(row: Record<string, any>, offboarded = false): Partial<Staff> 
     personal_phone: String(get(/personal\s*phone|cell|mobile/i) || ''),
     email: String(get(/email/i) || ''),
     start_date: start ? excelToDate(start) : '',
-    dob: dob ? excelToDate(dob) : '',
+    dob: dob ? toMMDDYYYY(dob) : '',
     favorite_color: String(get(/favorite\s*color/i) || ''),
     favorite_treat: String(get(/favorite\s*treat|snack/i) || ''),
     note: String(get(/^note/i) || get(/note/i) || ''),
     ktn: String(get(/ktn|known\s*traveler/i) || ''),
     marriott: String(get(/marriot/i) || ''),
     delta: String(get(/delta/i) || ''),
+    southwest: String(get(/southwest|rapid\s*rewards/i) || ''),
     ...(offboarded
       ? { offboarded: (() => { const v = get(/offboard|term|end\s*date/i); return v ? excelToDate(v) : ''; })() }
       : { weight: String(get(/weight/i) || '') }),
@@ -213,7 +234,9 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
             <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas">
               {cols.map(c => (
                 <td key={c.key} className={`px-4 py-3 ${c.key === 'name' ? 'font-medium text-text-primary' : 'text-text-muted'}`}>
-                  {c.key === 'email' && r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a> : (r[c.key] ?? '—') || '—'}
+                  {c.key === 'email' && r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>
+                    : c.key === 'dob' ? (toMMDDYYYY(r.dob) || '—')
+                    : (r[c.key] ?? '—') || '—'}
                 </td>
               ))}
               <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -320,7 +343,9 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                 <div key={c.key} className={c.key === 'note' ? 'col-span-2' : ''}>
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">{c.label}</label>
                   <input value={(editStaff.data[c.key] as string) ?? ''} onChange={e => setEditStaff(p => p && ({ ...p, data: { ...p.data, [c.key]: e.target.value } }))}
-                    type={c.key === 'start_date' || c.key === 'dob' || c.key === 'offboarded' ? 'date' : 'text'}
+                    type={c.key === 'start_date' || c.key === 'offboarded' ? 'date' : 'text'}
+                    placeholder={c.key === 'dob' ? 'MM/DD/YYYY' : undefined}
+                    onBlur={c.key === 'dob' ? (e => setEditStaff(p => p && ({ ...p, data: { ...p.data, dob: toMMDDYYYY(e.target.value) } }))) : undefined}
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
                 </div>
               ))}

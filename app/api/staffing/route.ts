@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-const FIELDS = ['name','position','dialpad','personal_phone','email','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','weight'] as const;
+const FIELDS = ['name','position','dialpad','personal_phone','email','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','weight'] as const;
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS staff_directory (
@@ -23,6 +23,7 @@ async function ensureTable() {
     weight TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS southwest TEXT`;
 }
 
 function rid() { return `st${Date.now()}${Math.random().toString(36).slice(2, 7)}`; }
@@ -42,8 +43,8 @@ export async function POST(req: Request) {
   if (body.replace) await sql`DELETE FROM staff_directory`;
   for (const r of clean) {
     const v = Object.fromEntries(FIELDS.map(f => [f, r[f] != null && r[f] !== '' ? String(r[f]) : null]));
-    await sql`INSERT INTO staff_directory (id,name,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,weight)
-      VALUES (${rid()},${v.name},${v.position},${v.dialpad},${v.personal_phone},${v.email},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.weight})`;
+    await sql`INSERT INTO staff_directory (id,name,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,weight)
+      VALUES (${rid()},${v.name},${v.position},${v.dialpad},${v.personal_phone},${v.email},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.southwest},${v.weight})`;
   }
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;
   return NextResponse.json({ rows, inserted: clean.length });

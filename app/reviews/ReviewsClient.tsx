@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
+import { reviewDateStr as sharedReviewDateStr } from '@/lib/reviews';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
@@ -19,12 +20,6 @@ interface ReviewItem {
 }
 
 // ---- Date helpers (CST / America/Chicago) ----
-function addMonths(dateStr: string, months: number): Date {
-  const d = new Date(dateStr.slice(0, 10) + 'T12:00:00');
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-
 function toYmd(d: Date): string {
   return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
 }
@@ -48,16 +43,9 @@ function formatDate(dateStr: string) {
   return new Date(dateStr.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Resolve the effective date string for a review (manual override wins, else hire_date + months)
+// Effective review date derivation is shared with Reports (lib/reviews)
 function reviewDateStr(e: Employee, kind: '6mo' | '1yr'): string | null {
-  if (kind === '6mo') {
-    if (e.review_6mo_date) return e.review_6mo_date.slice(0, 10);
-    if (e.hire_date) return toYmd(addMonths(e.hire_date, 6));
-  } else {
-    if (e.review_1yr_date) return e.review_1yr_date.slice(0, 10);
-    if (e.hire_date) return toYmd(addMonths(e.hire_date, 12));
-  }
-  return null;
+  return sharedReviewDateStr(e as any, kind);
 }
 
 // Open the connected dashboard link directly. We don't append a path because
