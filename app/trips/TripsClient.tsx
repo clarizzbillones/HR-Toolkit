@@ -2,18 +2,32 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
+import { mapTripRows } from '@/lib/trips';
 
 interface Trip {
   id: string; who: string; detail: string; cost: number | null;
   matter: string | null; status: string; created_at: string;
+  travel_start?: string | null; travel_end?: string | null;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  'Pending': 'bg-[#f7efe1] text-[#b07d2a]',
-  'Approved': 'bg-[#eef5f1] text-[#2f7d5b]',
-  'On Hold': 'bg-[#e9f0f5] text-[#3f6b8a]',
-  'Denied': 'bg-[#fdeaea] text-[#b0412f]',
-};
+// Case-insensitive status chip — also covers imported values (completed/confirmed/etc.)
+function statusChip(status: string): string {
+  const s = (status ?? '').toLowerCase();
+  if (/appro|complete|confirm|book|paid|done/.test(s)) return 'bg-[#eef5f1] text-[#2f7d5b]';
+  if (/hold|process|review/.test(s)) return 'bg-[#e9f0f5] text-[#3f6b8a]';
+  if (/deny|denied|reject|cancel/.test(s)) return 'bg-[#fdeaea] text-[#b0412f]';
+  if (/pend|await|request/.test(s)) return 'bg-[#f7efe1] text-[#b07d2a]';
+  return 'bg-[#f1ece3] text-text-muted';
+}
+
+// Travel date shown after the traveler name — from the imported report, not created_at
+function tripDate(t: Trip): string {
+  const s = (t.travel_start ?? '').slice(0, 10);
+  const e = (t.travel_end ?? '').slice(0, 10);
+  if (s && e && s !== e) return `${s} → ${e}`;
+  if (s) return s;
+  return '—';
+}
 
 export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) {
   const { showToast } = useToast();
@@ -66,29 +80,31 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
     setImporting(true);
     try {
       const { read, utils } = await import('xlsx');
-      const wb = read(await file.arrayBuffer(), { type: 'array' });
+      const wb = read(await file.arrayBuffer(), { type: 'array', cellDates: true });
       const sheet = wb.SheetNames.find(n => /trip|travel|report/i.test(n)) ?? wb.SheetNames[0];
       const json = utils.sheet_to_json<Record<string, any>>(wb.Sheets[sheet], { defval: '' });
-      const get = (r: Record<string, any>, keys: string[]) => {
-        for (const k of Object.keys(r)) if (keys.some(w => k.toLowerCase().replace(/[^a-z]/g, '').includes(w))) { const v = r[k]; if (v != null && v !== '') return v; }
-        return '';
-      };
-      const rows = json.map(r => {
-        const who = get(r, ['traveler', 'employee', 'name', 'who']) || '—';
-        const dest = get(r, ['destination', 'location', 'trip', 'title']);
-        const start = get(r, ['startdate', 'departdate', 'traveldate', 'date', 'depart']);
-        const end = get(r, ['enddate', 'returndate', 'return']);
-        const dateStr = start && end ? `${start} → ${end}` : (start || '');
-        const detail = [dest, dateStr].filter(Boolean).join(' · ') || dest || dateStr;
-        return { who, detail, cost: get(r, ['totalcost', 'cost', 'amount', 'total', 'spend']), matter: get(r, ['client', 'matter', 'purpose', 'reason']) || null, status: get(r, ['status', 'state']) || 'Approved' };
-      }).filter(r => (r.who && r.who !== '—') || r.detail);
+      const rows = mapTripRows(json);
       if (!rows.length) { showToast('No trip rows found in file'); setImporting(false); return; }
-      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) });
+      const replace = trips.length > 0 && confirm(`Replace all ${trips.length} existing trips with the ${rows.length} rows from this file?\n\nOK = replace · Cancel = add to existing`);
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, replace }) });
       const d = await res.json();
       setTrips(d.trips ?? []);
       showToast(`Imported ${d.inserted ?? rows.length} trips`);
     } catch { showToast('Failed to read file'); }
     setImporting(false);
+  }
+
+  async function clearAll() {
+    if (!confirm(`Delete ALL ${trips.length} trips? This cannot be undone.`)) return;
+    await fetch('/api/trips', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) });
+    setTrips([]);
+    showToast('All trips cleared');
+  }
+
+  async function deleteTrip(id: string) {
+    await fetch('/api/trips', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    setTrips(prev => prev.filter(t => t.id !== id));
+    showToast('Trip deleted');
   }
 
   async function updateStatus(id: string, status: string) {
@@ -132,6 +148,11 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
               {importing ? 'Importing…' : '↑ Import CSV/XLSX'}
             </button>
+            {trips.length > 0 && (
+              <button onClick={clearAll} className="bg-white border border-border-light text-[#b0412f] text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-[#fdeaea] transition-colors">
+                🗑 Clear all
+              </button>
+            )}
             <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
               ＋ New Request
             </button>
@@ -247,7 +268,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
             <div className="bg-white border border-border rounded-card overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-[#f1ece3] border-b border-border">
-                  <tr>{['Employee','Travel Details','Matter','Est. Cost','Status','Actions'].map(h => (
+                  <tr>{['Employee','Travel Date','Travel Details','Matter','Est. Cost','Status','Actions'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>
                   ))}</tr>
                 </thead>
@@ -255,24 +276,28 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
                   {trips.map(t => (
                     <tr key={t.id} className="border-t border-[#f1ece3] hover:bg-canvas transition-colors">
                       <td className="px-4 py-3 font-medium text-text-primary">{t.who}</td>
+                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{tripDate(t)}</td>
                       <td className="px-4 py-3 text-text-secondary">{t.detail}</td>
                       <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td>
                       <td className="px-4 py-3 text-text-muted">{t.cost != null ? `$${t.cost.toLocaleString()}` : '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLE[t.status] ?? 'bg-[#f1ece3] text-text-muted'}`}>{t.status}</span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusChip(t.status)}`}>{t.status}</span>
                       </td>
                       <td className="px-4 py-3">
-                        {t.status === 'Pending' && (
-                          <div className="flex gap-2">
-                            <button onClick={() => updateStatus(t.id, 'Approved')} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Approve</button>
-                            <button onClick={() => updateStatus(t.id, 'On Hold')} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Hold</button>
-                            <button onClick={() => updateStatus(t.id, 'Denied')} className="text-xs font-semibold text-[#b0412f] hover:underline">Deny</button>
-                          </div>
-                        )}
+                        <div className="flex gap-2 items-center">
+                          {/appro|complete|confirm|deny|denied|hold/i.test(t.status) ? null : (
+                            <>
+                              <button onClick={() => updateStatus(t.id, 'Approved')} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Approve</button>
+                              <button onClick={() => updateStatus(t.id, 'On Hold')} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Hold</button>
+                              <button onClick={() => updateStatus(t.id, 'Denied')} className="text-xs font-semibold text-[#b0412f] hover:underline">Deny</button>
+                            </>
+                          )}
+                          <button onClick={() => deleteTrip(t.id)} className="text-xs font-semibold text-text-muted hover:text-[#b0412f]">🗑</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
-                  {trips.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-text-muted">No travel requests</td></tr>}
+                  {trips.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-text-muted">No travel requests</td></tr>}
                 </tbody>
               </table>
             </div>

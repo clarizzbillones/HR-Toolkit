@@ -4,6 +4,25 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { mergePto } from '@/lib/pto';
 import { reviewRows } from '@/lib/reviews';
+import { mapTripRows } from '@/lib/trips';
+
+// Travel date (from the imported report) shown after the traveler name
+function tripDate(t: any): string {
+  const s = (t.travel_start ?? '').slice(0, 10);
+  const e = (t.travel_end ?? '').slice(0, 10);
+  if (s && e && s !== e) return `${s} → ${e}`;
+  if (s) return s;
+  return (t.created_at ?? '').slice(0, 10) || '—';
+}
+// Case-insensitive status chip (covers imported completed/confirmed/pending/etc.)
+function tripStatusChip(status: string): string {
+  const s = (status ?? '').toLowerCase();
+  if (/appro|complete|confirm|book|paid|done/.test(s)) return 'bg-[#eef5f1] text-[#2f7d5b]';
+  if (/hold|process|review/.test(s)) return 'bg-[#e9f0f5] text-[#3f6b8a]';
+  if (/deny|denied|reject|cancel/.test(s)) return 'bg-[#fdeaea] text-[#b0412f]';
+  if (/pend|await|request/.test(s)) return 'bg-[#f7efe1] text-[#b07d2a]';
+  return 'bg-[#f1ece3] text-text-secondary';
+}
 
 // Fetch DB PTO + calendar events + hidden ids, return the SAME merged rows the
 // PTO dashboard shows, mapped to the report row shape (single source of truth).
@@ -48,24 +67,13 @@ function TripsReportTab() {
     setImporting(true);
     try {
       const { read, utils } = await import('xlsx');
-      const wb = read(await file.arrayBuffer(), { type: 'array' });
+      const wb = read(await file.arrayBuffer(), { type: 'array', cellDates: true });
       const sheet = wb.SheetNames.find(n => /trip|travel|report/i.test(n)) ?? wb.SheetNames[0];
       const json = utils.sheet_to_json<Record<string, any>>(wb.Sheets[sheet], { defval: '' });
-      const get = (r: Record<string, any>, keys: string[]) => {
-        for (const k of Object.keys(r)) if (keys.some(w => k.toLowerCase().replace(/[^a-z]/g, '').includes(w))) { const v = r[k]; if (v != null && v !== '') return v; }
-        return '';
-      };
-      const rows = json.map(r => {
-        const who = get(r, ['traveler', 'employee', 'name', 'who']) || '—';
-        const dest = get(r, ['destination', 'location', 'trip', 'title']);
-        const start = get(r, ['startdate', 'departdate', 'traveldate', 'date', 'depart']);
-        const end = get(r, ['enddate', 'returndate', 'return']);
-        const dateStr = start && end ? `${start} → ${end}` : (start || '');
-        const detail = [dest, dateStr].filter(Boolean).join(' · ') || dest || dateStr;
-        return { who, detail, cost: get(r, ['totalcost', 'cost', 'amount', 'total', 'spend']), matter: get(r, ['client', 'matter', 'purpose', 'reason']) || null, status: get(r, ['status', 'state']) || 'Approved' };
-      }).filter(r => (r.who && r.who !== '—') || r.detail);
+      const rows = mapTripRows(json);
       if (!rows.length) { showToast('No trip rows found in file'); setImporting(false); return; }
-      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) });
+      const replace = trips.length > 0 && confirm(`Replace all ${trips.length} existing trips with the ${rows.length} rows from this file?\n\nOK = replace · Cancel = add to existing`);
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, replace }) });
       const d = await res.json();
       setTrips(d.trips ?? []);
       showToast(`Imported ${d.inserted ?? rows.length} trips`);
@@ -73,9 +81,24 @@ function TripsReportTab() {
     setImporting(false);
   }
 
+  async function clearAll() {
+    if (!confirm(`Delete ALL ${trips.length} trips? This cannot be undone.`)) return;
+    await fetch('/api/trips', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) });
+    setTrips([]);
+    showToast('All trips cleared');
+  }
+
+  async function deleteTrip(id: string) {
+    await fetch('/api/trips', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    setTrips(prev => prev.filter((t: any) => t.id !== id));
+    showToast('Trip deleted');
+  }
+
   const filtered = trips.filter((t: any) => {
-    const d = (t.created_at ?? '').slice(0, 10);
-    if (from && d < from) return false;
+    // Filter on the travel date (falls back to created date if not set)
+    const d = (t.travel_start ?? t.created_at ?? '').slice(0, 10);
+    const dEnd = (t.travel_end ?? t.travel_start ?? t.created_at ?? '').slice(0, 10);
+    if (from && dEnd < from) return false;
     if (to && d > to) return false;
     if (q) {
       const s = q.toLowerCase();
@@ -84,8 +107,8 @@ function TripsReportTab() {
     return true;
   });
   const totalSpend = filtered.reduce((s: number, t: any) => s + (Number(t.cost) || 0), 0);
-  const approved = filtered.filter((t: any) => t.status === 'Approved').length;
-  const pending = filtered.filter((t: any) => t.status === 'Pending').length;
+  const approved = filtered.filter((t: any) => /appro|complete|confirm/i.test(t.status ?? '')).length;
+  const pending = filtered.filter((t: any) => /pend|await|request/i.test(t.status ?? '')).length;
 
   function exportCsv() {
     const rows = filtered.map((t: any) => [
@@ -118,6 +141,9 @@ function TripsReportTab() {
           className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">
           {importing ? 'Importing…' : '↑ Import trips (CSV/XLSX)'}
         </button>
+        {trips.length > 0 && (
+          <button onClick={clearAll} className="bg-white border border-border-light text-[#b0412f] text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-[#fdeaea]">🗑 Clear all</button>
+        )}
         <button onClick={exportCsv} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download trip pack (CSV)</button>
       </div>
 
@@ -131,20 +157,21 @@ function TripsReportTab() {
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Traveler','Details','Matter / Client','Cost','Status','Date'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Traveler','Travel Date','Details','Matter / Client','Cost','Status',''].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {filtered.map((t: any) => (
-              <tr key={t.id} className="border-t border-[#f1ece3]">
+              <tr key={t.id} className="border-t border-[#f1ece3] group">
                 <td className="px-4 py-3 font-medium">{t.who}</td>
+                <td className="px-4 py-3 text-text-muted whitespace-nowrap">{tripDate(t)}</td>
                 <td className="px-4 py-3 text-text-secondary">{t.detail}</td>
                 <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td>
                 <td className="px-4 py-3 text-text-muted">{t.cost != null ? fmt$(Number(t.cost)) : '—'}</td>
-                <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-secondary">{t.status}</span></td>
-                <td className="px-4 py-3 text-text-muted">{(t.created_at ?? '').slice(0, 10)}</td>
+                <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${tripStatusChip(t.status)}`}>{t.status}</span></td>
+                <td className="px-4 py-3 text-right"><button onClick={() => deleteTrip(t.id)} className="text-xs text-text-muted hover:text-[#b0412f] opacity-0 group-hover:opacity-100">🗑</button></td>
               </tr>
             ))}
-            {!filtered.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No trips in this range</td></tr>}
+            {!filtered.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No trips in this range</td></tr>}
           </tbody>
         </table>
       </div>
@@ -321,6 +348,9 @@ function num(v: any) { const n = Number(String(v ?? '').replace(/[$,]/g, '')); r
 // (e.g. "Jul 7 – Jul 9", "8/3/2026"), falling back to when it was logged.
 const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 function tripMonthKey(t: any): string {
+  // Prefer the explicit travel date captured on import
+  const ts = (t.travel_start ?? '').slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(ts)) return ts;
   const detail = String(t.detail ?? '');
   const created = ymOf(t.created_at);
   const cy = created ? created.slice(0, 4) : String(new Date().getFullYear());
@@ -522,9 +552,11 @@ function MonthlyTab({ data }: { data: any }) {
     ),
     trip: (t: any) => (
       <tr key={t.id} className="border-t border-[#f1ece3]">
-        <td className="px-3 py-2 font-medium">{t.who}</td><td className="px-3 py-2 text-text-secondary">{t.detail}</td>
+        <td className="px-3 py-2 font-medium">{t.who}</td>
+        <td className="px-3 py-2 text-text-muted whitespace-nowrap">{tripDate(t)}</td>
+        <td className="px-3 py-2 text-text-secondary">{t.detail}</td>
         <td className="px-3 py-2 text-text-muted">{t.matter ?? '—'}</td><td className="px-3 py-2 text-text-muted">{t.cost != null ? fmt$(num(t.cost)) : '—'}</td>
-        <td className="px-3 py-2"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{t.status}</span></td>
+        <td className="px-3 py-2"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${tripStatusChip(t.status)}`}>{t.status}</span></td>
       </tr>
     ),
     contractor: (c: any) => (
@@ -587,7 +619,7 @@ function MonthlyTab({ data }: { data: any }) {
         total={(rows: any[]) => ({ label: 'Total PTO Days', value: `${rows.reduce((s, e) => s + num(e.days), 0)} days · ${rows.length} PTOs` })} />
       <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total Contractor $', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
-      <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
+      <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
       <Compare title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']} renderRow={cellRow.review} rowsThis={reviewOf(thisKey)} rowsLast={reviewOf(lastKey)} />
 
       <section>
