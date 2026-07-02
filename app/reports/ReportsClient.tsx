@@ -288,6 +288,24 @@ function ymOf(s: string) { return (s ?? '').slice(0, 7); }
 function monthLabel(y: number, m: number) { return new Date(y, m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); }
 function num(v: any) { const n = Number(String(v ?? '').replace(/[$,]/g, '')); return isFinite(n) ? n : 0; }
 
+// A trip's month comes from its travel dates in the free-text detail
+// (e.g. "Jul 7 – Jul 9", "8/3/2026"), falling back to when it was logged.
+const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function tripMonthKey(t: any): string {
+  const detail = String(t.detail ?? '');
+  const created = ymOf(t.created_at);
+  const cy = created ? created.slice(0, 4) : String(new Date().getFullYear());
+  const mName = detail.toLowerCase().match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/);
+  if (mName) { const mi = MON3.indexOf(mName[1]); if (mi >= 0) return `${cy}-${String(mi + 1).padStart(2, '0')}`; }
+  const mNum = detail.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (mNum) {
+    const mm = String(Math.min(12, Math.max(1, parseInt(mNum[1])))).padStart(2, '0');
+    const yy = mNum[3] ? (mNum[3].length === 2 ? '20' + mNum[3] : mNum[3]) : cy;
+    return `${yy}-${mm}`;
+  }
+  return created;
+}
+
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState<'this' | 'last'>('this');
@@ -309,8 +327,8 @@ function MonthlyTab({ data }: { data: any }) {
 
   // Per-month metric calculators
   const ptoDays = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k).reduce((s: number, e: any) => s + num(e.days), 0);
-  const tripCount = (k: string) => (trips ?? []).filter((t: any) => ymOf(t.created_at) === k).length;
-  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => ymOf(t.created_at) === k).reduce((s: number, t: any) => s + num(t.cost), 0);
+  const tripCount = (k: string) => (trips ?? []).filter((t: any) => tripMonthKey(t) === k).length;
+  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripMonthKey(t) === k).reduce((s: number, t: any) => s + num(t.cost), 0);
   const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
   const reviewsDue = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k && r.status !== 'Complete').length;
 
@@ -324,7 +342,7 @@ function MonthlyTab({ data }: { data: any }) {
 
   // Selected-month rows
   const ptoRows = (pto ?? []).filter((e: any) => ymOf(e.start_date) === selKey);
-  const tripRows = (trips ?? []).filter((t: any) => ymOf(t.created_at) === selKey);
+  const tripRows = (trips ?? []).filter((t: any) => tripMonthKey(t) === selKey);
   const contractorRows = (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === selKey);
   const reviewRowsSel = reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === selKey).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const birthdays = (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === (mode === 'this' ? thisM : last.getMonth()) + 1);
@@ -339,7 +357,7 @@ function MonthlyTab({ data }: { data: any }) {
     lines.push('PTO'); lines.push('Employee,Type,Start,End,Days,Status');
     ptoRows.forEach((e: any) => lines.push([e.employee, e.type, e.start_date, e.end_date, e.days, e.status].map(x => `"${x ?? ''}"`).join(',')));
     lines.push(''); lines.push('TRIPS'); lines.push('Traveler,Details,Client,Cost,Status,Date');
-    tripRows.forEach((t: any) => lines.push([t.who, t.detail, t.matter, num(t.cost), t.status, ymOf(t.created_at)].map(x => `"${x ?? ''}"`).join(',')));
+    tripRows.forEach((t: any) => lines.push([t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)].map(x => `"${x ?? ''}"`).join(',')));
     lines.push(''); lines.push('CONTRACTOR PAYMENTS'); lines.push('Name,Date,Amount,Note');
     contractorRows.forEach((c: any) => lines.push([cName(c), cDate(c), num(c.amount), cNote(c)].map(x => `"${x ?? ''}"`).join(',')));
     lines.push(''); lines.push('PERFORMANCE REVIEWS'); lines.push('Employee,Role,Review,Date,Status');
@@ -455,7 +473,7 @@ function MonthlyTab({ data }: { data: any }) {
             <td className="px-4 py-3 font-medium">{t.who}</td><td className="px-4 py-3 text-text-secondary">{t.detail}</td>
             <td className="px-4 py-3 text-text-muted">{t.matter ?? '—'}</td><td className="px-4 py-3 text-text-muted">{t.cost != null ? fmt$(num(t.cost)) : '—'}</td>
             <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{t.status}</span></td>
-            <td className="px-4 py-3 text-text-muted">{ymOf(t.created_at)}</td>
+            <td className="px-4 py-3 text-text-muted">{tripMonthKey(t)}</td>
           </tr>
         ))}
       </SectionTable>
