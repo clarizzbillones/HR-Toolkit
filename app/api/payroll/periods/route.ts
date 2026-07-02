@@ -68,18 +68,23 @@ function buildSchedule(cadence: string): { period: string; pay_start: string; pa
 
 export async function POST(req: Request) {
   await ensureColumns();
-  const { action, cadence } = await req.json();
-  if (action !== 'generate') return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  const sched = buildSchedule(cadence ?? 'Semi-monthly');
+  const body = await req.json();
+  if (body.action !== 'generate') return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  // Generate one or many cadences; default = all regular schedules at once
+  const cadences: string[] = Array.isArray(body.cadences) && body.cadences.length
+    ? body.cadences
+    : body.cadence ? [body.cadence] : ['Weekly', 'Semi-monthly', 'Monthly'];
   // Replace future (Upcoming) periods; keep any Processing/Processed history
   await sql`DELETE FROM payroll_periods WHERE status NOT IN ('Processing','Processed')`;
-  const scheduleLabel = cadence === 'Semi-monthly' ? 'Semimonthly' : (cadence ?? 'Semi-monthly');
-  for (const p of sched) {
-    const id = `pp${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-    await sql`INSERT INTO payroll_periods (id, period, run_date, cutoff, check_date, status, schedule)
-      VALUES (${id}, ${p.period}, ${p.check_date}, ${p.due_date}, ${p.check_date}, 'Upcoming', ${scheduleLabel})`;
+  for (const cadence of cadences) {
+    const scheduleLabel = cadence === 'Semi-monthly' ? 'Semimonthly' : cadence;
+    for (const p of buildSchedule(cadence)) {
+      const id = `pp${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+      await sql`INSERT INTO payroll_periods (id, period, run_date, cutoff, check_date, status, schedule)
+        VALUES (${id}, ${p.period}, ${p.check_date}, ${p.due_date}, ${p.check_date}, 'Upcoming', ${scheduleLabel})`;
+    }
   }
-  const periods = await sql`SELECT * FROM payroll_periods ORDER BY run_date ASC`;
+  const periods = await sql`SELECT * FROM payroll_periods ORDER BY cutoff ASC`;
   return NextResponse.json({ periods });
 }
 

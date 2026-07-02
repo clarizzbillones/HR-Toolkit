@@ -1,9 +1,7 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
-
-const CADENCES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Contractor'];
 
 function money(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
@@ -74,6 +72,24 @@ function statusChip(s: string) {
   return 'bg-[#f1ece3] text-[#8b8478]';
 }
 
+// Payroll type badge colors for the unified deadline view
+const TYPE_STYLE: Record<string, string> = {
+  'Weekly': 'bg-[#e9f0f5] text-[#3f6b8a]',
+  'Semimonthly': 'bg-[#eef5f1] text-[#2f7d5b]',
+  'Monthly': 'bg-[#f0ece4] text-[#8a6d3b]',
+  '6th Contractor': 'bg-[#f3ecf7] text-[#6b4f8a]',
+  'Monthly Contractor': 'bg-[#fdeaea] text-[#b0412f]',
+};
+const TYPE_ORDER = ['Weekly', 'Semimonthly', 'Monthly', '6th Contractor', 'Monthly Contractor'];
+
+interface DeadlineRow {
+  key: string; kind: 'period' | 'contractor'; type: string;
+  coverage: string; deadline: string; payDate: string; status: string;
+  period?: Period; contractor?: Contractor;
+}
+
+function iso(d: Date) { return d.toLocaleDateString('en-CA'); }
+
 export default function PayrollClient({ initialPeriods, initialSettings }: { initialPeriods: Period[]; initialSettings: Settings }) {
   const { showToast } = useToast();
   const [tab, setTab] = useState<'schedule' | 'contractors'>('schedule');
@@ -89,21 +105,23 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
   const [summaryPeriod, setSummaryPeriod] = useState('');
+  const [filterType, setFilterType] = useState('All');
 
-  async function changeCadence(cadence: string) {
-    const res = await fetch('/api/payroll', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cadence }) });
-    const data = await res.json();
-    setSettings(data.settings);
-    showToast(`Pay schedule set to ${cadence}`);
-  }
+  // Load contractors upfront so the unified deadline view includes them
+  useEffect(() => {
+    fetch('/api/payroll/contractors').then(r => r.json()).then(d => { setContractors(d.rows ?? []); setContractorsLoaded(true); }).catch(() => {});
+  }, []);
 
-  async function generateSchedule() {
-    const cadence = settings?.cadence ?? 'Semi-monthly';
-    if (!confirm(`Generate upcoming ${cadence} payroll periods? This replaces existing upcoming (unprocessed) periods.`)) return;
-    const res = await fetch('/api/payroll/periods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate', cadence }) });
+  async function generateAll() {
+    if (!confirm('Generate all upcoming payroll deadlines (weekly, semi-monthly, monthly) and the contractor schedule? Replaces existing upcoming periods.')) return;
+    const res = await fetch('/api/payroll/periods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate' }) });
     const { periods: p } = await res.json();
     setPeriods(p);
-    showToast(`Generated ${p.length} upcoming periods`);
+    // Contractor schedule too
+    const cr = await fetch('/api/payroll/contractors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate' }) });
+    const cd = await cr.json();
+    if (cd.rows) setContractors(cd.rows);
+    showToast(`Generated ${p.length} payroll periods + contractor schedule`);
   }
 
   async function generateContractorSchedule() {
@@ -205,19 +223,38 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
     showToast('Deleted');
   }
 
+  // ---- Unified payroll deadlines (regular periods + contractor runs) ----
+  const deadlineRows: DeadlineRow[] = [
+    ...periods.map(p => ({
+      key: p.id, kind: 'period' as const,
+      type: p.schedule || (settings?.cadence === 'Semi-monthly' ? 'Semimonthly' : settings?.cadence) || 'Semimonthly',
+      coverage: p.period, deadline: (p.cutoff ?? '').slice(0, 10),
+      payDate: (p.check_date ?? p.run_date ?? '').slice(0, 10), status: p.status, period: p,
+    })),
+    ...contractors.map(c => {
+      const pay = new Date((c.pay_date ?? '').slice(0, 10) + 'T12:00:00');
+      const isSixth = pay.getDate() === 6;
+      const deadline = iso(new Date(pay.getFullYear(), pay.getMonth(), isSixth ? 2 : 1));
+      const coverage = c.notes?.replace(/ · run by.*/, '') || `${c.contractor}`;
+      return {
+        key: c.id, kind: 'contractor' as const,
+        type: isSixth ? '6th Contractor' : 'Monthly Contractor',
+        coverage, deadline, payDate: (c.pay_date ?? '').slice(0, 10), status: c.status, contractor: c,
+      };
+    }),
+  ];
+  const typeCounts = TYPE_ORDER.map(t => [t, deadlineRows.filter(r => r.type === t).length] as const).filter(([, n]) => n > 0);
+  const visibleRows = deadlineRows
+    .filter(r => filterType === 'All' || r.type === filterType)
+    .sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'));
+  const todayIso = iso(new Date());
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="flex items-center px-8 py-5 bg-white border-b border-border flex-shrink-0 gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Payroll</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm text-text-muted">Pay schedule:</span>
-            <select value={settings?.cadence ?? 'Semi-monthly'} onChange={e => changeCadence(e.target.value)}
-              className="text-sm font-semibold text-ink border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
-              {CADENCES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <span className="text-sm text-text-muted">· administered via ADP</span>
-          </div>
+          <p className="text-sm text-text-muted mt-0.5">Upcoming deadlines across all pay types · administered via ADP</p>
         </div>
         <div className="flex gap-1 bg-[#f1ece3] p-1 rounded-ctrl ml-6">
           {(['schedule', 'contractors'] as const).map(t => (
@@ -261,92 +298,114 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
             </div>
           </div>
 
-          {/* Pay periods table */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">UPCOMING PAYROLL</div>
-              <button onClick={generateSchedule}
-                className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
-                ↻ Generate {settings?.cadence ?? 'Semi-monthly'} schedule
+          {/* Type filter */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mr-1">Payroll Deadlines</span>
+            <button onClick={() => setFilterType('All')}
+              className={clsx('text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors', filterType === 'All' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:bg-canvas')}>
+              All <span className="opacity-60">{deadlineRows.length}</span>
+            </button>
+            {typeCounts.map(([t, n]) => (
+              <button key={t} onClick={() => setFilterType(t)}
+                className={clsx('text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors', filterType === t ? 'border-transparent ' + TYPE_STYLE[t] : 'bg-white text-text-secondary border-border-light hover:bg-canvas')}>
+                {t} <span className="opacity-60">{n}</span>
               </button>
-            </div>
-            <div className="bg-white border border-border rounded-card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#f1ece3] text-xs font-bold uppercase tracking-wider text-text-muted">
-                    <th className="text-left px-5 py-3">Payroll Type</th>
-                    <th className="text-left px-5 py-3">Pay Period</th>
-                    <th className="text-left px-5 py-3">Deadline to Run</th>
-                    <th className="text-left px-5 py-3">Check Date</th>
-                    <th className="text-left px-5 py-3">Status</th>
-                    <th className="text-left px-5 py-3">Report</th>
-                    <th className="px-5 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {periods.map(p => {
-                    const isEditing = editingId === p.id;
-                    const checkDate = p.check_date ? new Date(p.check_date + 'T12:00:00') : null;
-                    const schedule = p.schedule || (settings?.cadence === 'Semi-monthly' ? 'Semimonthly' : settings?.cadence) || 'Semimonthly';
-                    return (
-                      <tr key={p.id} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
-                        <td className="px-5 py-3.5">
-                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{schedule}</span>
-                        </td>
-                        <td className="px-5 py-3.5 font-medium text-text-primary">{p.period}</td>
-                        <td className="px-5 py-3.5">
-                          {isEditing ? (
-                            <input type="date" value={editDates.cutoff} onChange={e => setEditDates(d => ({ ...d, cutoff: e.target.value }))}
-                              className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
-                          ) : (
-                            <span className="text-[#b0412f] font-medium">{new Date(p.cutoff + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          {isEditing ? (
-                            <input type="date" value={editDates.check_date} onChange={e => setEditDates(d => ({ ...d, check_date: e.target.value }))}
-                              className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
-                          ) : (
-                            <span className="text-text-primary">{checkDate ? checkDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusChip(p.status)}`}>{p.status}</span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          {p.report_name ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-[#2f7d5b] font-medium">📄 {p.report_name}</span>
-                              {p.report_summary && (
-                                <button onClick={() => viewSummary(p)} className="text-xs font-semibold text-ink underline hover:text-ink-dark">View totals</button>
-                              )}
-                            </div>
-                          ) : (
-                            <>
-                              <input type="file" accept=".pdf,.csv,.xlsx" className="hidden"
-                                ref={el => { fileRefs.current[p.id] = el; }}
-                                onChange={e => { const f = e.target.files?.[0]; if (f) uploadReport(p.id, f); }} />
-                              <button onClick={() => fileRefs.current[p.id]?.click()}
-                                className="text-xs text-text-muted hover:text-ink font-medium underline">Upload</button>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          {isEditing ? (
+            ))}
+            <button onClick={generateAll}
+              className="ml-auto text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
+              ↻ Generate all deadlines
+            </button>
+          </div>
+
+          <div className="bg-white border border-border rounded-card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#f1ece3] text-xs font-bold uppercase tracking-wider text-text-muted">
+                  <th className="text-left px-5 py-3">Payroll Type</th>
+                  <th className="text-left px-5 py-3">Coverage / Period</th>
+                  <th className="text-left px-5 py-3">Deadline to Run</th>
+                  <th className="text-left px-5 py-3">Pay / Check Date</th>
+                  <th className="text-left px-5 py-3">Status</th>
+                  <th className="text-left px-5 py-3">Report</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map(r => {
+                  const p = r.period;
+                  const isEditing = p && editingId === p.id;
+                  const overdue = r.status !== 'Processed' && r.status !== 'Paid' && r.deadline && r.deadline < todayIso;
+                  const fmt = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                  return (
+                    <tr key={r.key} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_STYLE[r.type] ?? 'bg-[#f1ece3] text-text-muted'}`}>{r.type}</span>
+                      </td>
+                      <td className="px-5 py-3.5 font-medium text-text-primary">
+                        {r.coverage}
+                        {r.kind === 'contractor' && <span className="text-text-muted font-normal"> · {r.contractor?.contractor}</span>}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {isEditing ? (
+                          <input type="date" value={editDates.cutoff} onChange={e => setEditDates(d => ({ ...d, cutoff: e.target.value }))}
+                            className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
+                        ) : (
+                          <span className={overdue ? 'text-[#b0412f] font-bold' : 'text-[#b0412f] font-medium'}>{fmt(r.deadline)}{overdue ? ' ⚠' : ''}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {isEditing ? (
+                          <input type="date" value={editDates.check_date} onChange={e => setEditDates(d => ({ ...d, check_date: e.target.value }))}
+                            className="border border-border-light rounded px-2 py-1 text-sm focus:outline-none focus:border-ink" />
+                        ) : (
+                          <span className="text-text-primary">{fmt(r.payDate)}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusChip(r.status)}`}>{r.status}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {r.kind !== 'period' ? <span className="text-text-faint text-xs">—</span> : p!.report_name ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-[#2f7d5b] font-medium">📄 {p!.report_name}</span>
+                            {p!.report_summary && <button onClick={() => viewSummary(p!)} className="text-xs font-semibold text-ink underline hover:text-ink-dark">View totals</button>}
+                          </div>
+                        ) : (
+                          <>
+                            <input type="file" accept=".pdf,.csv,.xlsx" className="hidden"
+                              ref={el => { fileRefs.current[p!.id] = el; }}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadReport(p!.id, f); }} />
+                            <button onClick={() => fileRefs.current[p!.id]?.click()} className="text-xs text-text-muted hover:text-ink font-medium underline">Upload</button>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        {r.kind === 'period' ? (
+                          isEditing ? (
                             <div className="flex gap-2 justify-end">
-                              <button onClick={() => saveDates(p.id)} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Save</button>
+                              <button onClick={() => saveDates(p!.id)} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Save</button>
                               <button onClick={() => setEditingId(null)} className="text-xs text-text-muted hover:underline">Cancel</button>
                             </div>
                           ) : (
-                            <button onClick={() => startEdit(p)} className="text-xs text-text-muted hover:text-ink font-medium">Edit dates</button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            <button onClick={() => startEdit(p!)} className="text-xs text-text-muted hover:text-ink font-medium">Edit dates</button>
+                          )
+                        ) : (
+                          <div className="flex gap-2 justify-end">
+                            {r.status !== 'Paid' && <button onClick={() => markContractorPaid(r.contractor!.id)} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Mark paid</button>}
+                            <button onClick={() => deleteContractor(r.contractor!.id)} className="text-xs text-[#b0412f] hover:underline">Delete</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!visibleRows.length && (
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-text-muted">
+                    No deadlines yet — click “Generate all deadlines”.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
