@@ -446,6 +446,52 @@ function MonthlyTab({ data }: { data: any }) {
     showToast('CSV downloaded');
   }
 
+  // Styled Excel export — Excel opens HTML tables with inline styles, so this
+  // renders the same colored, side-by-side layout as the PDF.
+  function downloadXls() {
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const statusText = (s: string) => esc(s);
+    const th = (color: string, h: string) => `<td style="background:${color};color:#fff;font-weight:bold;font-size:9pt;border:1px solid #fff">${esc(h)}</td>`;
+    const monthTable = (color: string, badge: string, monthLbl: string, headers: string[], rows: string[][], total?: [string, string]) => `
+      <table border="0" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%">
+        <tr><td colspan="${headers.length}" style="background:${color};color:#fff;font-weight:bold;font-size:10pt">${badge} · ${esc(monthLbl)} (${rows.length})</td></tr>
+        <tr>${headers.map(h => th(color, h)).join('')}</tr>
+        ${rows.length ? rows.map((r, i) => `<tr>${r.map(c => `<td style="border:1px solid #ddd;background:${i % 2 ? '#f7f7f7' : '#fff'};font-size:9pt">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="border:1px solid #ddd;color:#999;text-align:center">None</td></tr>`}
+        ${total && rows.length ? `<tr><td style="background:${color}22;font-weight:bold;font-size:9pt">${esc(total[0])}</td><td colspan="${headers.length - 1}" style="background:${color}22;font-weight:bold;font-size:9pt">${esc(total[1])}</td></tr>` : ''}
+      </table>`;
+    const section = (title: string, color: string, headers: string[], mapper: (k: string) => string[][], totalFn?: (k: string) => [string, string]) => `
+      <tr><td colspan="2" style="font-size:13pt;font-weight:bold;color:${color};padding-top:14px">${esc(title)}</td></tr>
+      <tr>
+        <td valign="top" style="width:50%;padding-right:10px">${monthTable(color, 'CURRENT', thisLabel, headers, mapper(thisKey), totalFn?.(thisKey))}</td>
+        <td valign="top" style="width:50%;padding-left:10px">${monthTable(color, 'PREVIOUS', lastLabel, headers, mapper(lastKey), totalFn?.(lastKey))}</td>
+      </tr>`;
+    const cmpRows = metrics.map(m => { const t = (m as any).approx ? '~' : ''; const tv = m.money ? t + fmt$(m.thisV) : String(m.thisV); const lv = m.money ? t + fmt$(m.lastV) : String(m.lastV); return `<tr><td style="border:1px solid #ddd;font-weight:bold">${esc(m.label)}</td><td style="border:1px solid #ddd;color:${m.color};font-weight:bold">${tv}</td><td style="border:1px solid #ddd;color:#777">${lv}</td></tr>`; }).join('');
+    const peopleRow = (title: string, color: string, thisArr: any[], lastArr: any[], fmt: (e: any) => string) => `
+      <tr><td colspan="2" style="font-size:13pt;font-weight:bold;color:${color};padding-top:14px">${esc(title)}</td></tr>
+      <tr>
+        <td valign="top" style="width:50%;padding-right:10px"><table border="0" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%"><tr><td style="background:${color};color:#fff;font-weight:bold">CURRENT · ${esc(thisLabel)} (${thisArr.length})</td></tr>${thisArr.length ? thisArr.map((e: any) => `<tr><td style="border:1px solid #ddd;font-size:9pt">${fmt(e)}</td></tr>`).join('') : '<tr><td style="border:1px solid #ddd;color:#999">None</td></tr>'}</table></td>
+        <td valign="top" style="width:50%;padding-left:10px"><table border="0" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%"><tr><td style="background:${color};color:#fff;font-weight:bold">PREVIOUS · ${esc(lastLabel)} (${lastArr.length})</td></tr>${lastArr.length ? lastArr.map((e: any) => `<tr><td style="border:1px solid #ddd;font-size:9pt">${fmt(e)}</td></tr>`).join('') : '<tr><td style="border:1px solid #ddd;color:#999">None</td></tr>'}</table></td>
+      </tr>`;
+    const body = `
+      <table border="0" cellspacing="0" cellpadding="0" style="width:100%;font-family:Calibri,Arial,sans-serif">
+        <tr><td colspan="2" style="background:#1b2a3d;color:#fff;font-size:18pt;font-weight:bold;padding:12px">LITSON — HR Monthly Pack</td></tr>
+        <tr><td colspan="2" style="color:#8a6d3b;font-weight:bold;padding:4px 0 12px">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</td></tr>
+        <tr><td colspan="2" style="font-size:13pt;font-weight:bold;color:#1b2a3d">Comparison</td></tr>
+        <tr><td colspan="2"><table border="0" cellspacing="0" cellpadding="5" style="border-collapse:collapse"><tr><td style="background:#1b2a3d;color:#fff;font-weight:bold">Category</td><td style="background:#1b2a3d;color:#fff;font-weight:bold">${esc(thisLabel)}</td><td style="background:#1b2a3d;color:#fff;font-weight:bold">${esc(lastLabel)}</td></tr>${cmpRows}</table></td></tr>
+        ${section('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), esc(c.category), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
+        ${section('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
+        ${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
+        ${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
+        ${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
+        ${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(last.getMonth()), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
+        ${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(last.getMonth(), last.getFullYear()), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
+      </table>`;
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Monthly Pack</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${body}</body></html>`;
+    const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `monthly-pack-${thisKey}-vs-${lastKey}.xls`; a.click();
+    showToast('Excel downloaded');
+  }
+
   function printPack() {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Inline status pill matching the on-screen chip colors
@@ -640,7 +686,8 @@ function MonthlyTab({ data }: { data: any }) {
         <span className="text-sm text-text-muted">Comparing <span className="font-semibold text-text-primary">{thisLabel}</span> vs <span className="font-semibold text-text-primary">{lastLabel}</span> — side by side</span>
         <div className="ml-auto flex gap-2">
           <button onClick={printPack} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
-          <button onClick={downloadCsvPack} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Download XLS/CSV</button>
+          <button onClick={downloadXls} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Download Excel</button>
+          <button onClick={downloadCsvPack} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Raw CSV</button>
         </div>
       </div>
 
