@@ -21,9 +21,44 @@ export async function GET() {
   return NextResponse.json({ rows });
 }
 
+// Contractors paid on the 6th of each month
+const SIXTH_OF_MONTH = ['Amy Nelson', 'Kelley Hess'];
+
 export async function POST(req: Request) {
   await ensureTable();
-  const { contractor, amount, pay_date, method, notes } = await req.json();
+  const body = await req.json();
+
+  // Generate a recurring monthly contractor schedule for the next 6 months
+  if (body.action === 'generate') {
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    const iso = (d: Date) => d.toLocaleDateString('en-CA');
+    const existing = await sql`SELECT contractor, pay_date FROM contractor_payments`;
+    const seen = new Set((existing as any[]).map(r => `${r.contractor}|${r.pay_date}`));
+    let created = 0;
+    for (let i = 0; i < 6; i++) {
+      const y = today.getFullYear(), m = today.getMonth() + i;
+      // 6th-of-month contractors
+      for (const name of SIXTH_OF_MONTH) {
+        const d = iso(new Date(y, m, 6));
+        if (d < iso(today)) continue;
+        if (seen.has(`${name}|${d}`)) continue;
+        await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, status, notes)
+          VALUES (${cuid()}, ${name}, 'TBD', ${d}, 'ACH', 'Pending', 'Monthly — 6th')`;
+        created++;
+      }
+      // End-of-month general contractor run
+      const eom = iso(new Date(y, m + 1, 0));
+      if (eom >= iso(today) && !seen.has(`Contractors (general)|${eom}`)) {
+        await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, status, notes)
+          VALUES (${cuid()}, 'Contractors (general)', 'TBD', ${eom}, 'ACH', 'Pending', 'Monthly — end of month')`;
+        created++;
+      }
+    }
+    const rows = await sql`SELECT * FROM contractor_payments ORDER BY pay_date DESC`;
+    return NextResponse.json({ rows, created });
+  }
+
+  const { contractor, amount, pay_date, method, notes } = body;
   if (!contractor || !amount || !pay_date) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   const id = cuid();
   await sql`INSERT INTO contractor_payments (id, contractor, amount, pay_date, method, notes)

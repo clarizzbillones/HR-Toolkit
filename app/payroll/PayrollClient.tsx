@@ -97,6 +97,24 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
     showToast(`Pay schedule set to ${cadence}`);
   }
 
+  async function generateSchedule() {
+    const cadence = settings?.cadence ?? 'Semi-monthly';
+    if (!confirm(`Generate upcoming ${cadence} payroll periods? This replaces existing upcoming (unprocessed) periods.`)) return;
+    const res = await fetch('/api/payroll/periods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate', cadence }) });
+    const { periods: p } = await res.json();
+    setPeriods(p);
+    showToast(`Generated ${p.length} upcoming periods`);
+  }
+
+  async function generateContractorSchedule() {
+    if (!confirm('Generate the monthly contractor schedule? Amy Nelson & Kelley Hess on the 6th, general contractors at end of month, for the next 6 months.')) return;
+    const res = await fetch('/api/payroll/contractors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'generate' }) });
+    const { rows, created } = await res.json();
+    setContractors(rows);
+    setContractorsLoaded(true);
+    showToast(`Added ${created} scheduled payments`);
+  }
+
   const today = new Date();
   const nextPeriod = periods.find(p => p.status === 'Upcoming') ?? periods[0];
   const nextDate = nextPeriod?.run_date ? new Date(nextPeriod.run_date + 'T12:00:00') : null;
@@ -274,7 +292,13 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
 
           {/* Pay periods table */}
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-4">PAY PERIODS</div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">PAY PERIODS</div>
+              <button onClick={generateSchedule}
+                className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
+                ↻ Generate {settings?.cadence ?? 'Semi-monthly'} schedule
+              </button>
+            </div>
             <div className="bg-white border border-border rounded-card overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -357,11 +381,17 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
       {tab === 'contractors' && (
         <div className="flex-1 overflow-auto px-8 py-6">
           <div className="flex items-center justify-between mb-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">CONTRACTOR PAYMENTS</div>
-            <button onClick={() => setShowAddContractor(v => !v)}
-              className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors">
-              + Add Payment
-            </button>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted">CONTRACTOR PAYMENTS <span className="normal-case font-normal text-text-muted">· generally end of month · Amy Nelson &amp; Kelley Hess on the 6th</span></div>
+            <div className="flex gap-2">
+              <button onClick={generateContractorSchedule}
+                className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors">
+                ↻ Generate monthly schedule
+              </button>
+              <button onClick={() => setShowAddContractor(v => !v)}
+                className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors">
+                + Add Payment
+              </button>
+            </div>
           </div>
 
           {showAddContractor && (
