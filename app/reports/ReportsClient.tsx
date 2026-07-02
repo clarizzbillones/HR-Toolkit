@@ -300,7 +300,7 @@ function tripMonthKey(t: any): string {
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, employees, reviews, cashout } = data;
+  const { pto, trips, contractors, reviews, cashout, staff } = data;
 
   const now = new Date();
   const thisY = now.getFullYear(), thisM = now.getMonth();
@@ -322,7 +322,30 @@ function MonthlyTab({ data }: { data: any }) {
   const reviewOf = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashoutOf = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashTotalOf = (k: string) => cashoutOf(k).reduce((s: number, c: any) => s + num(c.amount), 0);
-  const birthdaysOf = (mi: number) => (employees ?? []).filter((e: any) => e.birthday && parseInt(e.birthday.split('-')[1]) === mi + 1);
+  const ptoDaysOf = (k: string) => ptoOf(k).reduce((s: number, e: any) => s + num(e.days), 0);
+  // Birthday month from staffing dob (MM/DD/YYYY, or YYYY-MM-DD fallback)
+  const dobMonth = (dob: string) => {
+    if (!dob) return 0;
+    const s = String(dob).trim();
+    if (/^\d{4}-\d{2}/.test(s)) return parseInt(s.slice(5, 7));
+    const parts = s.split('/');
+    return parts.length >= 1 ? parseInt(parts[0]) : 0;
+  };
+  const birthdaysOf = (mi: number) => (staff ?? []).filter((e: any) => dobMonth(e.dob) === mi + 1)
+    .sort((a: any, b: any) => (parseInt(String(a.dob).split('/')[1]) || 0) - (parseInt(String(b.dob).split('/')[1]) || 0));
+  // Parse a date (MM/DD/YYYY or YYYY-MM-DD) into { m, y }
+  const parseMY = (v: string) => {
+    const s = String(v ?? '').trim();
+    if (/^\d{4}-\d{2}/.test(s)) return { m: parseInt(s.slice(5, 7)), y: parseInt(s.slice(0, 4)) };
+    const p = s.split('/');
+    return p.length >= 3 ? { m: parseInt(p[0]), y: parseInt(p[2]) } : { m: 0, y: 0 };
+  };
+  // Work anniversaries in month `mi` of year `yr`, with years-of-service
+  const anniversariesOf = (mi: number, yr: number) => (staff ?? [])
+    .map((e: any) => ({ ...e, ...parseMY(e.start_date) }))
+    .filter((e: any) => e.m === mi + 1 && e.y && e.y < yr)
+    .map((e: any) => ({ ...e, years: yr - e.y }))
+    .sort((a: any, b: any) => (parseInt(String(a.start_date).split('/')[1]) || 0) - (parseInt(String(b.start_date).split('/')[1]) || 0));
 
   const metrics = [
     { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashTotalOf(thisKey), lastV: cashTotalOf(lastKey) },
@@ -331,6 +354,8 @@ function MonthlyTab({ data }: { data: any }) {
     { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripOf(thisKey).reduce((s: number, t: any) => s + num(t.cost), 0), lastV: tripOf(lastKey).reduce((s: number, t: any) => s + num(t.cost), 0) },
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorOf(thisKey).reduce((s: number, c: any) => s + num(c.amount), 0), lastV: contractorOf(lastKey).reduce((s: number, c: any) => s + num(c.amount), 0) },
     { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).filter(r => r.status !== 'Complete').length, lastV: reviewOf(lastKey).filter(r => r.status !== 'Complete').length },
+    { label: 'Birthdays', color: '#c9a24a', money: false, thisV: birthdaysOf(thisM).length, lastV: birthdaysOf(last.getMonth()).length },
+    { label: 'Anniversaries', color: '#8a6d3b', money: false, thisV: anniversariesOf(thisM, thisY).length, lastV: anniversariesOf(last.getMonth(), last.getFullYear()).length },
   ];
 
   function csvSection(lines: string[], title: string, headers: string[], rowsThis: any[][], rowsLast: any[][]) {
@@ -389,24 +414,41 @@ function MonthlyTab({ data }: { data: any }) {
   }
 
   // Renders one category as two side-by-side month tables
-  const Compare = ({ title, color, headers, renderRow, rowsThis, rowsLast, subtitle }: any) => {
-    const Col = ({ label, rows }: { label: string; rows: any[] }) => (
-      <div className="bg-white border rounded-card overflow-hidden flex-1 min-w-0" style={{ borderColor: `${color}33`, borderTop: `3px solid ${color}` }}>
-        <div className="px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between" style={{ color, background: `${color}10` }}>
-          <span>{label}</span><span className="opacity-70">{rows.length}</span>
+  // total?: (rows) => { label, value } renders a bold footer row summing the column
+  const Compare = ({ title, color, headers, renderRow, rowsThis, rowsLast, subtitle, total }: any) => {
+    const Col = ({ label, badge, rows, current }: { label: string; badge: string; rows: any[]; current: boolean }) => {
+      const t = total ? total(rows) : null;
+      return (
+        <div className="bg-white rounded-card overflow-hidden flex-1 min-w-0"
+          style={{ border: `2px solid ${color}${current ? '' : '55'}`, borderTop: `4px solid ${color}`, boxShadow: current ? `0 1px 3px ${color}22` : 'none' }}>
+          <div className="px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between" style={{ color, background: `${color}${current ? '18' : '0c'}` }}>
+            <span className="flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: current ? color : `${color}33`, color: current ? '#fff' : color }}>{badge}</span>
+              {label}
+            </span>
+            <span className="opacity-70">{rows.length}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead style={{ background: `${color}0a` }}><tr>
+                {headers.map((h: string) => <th key={h} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {rows.length ? rows.map(renderRow) : <tr><td colSpan={headers.length} className="px-3 py-6 text-center text-text-muted">None</td></tr>}
+              </tbody>
+              {t && rows.length ? (
+                <tfoot>
+                  <tr style={{ background: `${color}10`, borderTop: `2px solid ${color}55` }}>
+                    <td className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider" style={{ color }}>{t.label}</td>
+                    <td className="px-3 py-2 font-bold" style={{ color }} colSpan={headers.length - 1}>{t.value}</td>
+                  </tr>
+                </tfoot>
+              ) : null}
+            </table>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
-            <thead style={{ background: `${color}0a` }}><tr>
-              {headers.map((h: string) => <th key={h} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {rows.length ? rows.map(renderRow) : <tr><td colSpan={headers.length} className="px-3 py-6 text-center text-text-muted">None</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
+      );
+    };
     return (
       <section>
         <div className="flex items-center gap-2 mb-2">
@@ -414,9 +456,9 @@ function MonthlyTab({ data }: { data: any }) {
           <div className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</div>
           {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
         </div>
-        <div className="flex flex-col lg:flex-row gap-4">
-          <Col label={thisLabel} rows={rowsThis} />
-          <Col label={lastLabel} rows={rowsLast} />
+        <div className="flex flex-col lg:flex-row gap-5">
+          <Col label={thisLabel} badge="Current" rows={rowsThis} current />
+          <Col label={lastLabel} badge="Previous" rows={rowsLast} current={false} />
         </div>
       </section>
     );
@@ -473,18 +515,27 @@ function MonthlyTab({ data }: { data: any }) {
         </div>
       </div>
 
-      {/* Comparison band */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      {/* Comparison band — Current vs Previous split per metric */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {metrics.map(m => {
           const delta = m.thisV - m.lastV;
           const tilde = (m as any).approx ? '~' : '';
+          const fmtV = (v: number) => m.money ? tilde + fmt$(v) : String(v);
           return (
-            <div key={m.label} className="bg-white border rounded-card px-4 py-3" style={{ borderTop: `3px solid ${m.color}` }}>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{m.label}</div>
-              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? tilde + fmt$(m.thisV) : m.thisV}</div>
-              <div className="text-[11px] text-text-muted mt-0.5">
-                {lastLabel.split(' ')[0]}: {m.money ? tilde + fmt$(m.lastV) : m.lastV}
-                {delta !== 0 && <span className={delta > 0 ? 'text-[#b0412f] ml-1' : 'text-[#2f7d5b] ml-1'}>({delta > 0 ? '+' : ''}{m.money ? fmt$(delta) : delta})</span>}
+            <div key={m.label} className="bg-white border rounded-card overflow-hidden" style={{ borderTop: `3px solid ${m.color}` }}>
+              <div className="px-4 pt-2.5 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center justify-between">
+                <span>{m.label}</span>
+                {delta !== 0 && <span className={delta > 0 ? 'text-[#b0412f]' : 'text-[#2f7d5b]'}>{delta > 0 ? '▲' : '▼'} {m.money ? fmt$(Math.abs(delta)) : Math.abs(delta)}</span>}
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-border-light border-t border-border-light">
+                <div className="px-4 py-2" style={{ background: `${m.color}0c` }}>
+                  <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: m.color }}>{thisLabel.split(' ')[0]} · Current</div>
+                  <div className="font-spectral text-xl font-semibold mt-0.5" style={{ color: m.color }}>{fmtV(m.thisV)}</div>
+                </div>
+                <div className="px-4 py-2">
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-text-muted">{lastLabel.split(' ')[0]} · Previous</div>
+                  <div className="font-spectral text-xl font-semibold mt-0.5 text-text-muted">{fmtV(m.lastV)}</div>
+                </div>
               </div>
             </div>
           );
@@ -492,26 +543,59 @@ function MonthlyTab({ data }: { data: any }) {
       </div>
 
       <Compare title="Cash Out" color="#b0412f" subtitle={`${thisLabel}: ${fmt$(cashTotalOf(thisKey))} · ${lastLabel}: ${fmt$(cashTotalOf(lastKey))}`}
-        headers={['Date', 'Payee', 'Category', 'Amount', 'Note']} renderRow={cellRow.cash} rowsThis={cashoutOf(thisKey)} rowsLast={cashoutOf(lastKey)} />
-      <Compare title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']} renderRow={cellRow.pto} rowsThis={ptoOf(thisKey)} rowsLast={ptoOf(lastKey)} />
+        headers={['Date', 'Payee', 'Category', 'Amount', 'Note']} renderRow={cellRow.cash} rowsThis={cashoutOf(thisKey)} rowsLast={cashoutOf(lastKey)}
+        total={(rows: any[]) => ({ label: 'Total Cash Out', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
+      <Compare title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']} renderRow={cellRow.pto} rowsThis={ptoOf(thisKey)} rowsLast={ptoOf(lastKey)}
+        total={(rows: any[]) => ({ label: 'Total PTO Days', value: `${rows.reduce((s, e) => s + num(e.days), 0)} days · ${rows.length} PTOs` })} />
+      <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)}
+        total={(rows: any[]) => ({ label: 'Total Contractor $', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
       <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
-      <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)} />
       <Compare title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']} renderRow={cellRow.review} rowsThis={reviewOf(thisKey)} rowsLast={reviewOf(lastKey)} />
 
       <section>
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#c9a24a]" />
           <div className="text-sm font-bold uppercase tracking-wider text-[#8a6d3b]">Birthdays</div>
+          <span className="text-xs text-text-muted">{thisLabel}: {birthdaysOf(thisM).length} · {lastLabel}: {birthdaysOf(last.getMonth()).length}</span>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {[{ lbl: thisLabel, mi: thisM }, { lbl: lastLabel, mi: last.getMonth() }].map(({ lbl, mi }) => (
-            <div key={lbl}>
-              <div className="text-xs font-bold text-[#8a6d3b] mb-1.5">{lbl}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {[{ lbl: thisLabel, mi: thisM, cur: true }, { lbl: lastLabel, mi: last.getMonth(), cur: false }].map(({ lbl, mi, cur }) => (
+            <div key={lbl} className="rounded-card p-3" style={{ border: `2px solid #c9a24a${cur ? '' : '55'}`, background: cur ? '#c9a24a10' : '#fff' }}>
+              <div className="text-xs font-bold text-[#8a6d3b] mb-1.5 flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: cur ? '#c9a24a' : '#c9a24a33', color: cur ? '#fff' : '#8a6d3b' }}>{cur ? 'Current' : 'Previous'}</span>
+                {lbl}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {birthdaysOf(mi).length ? birthdaysOf(mi).map((e: any) => (
                   <div key={e.id} className="bg-white border border-border rounded-card px-3 py-2 text-sm">
-                    <div className="font-semibold text-text-primary">{e.name}</div>
-                    <div className="text-text-muted text-xs">{e.birthday}</div>
+                    <div className="font-semibold text-text-primary">🎂 {e.name}</div>
+                    <div className="text-text-muted text-xs">{e.dob}</div>
+                  </div>
+                )) : <p className="text-sm text-text-muted">None</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
+          <div className="text-sm font-bold uppercase tracking-wider text-[#6b5427]">Work Anniversaries</div>
+          <span className="text-xs text-text-muted">{thisLabel}: {anniversariesOf(thisM, thisY).length} · {lastLabel}: {anniversariesOf(last.getMonth(), last.getFullYear()).length}</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {[{ lbl: thisLabel, mi: thisM, yr: thisY, cur: true }, { lbl: lastLabel, mi: last.getMonth(), yr: last.getFullYear(), cur: false }].map(({ lbl, mi, yr, cur }) => (
+            <div key={lbl} className="rounded-card p-3" style={{ border: `2px solid #8a6d3b${cur ? '' : '55'}`, background: cur ? '#8a6d3b10' : '#fff' }}>
+              <div className="text-xs font-bold text-[#6b5427] mb-1.5 flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: cur ? '#8a6d3b' : '#8a6d3b33', color: cur ? '#fff' : '#6b5427' }}>{cur ? 'Current' : 'Previous'}</span>
+                {lbl}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {anniversariesOf(mi, yr).length ? anniversariesOf(mi, yr).map((e: any) => (
+                  <div key={e.id} className="bg-white border border-border rounded-card px-3 py-2 text-sm">
+                    <div className="font-semibold text-text-primary">🎉 {e.name}</div>
+                    <div className="text-text-muted text-xs">{e.years} {e.years === 1 ? 'year' : 'years'} · since {e.start_date}</div>
                   </div>
                 )) : <p className="text-sm text-text-muted">None</p>}
               </div>

@@ -34,7 +34,10 @@ export async function GET(req: Request) {
   const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
   const reviews = await sql`SELECT id, name, role, dept, hire_date, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
   const cashout = await sql`SELECT * FROM cashout_ledger ORDER BY date ASC`;
-  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews, cashout });
+  // Birthdays come from the Staffing directory (dob column, MM/DD/YYYY)
+  let staff: any[] = [];
+  try { staff = await sql`SELECT id, name, dob, start_date FROM staff_directory ORDER BY name ASC`; } catch { /* table may not exist yet */ }
+  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews, cashout, staff });
 }
 
 export async function POST(req: Request) {

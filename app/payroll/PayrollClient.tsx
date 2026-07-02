@@ -86,10 +86,8 @@ const TYPE_STYLE: Record<string, string> = {
   'Monthly (Owners)': 'bg-[#f0ece4] text-[#8a6d3b]',
   'Monthly': 'bg-[#f0ece4] text-[#8a6d3b]',
   '6th of Month': 'bg-[#eaf3ee] text-[#2f7d5b]',
-  '6th Contractor': 'bg-[#f3ecf7] text-[#6b4f8a]',
-  'Monthly Contractor': 'bg-[#fdeaea] text-[#b0412f]',
 };
-const TYPE_ORDER = ['Weekly', 'Semimonthly', 'Monthly (Owners)', 'Monthly', '6th of Month', '6th Contractor', 'Monthly Contractor'];
+const TYPE_ORDER = ['Weekly', 'Semimonthly', 'Monthly (Owners)', 'Monthly', '6th of Month'];
 
 interface DeadlineRow {
   key: string; kind: 'period' | 'contractor'; type: string;
@@ -242,7 +240,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
     showToast('Deleted');
   }
 
-  // ---- Unified payroll deadlines (regular periods + contractor runs) ----
+  // ---- Unified payroll deadlines (regular periods only; contractors live in their own tab) ----
   const deadlineRows: DeadlineRow[] = [
     ...periods.map(p => ({
       key: p.id, kind: 'period' as const,
@@ -250,17 +248,6 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
       coverage: p.period, deadline: (p.cutoff ?? '').slice(0, 10),
       payDate: (p.check_date ?? p.run_date ?? '').slice(0, 10), status: p.status, period: p,
     })),
-    ...contractors.map(c => {
-      const pay = new Date((c.pay_date ?? '').slice(0, 10) + 'T12:00:00');
-      const isSixth = pay.getDate() === 6;
-      const deadline = iso(new Date(pay.getFullYear(), pay.getMonth(), isSixth ? 2 : 1));
-      const coverage = c.notes?.replace(/ · run by.*/, '') || `${c.contractor}`;
-      return {
-        key: c.id, kind: 'contractor' as const,
-        type: isSixth ? '6th Contractor' : 'Monthly Contractor',
-        coverage, deadline, payDate: (c.pay_date ?? '').slice(0, 10), status: c.status, contractor: c,
-      };
-    }),
   ];
   const typeCounts = TYPE_ORDER.map(t => [t, deadlineRows.filter(r => r.type === t).length] as const).filter(([, n]) => n > 0);
   const visibleRows = deadlineRows
