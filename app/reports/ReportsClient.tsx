@@ -38,8 +38,40 @@ function TripsReportTab() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [q, setQ] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setTrips(d.trips ?? [])); }, []);
+
+  // Import trips from a CSV/XLSX export (e.g. the Trip Desk monthly report).
+  async function importFile(file: File) {
+    setImporting(true);
+    try {
+      const { read, utils } = await import('xlsx');
+      const wb = read(await file.arrayBuffer(), { type: 'array' });
+      const sheet = wb.SheetNames.find(n => /trip|travel|report/i.test(n)) ?? wb.SheetNames[0];
+      const json = utils.sheet_to_json<Record<string, any>>(wb.Sheets[sheet], { defval: '' });
+      const get = (r: Record<string, any>, keys: string[]) => {
+        for (const k of Object.keys(r)) if (keys.some(w => k.toLowerCase().replace(/[^a-z]/g, '').includes(w))) { const v = r[k]; if (v != null && v !== '') return v; }
+        return '';
+      };
+      const rows = json.map(r => {
+        const who = get(r, ['traveler', 'employee', 'name', 'who']) || '—';
+        const dest = get(r, ['destination', 'location', 'trip', 'title']);
+        const start = get(r, ['startdate', 'departdate', 'traveldate', 'date', 'depart']);
+        const end = get(r, ['enddate', 'returndate', 'return']);
+        const dateStr = start && end ? `${start} → ${end}` : (start || '');
+        const detail = [dest, dateStr].filter(Boolean).join(' · ') || dest || dateStr;
+        return { who, detail, cost: get(r, ['totalcost', 'cost', 'amount', 'total', 'spend']), matter: get(r, ['client', 'matter', 'purpose', 'reason']) || null, status: get(r, ['status', 'state']) || 'Approved' };
+      }).filter(r => (r.who && r.who !== '—') || r.detail);
+      if (!rows.length) { showToast('No trip rows found in file'); setImporting(false); return; }
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) });
+      const d = await res.json();
+      setTrips(d.trips ?? []);
+      showToast(`Imported ${d.inserted ?? rows.length} trips`);
+    } catch { showToast('Failed to read file'); }
+    setImporting(false);
+  }
 
   const filtered = trips.filter((t: any) => {
     const d = (t.created_at ?? '').slice(0, 10);
@@ -80,6 +112,12 @@ function TripsReportTab() {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search traveler, client, status…"
             className="border border-border-light rounded-ctrl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-ink w-64" />
         </div>
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+          onChange={e => { if (e.target.files?.[0]) { importFile(e.target.files[0]); e.target.value = ''; } }} />
+        <button onClick={() => fileRef.current?.click()} disabled={importing}
+          className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">
+          {importing ? 'Importing…' : '↑ Import trips (CSV/XLSX)'}
+        </button>
         <button onClick={exportCsv} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download trip pack (CSV)</button>
       </div>
 
