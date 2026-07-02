@@ -460,6 +460,8 @@ function MonthlyTab({ data }: { data: any }) {
         ${total && rows.length ? `<tr><td style="background:${color}22;font-weight:bold;font-size:9pt">${esc(total[0])}</td><td colspan="${headers.length - 1}" style="background:${color}22;font-weight:bold;font-size:9pt">${esc(total[1])}</td></tr>` : ''}
       </table>`;
     const spacer = '<td style="width:28px">&nbsp;</td>';
+    // Blank rows between stacked sections (Excel needs real rows, not padding)
+    const gap = '<tr><td colspan="3" style="height:10px;line-height:10px">&nbsp;</td></tr><tr><td colspan="3" style="height:10px;line-height:10px">&nbsp;</td></tr>';
     const section = (title: string, color: string, headers: string[], mapper: (k: string) => string[][], totalFn?: (k: string) => [string, string]) => `
       <tr><td colspan="3" style="font-size:13pt;font-weight:bold;color:${color};padding-top:14px">${esc(title)}</td></tr>
       <tr>
@@ -481,13 +483,13 @@ function MonthlyTab({ data }: { data: any }) {
         <tr><td colspan="3" style="color:#8a6d3b;font-weight:bold;padding:4px 0 12px">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</td></tr>
         <tr><td colspan="3" style="font-size:13pt;font-weight:bold;color:#1b2a3d">Comparison</td></tr>
         <tr><td colspan="3"><table border="0" cellspacing="0" cellpadding="5" style="border-collapse:collapse"><tr><td style="background:#1b2a3d;color:#fff;font-weight:bold">Category</td><td style="background:#1b2a3d;color:#fff;font-weight:bold">${esc(thisLabel)}</td><td style="background:#1b2a3d;color:#fff;font-weight:bold">${esc(lastLabel)}</td></tr>${cmpRows}</table></td></tr>
-        ${section('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), esc(c.category), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
-        ${section('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
-        ${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
-        ${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
-        ${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
-        ${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(last.getMonth()), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
-        ${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(last.getMonth(), last.getFullYear()), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
+        ${gap}${section('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), esc(c.category), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
+        ${gap}${section('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
+        ${gap}${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
+        ${gap}${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
+        ${gap}${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
+        ${gap}${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(last.getMonth()), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
+        ${gap}${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(last.getMonth(), last.getFullYear()), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
       </table>`;
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Monthly Pack</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${body}</body></html>`;
     const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
