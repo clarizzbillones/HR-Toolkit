@@ -5,6 +5,12 @@ import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 
 function money(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+// Format a stored amount (text like "1,706.66" or "$200") as USD
+function usd(v: any) {
+  if (v == null || v === '' || v === 'TBD') return v || '—';
+  const n = Number(String(v).replace(/[$,\s]/g, ''));
+  return isFinite(n) ? money(n) : String(v);
+}
 
 interface PayrollSummary {
   rows: { name: string; gross: number; taxes: number; benefits: number; guideline: number; reimbursements: number; net: number }[];
@@ -503,7 +509,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                 {contractors.map(c => (
                   <tr key={c.id} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
                     <td className="px-5 py-3.5 font-semibold text-text-primary">{c.contractor}</td>
-                    <td className="px-5 py-3.5 text-text-primary">{c.amount}</td>
+                    <td className="px-5 py-3.5 text-text-primary font-medium">{usd(c.amount)}</td>
                     <td className="px-5 py-3.5 text-text-muted">{new Date(c.pay_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                     <td className="px-5 py-3.5 text-text-muted">{c.method}</td>
                     <td className="px-5 py-3.5">
