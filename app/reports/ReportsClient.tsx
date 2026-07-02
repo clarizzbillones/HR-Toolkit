@@ -325,10 +325,12 @@ function MonthlyTab({ data }: { data: any }) {
   const cDate = (c: any) => (c.pay_date ?? c.due_date ?? '');
   const cNote = (c: any) => c.notes ?? c.note ?? '';
 
-  // Per-month metric calculators
-  const ptoDays = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k).reduce((s: number, e: any) => s + num(e.days), 0);
-  const tripCount = (k: string) => (trips ?? []).filter((t: any) => tripMonthKey(t) === k).length;
-  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripMonthKey(t) === k).reduce((s: number, t: any) => s + num(t.cost), 0);
+  // A trip counts for a month if its travel month OR logged month matches
+  const tripInMonth = (t: any, k: string) => tripMonthKey(t) === k || ymOf(t.created_at) === k;
+  // Per-month metric calculators (PTO excludes < 1 day)
+  const ptoDays = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k && num(e.days) >= 1).reduce((s: number, e: any) => s + num(e.days), 0);
+  const tripCount = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).length;
+  const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).reduce((s: number, t: any) => s + num(t.cost), 0);
   const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
   const reviewsDue = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k && r.status !== 'Complete').length;
   const cashOut = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
@@ -337,14 +339,14 @@ function MonthlyTab({ data }: { data: any }) {
     { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashOut(thisKey), lastV: cashOut(lastKey) },
     { label: 'PTO Days', color: '#2f7d5b', money: false, thisV: ptoDays(thisKey), lastV: ptoDays(lastKey) },
     { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripCount(thisKey), lastV: tripCount(lastKey) },
-    { label: 'Travel Spend', color: '#3f6b8a', money: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
+    { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorSpend(thisKey), lastV: contractorSpend(lastKey) },
     { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewsDue(thisKey), lastV: reviewsDue(lastKey) },
   ];
 
   // Selected-month rows
-  const ptoRows = (pto ?? []).filter((e: any) => ymOf(e.start_date) === selKey);
-  const tripRows = (trips ?? []).filter((t: any) => tripMonthKey(t) === selKey);
+  const ptoRows = (pto ?? []).filter((e: any) => ymOf(e.start_date) === selKey && num(e.days) >= 1);
+  const tripRows = (trips ?? []).filter((t: any) => tripInMonth(t, selKey));
   const contractorRows = (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === selKey);
   const reviewRowsSel = reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === selKey).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashoutRows = (cashout ?? []).filter((c: any) => ymOf(c.date) === selKey).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
@@ -356,7 +358,7 @@ function MonthlyTab({ data }: { data: any }) {
     lines.push(`LITSON HR — Monthly Pack — ${selLabel}`);
     lines.push('');
     lines.push('COMPARISON,This Month,Last Month');
-    metrics.forEach(m => lines.push(`${m.label},${m.money ? fmt$(m.thisV) : m.thisV},${m.money ? fmt$(m.lastV) : m.lastV}`));
+    metrics.forEach(m => { const t = (m as any).approx ? '~' : ''; lines.push(`${m.label},${m.money ? t + fmt$(m.thisV) : m.thisV},${m.money ? t + fmt$(m.lastV) : m.lastV}`); });
     lines.push('');
     lines.push(`CASH OUT — Total ${fmt$(cashoutTotal)}`); lines.push('Date,Payee,Category,Amount,Note');
     cashoutRows.forEach((c: any) => lines.push([c.date, c.payee, c.category, num(c.amount), c.note].map(x => `"${x ?? ''}"`).join(',')));
@@ -447,12 +449,13 @@ function MonthlyTab({ data }: { data: any }) {
           const delta = m.thisV - m.lastV;
           const cur = mode === 'this' ? m.thisV : m.lastV;
           const other = mode === 'this' ? m.lastV : m.thisV;
+          const tilde = (m as any).approx ? '~' : '';
           return (
             <div key={m.label} className="bg-white border rounded-card px-4 py-3" style={{ borderTop: `3px solid ${m.color}` }}>
               <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{m.label}</div>
-              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? fmt$(cur) : cur}</div>
+              <div className="font-spectral text-2xl font-semibold mt-1" style={{ color: m.color }}>{m.money ? tilde + fmt$(cur) : cur}</div>
               <div className="text-[11px] text-text-muted mt-0.5">
-                {mode === 'this' ? 'Last mo' : 'This mo'}: {m.money ? fmt$(other) : other}
+                {mode === 'this' ? 'Last mo' : 'This mo'}: {m.money ? tilde + fmt$(other) : other}
                 {delta !== 0 && <span className={mode === 'this' ? (delta > 0 ? 'text-[#b0412f] ml-1' : 'text-[#2f7d5b] ml-1') : 'ml-1'}>
                   {mode === 'this' ? ` (${delta > 0 ? '+' : ''}${m.money ? fmt$(delta) : delta})` : ''}
                 </span>}
