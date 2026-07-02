@@ -232,14 +232,18 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     return (
       <table className="w-full text-sm whitespace-nowrap">
         <thead style={{ background: active.soft }}><tr>
-          {cols.map(c => <th key={c.key} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: active.text }}>{c.label}</th>)}
+          {cols.map(c => <th key={c.key}
+            className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider ${c.key === 'name' ? 'sticky left-0 z-20' : ''}`}
+            style={{ color: active.text, ...(c.key === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>{c.label}</th>)}
           <th className="px-4 py-3" />
         </tr></thead>
         <tbody>
           {data.map(r => (
-            <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas">
+            <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas group">
               {cols.map(c => (
-                <td key={c.key} className={`px-4 py-3 ${c.key === 'name' ? 'font-medium text-text-primary' : 'text-text-muted'}`}>
+                <td key={c.key}
+                  className={`px-4 py-3 ${c.key === 'name' ? 'font-medium text-text-primary sticky left-0 z-10 bg-white group-hover:bg-canvas' : 'text-text-muted'}`}
+                  style={c.key === 'name' ? { boxShadow: '2px 0 0 #f1ece3' } : undefined}>
                   {c.key === 'email' && r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>
                     : c.key === 'dob' ? (toMMDDYYYY(r.dob) || '—')
                     : (r[c.key] ?? '—') || '—'}
