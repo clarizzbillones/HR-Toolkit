@@ -73,6 +73,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+const PERIOD_STATUSES = ['Upcoming', 'Processing', 'Processed'];
 function statusChip(s: string) {
   if (s === 'Processed' || s === 'Paid') return 'bg-[#eef5f1] text-[#2f7d5b]';
   if (s === 'Upcoming' || s === 'Pending') return 'bg-[#f7efe1] text-[#b07d2a]';
@@ -173,6 +174,15 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   function startEdit(p: Period) {
     setEditingId(p.id);
     setEditDates({ cutoff: p.cutoff?.slice(0, 10) ?? '', check_date: p.check_date?.slice(0, 10) ?? '', period: p.period ?? '' });
+  }
+
+  async function updateStatus(id: string, status: string) {
+    setPeriods(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    await fetch('/api/payroll/periods', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+    showToast(`Marked ${status}`);
   }
 
   async function saveDates(id: string) {
@@ -376,7 +386,14 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                         )}
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusChip(r.status)}`}>{r.status}</span>
+                        {r.kind === 'period' ? (
+                          <select value={r.status} onChange={e => updateStatus(p!.id, e.target.value)}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-ink ${statusChip(r.status)}`}>
+                            {PERIOD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusChip(r.status)}`}>{r.status}</span>
+                        )}
                       </td>
                       <td className="px-5 py-3.5">
                         {r.kind !== 'period' ? <span className="text-text-faint text-xs">—</span> : p!.report_name ? (
