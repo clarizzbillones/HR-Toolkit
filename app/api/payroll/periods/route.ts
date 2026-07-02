@@ -8,6 +8,7 @@ async function ensureColumns() {
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS check_date text`;
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_name text`;
     await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_data text`;
+    await sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS report_summary text`;
   } catch { /* ignore */ }
 }
 
@@ -28,10 +29,11 @@ export async function PUT(req: Request) {
   const id = formData.get('id') as string;
   const file = formData.get('file') as File | null;
   if (!id || !file) return NextResponse.json({ error: 'Missing id or file' }, { status: 400 });
+  const summary = formData.get('summary') as string | null;
   const buf = await file.arrayBuffer();
   const b64 = Buffer.from(buf).toString('base64');
   const dataUrl = `data:${file.type};base64,${b64}`;
-  await sql`UPDATE payroll_periods SET report_name = ${file.name}, report_data = ${dataUrl} WHERE id = ${id}`;
-  const [period] = await sql`SELECT id, report_name FROM payroll_periods WHERE id = ${id}`;
+  await sql`UPDATE payroll_periods SET report_name = ${file.name}, report_data = ${dataUrl}, report_summary = ${summary ?? null} WHERE id = ${id}`;
+  const [period] = await sql`SELECT id, report_name, report_summary FROM payroll_periods WHERE id = ${id}`;
   return NextResponse.json({ period });
 }

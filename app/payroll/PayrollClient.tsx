@@ -3,9 +3,56 @@ import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 
+const CADENCES = ['Weekly', 'Bi-weekly', 'Semi-monthly', 'Monthly', 'Contractor'];
+
+function money(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+
+interface PayrollSummary {
+  rows: { name: string; gross: number; taxes: number; benefits: number; guideline: number; reimbursements: number; net: number }[];
+  totals: { gross: number; taxes: number; benefits: number; guideline: number; reimbursements: number; net: number };
+}
+
+// Parse an uploaded payroll register into per-employee + total figures.
+async function parsePayroll(file: File): Promise<PayrollSummary | null> {
+  const { read, utils } = await import('xlsx');
+  const buf = await file.arrayBuffer();
+  const wb = read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const json = utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+  if (!json.length) return null;
+  const headers = Object.keys(json[0]);
+  const num = (v: any) => { const n = Number(String(v).replace(/[$,\s]/g, '')); return isFinite(n) ? n : 0; };
+  const cols = (re: RegExp) => headers.filter(h => re.test(h));
+  const nameCol = headers.find(h => /name|employee/i.test(h)) ?? headers[0];
+  const netCols = cols(/net\s*pay|net\b|take.?home/i);
+  const grossCols = cols(/gross|total\s*(pay|earn)|earnings/i);
+  const taxCols = cols(/tax|withhold|fica|medicare|social|fed\b|federal|state\b|suta|futa/i);
+  const benefitCols = cols(/benefit|health|dental|vision|insurance|hsa|fsa/i);
+  const guidelineCols = cols(/guideline|401|retire|roth|pension/i);
+  const reimbCols = cols(/reimburse|expense/i);
+  const sumCols = (r: Record<string, any>, cs: string[]) => cs.reduce((s, c) => s + num(r[c]), 0);
+
+  const rows = json
+    .filter(r => String(r[nameCol]).trim() && !/total/i.test(String(r[nameCol])))
+    .map(r => ({
+      name: String(r[nameCol]).trim(),
+      gross: sumCols(r, grossCols),
+      taxes: sumCols(r, taxCols),
+      benefits: sumCols(r, benefitCols),
+      guideline: sumCols(r, guidelineCols),
+      reimbursements: sumCols(r, reimbCols),
+      net: sumCols(r, netCols),
+    }));
+  const totals = rows.reduce((t, r) => ({
+    gross: t.gross + r.gross, taxes: t.taxes + r.taxes, benefits: t.benefits + r.benefits,
+    guideline: t.guideline + r.guideline, reimbursements: t.reimbursements + r.reimbursements, net: t.net + r.net,
+  }), { gross: 0, taxes: 0, benefits: 0, guideline: 0, reimbursements: 0, net: 0 });
+  return { rows, totals };
+}
+
 interface Period {
   id: string; period: string; run_date: string; cutoff: string;
-  check_date?: string; status: string; report_name?: string;
+  check_date?: string; status: string; report_name?: string; report_summary?: string;
 }
 interface Settings { id: string; cadence: string; reminder_toggles: string; }
 interface Contractor {
@@ -40,6 +87,15 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const [showAddContractor, setShowAddContractor] = useState(false);
   const [newC, setNewC] = useState({ contractor: '', amount: '', pay_date: '', method: 'ACH', notes: '' });
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [summary, setSummary] = useState<PayrollSummary | null>(null);
+  const [summaryPeriod, setSummaryPeriod] = useState('');
+
+  async function changeCadence(cadence: string) {
+    const res = await fetch('/api/payroll', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cadence }) });
+    const data = await res.json();
+    setSettings(data.settings);
+    showToast(`Pay schedule set to ${cadence}`);
+  }
 
   const today = new Date();
   const nextPeriod = periods.find(p => p.status === 'Upcoming') ?? periods[0];
@@ -87,13 +143,26 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   }
 
   async function uploadReport(id: string, file: File) {
+    // Parse the register client-side for totals when it's a spreadsheet
+    let parsed: PayrollSummary | null = null;
+    if (/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      try { parsed = await parsePayroll(file); } catch { parsed = null; }
+    }
     const fd = new FormData();
     fd.append('id', id);
     fd.append('file', file);
+    if (parsed) fd.append('summary', JSON.stringify(parsed));
     const res = await fetch('/api/payroll/periods', { method: 'PUT', body: fd });
     const { period } = await res.json();
-    setPeriods(prev => prev.map(p => p.id === id ? { ...p, report_name: period.report_name } : p));
+    setPeriods(prev => prev.map(p => p.id === id ? { ...p, report_name: period.report_name, report_summary: parsed ? JSON.stringify(parsed) : p.report_summary } : p));
     showToast(`Uploaded: ${file.name}`);
+    if (parsed) { setSummary(parsed); setSummaryPeriod(periods.find(p => p.id === id)?.period ?? ''); }
+    else if (!parsed && /\.(xlsx|xls|csv)$/i.test(file.name)) showToast('Uploaded, but could not read payroll totals from this file');
+  }
+
+  function viewSummary(p: Period) {
+    if (!p.report_summary) return;
+    try { setSummary(JSON.parse(p.report_summary)); setSummaryPeriod(p.period); } catch { showToast('Could not read stored totals'); }
   }
 
   async function addContractor() {
@@ -123,7 +192,14 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
       <header className="flex items-center px-8 py-5 bg-white border-b border-border flex-shrink-0 gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Payroll</h1>
-          <p className="text-sm text-text-muted mt-0.5">{settings?.cadence ?? 'Semi-monthly'} · administered via ADP</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-text-muted">Pay schedule:</span>
+            <select value={settings?.cadence ?? 'Semi-monthly'} onChange={e => changeCadence(e.target.value)}
+              className="text-sm font-semibold text-ink border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
+              {CADENCES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span className="text-sm text-text-muted">· administered via ADP</span>
+          </div>
         </div>
         <div className="flex gap-1 bg-[#f1ece3] p-1 rounded-ctrl ml-6">
           {(['schedule', 'contractors'] as const).map(t => (
@@ -242,7 +318,12 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                         </td>
                         <td className="px-5 py-3.5">
                           {p.report_name ? (
-                            <span className="text-xs text-[#2f7d5b] font-medium">📄 {p.report_name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-[#2f7d5b] font-medium">📄 {p.report_name}</span>
+                              {p.report_summary && (
+                                <button onClick={() => viewSummary(p)} className="text-xs font-semibold text-ink underline hover:text-ink-dark">View totals</button>
+                              )}
+                            </div>
                           ) : (
                             <>
                               <input type="file" accept=".pdf,.csv,.xlsx" className="hidden"
@@ -363,6 +444,51 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Payroll totals modal */}
+      {summary && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={() => setSummary(null)}>
+          <div className="bg-white rounded-card w-full max-w-3xl max-h-[88vh] flex flex-col shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Payroll Totals{summaryPeriod ? ` · ${summaryPeriod}` : ''}</h2>
+                <p className="text-xs text-text-muted">{summary.rows.length} employees parsed from the uploaded register</p>
+              </div>
+              <button onClick={() => setSummary(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+
+            <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-6 gap-2 border-b border-border">
+              {([['Gross','gross'],['Taxes','taxes'],['Benefits','benefits'],['Guideline/401k','guideline'],['Reimb.','reimbursements'],['Net Pay','net']] as const).map(([label, key]) => (
+                <div key={key} className="bg-canvas border border-border rounded-ctrl px-3 py-2">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted">{label}</div>
+                  <div className={`text-sm font-semibold mt-0.5 ${key === 'net' ? 'text-[#2f7d5b]' : 'text-text-primary'}`}>{money(summary.totals[key])}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="bg-[#f1ece3] sticky top-0"><tr>
+                  {['Employee','Gross','Taxes','Benefits','Guideline/401k','Reimb.','Net Pay'].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {summary.rows.map((r, i) => (
+                    <tr key={i} className="border-t border-[#f1ece3]">
+                      <td className="px-4 py-2 font-medium text-text-primary">{r.name}</td>
+                      <td className="px-4 py-2 text-text-muted">{money(r.gross)}</td>
+                      <td className="px-4 py-2 text-text-muted">{money(r.taxes)}</td>
+                      <td className="px-4 py-2 text-text-muted">{money(r.benefits)}</td>
+                      <td className="px-4 py-2 text-text-muted">{money(r.guideline)}</td>
+                      <td className="px-4 py-2 text-text-muted">{money(r.reimbursements)}</td>
+                      <td className="px-4 py-2 font-semibold text-[#2f7d5b]">{money(r.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
