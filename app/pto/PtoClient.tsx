@@ -770,7 +770,11 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                     <td className="px-4 py-3 text-text-muted text-xs max-w-[180px] truncate">{r.calTitle ?? '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       {r.source === 'calendar' ? (
-                        <span className="text-xs text-text-faint">Outlook</span>
+                        <EditGate>
+                          <span className="text-[10px] text-text-faint mr-1.5">Outlook</span>
+                          <button onClick={() => deletePto(r.key)} title="Remove from report only (kept in Outlook)"
+                            className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                        </EditGate>
                       ) : (
                         <EditGate>
                           <button onClick={() => openEdit(r.key)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
