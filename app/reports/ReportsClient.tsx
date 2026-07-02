@@ -2,6 +2,18 @@
 import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { mergePto } from '@/lib/pto';
+
+// Fetch DB PTO + calendar events + hidden ids, return the SAME merged rows the
+// PTO dashboard shows, mapped to the report row shape (single source of truth).
+async function fetchMergedPto(): Promise<any[]> {
+  const [monthly, conn] = await Promise.all([
+    fetch('/api/reports?tab=monthly').then(r => r.json()).catch(() => ({})),
+    fetch('/api/connections').then(r => r.json()).catch(() => ({})),
+  ]);
+  const merged = mergePto(monthly.pto ?? [], conn.calendar_events ?? [], conn.hidden_cal_ids ?? []);
+  return merged.map(m => ({ id: m.key, employee: m.employee, type: m.type, start_date: m.start, end_date: m.end, days: m.days, status: m.status, source: m.source }));
+}
 
 type Tab = 'monthly' | 'trips' | 'pto' | 'reviews' | 'insurance' | 'reimbursements' | 'cashout';
 
@@ -108,7 +120,7 @@ function PtoReportTab() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
-  useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setPto(d.pto ?? [])); }, []);
+  useEffect(() => { fetchMergedPto().then(setPto); }, []);
 
   const filtered = pto.filter((e: any) => {
     const d = (e.start_date ?? '').slice(0, 10);
@@ -773,7 +785,12 @@ export default function ReportsClient() {
   const [monthlyData, setMonthlyData] = useState<any>(null);
 
   useEffect(() => {
-    if (tab === 'monthly') fetch('/api/reports?tab=monthly').then(r => r.json()).then(setMonthlyData);
+    if (tab === 'monthly') {
+      Promise.all([
+        fetch('/api/reports?tab=monthly').then(r => r.json()),
+        fetchMergedPto(),
+      ]).then(([d, mergedPto]) => setMonthlyData({ ...d, pto: mergedPto }));
+    }
   }, [tab]);
 
   return (
