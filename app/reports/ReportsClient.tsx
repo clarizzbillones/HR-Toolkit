@@ -467,15 +467,15 @@ function MonthlyTab({ data }: { data: any }) {
       const tv = m.money ? t + fmt$(m.thisV) : String(m.thisV);
       const lv = m.money ? t + fmt$(m.lastV) : String(m.lastV);
       return `<div style="border:1px solid #e6ddcd;border-top:3px solid ${m.color};border-radius:8px;overflow:hidden">
-        <div style="padding:6px 10px 4px;font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a7f6d">${esc(m.label)}</div>
+        <div style="padding:6px 10px 4px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#4a4235">${esc(m.label)}</div>
         <div style="display:flex;border-top:1px solid #eee">
-          <div style="flex:1;padding:6px 10px;background:${m.color}0c">
-            <div style="font-size:7.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${m.color}">${esc(thisLabel.split(' ')[0])} · Current</div>
-            <div style="font-family:Georgia,serif;font-size:16px;font-weight:600;color:${m.color}">${tv}</div>
+          <div style="flex:1;min-width:0;padding:6px 8px;background:${m.color}12">
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${m.color}">${esc(thisLabel.split(' ')[0])} · Current</div>
+            <div style="font-size:14px;font-weight:700;color:${m.color};word-break:break-all;line-height:1.2">${tv}</div>
           </div>
-          <div style="flex:1;padding:6px 10px;border-left:1px solid #eee">
-            <div style="font-size:7.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#999">${esc(lastLabel.split(' ')[0])} · Previous</div>
-            <div style="font-family:Georgia,serif;font-size:16px;font-weight:600;color:#999">${lv}</div>
+          <div style="flex:1;min-width:0;padding:6px 8px;border-left:1px solid #eee">
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6355">${esc(lastLabel.split(' ')[0])} · Previous</div>
+            <div style="font-size:14px;font-weight:700;color:#6b6355;word-break:break-all;line-height:1.2">${lv}</div>
           </div>
         </div></div>`;
     }).join('');
@@ -493,7 +493,7 @@ function MonthlyTab({ data }: { data: any }) {
         </table>
       </div>`;
     const pair = (title: string, color: string, headers: string[], mapper: (k: string) => string[][], totalFn?: (k: string) => [string, string]) => `
-      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-family:Georgia,serif;font-size:14px;color:${color};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${color};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
       <div style="display:flex;gap:18px;align-items:flex-start">
         ${col(color, 'Current', true, thisLabel, headers, mapper(thisKey), totalFn?.(thisKey))}
         ${col(color, 'Previous', false, lastLabel, headers, mapper(lastKey), totalFn?.(lastKey))}
@@ -501,7 +501,7 @@ function MonthlyTab({ data }: { data: any }) {
 
     // Birthdays / Anniversaries as chip grids (mirrors UI cards)
     const peopleBlock = (title: string, color: string, fg: string, cards: (mi: number, yr: number) => string) => `
-      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-family:Georgia,serif;font-size:14px;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
       <div style="display:flex;gap:18px">
         <div style="flex:1;border:2px solid ${color};border-radius:8px;padding:10px;background:${color}10"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color};color:#fff">Current</span> ${esc(thisLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(thisM, thisY) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
         <div style="flex:1;border:2px solid ${color}55;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color}33;color:${fg}">Previous</span> ${esc(lastLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(last.getMonth(), last.getFullYear()) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
@@ -509,14 +509,16 @@ function MonthlyTab({ data }: { data: any }) {
     const bdayCards = (mi: number) => birthdaysOf(mi).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎂 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${esc(e.dob)}</div></div>`).join('');
     const annCards = (mi: number, yr: number) => anniversariesOf(mi, yr).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎉 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${e.years} ${e.years === 1 ? 'year' : 'years'} · since ${esc(e.start_date)}</div></div>`).join('');
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Pack — ${esc(thisLabel)} vs ${esc(lastLabel)}</title></head>
-      <body style="font-family:Georgia,serif;margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-        <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:22px 32px;border-bottom:4px solid #c9a24a;color:#fff">
-          <div style="font-size:22px;font-weight:700;letter-spacing:.15em">LITSON</div>
-          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${esc(thisLabel.toUpperCase())} vs ${esc(lastLabel.toUpperCase())}</div>
+    const SANS = "'Helvetica Neue',Helvetica,Arial,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Pack — ${esc(thisLabel)} vs ${esc(lastLabel)}</title>
+      <style>@page{size:A4 landscape;margin:12mm} *{box-sizing:border-box} h2{font-family:${SANS}}</style></head>
+      <body style="font-family:${SANS};margin:0;background:#fff;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:20px 32px;border-bottom:4px solid #c9a24a;color:#fff">
+          <div style="font-size:22px;font-weight:800;letter-spacing:.18em">LITSON</div>
+          <div style="font-size:10px;color:#c9a24a;letter-spacing:.12em;font-weight:600">HR MONTHLY PACK · ${esc(thisLabel.toUpperCase())} vs ${esc(lastLabel.toUpperCase())}</div>
         </div>
-        <div style="padding:24px 32px">
-          <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><h2 style="font-family:Georgia,serif;font-size:14px;color:#1b2a3d;margin:0">Comparison</h2><span style="font-size:10px;color:#999">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</span></div>
+        <div style="padding:22px 32px">
+          <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><h2 style="font-size:14px;font-weight:700;color:#1b2a3d;margin:0">Comparison</h2><span style="font-size:10px;color:#999">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</span></div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${cmpCards}</div>
           ${pair('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), catPill(c.category, '#b0412f'), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
           ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? ''), STATUS(e.status)]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
