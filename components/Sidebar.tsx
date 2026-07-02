@@ -14,6 +14,7 @@ const navItems = [
   { href: '/payroll',   label: 'Payroll' },
   { href: '/trips',     label: 'Trip Help Desk' },
   { href: '/reviews',   label: 'Performance Reviews' },
+  { href: '/staffing',  label: 'Staffing' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
