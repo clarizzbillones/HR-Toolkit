@@ -318,8 +318,9 @@ function MonthlyTab({ data }: { data: any }) {
 
   // A trip counts for a month if its travel month OR logged month matches
   const tripInMonth = (t: any, k: string) => tripMonthKey(t) === k || ymOf(t.created_at) === k;
-  // Per-month metric calculators (PTO excludes < 1 day)
-  const ptoDays = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k && num(e.days) >= 1).reduce((s: number, e: any) => s + num(e.days), 0);
+  // Number of PTO entries in the month (all types — sick, bereavement, other, …),
+  // matching the PTO calendar dashboard.
+  const ptoNum = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k).length;
   const tripCount = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).length;
   const tripSpend = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k)).reduce((s: number, t: any) => s + num(t.cost), 0);
   const contractorSpend = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k).reduce((s: number, c: any) => s + num(c.amount), 0);
@@ -328,7 +329,7 @@ function MonthlyTab({ data }: { data: any }) {
 
   const metrics = [
     { label: 'Cash Out', color: '#b0412f', money: true, thisV: cashOut(thisKey), lastV: cashOut(lastKey) },
-    { label: 'PTO Days', color: '#2f7d5b', money: false, thisV: ptoDays(thisKey), lastV: ptoDays(lastKey) },
+    { label: 'Number of PTOs', color: '#2f7d5b', money: false, thisV: ptoNum(thisKey), lastV: ptoNum(lastKey) },
     { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripCount(thisKey), lastV: tripCount(lastKey) },
     { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripSpend(thisKey), lastV: tripSpend(lastKey) },
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorSpend(thisKey), lastV: contractorSpend(lastKey) },

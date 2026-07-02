@@ -76,11 +76,13 @@ function statusChip(s: string) {
 const TYPE_STYLE: Record<string, string> = {
   'Weekly': 'bg-[#e9f0f5] text-[#3f6b8a]',
   'Semimonthly': 'bg-[#eef5f1] text-[#2f7d5b]',
+  'Monthly (Owners)': 'bg-[#f0ece4] text-[#8a6d3b]',
   'Monthly': 'bg-[#f0ece4] text-[#8a6d3b]',
+  '6th of Month': 'bg-[#eaf3ee] text-[#2f7d5b]',
   '6th Contractor': 'bg-[#f3ecf7] text-[#6b4f8a]',
   'Monthly Contractor': 'bg-[#fdeaea] text-[#b0412f]',
 };
-const TYPE_ORDER = ['Weekly', 'Semimonthly', 'Monthly', '6th Contractor', 'Monthly Contractor'];
+const TYPE_ORDER = ['Weekly', 'Semimonthly', 'Monthly (Owners)', 'Monthly', '6th of Month', '6th Contractor', 'Monthly Contractor'];
 
 interface DeadlineRow {
   key: string; kind: 'period' | 'contractor'; type: string;

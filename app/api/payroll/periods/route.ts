@@ -20,6 +20,15 @@ function label(a: Date, b: Date) {
   return `${m(a)}–${m(b)}`;
 }
 function endOfMonth(y: number, m: number) { return new Date(y, m + 1, 0); }
+function isWeekend(d: Date) { const g = d.getDay(); return g === 0 || g === 6; }
+// Move a date back to the nearest weekday (Fri) if it lands on a weekend
+function toWeekday(d: Date) { const x = new Date(d); while (isWeekend(x)) x.setDate(x.getDate() - 1); return x; }
+// Add/subtract N business days (skips weekends)
+function addBizDays(d: Date, n: number) {
+  const x = new Date(d); const step = n < 0 ? -1 : 1; let left = Math.abs(n);
+  while (left > 0) { x.setDate(x.getDate() + step); if (!isWeekend(x)) left--; }
+  return x;
+}
 
 // Build upcoming periods for the next ~6 months based on cadence.
 // STANDARD (from the ADP reference — keep these rules for all future periods):
@@ -46,6 +55,24 @@ function buildSchedule(cadence: string): { period: string; pay_start: string; pa
       const due = addDays(check, -1);
       out.push({ period: label(payStart, payEnd), pay_start: iso(payStart), pay_end: iso(payEnd), check_date: iso(check), due_date: iso(due) });
       end = addDays(end, step);
+    }
+  } else if (cadence === 'Monthly (Owners)') {
+    // Owners: coverage 1–EOM (that month); check = last weekday of month; deadline = 2 business days before
+    for (let i = 0; i < 6; i++) {
+      const start = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const end = endOfMonth(start.getFullYear(), start.getMonth());
+      const check = toWeekday(end);
+      const due = addBizDays(check, -2);
+      out.push({ period: label(start, end), pay_start: iso(start), pay_end: iso(end), check_date: iso(check), due_date: iso(due) });
+    }
+  } else if (cadence === '6th of Month') {
+    // Pay on the 6th (weekday-adjusted) for the WHOLE previous month; deadline = 2 business days before
+    for (let i = 0; i < 6; i++) {
+      const cov = new Date(today.getFullYear(), today.getMonth() + i - 1, 1);
+      const covEnd = endOfMonth(cov.getFullYear(), cov.getMonth());
+      const check = toWeekday(new Date(today.getFullYear(), today.getMonth() + i, 6));
+      const due = addBizDays(check, -2);
+      out.push({ period: label(cov, covEnd), pay_start: iso(cov), pay_end: iso(covEnd), check_date: iso(check), due_date: iso(due) });
     }
   } else if (cadence === 'Monthly' || cadence === 'Contractor') {
     for (let i = 0; i < 6; i++) {
@@ -80,7 +107,7 @@ export async function POST(req: Request) {
   // Generate one or many cadences; default = all regular schedules at once
   const cadences: string[] = Array.isArray(body.cadences) && body.cadences.length
     ? body.cadences
-    : body.cadence ? [body.cadence] : ['Weekly', 'Semi-monthly', 'Monthly'];
+    : body.cadence ? [body.cadence] : ['Weekly', 'Semi-monthly', 'Monthly (Owners)', '6th of Month'];
   // Replace future (Upcoming) periods; keep any Processing/Processed history
   await sql`DELETE FROM payroll_periods WHERE status NOT IN ('Processing','Processed')`;
   for (const cadence of cadences) {

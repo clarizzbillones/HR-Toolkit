@@ -83,7 +83,9 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
   (calEvents ?? []).forEach(c => {
     if (usedCalIds.has(c.id) || hidden.has(c.id)) return;
     if (c.end < '2026-06-01') return;
-    if (EXCLUDED_TYPES.test(c.tag) || c.tag === 'Other') return;
+    // Match the PTO dashboard exactly: only skip WFH/personal + non-PTO titles.
+    // (Do NOT drop tag==='Other' — the dashboard keeps those.)
+    if (EXCLUDED_TYPES.test(c.tag)) return;
     if (EXCLUDED_TITLE.test(c.title)) return;
     const days = workingDays(c.start, c.end);
     if (days < 1) return;
