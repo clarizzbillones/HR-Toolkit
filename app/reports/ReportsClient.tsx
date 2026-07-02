@@ -643,18 +643,18 @@ function MonthlyTab({ data }: { data: any }) {
           const fmtV = (v: number) => m.money ? tilde + fmt$(v) : String(v);
           return (
             <div key={m.label} className="bg-white border rounded-card overflow-hidden" style={{ borderTop: `3px solid ${m.color}` }}>
-              <div className="px-4 pt-2.5 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center justify-between">
+              <div className="px-4 pt-2.5 pb-2 text-[11px] font-bold uppercase tracking-widest text-text-primary flex items-center justify-between">
                 <span>{m.label}</span>
-                {delta !== 0 && <span className={delta > 0 ? 'text-[#b0412f]' : 'text-[#2f7d5b]'}>{delta > 0 ? '▲' : '▼'} {m.money ? fmt$(Math.abs(delta)) : Math.abs(delta)}</span>}
+                {delta !== 0 && <span className={`px-1.5 py-0.5 rounded ${delta > 0 ? 'text-[#b0412f] bg-[#fdeaea]' : 'text-[#2f7d5b] bg-[#eef5f1]'}`}>{delta > 0 ? '▲' : '▼'} {m.money ? fmt$(Math.abs(delta)) : Math.abs(delta)}</span>}
               </div>
               <div className="grid grid-cols-2 divide-x divide-border-light border-t border-border-light">
-                <div className="px-4 py-2" style={{ background: `${m.color}0c` }}>
-                  <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: m.color }}>{thisLabel.split(' ')[0]} · Current</div>
-                  <div className="font-spectral text-xl font-semibold mt-0.5" style={{ color: m.color }}>{fmtV(m.thisV)}</div>
+                <div className="px-4 py-2" style={{ background: `${m.color}14` }}>
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest" style={{ color: m.color }}>{thisLabel.split(' ')[0]} · Current</div>
+                  <div className="font-spectral text-2xl font-bold mt-0.5" style={{ color: m.color }}>{fmtV(m.thisV)}</div>
                 </div>
                 <div className="px-4 py-2">
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-text-muted">{lastLabel.split(' ')[0]} · Previous</div>
-                  <div className="font-spectral text-xl font-semibold mt-0.5 text-text-muted">{fmtV(m.lastV)}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest text-text-secondary">{lastLabel.split(' ')[0]} · Previous</div>
+                  <div className="font-spectral text-2xl font-bold mt-0.5 text-text-secondary">{fmtV(m.lastV)}</div>
                 </div>
               </div>
             </div>
