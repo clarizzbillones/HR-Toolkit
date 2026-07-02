@@ -22,6 +22,13 @@ function label(a: Date, b: Date) {
 function endOfMonth(y: number, m: number) { return new Date(y, m + 1, 0); }
 
 // Build upcoming periods for the next ~6 months based on cadence.
+// STANDARD (from the ADP reference — keep these rules for all future periods):
+//   Weekly:      coverage Sat–Fri;  check = period end + 7;      deadline = check − 1
+//                (e.g. 06/27–07/03 → check 07/10, deadline 07/09)
+//   Semimonthly: coverage 1–15 and 16–EOM
+//                1st half:  check = 13th,     deadline = check − 3 (10th)
+//                2nd half:  check = EOM − 3,  deadline = check − 3
+//   Monthly:     coverage 1–EOM; check = EOM − 2 (29th); deadline = check − 1 (28th)
 function buildSchedule(cadence: string): { period: string; pay_start: string; pay_end: string; check_date: string; due_date: string }[] {
   const out: { period: string; pay_start: string; pay_end: string; check_date: string; due_date: string }[] = [];
   const today = new Date(); today.setHours(12, 0, 0, 0);
