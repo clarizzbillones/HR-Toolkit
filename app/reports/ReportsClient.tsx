@@ -437,44 +437,94 @@ function MonthlyTab({ data }: { data: any }) {
     metrics.forEach(m => { const t = (m as any).approx ? '~' : ''; lines.push(`${m.label},${m.money ? t + fmt$(m.thisV) : m.thisV},${m.money ? t + fmt$(m.lastV) : m.lastV}`); });
     csvSection(lines, 'CASH OUT', ['Date', 'Payee', 'Category', 'Amount', 'Note'], cashoutOf(thisKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]), cashoutOf(lastKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]));
     csvSection(lines, 'PTO', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoOf(thisKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]), ptoOf(lastKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]));
-    csvSection(lines, 'TRIPS', ['Traveler', 'Details', 'Client', 'Cost', 'Status', 'Month'], tripOf(thisKey).map((t: any) => [t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)]), tripOf(lastKey).map((t: any) => [t.who, t.detail, t.matter, num(t.cost), t.status, tripMonthKey(t)]));
+    csvSection(lines, 'TRIPS', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], tripOf(thisKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]), tripOf(lastKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]));
     csvSection(lines, 'CONTRACTOR PAYMENTS', ['Name', 'Date', 'Amount', 'Note'], contractorOf(thisKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]), contractorOf(lastKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]));
     csvSection(lines, 'PERFORMANCE REVIEWS', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewOf(thisKey).map(r => [r.name, r.role, r.type, r.date, r.status]), reviewOf(lastKey).map(r => [r.name, r.role, r.type, r.date, r.status]));
+    csvSection(lines, 'BIRTHDAYS', ['Name', 'DOB'], birthdaysOf(thisM).map((e: any) => [e.name, e.dob]), birthdaysOf(last.getMonth()).map((e: any) => [e.name, e.dob]));
+    csvSection(lines, 'WORK ANNIVERSARIES', ['Name', 'Years', 'Since'], anniversariesOf(thisM, thisY).map((e: any) => [e.name, e.years, e.start_date]), anniversariesOf(last.getMonth(), last.getFullYear()).map((e: any) => [e.name, e.years, e.start_date]));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `monthly-pack-${thisKey}-vs-${lastKey}.csv`; a.click();
     showToast('CSV downloaded');
   }
 
   function printPack() {
-    const cmp = metrics.map(m => { const t = (m as any).approx ? '~' : ''; return `<tr><td style="padding:8px 12px;font-weight:600">${m.label}</td><td style="padding:8px 12px;color:${m.color};font-weight:700">${m.money ? t + fmt$(m.thisV) : m.thisV}</td><td style="padding:8px 12px;color:#888">${m.money ? t + fmt$(m.lastV) : m.lastV}</td></tr>`; }).join('');
-    const tbl = (color: string, monthLbl: string, headers: string[], rows: string[][]) => `
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:700;color:${color};margin:0 0 4px">${monthLbl} · ${rows.length}</div>
-        <table style="width:100%;border-collapse:collapse;font-size:11px">
-          <thead><tr style="background:${color}18">${headers.map(h => `<th style="text-align:left;padding:5px 8px;color:${color};font-size:9px;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
-          <tbody>${rows.length ? rows.map(r => `<tr style="border-bottom:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:10px;text-align:center;color:#999">None</td></tr>`}</tbody>
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Inline status pill matching the on-screen chip colors
+    const STATUS = (s: string) => {
+      const x = (s ?? '').toLowerCase();
+      let bg = '#f1ece3', fg = '#6b5f4d';
+      if (/appro|complete|confirm|book|paid|done/.test(x)) { bg = '#eef5f1'; fg = '#2f7d5b'; }
+      else if (/hold|process|review/.test(x)) { bg = '#e9f0f5'; fg = '#3f6b8a'; }
+      else if (/deny|denied|reject|cancel/.test(x)) { bg = '#fdeaea'; fg = '#b0412f'; }
+      else if (/pend|await|request/.test(x)) { bg = '#f7efe1'; fg = '#b07d2a'; }
+      return `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${bg};color:${fg};font-size:9px;font-weight:700;text-transform:capitalize">${esc(s)}</span>`;
+    };
+    const catPill = (t: string, color: string) => `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${color}1a;color:${color};font-size:9px;font-weight:700">${esc(t)}</span>`;
+
+    // Comparison band — Current vs Previous split cards, mirrors the UI
+    const cmpCards = metrics.map(m => {
+      const t = (m as any).approx ? '~' : '';
+      const tv = m.money ? t + fmt$(m.thisV) : String(m.thisV);
+      const lv = m.money ? t + fmt$(m.lastV) : String(m.lastV);
+      return `<div style="border:1px solid #e6ddcd;border-top:3px solid ${m.color};border-radius:8px;overflow:hidden">
+        <div style="padding:6px 10px 4px;font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a7f6d">${esc(m.label)}</div>
+        <div style="display:flex;border-top:1px solid #eee">
+          <div style="flex:1;padding:6px 10px;background:${m.color}0c">
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${m.color}">${esc(thisLabel.split(' ')[0])} · Current</div>
+            <div style="font-family:Georgia,serif;font-size:16px;font-weight:600;color:${m.color}">${tv}</div>
+          </div>
+          <div style="flex:1;padding:6px 10px;border-left:1px solid #eee">
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#999">${esc(lastLabel.split(' ')[0])} · Previous</div>
+            <div style="font-family:Georgia,serif;font-size:16px;font-weight:600;color:#999">${lv}</div>
+          </div>
+        </div></div>`;
+    }).join('');
+
+    // One category column (Current or Previous) with badge, header, rows, optional total footer
+    const col = (color: string, badge: string, current: boolean, monthLbl: string, headers: string[], rows: string[][], total?: [string, string]) => `
+      <div style="flex:1;min-width:0;border:2px solid ${color}${current ? '' : '55'};border-top:4px solid ${color};border-radius:8px;overflow:hidden">
+        <div style="padding:5px 10px;background:${color}${current ? '18' : '0c'};color:${color};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between">
+          <span><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${current ? color : color + '33'};color:${current ? '#fff' : color}">${badge}</span> ${esc(monthLbl)}</span><span style="opacity:.7">${rows.length}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead><tr style="background:${color}0a">${headers.map(h => `<th style="text-align:left;padding:4px 8px;color:${color};font-size:8px;text-transform:uppercase;letter-spacing:.05em">${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.length ? rows.map(r => `<tr style="border-top:1px solid #f1ece3">${r.map(c => `<td style="padding:4px 8px;color:#333">${c ?? '—'}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" style="padding:12px;text-align:center;color:#999">None</td></tr>`}</tbody>
+          ${total && rows.length ? `<tfoot><tr style="background:${color}10;border-top:2px solid ${color}55"><td style="padding:5px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:${color}">${esc(total[0])}</td><td style="padding:5px 8px;font-weight:700;color:${color}" colspan="${headers.length - 1}">${esc(total[1])}</td></tr></tfoot>` : ''}
         </table>
       </div>`;
-    const pair = (title: string, color: string, headers: string[], mapper: (k: string) => string[][]) => `
-      <h2 style="font-family:Georgia,serif;font-size:15px;color:${color};border-left:4px solid ${color};padding-left:8px;margin:22px 0 8px">${title}</h2>
-      <div style="display:flex;gap:16px;align-items:flex-start">${tbl(color, thisLabel, headers, mapper(thisKey))}${tbl(color, lastLabel, headers, mapper(lastKey))}</div>`;
-    const html = `<!DOCTYPE html><html><head><title>Monthly Pack — ${thisLabel} vs ${lastLabel}</title></head>
+    const pair = (title: string, color: string, headers: string[], mapper: (k: string) => string[][], totalFn?: (k: string) => [string, string]) => `
+      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-family:Georgia,serif;font-size:14px;color:${color};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div style="display:flex;gap:18px;align-items:flex-start">
+        ${col(color, 'Current', true, thisLabel, headers, mapper(thisKey), totalFn?.(thisKey))}
+        ${col(color, 'Previous', false, lastLabel, headers, mapper(lastKey), totalFn?.(lastKey))}
+      </div>`;
+
+    // Birthdays / Anniversaries as chip grids (mirrors UI cards)
+    const peopleBlock = (title: string, color: string, fg: string, cards: (mi: number, yr: number) => string) => `
+      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-family:Georgia,serif;font-size:14px;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div style="display:flex;gap:18px">
+        <div style="flex:1;border:2px solid ${color};border-radius:8px;padding:10px;background:${color}10"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color};color:#fff">Current</span> ${esc(thisLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(thisM, thisY) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
+        <div style="flex:1;border:2px solid ${color}55;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color}33;color:${fg}">Previous</span> ${esc(lastLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(last.getMonth(), last.getFullYear()) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
+      </div>`;
+    const bdayCards = (mi: number) => birthdaysOf(mi).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎂 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${esc(e.dob)}</div></div>`).join('');
+    const annCards = (mi: number, yr: number) => anniversariesOf(mi, yr).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎉 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${e.years} ${e.years === 1 ? 'year' : 'years'} · since ${esc(e.start_date)}</div></div>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Pack — ${esc(thisLabel)} vs ${esc(lastLabel)}</title></head>
       <body style="font-family:Georgia,serif;margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:22px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:22px;font-weight:700;letter-spacing:.15em">LITSON</div>
-          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${thisLabel.toUpperCase()} vs ${lastLabel.toUpperCase()}</div>
+          <div style="font-size:11px;color:#c9a24a;letter-spacing:.1em">HR MONTHLY PACK · ${esc(thisLabel.toUpperCase())} vs ${esc(lastLabel.toUpperCase())}</div>
         </div>
         <div style="padding:24px 32px">
-          <h2 style="font-family:Georgia,serif;font-size:15px;color:#1b2a3d;margin:0 0 8px">Comparison</h2>
-          <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px">
-            <thead><tr style="background:#f1ece3"><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">Category</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${thisLabel}</th><th style="text-align:left;padding:6px 12px;font-size:10px;text-transform:uppercase">${lastLabel}</th></tr></thead>
-            <tbody>${cmp}</tbody>
-          </table>
-          ${pair('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [c.date, c.payee, c.category, fmt$(num(c.amount)), c.note]))}
-          ${pair('PTO', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], k => ptoOf(k).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, String(e.days ?? ''), e.status]))}
-          ${pair('Trips', '#3f6b8a', ['Traveler', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [t.who, t.detail, t.matter, fmt$(num(t.cost)), t.status]))}
-          ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [cName(c), cDate(c), fmt$(num(c.amount)), cNote(c)]))}
-          ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [r.name, r.role, r.type, r.date ?? '', r.status]))}
+          <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><h2 style="font-family:Georgia,serif;font-size:14px;color:#1b2a3d;margin:0">Comparison</h2><span style="font-size:10px;color:#999">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</span></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${cmpCards}</div>
+          ${pair('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), catPill(c.category, '#b0412f'), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
+          ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? ''), STATUS(e.status)]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
+          ${pair('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', STATUS(t.status)]))}
+          ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
+          ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), STATUS(r.status)]))}
+          ${peopleBlock('Birthdays', '#c9a24a', '#8a6d3b', bdayCards)}
+          ${peopleBlock('Work Anniversaries', '#8a6d3b', '#6b5427', annCards)}
         </div>
         <script>window.onload=function(){window.print()}</script>
       </body></html>`;
