@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 
-type Tab = 'monthly' | 'trips' | 'pto' | 'insurance' | 'reimbursements' | 'cashout';
+type Tab = 'monthly' | 'trips' | 'pto' | 'reviews' | 'insurance' | 'reimbursements' | 'cashout';
 
 function fmt$(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
@@ -162,6 +162,108 @@ function PtoReportTab() {
   );
 }
 
+// ---- Review date helpers ----
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr.slice(0, 10) + 'T12:00:00');
+  d.setMonth(d.getMonth() + months);
+  return d.toLocaleDateString('en-CA');
+}
+function reviewDate(e: any, kind: '6mo' | '1yr'): string | null {
+  if (kind === '6mo') return e.review_6mo_date?.slice(0, 10) ?? (e.hire_date ? addMonths(e.hire_date, 6) : null);
+  return e.review_1yr_date?.slice(0, 10) ?? (e.hire_date ? addMonths(e.hire_date, 12) : null);
+}
+
+// Flatten employees into individual review rows
+function reviewRows(reviews: any[]) {
+  const rows: { id: string; name: string; role: string; dept: string; type: string; date: string | null; status: string }[] = [];
+  for (const e of reviews ?? []) {
+    const d6 = reviewDate(e, '6mo');
+    if (d6 || e.review_6mo_status) rows.push({ id: e.id + '-6', name: e.name, role: e.role, dept: e.dept, type: '6-month', date: d6, status: e.review_6mo_status ?? 'Not Started' });
+    const d12 = reviewDate(e, '1yr');
+    if (d12 || e.review_1yr_status) rows.push({ id: e.id + '-12', name: e.name, role: e.role, dept: e.dept, type: '1-year', date: d12, status: e.review_1yr_status ?? 'Not Started' });
+  }
+  return rows;
+}
+
+function reviewStatusChip(s: string) {
+  if (s === 'Complete') return 'bg-[#eef5f1] text-[#2f7d5b]';
+  if (s === 'In Progress') return 'bg-[#f7efe1] text-[#b07d2a]';
+  if (s === 'Scheduled') return 'bg-[#e9f0f5] text-[#3f6b8a]';
+  return 'bg-[#f1ece3] text-text-muted';
+}
+
+// ---- Performance Review report tab (date-range filtered) ----
+function ReviewsReportTab() {
+  const { showToast } = useToast();
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  useEffect(() => { fetch('/api/reports?tab=monthly').then(r => r.json()).then(d => setReviews(d.reviews ?? [])); }, []);
+
+  const all = reviewRows(reviews);
+  const filtered = all.filter(r => {
+    if (!r.date) return !from && !to; // undated only show when no range set
+    if (from && r.date < from) return false;
+    if (to && r.date > to) return false;
+    return true;
+  }).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
+
+  const complete = filtered.filter(r => r.status === 'Complete').length;
+  const scheduled = filtered.filter(r => r.status === 'Scheduled').length;
+  const notStarted = filtered.filter(r => r.status === 'Not Started').length;
+
+  function exportCsv() {
+    const rows = filtered.map(r => [r.name, r.role, r.dept, r.type, r.date ?? '', r.status]);
+    downloadCsv(`review-report${from ? '-' + from : ''}${to ? '-to-' + to : ''}.csv`,
+      ['Employee', 'Role', 'Department', 'Review', 'Date', 'Status'], rows);
+    showToast(`Exported ${rows.length} reviews`);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Review range</span>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        <span className="text-text-muted text-xs">to</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)}
+          className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+        {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>}
+        <button onClick={exportCsv} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">↓ Download review pack (CSV)</button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <StatTile label="Reviews" value={String(filtered.length)} color="#1b2a3d" />
+        <StatTile label="Complete" value={String(complete)} color="#2f7d5b" />
+        <StatTile label="Scheduled" value={String(scheduled)} color="#3f6b8a" />
+        <StatTile label="Not Started" value={String(notStarted)} color="#b07d2a" />
+      </div>
+
+      <div className="bg-white border border-border rounded-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-[#f1ece3]"><tr>
+            {['Employee','Role','Department','Review','Date','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.map(r => (
+              <tr key={r.id} className="border-t border-[#f1ece3]">
+                <td className="px-4 py-3 font-medium">{r.name}</td>
+                <td className="px-4 py-3 text-text-muted">{r.role}</td>
+                <td className="px-4 py-3 text-text-muted">{r.dept}</td>
+                <td className="px-4 py-3 text-text-secondary">{r.type}</td>
+                <td className="px-4 py-3 text-text-muted">{r.date ?? '—'}</td>
+                <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
+              </tr>
+            ))}
+            {!filtered.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No reviews in this range</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function StatTile({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="bg-white border border-border rounded-card px-4 py-3">
@@ -174,7 +276,7 @@ function StatTile({ label, value, color }: { label: string; value: string; color
 // ---- Monthly tab ----
 function MonthlyTab({ data }: { data: any }) {
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, overtime, employees } = data;
+  const { pto, trips, contractors, overtime, employees, reviews } = data;
 
   const today = new Date();
   const birthdays = (employees ?? []).filter((e: any) => {
@@ -183,6 +285,14 @@ function MonthlyTab({ data }: { data: any }) {
     const now = new Date();
     return parseInt(m) === now.getMonth() + 1;
   });
+
+  // Reviews due this month
+  const nowY = today.getFullYear(), nowM = today.getMonth();
+  const reviewsThisMonth = reviewRows(reviews ?? []).filter(r => {
+    if (!r.date || r.status === 'Complete') return false;
+    const d = new Date(r.date + 'T12:00:00');
+    return d.getFullYear() === nowY && d.getMonth() === nowM;
+  }).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 
   return (
     <div className="space-y-6">
@@ -205,6 +315,29 @@ function MonthlyTab({ data }: { data: any }) {
                 </tr>
               ))}
               {!(pto ?? []).length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO entries</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-3">Performance Reviews This Month</div>
+        <div className="bg-white border border-border rounded-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-[#f1ece3]"><tr>
+              {['Employee','Role','Review','Date','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {reviewsThisMonth.map(r => (
+                <tr key={r.id} className="border-t border-[#f1ece3]">
+                  <td className="px-4 py-3 font-medium">{r.name}</td>
+                  <td className="px-4 py-3 text-text-muted">{r.role}</td>
+                  <td className="px-4 py-3 text-text-secondary">{r.type}</td>
+                  <td className="px-4 py-3 text-text-muted">{r.date}</td>
+                  <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
+                </tr>
+              ))}
+              {!reviewsThisMonth.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reviews due this month</td></tr>}
             </tbody>
           </table>
         </div>
@@ -467,6 +600,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'monthly', label: 'Monthly Pack' },
   { key: 'trips', label: 'Trips' },
   { key: 'pto', label: 'PTO' },
+  { key: 'reviews', label: 'Performance Reviews' },
   { key: 'insurance', label: 'Insurance' },
   { key: 'reimbursements', label: 'Reimbursements' },
   { key: 'cashout', label: 'Cash Out' },
@@ -497,6 +631,7 @@ export default function ReportsClient() {
         {tab === 'monthly' && <MonthlyTab data={monthlyData} />}
         {tab === 'trips' && <TripsReportTab />}
         {tab === 'pto' && <PtoReportTab />}
+        {tab === 'reviews' && <ReviewsReportTab />}
         {tab === 'insurance' && <InsuranceTab />}
         {tab === 'reimbursements' && <ReimbursementsTab />}
         {tab === 'cashout' && <CashOutTab />}

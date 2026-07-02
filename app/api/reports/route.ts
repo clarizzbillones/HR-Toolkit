@@ -32,7 +32,8 @@ export async function GET(req: Request) {
   const contractors = await sql`SELECT * FROM contractor_payments ORDER BY due_date ASC`;
   const overtime = await sql`SELECT * FROM overtime ORDER BY created_at DESC`;
   const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
-  return NextResponse.json({ pto, trips, contractors, overtime, employees });
+  const reviews = await sql`SELECT id, name, role, dept, hire_date, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
+  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews });
 }
 
 export async function POST(req: Request) {
