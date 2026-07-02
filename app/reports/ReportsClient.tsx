@@ -200,10 +200,10 @@ function PtoReportTab() {
   function exportCsv() {
     const rows = filtered.map((e: any) => [
       e.employee, e.type, (e.start_date ?? '').slice(0, 10), (e.end_date ?? '').slice(0, 10),
-      Number(e.days) || 0, e.status,
+      Number(e.days) || 0,
     ]);
     downloadCsv(`pto-report${from ? '-' + from : ''}${to ? '-to-' + to : ''}.csv`,
-      ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], rows);
+      ['Employee', 'Type', 'Start', 'End', 'Days'], rows);
     showToast(`Exported ${rows.length} PTO entries`);
   }
 
@@ -229,7 +229,7 @@ function PtoReportTab() {
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Employee','Type','Start','End','Days','Status'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Employee','Type','Start','End','Days'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {filtered.map((e: any) => (
@@ -239,10 +239,9 @@ function PtoReportTab() {
                 <td className="px-4 py-3 text-text-muted">{(e.start_date ?? '').slice(0, 10)}</td>
                 <td className="px-4 py-3 text-text-muted">{(e.end_date ?? '').slice(0, 10)}</td>
                 <td className="px-4 py-3 text-text-muted">{e.days}</td>
-                <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
               </tr>
             ))}
-            {!filtered.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No PTO entries in this range</td></tr>}
+            {!filtered.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No PTO entries in this range</td></tr>}
           </tbody>
         </table>
       </div>
@@ -436,7 +435,7 @@ function MonthlyTab({ data }: { data: any }) {
     const lines: string[] = [`LITSON HR — Monthly Pack — ${thisLabel} vs ${lastLabel}`, '', `COMPARISON,${thisLabel},${lastLabel}`];
     metrics.forEach(m => { const t = (m as any).approx ? '~' : ''; lines.push(`${m.label},${m.money ? t + fmt$(m.thisV) : m.thisV},${m.money ? t + fmt$(m.lastV) : m.lastV}`); });
     csvSection(lines, 'CASH OUT', ['Date', 'Payee', 'Category', 'Amount', 'Note'], cashoutOf(thisKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]), cashoutOf(lastKey).map((c: any) => [c.date, c.payee, c.category, num(c.amount), c.note]));
-    csvSection(lines, 'PTO', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], ptoOf(thisKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]), ptoOf(lastKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days, e.status]));
+    csvSection(lines, 'PTO', ['Employee', 'Type', 'Start', 'End', 'Days'], ptoOf(thisKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days]), ptoOf(lastKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days]));
     csvSection(lines, 'TRIPS', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], tripOf(thisKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]), tripOf(lastKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]));
     csvSection(lines, 'CONTRACTOR PAYMENTS', ['Name', 'Date', 'Amount', 'Note'], contractorOf(thisKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]), contractorOf(lastKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]));
     csvSection(lines, 'PERFORMANCE REVIEWS', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewOf(thisKey).map(r => [r.name, r.role, r.type, r.date, r.status]), reviewOf(lastKey).map(r => [r.name, r.role, r.type, r.date, r.status]));
@@ -493,25 +492,34 @@ function MonthlyTab({ data }: { data: any }) {
         </table>
       </div>`;
     const pair = (title: string, color: string, headers: string[], mapper: (k: string) => string[][], totalFn?: (k: string) => [string, string]) => `
-      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${color};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div class="sec">
+      <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${color};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
       <div style="display:flex;gap:18px;align-items:flex-start">
         ${col(color, 'Current', true, thisLabel, headers, mapper(thisKey), totalFn?.(thisKey))}
         ${col(color, 'Previous', false, lastLabel, headers, mapper(lastKey), totalFn?.(lastKey))}
-      </div>`;
+      </div></div>`;
 
     // Birthdays / Anniversaries as chip grids (mirrors UI cards)
     const peopleBlock = (title: string, color: string, fg: string, cards: (mi: number, yr: number) => string) => `
-      <div style="display:flex;align-items:center;gap:8px;margin:22px 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
+      <div class="sec">
+      <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
       <div style="display:flex;gap:18px">
         <div style="flex:1;border:2px solid ${color};border-radius:8px;padding:10px;background:${color}10"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color};color:#fff">Current</span> ${esc(thisLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(thisM, thisY) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
         <div style="flex:1;border:2px solid ${color}55;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color}33;color:${fg}">Previous</span> ${esc(lastLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(last.getMonth(), last.getFullYear()) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
-      </div>`;
+      </div></div>`;
     const bdayCards = (mi: number) => birthdaysOf(mi).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎂 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${esc(e.dob)}</div></div>`).join('');
     const annCards = (mi: number, yr: number) => anniversariesOf(mi, yr).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎉 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${e.years} ${e.years === 1 ? 'year' : 'years'} · since ${esc(e.start_date)}</div></div>`).join('');
 
     const SANS = "'Helvetica Neue',Helvetica,Arial,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Pack — ${esc(thisLabel)} vs ${esc(lastLabel)}</title>
-      <style>@page{size:A4 landscape;margin:12mm} *{box-sizing:border-box} h2{font-family:${SANS}}</style></head>
+      <style>
+        @page{size:A4 landscape;margin:12mm}
+        *{box-sizing:border-box}
+        h2{font-family:${SANS};break-after:avoid;page-break-after:avoid}
+        tr,td,th{break-inside:avoid;page-break-inside:avoid}
+        thead{display:table-header-group}
+        .sec{break-inside:avoid;page-break-inside:avoid;margin-top:22px}
+      </style></head>
       <body style="font-family:${SANS};margin:0;background:#fff;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:20px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:22px;font-weight:800;letter-spacing:.18em">LITSON</div>
@@ -521,7 +529,7 @@ function MonthlyTab({ data }: { data: any }) {
           <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px"><h2 style="font-size:14px;font-weight:700;color:#1b2a3d;margin:0">Comparison</h2><span style="font-size:10px;color:#999">${esc(thisLabel)} (current) vs ${esc(lastLabel)} (previous)</span></div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">${cmpCards}</div>
           ${pair('Cash Out', '#b0412f', ['Date', 'Payee', 'Category', 'Amount', 'Note'], k => cashoutOf(k).map((c: any) => [esc(c.date), esc(c.payee), catPill(c.category, '#b0412f'), fmt$(num(c.amount)), esc(c.note)]), k => ['Total Cash Out', fmt$(cashTotalOf(k))])}
-          ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days', 'Status'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? ''), STATUS(e.status)]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
+          ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
           ${pair('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', STATUS(t.status)]))}
           ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
           ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), STATUS(r.status)]))}
@@ -599,7 +607,6 @@ function MonthlyTab({ data }: { data: any }) {
         <td className="px-3 py-2 font-medium">{e.employee}</td><td className="px-3 py-2 text-text-muted">{e.type}</td>
         <td className="px-3 py-2 text-text-muted">{e.start_date}</td><td className="px-3 py-2 text-text-muted">{e.end_date}</td>
         <td className="px-3 py-2 text-text-muted">{e.days}</td>
-        <td className="px-3 py-2"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{e.status}</span></td>
       </tr>
     ),
     trip: (t: any) => (
@@ -667,7 +674,7 @@ function MonthlyTab({ data }: { data: any }) {
       <Compare title="Cash Out" color="#b0412f" subtitle={`${thisLabel}: ${fmt$(cashTotalOf(thisKey))} · ${lastLabel}: ${fmt$(cashTotalOf(lastKey))}`}
         headers={['Date', 'Payee', 'Category', 'Amount', 'Note']} renderRow={cellRow.cash} rowsThis={cashoutOf(thisKey)} rowsLast={cashoutOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total Cash Out', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
-      <Compare title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days', 'Status']} renderRow={cellRow.pto} rowsThis={ptoOf(thisKey)} rowsLast={ptoOf(lastKey)}
+      <Compare title="Paid Time Off" color="#2f7d5b" headers={['Employee', 'Type', 'Start', 'End', 'Days']} renderRow={cellRow.pto} rowsThis={ptoOf(thisKey)} rowsLast={ptoOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total PTO Days', value: `${rows.reduce((s, e) => s + num(e.days), 0)} days · ${rows.length} PTOs` })} />
       <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total Contractor $', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
