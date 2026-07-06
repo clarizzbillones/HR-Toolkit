@@ -7,13 +7,27 @@ interface Item {
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
 }
-// Turn plain URLs inside section text into clickable links
+// Render clickable links in section text.
+// Supports [Label](https://url) for a friendly label; bare URLs are shortened.
 function linkify(text: string | null) {
-  return String(text ?? '').split(/(https?:\/\/[^\s]+)/g).map((p, i) =>
-    /^https?:\/\//.test(p)
-      ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] underline break-all">{p}</a>
-      : <span key={i}>{p}</span>
-  );
+  const src = String(text ?? '');
+  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+  const out: React.ReactNode[] = [];
+  let last = 0, m: RegExpExecArray | null, i = 0;
+  const cls = "text-[#3f6b8a] underline font-medium";
+  while ((m = re.exec(src))) {
+    if (m.index > last) out.push(<span key={i++}>{src.slice(last, m.index)}</span>);
+    if (m[1]) {
+      out.push(<a key={i++} href={m[2]} target="_blank" rel="noopener noreferrer" className={cls}>{m[1]}</a>);
+    } else {
+      const url = m[3]; let label = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+      if (label.length > 42) label = label.slice(0, 42) + '…';
+      out.push(<a key={i++} href={url} target="_blank" rel="noopener noreferrer" className={cls}>{label} ↗</a>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < src.length) out.push(<span key={i++}>{src.slice(last)}</span>);
+  return out;
 }
 
 interface TableData { headers: string[]; rows: string[][] }
@@ -215,7 +229,9 @@ export default function OnboardingClient() {
     const secHtml = (arr: Item[]) => arr.map(s => `
       <section style="margin:0 0 18px;break-inside:avoid">
         <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px;margin:0 0 6px">${esc(s.title)}</h2>
-        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '').replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#3f6b8a">$1</a>')}</div>
+        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '')
+          .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#3f6b8a">$1</a>')
+          .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })}</div>
       </section>`).join('');
     const schedHtml = schedule.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
