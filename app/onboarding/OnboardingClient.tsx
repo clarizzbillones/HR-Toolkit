@@ -20,8 +20,48 @@ export default function OnboardingClient() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ title: string; body: string }>({ title: '', body: '' });
   const [hire, setHire] = useState('');
+  const [view, setView] = useState<'dashboard' | 'guides'>('dashboard');
+  const [people, setPeople] = useState<any[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', start_date: '', dob: '', phone: '' };
+  const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
+  useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
+
+  function tasksFor(g: string) { return items.filter(i => i.guide === g && i.kind === 'task'); }
+  const parseProg = (p: any) => { try { return JSON.parse(p ?? '{}') || {}; } catch { return {}; } };
+  function progressOf(person: any) {
+    const t = tasksFor(person.guide); const prog = parseProg(person.progress);
+    const done = t.filter(x => prog[x.title]).length;
+    return { done, total: t.length, pct: t.length ? Math.round(done / t.length * 100) : 0 };
+  }
+  async function addOnboardee() {
+    if (!newForm.name.trim()) { showToast('Name required'); return; }
+    const res = await fetch('/api/onboardees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newForm) });
+    const { row } = await res.json();
+    setPeople(prev => [row, ...prev]); setShowAdd(false); setNewForm({ ...blankNew }); setSelected(row.id);
+    showToast('Onboarding started');
+  }
+  async function toggleTask(person: any, title: string, val: boolean) {
+    const prog = { ...parseProg(person.progress), [title]: val };
+    setPeople(prev => prev.map(p => p.id === person.id ? { ...p, progress: JSON.stringify(prog) } : p));
+    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, progress: prog }) });
+  }
+  async function completeOnboardee(person: any) {
+    if (!confirm(`Mark ${person.name}'s onboarding complete? Their info will be added to the Staffing tab.`)) return;
+    const res = await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, complete: true }) });
+    const { row } = await res.json();
+    setPeople(prev => prev.map(p => p.id === person.id ? row : p));
+    showToast('Complete — added to Staffing');
+  }
+  async function deleteOnboardee(id: string) {
+    if (!confirm('Remove this onboarding record?')) return;
+    setPeople(prev => prev.filter(p => p.id !== id));
+    if (selected === id) setSelected(null);
+    await fetch('/api/onboardees', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+  }
 
   // Distinct guides, General first
   const guides = Array.from(new Set(items.map(i => i.guide))).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
@@ -83,6 +123,15 @@ export default function OnboardingClient() {
     const item = await add('section', { title: 'New Section', body: '' });
     setEditing(item.id); setDraft({ title: item.title, body: item.body ?? '' });
   }
+  async function copyToGuide(s: Item) {
+    const targets = guides.filter(g => g !== guide);
+    const to = prompt(`Copy “${s.title}” to which guide?\n${targets.join(', ')}`, targets[0] ?? '')?.trim();
+    if (!to) return;
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'section', guide: to, title: s.title, body: s.body }) });
+    const { item } = await res.json();
+    setItems(prev => [...prev, item]);
+    showToast(`Copied to “${to}”`);
+  }
   function startEdit(s: Item) { setEditing(s.id); setDraft({ title: s.title, body: s.body ?? '' }); }
   async function saveEdit(id: string) { await patch(id, { title: draft.title, body: draft.body }); setEditing(null); showToast('Saved'); }
 
@@ -106,6 +155,7 @@ export default function OnboardingClient() {
           <div className="flex items-start gap-2">
             <h2 className="font-spectral text-[17px] font-semibold text-text-primary flex-1" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
             <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Edit</button>
+            {guides.length > 1 && <button onClick={() => copyToGuide(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Copy to…</button>}
             <button onClick={() => remove(s.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea] opacity-0 group-hover:opacity-100">Delete</button>
           </div>
           <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3">{s.body}</p>
@@ -164,12 +214,10 @@ export default function OnboardingClient() {
         <thead><tr style="background:#f0ece4">${d.headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
-    const taskGroup = (label: string, list: Item[]) => list.length ? `
-      <div style="margin-top:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#666">${label} to-do</div>
-      <ul style="list-style:none;padding:0;font-size:12px;color:#333">${list.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul></div>` : '';
-    const taskHtml = `
+    // Outbound guide shows only the new-hire checklist — HR tasks stay internal
+    const taskHtml = hireTasks.length ? `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #2f7d5b;padding-left:10px;margin:20px 0 6px">Onboarding Checklist</h2>
-      ${taskGroup('New Hire', hireTasks)}${taskGroup('HR', hrTasks)}`;
+      <ul style="list-style:none;padding:0;columns:2;font-size:12px;color:#333">${hireTasks.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul>` : '';
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson — New Hire Onboarding Guide</title>
       <style>@page{size:A4;margin:14mm} body{font-family:${SANS}} h2{break-after:avoid} tr,td,th{break-inside:avoid}</style></head>
@@ -195,8 +243,7 @@ export default function OnboardingClient() {
       + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '')
       + (closingSections.length ? `\n\n` + closingSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n') : '')
-      + `\n\nCHECKLIST — ${hireLabel.toUpperCase()}\n` + hireTasks.map(t => `- ${t.title}`).join('\n')
-      + `\n\nCHECKLIST — HR\n` + hrTasks.map(t => `- ${t.title}`).join('\n');
+      + (hireTasks.length ? `\n\nCHECKLIST\n` + hireTasks.map(t => `- ${t.title}`).join('\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
   function emailGuide() {
@@ -209,19 +256,33 @@ export default function OnboardingClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Onboarding</h1>
-          <p className="text-sm text-text-muted mt-0.5">A general new-hire guide — edit, add, or remove anything, then send it</p>
+          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : 'Edit, add, or remove anything, then send it'}</p>
         </div>
-        <div className="ml-auto flex items-center gap-2.5">
-          <input value={hire} onChange={e => setHire(e.target.value)} placeholder="New hire name (optional)"
-            className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-48" />
-          <button onClick={resetTemplate} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">↺ Reset</button>
-          <button onClick={copyEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">⧉ Copy</button>
-          <button onClick={emailGuide} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">✉ Email</button>
-          <button onClick={printGuide} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
+        <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 ml-4">
+          {(['dashboard', 'guides'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${view === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>
+              {v === 'dashboard' ? 'Dashboard' : 'Guide Templates'}
+            </button>
+          ))}
         </div>
+        {view === 'guides' && (
+          <div className="ml-auto flex items-center gap-2.5">
+            <input value={hire} onChange={e => setHire(e.target.value)} placeholder="New hire name (optional)"
+              className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-44" />
+            <button onClick={resetTemplate} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">↺ Reset</button>
+            <button onClick={copyEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">⧉ Copy</button>
+            <button onClick={emailGuide} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Email</button>
+            <button onClick={printGuide} className="bg-ink text-white text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-ink-dark">🖨 PDF</button>
+          </div>
+        )}
+        {view === 'dashboard' && (
+          <button onClick={() => { setShowAdd(true); setNewForm({ ...blankNew, guide: guides[0] ?? 'General' }); }} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add new hire</button>
+        )}
       </header>
 
-      {/* Guide selector */}
+      {/* Guide selector (guides view only) */}
+      {view === 'guides' && (
       <div className="px-8 pt-4 bg-white border-b border-border flex items-center gap-2 flex-wrap flex-shrink-0">
         {guides.map(g => (
           <button key={g} onClick={() => setGuide(g)}
@@ -232,7 +293,11 @@ export default function OnboardingClient() {
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
         {guide !== 'General' && <button onClick={deleteGuide} className="ml-auto text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>}
       </div>
+      )}
 
+      {view === 'dashboard' && Dashboard()}
+
+      {view === 'guides' && (
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-7xl">
           <div className="xl:col-span-2 space-y-6">
@@ -350,6 +415,128 @@ export default function OnboardingClient() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
+
+  function Dashboard() {
+    const person = people.find(p => p.id === selected) ?? null;
+    return (
+      <div className="flex-1 overflow-auto px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
+          {/* People list */}
+          <div className="space-y-3">
+            {people.length === 0 && <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-6 text-center">No one onboarding yet — click “Add new hire”.</div>}
+            {people.map(p => {
+              const { done, total, pct } = progressOf(p);
+              const complete = p.status === 'Complete';
+              return (
+                <button key={p.id} onClick={() => setSelected(p.id)}
+                  className={`w-full text-left bg-white border rounded-card p-4 transition-colors ${selected === p.id ? 'border-ink' : 'border-border hover:border-border-light'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-text-primary truncate">{p.name}</div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${complete ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{complete ? 'Complete' : `${pct}%`}</span>
+                  </div>
+                  <div className="text-xs text-text-muted mt-0.5">{p.position || p.worker_type} · {p.guide} guide</div>
+                  <div className="mt-2 h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: complete ? '#2f7d5b' : '#c9a24a' }} />
+                  </div>
+                  <div className="text-[11px] text-text-muted mt-1">{done}/{total} tasks</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Detail panel */}
+          <div className="lg:col-span-2">
+            {!person ? (
+              <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center">Select someone to see their checklist.</div>
+            ) : (() => {
+              const list = tasksFor(person.guide);
+              const prog = parseProg(person.progress);
+              const { done, total, pct } = progressOf(person);
+              const allDone = total > 0 && done === total;
+              return (
+                <div className="bg-white border border-border rounded-card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border flex items-start gap-3">
+                    <div className="flex-1">
+                      <h2 className="font-spectral text-[19px] font-semibold text-text-primary">{person.name}</h2>
+                      <p className="text-sm text-text-muted">{[person.position, person.email, person.start_date && `Starts ${person.start_date}`].filter(Boolean).join(' · ')}</p>
+                      <div className="flex gap-2 mt-1.5 text-[11px]">
+                        <span className="font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{person.worker_type}</span>
+                        <span className="font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{person.guide} guide</span>
+                        <span className="font-semibold px-2 py-0.5 rounded-full bg-[#f7efe1] text-[#b07d2a]">{pct}% complete</span>
+                      </div>
+                    </div>
+                    <button onClick={() => deleteOnboardee(person.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Remove</button>
+                  </div>
+                  <div className="p-4 space-y-1">
+                    {list.map(t => {
+                      const isDone = !!prog[t.title];
+                      return (
+                        <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas cursor-pointer">
+                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b]" />
+                          <span className={`flex-1 text-sm ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`}>{t.title}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${(t.owner ?? '') === 'HR' ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{(t.owner ?? '') === 'HR' ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}</span>
+                        </label>
+                      );
+                    })}
+                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet.</p>}
+                  </div>
+                  <div className="px-5 py-4 border-t border-border flex items-center justify-between">
+                    <span className="text-sm text-text-muted">{done}/{total} done</span>
+                    {person.status === 'Complete' ? (
+                      <span className="text-sm font-semibold text-[#2f7d5b]">✓ Completed — added to Staffing</span>
+                    ) : (
+                      <button onClick={() => completeOnboardee(person)} disabled={!allDone}
+                        className="bg-[#2f7d5b] text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-[#236045] disabled:opacity-40"
+                        title={allDone ? '' : 'Finish all tasks first'}>Mark complete → add to Staffing</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Add new hire modal */}
+        {showAdd && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={() => setShowAdd(false)}>
+            <div className="bg-white rounded-card w-full max-w-lg shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <h2 className="font-spectral text-[18px] font-semibold">Add new hire</h2>
+                <button onClick={() => setShowAdd(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+              </div>
+              <div className="p-6 grid grid-cols-2 gap-4">
+                {([['Name', 'name'], ['Email', 'email'], ['Position', 'position'], ['Phone', 'phone'], ['Start date', 'start_date'], ['DOB', 'dob']] as [string, keyof typeof newForm][]).map(([l, k]) => (
+                  <div key={k} className={k === 'name' ? 'col-span-2' : ''}>
+                    <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">{l}</label>
+                    <input type={k === 'start_date' ? 'date' : 'text'} value={newForm[k]} onChange={e => setNewForm(f => ({ ...f, [k]: e.target.value }))}
+                      placeholder={k === 'dob' ? 'MM/DD/YYYY' : undefined}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
+                ))}
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Type</label>
+                  <select value={newForm.worker_type} onChange={e => setNewForm(f => ({ ...f, worker_type: e.target.value }))} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                    {['Employee', 'Contractor'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Onboarding guide</label>
+                  <select value={newForm.guide} onChange={e => setNewForm(f => ({ ...f, guide: e.target.value }))} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                    {guides.map(g => <option key={g}>{g}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+                <button onClick={() => setShowAdd(false)} className="border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
+                <button onClick={addOnboardee} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Start onboarding</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 }
