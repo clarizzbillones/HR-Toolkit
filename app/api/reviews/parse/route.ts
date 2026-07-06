@@ -1,18 +1,20 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 
-const PROMPT = `You are summarizing an employee performance review. Produce a concise, plain-text summary (4–7 sentences) covering: overall assessment/rating if present, key strengths, areas for improvement, and any goals or next steps. No markdown, no bullet characters unless natural. Return ONLY the summary.`;
+// Short, fast "quick summary" — 3–4 sentences
+const PROMPT = `Write a brief 3–4 sentence quick summary of this employee performance review: overall assessment, main strength, main area to improve. Plain text only, no markdown or bullets. Return ONLY the summary.`;
+// Prefer the fast model so parsing returns quickly
+const FAST = process.env.ANTHROPIC_FAST_MODEL ?? 'claude-haiku-4-5-20251001';
 
 async function summarize(text: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return text.slice(0, 4000); // no key — return extracted text as-is
+  if (!apiKey) return text.slice(0, 2000); // no key — return extracted text as-is
   try {
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic.Anthropic({ apiKey });
-    const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5-20250929';
-    const msg = await client.messages.create({ model, max_tokens: 700, messages: [{ role: 'user', content: `${PROMPT}\n\nReview content:\n${text.slice(0, 30000)}` }] });
-    return (msg.content[0]?.type === 'text' ? msg.content[0].text : '').trim() || text.slice(0, 4000);
-  } catch { return text.slice(0, 4000); }
+    const msg = await client.messages.create({ model: FAST, max_tokens: 300, messages: [{ role: 'user', content: `${PROMPT}\n\nReview content:\n${text.slice(0, 20000)}` }] });
+    return (msg.content[0]?.type === 'text' ? msg.content[0].text : '').trim() || text.slice(0, 2000);
+  } catch { return text.slice(0, 2000); }
 }
 
 async function summarizePdf(base64: string): Promise<string | null> {
@@ -21,9 +23,8 @@ async function summarizePdf(base64: string): Promise<string | null> {
   try {
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic.Anthropic({ apiKey });
-    const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5-20250929';
     const msg = await client.messages.create({
-      model, max_tokens: 700,
+      model: FAST, max_tokens: 300,
       messages: [{ role: 'user', content: [
         { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
         { type: 'text', text: PROMPT },
