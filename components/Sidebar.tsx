@@ -15,6 +15,7 @@ const navItems = [
   { href: '/trips',     label: 'Trip Help Desk' },
   { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/staffing',  label: 'Staffing' },
+  { href: '/onboarding', label: 'Onboarding' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
