@@ -3,9 +3,14 @@ import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
-  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'task';
+  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task';
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
+}
+interface TableData { headers: string[]; rows: string[][] }
+function parseTable(body: string | null): TableData {
+  try { const t = JSON.parse(body ?? ''); if (Array.isArray(t.headers) && Array.isArray(t.rows)) return t; } catch { /* ignore */ }
+  return { headers: ['Column 1', 'Column 2'], rows: [['', '']] };
 }
 
 export default function OnboardingClient() {
@@ -26,10 +31,13 @@ export default function OnboardingClient() {
   const introSections = gItems.filter(i => i.kind === 'section' && i.sort_order < 50);
   const closingSections = gItems.filter(i => i.kind === 'section' && i.sort_order >= 50);
   const schedule = gItems.filter(i => i.kind === 'schedule');
+  const tools = gItems.filter(i => i.kind === 'tool');
   const links = gItems.filter(i => i.kind === 'sop');
+  const tables = gItems.filter(i => i.kind === 'table');
   const tasks = gItems.filter(i => i.kind === 'task');
   const hrTasks = tasks.filter(t => (t.owner ?? '') === 'HR');
   const hireTasks = tasks.filter(t => (t.owner ?? '') !== 'HR');
+  const hireLabel = guide === 'Contractor' ? 'Contractor' : 'New Hire';
   const doneCount = tasks.filter(t => t.done).length;
 
   async function patch(id: string, fields: Partial<Item>) {
@@ -109,6 +117,29 @@ export default function OnboardingClient() {
   const cell = "px-3 py-2 text-sm border-t border-[#f1ece3]";
   const inp = "w-full bg-transparent focus:outline-none focus:bg-canvas rounded px-1 -mx-1";
 
+  function saveTable(id: string, d: TableData) { patch(id, { body: JSON.stringify(d) }); }
+
+  // Reusable editable list (Tools or SOP Links)
+  const LinkBlock = ({ kind, title, color, list, placeholder }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string }) => (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
+        <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</h2>
+      </div>
+      <div className="bg-white border border-border rounded-card p-3 space-y-1">
+        {list.map(l => (
+          <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+            <input value={l.title} onChange={e => patch(l.id, { title: e.target.value })} className="flex-1 bg-transparent text-sm font-medium text-text-primary focus:outline-none" placeholder={placeholder} />
+            <input value={l.url ?? ''} onChange={e => patch(l.id, { url: e.target.value })} className="w-56 bg-transparent text-sm text-[#3f6b8a] focus:outline-none border-l border-border-light pl-2" placeholder="paste link (optional)" />
+            {l.url && <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#3f6b8a] hover:underline">↗</a>}
+            <button onClick={() => remove(l.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
+          </div>
+        ))}
+        <button onClick={() => add(kind, { title: placeholder })} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add</button>
+      </div>
+    </div>
+  );
+
   function printGuide() {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const secHtml = (arr: Item[]) => arr.map(s => `
@@ -122,9 +153,17 @@ export default function OnboardingClient() {
         <thead><tr style="background:#e9f0f5">${['Date','Agenda','Assignee','Notes','Location'].map(h => `<th style="text-align:left;padding:5px 8px;color:#3f6b8a;font-size:9px;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
         <tbody>${schedule.map(r => `<tr style="border-top:1px solid #eee">${[r.day, r.title, r.assignee, r.body, r.location].map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`;
-    const linksHtml = links.length === 0 ? '' : `
-      <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #6b4f8a;padding-left:10px;margin:20px 0 6px">Tools & SOP Links</h2>
-      <ul style="columns:2;font-size:12px;color:#333;padding-left:16px">${links.map(l => `<li style="margin:2px 0">${l.url ? `<a href="${esc(l.url)}" style="color:#3f6b8a">${esc(l.title)}</a>` : esc(l.title)}${l.assignee ? ` <span style="color:#999">— ${esc(l.assignee)}</span>` : ''}</li>`).join('')}</ul>`;
+    const listHtml = (heading: string, list: Item[]) => list.length === 0 ? '' : `
+      <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #6b4f8a;padding-left:10px;margin:20px 0 6px">${heading}</h2>
+      <ul style="columns:2;font-size:12px;color:#333;padding-left:16px">${list.map(l => `<li style="margin:2px 0">${l.url ? `<a href="${esc(l.url)}" style="color:#3f6b8a">${esc(l.title)}</a>` : esc(l.title)}</li>`).join('')}</ul>`;
+    const toolsHtml = listHtml('Tools', tools);
+    const linksHtml = listHtml('SOP Links', links);
+    const tablesHtml = tables.map(t => { const d = parseTable(t.body); return `
+      <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #8a6d3b;padding-left:10px;margin:20px 0 6px">${esc(t.title)}</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;break-inside:avoid">
+        <thead><tr style="background:#f0ece4">${d.headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
+        <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`; }).join('');
     const taskGroup = (label: string, list: Item[]) => list.length ? `
       <div style="margin-top:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#666">${label} to-do</div>
       <ul style="list-style:none;padding:0;font-size:12px;color:#333">${list.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul></div>` : '';
@@ -141,21 +180,28 @@ export default function OnboardingClient() {
         </div>
         <div style="padding:24px 32px">
           <p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
-          ${secHtml(introSections)}${schedHtml}${linksHtml}${secHtml(closingSections)}${taskHtml}
+          ${secHtml(introSections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${secHtml(closingSections)}${taskHtml}
         </div>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
   }
 
-  function copyEmail() {
-    const text = `${greeting}\n\n`
+  function buildText() {
+    const tbl = (t: Item) => { const d = parseTable(t.body); return `${t.title.toUpperCase()}\n` + [d.headers.join(' | '), ...d.rows.map(r => r.join(' | '))].join('\n'); };
+    return `${greeting}\n\n`
       + introSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n')
-      + `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n')
-      + `\n\nTOOLS & SOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n')
-      + `\n\n` + closingSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n')
-      + `\n\nONBOARDING CHECKLIST\n` + tasks.map(t => `- ${t.title}`).join('\n');
-    navigator.clipboard?.writeText(text);
-    showToast('Guide copied — paste into an email');
+      + (schedule.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
+      + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '')
+      + (closingSections.length ? `\n\n` + closingSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n') : '')
+      + `\n\nCHECKLIST — ${hireLabel.toUpperCase()}\n` + hireTasks.map(t => `- ${t.title}`).join('\n')
+      + `\n\nCHECKLIST — HR\n` + hrTasks.map(t => `- ${t.title}`).join('\n');
+  }
+  function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
+  function emailGuide() {
+    const subject = `${guide} Onboarding Guide — Litson${hire.trim() ? ` (${hire.trim()})` : ''}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildText())}`;
   }
 
   return (
@@ -169,7 +215,8 @@ export default function OnboardingClient() {
           <input value={hire} onChange={e => setHire(e.target.value)} placeholder="New hire name (optional)"
             className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-48" />
           <button onClick={resetTemplate} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">↺ Reset</button>
-          <button onClick={copyEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">✉ Copy as email</button>
+          <button onClick={copyEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">⧉ Copy</button>
+          <button onClick={emailGuide} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">✉ Email</button>
           <button onClick={printGuide} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
         </div>
       </header>
@@ -225,24 +272,50 @@ export default function OnboardingClient() {
             </div>
             )}
 
-            {/* Tools & SOP links */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2.5 h-6 rounded-full bg-[#6b4f8a]" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#6b4f8a]">Tools & SOP Links</h2>
-              </div>
-              <div className="bg-white border border-border rounded-card p-3 space-y-1">
-                {links.map(l => (
-                  <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
-                    <input value={l.title} onChange={e => patch(l.id, { title: e.target.value })} className="flex-1 bg-transparent text-sm font-medium text-text-primary focus:outline-none" placeholder="Tool / SOP name" />
-                    <input value={l.url ?? ''} onChange={e => patch(l.id, { url: e.target.value })} className="w-56 bg-transparent text-sm text-[#3f6b8a] focus:outline-none border-l border-border-light pl-2" placeholder="paste link (optional)" />
-                    {l.url && <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#3f6b8a] hover:underline">↗</a>}
-                    <button onClick={() => remove(l.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
+            {/* Tools */}
+            <LinkBlock kind="tool" title="Tools" color="#6b4f8a" list={tools} placeholder="Tool name" />
+
+            {/* SOP Links */}
+            <LinkBlock kind="sop" title="SOP Links" color="#3f6b8a" list={links} placeholder="SOP name" />
+
+            {/* Tables */}
+            {tables.map(t => {
+              const d = parseTable(t.body);
+              return (
+                <div key={t.id}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
+                    <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })} className="text-sm font-bold uppercase tracking-wider text-[#6b5427] bg-transparent focus:outline-none flex-1" />
+                    <button onClick={() => remove(t.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete table</button>
                   </div>
-                ))}
-                <button onClick={() => add('sop', { title: 'New tool / SOP' })} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add link</button>
-              </div>
-            </div>
+                  <div className="bg-white border border-border rounded-card overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[#f0ece4]"><tr>
+                        {d.headers.map((h, ci) => (
+                          <th key={ci} className="text-left px-2 py-2"><input value={h} onChange={e => { const n = { ...d, headers: d.headers.map((x, i) => i === ci ? e.target.value : x) }; saveTable(t.id, n); }} className="w-full bg-transparent text-[11px] font-bold uppercase tracking-wider text-[#8a6d3b] focus:outline-none" /></th>
+                        ))}
+                        <th className="w-8" />
+                      </tr></thead>
+                      <tbody>
+                        {d.rows.map((row, ri) => (
+                          <tr key={ri} className="group border-t border-[#f1ece3]">
+                            {row.map((c, ci) => (
+                              <td key={ci} className="px-2 py-1.5 align-top"><textarea rows={1} value={c} onChange={e => { const rows = d.rows.map((r, i) => i === ri ? r.map((x, j) => j === ci ? e.target.value : x) : r); saveTable(t.id, { ...d, rows }); }} className="w-full bg-transparent text-sm text-text-secondary focus:outline-none focus:bg-canvas rounded resize-none" /></td>
+                            ))}
+                            <td className="px-1 text-right"><button onClick={() => saveTable(t.id, { ...d, rows: d.rows.filter((_, i) => i !== ri) })} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex gap-3 border-t border-[#f1ece3] px-3 py-2">
+                      <button onClick={() => saveTable(t.id, { ...d, rows: [...d.rows, d.headers.map(() => '')] })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Row</button>
+                      <button onClick={() => saveTable(t.id, { headers: [...d.headers, 'Column'], rows: d.rows.map(r => [...r, '']) })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Column</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) })} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
 
             {/* Closing sections */}
             <div className="space-y-4">{closingSections.map(SectionCard)}</div>
@@ -255,7 +328,7 @@ export default function OnboardingClient() {
                 <h2 className="font-spectral text-[16px] font-semibold text-text-primary">Onboarding Checklist</h2>
                 <span className="text-xs font-semibold text-[#2f7d5b]">{doneCount}/{tasks.length}</span>
               </div>
-              {([['New Hire', hireTasks, '#2f7d5b'], ['HR', hrTasks, '#3f6b8a']] as const).map(([label, list, color]) => (
+              {([[hireLabel, hireTasks, '#2f7d5b'], ['HR', hrTasks, '#3f6b8a']] as [string, Item[], string][]).map(([label, list, color]) => (
                 <div key={label} className="border-t border-[#f1ece3] first:border-t-0">
                   <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color }}>{label} to-do</div>
                   <div className="px-3 pb-2 space-y-1">
