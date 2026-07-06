@@ -105,6 +105,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const [periods, setPeriods] = useState<Period[]>(initialPeriods);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [saving, setSaving] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDates, setEditDates] = useState<{ cutoff: string; check_date: string; period: string }>({ cutoff: '', check_date: '', period: '' });
   const [contractors, setContractors] = useState<Contractor[]>([]);
@@ -259,8 +260,12 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
       payDate: (p.check_date ?? p.run_date ?? '').slice(0, 10), status: p.status, period: p,
     })),
   ];
-  const typeCounts = TYPE_ORDER.map(t => [t, deadlineRows.filter(r => r.type === t).length] as const).filter(([, n]) => n > 0);
-  const visibleRows = deadlineRows
+  // Processed periods auto-move to the Archive; active view hides them
+  const isArchived = (r: DeadlineRow) => r.kind === 'period' && r.status === 'Processed';
+  const archivedCount = deadlineRows.filter(isArchived).length;
+  const activeRows = deadlineRows.filter(r => !isArchived(r));
+  const typeCounts = TYPE_ORDER.map(t => [t, activeRows.filter(r => r.type === t).length] as const).filter(([, n]) => n > 0);
+  const visibleRows = (showArchive ? deadlineRows.filter(isArchived) : activeRows)
     .filter(r => filterType === 'All' || r.type === filterType)
     .sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'));
   const todayIso = iso(new Date());
@@ -316,21 +321,27 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
 
           {/* Type filter */}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mr-1">Payroll Deadlines</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mr-1">{showArchive ? 'Archived (Processed)' : 'Payroll Deadlines'}</span>
             <button onClick={() => setFilterType('All')}
               className={clsx('text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors', filterType === 'All' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:bg-canvas')}>
-              All <span className="opacity-60">{deadlineRows.length}</span>
+              All <span className="opacity-60">{showArchive ? archivedCount : activeRows.length}</span>
             </button>
-            {typeCounts.map(([t, n]) => (
+            {!showArchive && typeCounts.map(([t, n]) => (
               <button key={t} onClick={() => setFilterType(t)}
                 className={clsx('text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors', filterType === t ? 'border-transparent ' + TYPE_STYLE[t] : 'bg-white text-text-secondary border-border-light hover:bg-canvas')}>
                 {t} <span className="opacity-60">{n}</span>
               </button>
             ))}
-            <button onClick={generateAll}
-              className="ml-auto text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
-              ↻ Generate all deadlines
+            <button onClick={() => { setShowArchive(v => !v); setFilterType('All'); }}
+              className={clsx('ml-auto text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors', showArchive ? 'bg-[#eef5f1] text-[#2f7d5b] border-transparent' : 'bg-white text-text-secondary border-border-light hover:bg-canvas')}>
+              🗄 {showArchive ? 'Back to active' : 'Archive'} <span className="opacity-60">{archivedCount}</span>
             </button>
+            {!showArchive && (
+              <button onClick={generateAll}
+                className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">
+                ↻ Generate all deadlines
+              </button>
+            )}
           </div>
 
           <div className="bg-white border border-border rounded-card overflow-hidden">
@@ -435,7 +446,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                 })}
                 {!visibleRows.length && (
                   <tr><td colSpan={7} className="px-5 py-10 text-center text-text-muted">
-                    No deadlines yet — click “Generate all deadlines”.
+                    {showArchive ? 'No archived deadlines yet — mark a run as “Processed” to file it here.' : 'No deadlines yet — click “Generate all deadlines”.'}
                   </td></tr>
                 )}
               </tbody>
