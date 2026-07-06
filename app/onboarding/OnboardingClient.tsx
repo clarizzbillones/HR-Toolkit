@@ -19,6 +19,11 @@ export default function OnboardingClient() {
   const [guide, setGuide] = useState('General');
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ title: string; body: string }>({ title: '', body: '' });
+  // Draft/customize mode: edits are temporary and only affect the exported PDF
+  const [draftMode, setDraftMode] = useState(false);
+  const [snapshot, setSnapshot] = useState<Item[] | null>(null);
+  function enterDraft() { setSnapshot(items.map(i => ({ ...i }))); setDraftMode(true); setEditing(null); }
+  function exitDraft() { if (snapshot) setItems(snapshot); setSnapshot(null); setDraftMode(false); setEditing(null); showToast('Reverted to the saved template'); }
   const [hire, setHire] = useState('');
   const [view, setView] = useState<'dashboard' | 'guides'>('dashboard');
   const [people, setPeople] = useState<any[]>([]);
@@ -82,9 +87,14 @@ export default function OnboardingClient() {
 
   async function patch(id: string, fields: Partial<Item>) {
     setItems(prev => prev.map(i => i.id === id ? { ...i, ...fields } : i));
+    if (draftMode) return;
     await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...fields }) });
   }
   async function add(kind: Item['kind'], seed: Partial<Item> = {}) {
+    if (draftMode) {
+      const item = { id: 'tmp' + Date.now() + Math.random().toString(36).slice(2, 6), guide, kind, title: '', body: null, day: null, assignee: null, location: null, url: null, owner: null, done: false, sort_order: 9999, ...seed } as Item;
+      setItems(prev => [...prev, item]); return item;
+    }
     const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, guide, ...seed }) });
     const { item } = await res.json();
     setItems(prev => [...prev, item]);
@@ -109,6 +119,7 @@ export default function OnboardingClient() {
   }
   async function remove(id: string) {
     setItems(prev => prev.filter(i => i.id !== id));
+    if (draftMode) return;
     await fetch('/api/onboarding', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     showToast('Removed');
   }
@@ -270,7 +281,14 @@ export default function OnboardingClient() {
           <div className="ml-auto flex items-center gap-2.5">
             <input value={hire} onChange={e => setHire(e.target.value)} placeholder="New hire name (optional)"
               className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-44" />
-            <button onClick={resetTemplate} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">↺ Reset</button>
+            {draftMode ? (
+              <button onClick={exitDraft} className="bg-[#fdeaea] border border-[#f3c9c1] text-[#b0412f] text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-[#fbddd6]">✕ Discard changes</button>
+            ) : (
+              <>
+                <button onClick={enterDraft} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Make temporary edits just for this PDF">✎ Customize for export</button>
+                <button onClick={resetTemplate} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">↺ Reset</button>
+              </>
+            )}
             <button onClick={copyEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">⧉ Copy</button>
             <button onClick={emailGuide} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Email</button>
             <button onClick={printGuide} className="bg-ink text-white text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-ink-dark">🖨 PDF</button>
@@ -291,8 +309,14 @@ export default function OnboardingClient() {
           </button>
         ))}
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
-        {guide !== 'General' && <button onClick={deleteGuide} className="ml-auto text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>}
+        {guide !== 'General' && !draftMode && <button onClick={deleteGuide} className="ml-auto text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>}
       </div>
+      )}
+
+      {view === 'guides' && draftMode && (
+        <div className="px-8 py-2 bg-[#fbf3e6] border-b border-[#e8d5b0] text-xs font-semibold text-[#8a6d3b] flex items-center gap-2 flex-shrink-0">
+          ✎ Customize mode — edits and deletions here are <span className="underline">temporary</span> and only affect the PDF/email you export now. Discard when done to keep the saved template unchanged.
+        </div>
       )}
 
       {view === 'dashboard' && Dashboard()}
