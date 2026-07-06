@@ -96,8 +96,7 @@ export default function OnboardingClient() {
   useEffect(() => { if (guides.length && !guides.includes(guide)) setGuide(guides[0]); }, [items]); // eslint-disable-line
 
   const gItems = items.filter(i => i.guide === guide);
-  const introSections = gItems.filter(i => i.kind === 'section' && i.sort_order < 50);
-  const closingSections = gItems.filter(i => i.kind === 'section' && i.sort_order >= 50);
+  const sections = gItems.filter(i => i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
   const schedule = gItems.filter(i => i.kind === 'schedule');
   const tools = gItems.filter(i => i.kind === 'tool');
   const links = gItems.filter(i => i.kind === 'sop');
@@ -178,16 +177,13 @@ export default function OnboardingClient() {
   async function reorderSection(targetId: string) {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
     const src = items.find(i => i.id === dragId), tgt = items.find(i => i.id === targetId);
-    if (!src || !tgt || src.kind !== 'section') { setDragId(null); return; }
-    const closing = src.sort_order >= 50;
-    if ((tgt.sort_order >= 50) !== closing) { setDragId(null); return; } // only within same group
-    const group = items.filter(i => i.guide === guide && i.kind === 'section' && (i.sort_order >= 50) === closing)
-      .sort((a, b) => a.sort_order - b.sort_order);
-    const ids = group.map(i => i.id);
+    if (!src || !tgt || src.kind !== 'section' || tgt.kind !== 'section') { setDragId(null); return; }
+    // Reorder freely across ALL sections in this guide
+    const all = items.filter(i => i.guide === guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+    const ids = all.map(i => i.id);
     ids.splice(ids.indexOf(dragId), 1);
     ids.splice(ids.indexOf(targetId), 0, dragId);
-    const base = closing ? 50 : 0;
-    const updated = ids.map((id, i) => ({ id, sort_order: base + i }));
+    const updated = ids.map((id, i) => ({ id, sort_order: i }));
     setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
     setDragId(null);
     if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
@@ -297,7 +293,7 @@ export default function OnboardingClient() {
         </div>
         <div style="padding:24px 32px">
           <p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
-          ${secHtml(introSections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${secHtml(closingSections)}${taskHtml}
+          ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${taskHtml}
         </div>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
@@ -306,12 +302,11 @@ export default function OnboardingClient() {
   function buildText() {
     const tbl = (t: Item) => { const d = parseTable(t.body); return `${t.title.toUpperCase()}\n` + [d.headers.join(' | '), ...d.rows.map(r => r.join(' | '))].join('\n'); };
     return `${greeting}\n\n`
-      + introSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n')
+      + sections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n')
       + (schedule.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
       + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '')
-      + (closingSections.length ? `\n\n` + closingSections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n') : '')
       + (hireTasks.length ? `\n\nCHECKLIST\n` + hireTasks.map(t => `- ${t.title}`).join('\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
@@ -388,9 +383,9 @@ export default function OnboardingClient() {
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-7xl">
           <div className="xl:col-span-2 space-y-6">
-            {/* Intro sections */}
+            {/* Sections — drag the ⠿ grip to reorder any section anywhere */}
             <div className="space-y-4">
-              {introSections.map(SectionCard)}
+              {sections.map(SectionCard)}
               <button onClick={addSection} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add section</button>
             </div>
 
@@ -469,8 +464,6 @@ export default function OnboardingClient() {
             })}
             <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) })} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
 
-            {/* Closing sections */}
-            <div className="space-y-4">{closingSections.map(SectionCard)}</div>
           </div>
 
           {/* Checklist — grouped by who owns the to-do */}
