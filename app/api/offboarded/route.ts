@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-const FIELDS = ['name','worker_type','position','dialpad','personal_phone','email','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','offboarded'] as const;
+const FIELDS = ['name','worker_type','position','dialpad','personal_phone','email','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','american','offboarded'] as const;
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS offboarded_staff (
@@ -12,6 +12,7 @@ async function ensureTable() {
   )`;
   await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS southwest TEXT`;
   await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS worker_type TEXT`;
+  await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS american TEXT`;
 }
 
 function rid() { return `of${Date.now()}${Math.random().toString(36).slice(2, 7)}`; }
@@ -31,8 +32,8 @@ export async function POST(req: Request) {
   if (body.replace) await sql`DELETE FROM offboarded_staff`;
   for (const r of clean) {
     const v = Object.fromEntries(FIELDS.map(f => [f, r[f] != null && r[f] !== '' ? String(r[f]) : null]));
-    await sql`INSERT INTO offboarded_staff (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,offboarded)
-      VALUES (${rid()},${v.name},${v.worker_type ?? 'Employee'},${v.position},${v.dialpad},${v.personal_phone},${v.email},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.southwest},${v.offboarded})`;
+    await sql`INSERT INTO offboarded_staff (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,offboarded)
+      VALUES (${rid()},${v.name},${v.worker_type ?? 'Employee'},${v.position},${v.dialpad},${v.personal_phone},${v.email},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.southwest},${v.american},${v.offboarded})`;
   }
   const rows = await sql`SELECT * FROM offboarded_staff ORDER BY name ASC`;
   return NextResponse.json({ rows, inserted: clean.length });

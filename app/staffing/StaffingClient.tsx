@@ -9,7 +9,7 @@ interface Staff {
   personal_phone: string | null; email: string | null; start_date: string | null;
   dob: string | null; favorite_color: string | null; favorite_treat: string | null;
   note: string | null; ktn: string | null; marriott: string | null; delta: string | null;
-  southwest?: string | null; weight?: string | null; offboarded?: string | null;
+  southwest?: string | null; american?: string | null; weight?: string | null; offboarded?: string | null;
 }
 interface Vendor {
   id: string; entity: string | null; name: string | null; phone: string | null;
@@ -24,7 +24,7 @@ const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
   { key: 'favorite_treat', label: 'Favorite Treat' }, { key: 'note', label: 'Note' },
   { key: 'ktn', label: 'KTN' }, { key: 'marriott', label: 'Marriott' },
-  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'weight', label: 'Weight' },
+  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'american', label: 'American Airlines' }, { key: 'weight', label: 'Weight' },
 ];
 const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'name', label: 'Name' }, { key: 'worker_type', label: 'Type' }, { key: 'position', label: 'Position' },
@@ -33,7 +33,7 @@ const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
   { key: 'favorite_treat', label: 'Favorite Treat' }, { key: 'note', label: 'Note' },
   { key: 'ktn', label: 'KTN' }, { key: 'marriott', label: 'Marriott' },
-  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'offboarded', label: 'Offboarded' },
+  { key: 'delta', label: 'Delta' }, { key: 'southwest', label: 'Southwest' }, { key: 'american', label: 'American Airlines' }, { key: 'offboarded', label: 'Offboarded' },
 ];
 const VENDOR_COLUMNS: { key: keyof Vendor; label: string }[] = [
   { key: 'entity', label: 'Facility/Entity' }, { key: 'name', label: 'Name' },
@@ -99,6 +99,7 @@ function mapStaff(row: Record<string, any>, offboarded = false): Partial<Staff> 
     marriott: String(get(/marriot/i) || ''),
     delta: String(get(/delta/i) || ''),
     southwest: String(get(/southwest|rapid\s*rewards/i) || ''),
+    american: String(get(/american|aadvantage|\baa\b/i) || ''),
     ...(offboarded
       ? { offboarded: (() => { const v = get(/offboard|term|end\s*date/i); return v ? excelToDate(v) : ''; })() }
       : { weight: String(get(/weight/i) || '') }),
