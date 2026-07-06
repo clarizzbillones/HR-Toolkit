@@ -511,20 +511,25 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   const [d12, setD12] = useState(employee.review_1yr_date?.slice(0, 10) ?? '');
   const [s12, setS12] = useState(employee.review_1yr_status ?? 'Not Started');
   const [summary, setSummary] = useState(employee.review_notes ?? '');
+  const [sum6, setSum6] = useState(employee.review_6mo_summary ?? '');
+  const [sum12, setSum12] = useState(employee.review_1yr_summary ?? '');
   const [busy, setBusy] = useState(false);
-  const [parsing, setParsing] = useState(false);
+  const [parsing, setParsing] = useState<'6mo' | '1yr' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<'6mo' | '1yr'>('6mo');
 
+  function pickFile(target: '6mo' | '1yr') { targetRef.current = target; fileRef.current?.click(); }
   async function parseSummaryFile(file: File) {
-    setParsing(true);
+    const target = targetRef.current;
+    setParsing(target);
     try {
       const fd = new FormData(); fd.append('file', file);
       const res = await fetch('/api/reviews/parse', { method: 'POST', body: fd });
       const d = await res.json();
       if (!res.ok) { alert(d.error ?? 'Could not parse the file'); return; }
-      setSummary(prev => prev ? `${prev}\n\n${d.summary}` : d.summary);
+      (target === '6mo' ? setSum6 : setSum12)(d.summary);
     } catch { alert('Failed to read file'); }
-    setParsing(false);
+    setParsing(null);
   }
 
   const hasExternalSync = Boolean(employee.review_6mo_summary || employee.review_1yr_summary);
@@ -542,6 +547,8 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
         review_1yr_date: d12 || null,
         review_1yr_status: s12,
         review_notes: summary || null,
+        review_6mo_summary: sum6 || null,
+        review_1yr_summary: sum12 || null,
       });
     } finally {
       setBusy(false);
@@ -581,39 +588,46 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
             </div>
           </div>
 
-          {/* Quick summary */}
+          {/* Shared hidden picker for both summary uploads */}
+          <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.xlsx,.xls,.md" className="hidden"
+            onChange={e => { if (e.target.files?.[0]) { parseSummaryFile(e.target.files[0]); e.target.value = ''; } }} />
+
+          {/* 6-month review summary */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
-              <div className="flex items-center gap-3">
-                <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.xlsx,.xls,.md" className="hidden"
-                  onChange={e => { if (e.target.files?.[0]) { parseSummaryFile(e.target.files[0]); e.target.value = ''; } }} />
-                <button onClick={() => fileRef.current?.click()} disabled={parsing}
-                  className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{parsing ? 'Parsing…' : '↑ Upload & parse summary'}</button>
-                {linkedUrl && (
-                  <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-                    className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
-                )}
-              </div>
+              <label className="text-xs font-semibold text-[#2f7d5b] uppercase tracking-wide">6-Month Review Summary</label>
+              <button onClick={() => pickFile('6mo')} disabled={parsing !== null}
+                className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{parsing === '6mo' ? 'Parsing…' : '↑ Upload & summarize'}</button>
             </div>
-            {!hasExternalSync && (
-              <div className="mb-2 text-xs text-[#b07d2a] bg-[#f7efe1] border border-[#e8d5b0] rounded-ctrl px-3 py-2">
-                Not yet synced from the review dashboard — the link may have been created recently. Add a quick summary below in the meantime.
-              </div>
-            )}
-            <textarea
-              value={summary}
-              onChange={e => setSummary(e.target.value)}
-              rows={5}
-              placeholder="Add a short summary of this employee's performance / review notes…"
-              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none"
-            />
-            {(employee.review_6mo_summary || employee.review_1yr_summary) && (
-              <div className="mt-2 text-xs text-text-secondary space-y-1">
-                {employee.review_6mo_summary && <p><span className="font-semibold">6-mo:</span> {employee.review_6mo_summary}</p>}
-                {employee.review_1yr_summary && <p><span className="font-semibold">1-yr:</span> {employee.review_1yr_summary}</p>}
-              </div>
-            )}
+            <textarea value={sum6} onChange={e => setSum6(e.target.value)} rows={6}
+              placeholder="Upload the 6-month review file to auto-fill a 3-paragraph summary, or type here…"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
+          </div>
+
+          {/* 1-year review summary */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-[#3f6b8a] uppercase tracking-wide">1-Year Review Summary</label>
+              <button onClick={() => pickFile('1yr')} disabled={parsing !== null}
+                className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{parsing === '1yr' ? 'Parsing…' : '↑ Upload & summarize'}</button>
+            </div>
+            <textarea value={sum12} onChange={e => setSum12(e.target.value)} rows={6}
+              placeholder="Upload the 1-year review file to auto-fill a 3-paragraph summary, or type here…"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
+          </div>
+
+          {/* Quick notes */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick notes</label>
+              {linkedUrl && (
+                <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
+              )}
+            </div>
+            <textarea value={summary} onChange={e => setSummary(e.target.value)} rows={3}
+              placeholder="Any other notes about this employee…"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
           </div>
 
           <div>

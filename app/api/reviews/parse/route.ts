@@ -2,21 +2,32 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 
-// Short, fast "quick summary" — used only when an AI key is configured
-const PROMPT = `Write a brief 3–4 sentence quick summary of this employee performance review: overall assessment, main strength, main area to improve. Plain text only, no markdown or bullets. Return ONLY the summary.`;
+// 3-paragraph summary
+const PROMPT = `Summarize this employee performance review in exactly THREE short paragraphs, separated by a blank line:
+Paragraph 1 — overall assessment / rating.
+Paragraph 2 — key strengths.
+Paragraph 3 — areas to improve and goals / next steps.
+Plain text only, no markdown, no headings, no bullets. Return ONLY the three paragraphs.`;
 const FAST = process.env.ANTHROPIC_FAST_MODEL ?? 'claude-haiku-4-5-20251001';
 
-// Condense extracted text: AI if a key exists, otherwise trim the raw text
+// Without AI, return a trimmed ~3-paragraph extract instead of the whole document
+function extract3(text: string): string {
+  const paras = text.split(/\n\s*\n/).map(p => p.replace(/\s+/g, ' ').trim()).filter(p => p.length > 20);
+  const pick = paras.length <= 3 ? paras : [paras[0], paras[Math.floor(paras.length / 2)], paras[paras.length - 1]];
+  return pick.map(p => p.length > 700 ? p.slice(0, 700) + '…' : p).join('\n\n') || text.slice(0, 1500);
+}
+
+// Condense extracted text: AI 3-paragraph summary if a key exists, otherwise a trimmed extract
 async function condense(text: string): Promise<string> {
   const clean = text.replace(/\n{3,}/g, '\n\n').trim();
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return clean.slice(0, 4000); // no key — return extracted text
+  if (!apiKey) return extract3(clean);
   try {
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic.Anthropic({ apiKey });
-    const msg = await client.messages.create({ model: FAST, max_tokens: 300, messages: [{ role: 'user', content: `${PROMPT}\n\nReview content:\n${clean.slice(0, 20000)}` }] });
-    return (msg.content[0]?.type === 'text' ? msg.content[0].text : '').trim() || clean.slice(0, 4000);
-  } catch { return clean.slice(0, 4000); }
+    const msg = await client.messages.create({ model: FAST, max_tokens: 600, messages: [{ role: 'user', content: `${PROMPT}\n\nReview content:\n${clean.slice(0, 20000)}` }] });
+    return (msg.content[0]?.type === 'text' ? msg.content[0].text : '').trim() || extract3(clean);
+  } catch { return extract3(clean); }
 }
 
 export async function POST(req: Request) {
