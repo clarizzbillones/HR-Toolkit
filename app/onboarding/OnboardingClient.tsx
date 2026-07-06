@@ -7,6 +7,15 @@ interface Item {
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
 }
+// Turn plain URLs inside section text into clickable links
+function linkify(text: string | null) {
+  return String(text ?? '').split(/(https?:\/\/[^\s]+)/g).map((p, i) =>
+    /^https?:\/\//.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] underline break-all">{p}</a>
+      : <span key={i}>{p}</span>
+  );
+}
+
 interface TableData { headers: string[]; rows: string[][] }
 function parseTable(body: string | null): TableData {
   try { const t = JSON.parse(body ?? ''); if (Array.isArray(t.headers) && Array.isArray(t.rows)) return t; } catch { /* ignore */ }
@@ -169,7 +178,7 @@ export default function OnboardingClient() {
             {guides.length > 1 && <button onClick={() => copyToGuide(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Copy to…</button>}
             <button onClick={() => remove(s.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea] opacity-0 group-hover:opacity-100">Delete</button>
           </div>
-          <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3">{s.body}</p>
+          <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3">{linkify(s.body)}</p>
         </div>
       )}
     </div>
@@ -206,7 +215,7 @@ export default function OnboardingClient() {
     const secHtml = (arr: Item[]) => arr.map(s => `
       <section style="margin:0 0 18px;break-inside:avoid">
         <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px;margin:0 0 6px">${esc(s.title)}</h2>
-        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '')}</div>
+        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '').replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#3f6b8a">$1</a>')}</div>
       </section>`).join('');
     const schedHtml = schedule.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
