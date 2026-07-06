@@ -29,9 +29,8 @@ export async function POST(req: Request) {
   try {
     let text = '';
     if (name.endsWith('.pdf') || file.type === 'application/pdf') {
-      const { PDFParse } = require('pdf-parse');
-      const parser = new PDFParse({ data: new Uint8Array(buf) });
-      text = (await parser.getText()).text ?? '';
+      const pdf = require('pdf-parse/lib/pdf-parse.js');
+      text = (await pdf(buf)).text ?? '';
     } else if (name.endsWith('.docx')) {
       const mammoth = require('mammoth');
       text = (await mammoth.extractRawText({ buffer: buf })).value ?? '';
