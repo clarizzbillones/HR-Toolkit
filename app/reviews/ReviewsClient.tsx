@@ -88,6 +88,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     showToast('Disconnected');
   }
 
+  async function sendTestReminder() {
+    showToast('Sending test email…');
+    try {
+      const res = await fetch('/api/reviews/remind?test=1', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok) showToast(`✓ Test email sent to ${d.to}`);
+      else showToast(d.error ?? 'Could not send email');
+    } catch { showToast('Could not send email'); }
+  }
+
   async function scheduleReview() {
     if (!form.name || !form.date) return;
     setSaving(true);
@@ -201,10 +211,15 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
             <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees · times in CST</p>
           </div>
-          <button
-            onClick={() => setShowSchedule(true)}
-            className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
-          >+ Schedule Review</button>
+          <div className="flex items-center gap-2.5">
+            <button onClick={sendTestReminder}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >📧 Test reminder email</button>
+            <button
+              onClick={() => setShowSchedule(true)}
+              className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
+            >+ Schedule Review</button>
+          </div>
         </div>
       </header>
 

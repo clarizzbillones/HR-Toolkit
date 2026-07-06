@@ -3,6 +3,10 @@
     {
       "path": "/api/ics-refresh",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/reviews/remind",
+      "schedule": "0 13 * * *"
     }
   ]
 }
