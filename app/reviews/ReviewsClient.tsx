@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { reviewDateStr as sharedReviewDateStr } from '@/lib/reviews';
@@ -512,6 +512,20 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   const [s12, setS12] = useState(employee.review_1yr_status ?? 'Not Started');
   const [summary, setSummary] = useState(employee.review_notes ?? '');
   const [busy, setBusy] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function parseSummaryFile(file: File) {
+    setParsing(true);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/reviews/parse', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error ?? 'Could not parse the file'); return; }
+      setSummary(prev => prev ? `${prev}\n\n${d.summary}` : d.summary);
+    } catch { alert('Failed to read file'); }
+    setParsing(false);
+  }
 
   const hasExternalSync = Boolean(employee.review_6mo_summary || employee.review_1yr_summary);
 
@@ -571,10 +585,16 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
-              {linkedUrl && (
-                <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
-                  className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
-              )}
+              <div className="flex items-center gap-3">
+                <input ref={fileRef} type="file" accept=".pdf,.txt,.csv,.xlsx,.xls,.md" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) { parseSummaryFile(e.target.files[0]); e.target.value = ''; } }} />
+                <button onClick={() => fileRef.current?.click()} disabled={parsing}
+                  className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{parsing ? 'Parsing…' : '↑ Upload & parse summary'}</button>
+                {linkedUrl && (
+                  <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
+                    className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
+                )}
+              </div>
             </div>
             {!hasExternalSync && (
               <div className="mb-2 text-xs text-[#b07d2a] bg-[#f7efe1] border border-[#e8d5b0] rounded-ctrl px-3 py-2">

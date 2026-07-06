@@ -173,13 +173,38 @@ export default function OnboardingClient() {
     setItems(prev => [...prev, item]);
     showToast(`Copied to “${to}”`);
   }
+  const [dragId, setDragId] = useState<string | null>(null);
+  // Reorder sections within the same group (intro <50 / closing >=50) via drag & drop
+  async function reorderSection(targetId: string) {
+    if (!dragId || dragId === targetId) { setDragId(null); return; }
+    const src = items.find(i => i.id === dragId), tgt = items.find(i => i.id === targetId);
+    if (!src || !tgt || src.kind !== 'section') { setDragId(null); return; }
+    const closing = src.sort_order >= 50;
+    if ((tgt.sort_order >= 50) !== closing) { setDragId(null); return; } // only within same group
+    const group = items.filter(i => i.guide === guide && i.kind === 'section' && (i.sort_order >= 50) === closing)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const ids = group.map(i => i.id);
+    ids.splice(ids.indexOf(dragId), 1);
+    ids.splice(ids.indexOf(targetId), 0, dragId);
+    const base = closing ? 50 : 0;
+    const updated = ids.map((id, i) => ({ id, sort_order: base + i }));
+    setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
+    setDragId(null);
+    if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+  }
   function startEdit(s: Item) { setEditing(s.id); setDraft({ title: s.title, body: s.body ?? '' }); }
   async function saveEdit(id: string) { await patch(id, { title: draft.title, body: draft.body }); setEditing(null); showToast('Saved'); }
 
   const greeting = hire.trim() ? `Hi ${hire.trim()},` : 'Welcome aboard,';
 
   const SectionCard = (s: Item) => (
-    <div key={s.id} className="bg-white border border-border rounded-card overflow-hidden">
+    <div key={s.id}
+      draggable={editing !== s.id}
+      onDragStart={() => setDragId(s.id)}
+      onDragOver={e => e.preventDefault()}
+      onDrop={() => reorderSection(s.id)}
+      onDragEnd={() => setDragId(null)}
+      className={`bg-white border border-border rounded-card overflow-hidden ${dragId === s.id ? 'opacity-40' : ''}`}>
       {editing === s.id ? (
         <div className="p-5 space-y-3">
           <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
@@ -194,6 +219,7 @@ export default function OnboardingClient() {
       ) : (
         <div className="p-5 group">
           <div className="flex items-start gap-2">
+            <span className="cursor-grab select-none text-text-faint opacity-0 group-hover:opacity-100 mt-1" title="Drag to reorder">⠿</span>
             <h2 className="font-spectral text-[17px] font-semibold text-text-primary flex-1" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
             <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Edit</button>
             {guides.length > 1 && <button onClick={() => copyToGuide(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Copy to…</button>}

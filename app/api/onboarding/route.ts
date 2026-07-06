@@ -225,7 +225,7 @@ export async function PATCH(req: Request) {
   await ensureTable();
   const { id, ...f } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-  for (const key of ['title', 'body', 'day', 'assignee', 'location', 'url', 'owner', 'done'] as const) {
+  for (const key of ['title', 'body', 'day', 'assignee', 'location', 'url', 'owner', 'done', 'sort_order'] as const) {
     if (f[key] !== undefined) await sql`UPDATE onboarding_items SET ${sql(key)} = ${f[key]} WHERE id = ${id}`;
   }
   const [item] = await sql`SELECT * FROM onboarding_items WHERE id = ${id}`;
