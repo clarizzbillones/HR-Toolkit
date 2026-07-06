@@ -454,7 +454,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     if (filterFrom || filterTo) {
       const ms = filterFrom || '0000-01-01';
       const me = filterTo || '9999-12-31';
-      if (r.start < ms || r.start > me) return false;
+      // Keep any leave that OVERLAPS the window (not just those starting in it),
+      // so multi-month leaves (e.g. Jun–Jul) still show for a day inside the range.
+      if (r.start > me || r.end < ms) return false;
     }
     if (filterCalEvent && !r.calTitle?.toLowerCase().includes(filterCalEvent.toLowerCase())) return false;
     return true;

@@ -189,9 +189,11 @@ function PtoReportTab() {
   useEffect(() => { fetchMergedPto().then(setPto); }, []);
 
   const filtered = pto.filter((e: any) => {
-    const d = (e.start_date ?? '').slice(0, 10);
-    if (from && d < from) return false;
-    if (to && d > to) return false;
+    // Overlap logic so multi-month leaves show for a range inside them
+    const s = (e.start_date ?? '').slice(0, 10);
+    const en = (e.end_date ?? e.start_date ?? '').slice(0, 10);
+    if (from && en < from) return false;
+    if (to && s > to) return false;
     return true;
   });
   const totalDays = filtered.reduce((s: number, e: any) => s + (Number(e.days) || 0), 0);
