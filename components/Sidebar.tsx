@@ -15,7 +15,7 @@ const navItems = [
   { href: '/trips',     label: 'Trip Help Desk' },
   { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/staffing',  label: 'Staffing' },
-  { href: '/onboarding', label: 'Onboarding' },
+  { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
@@ -32,6 +32,14 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Live count of people mid-onboarding
+  const [onboardingCount, setOnboardingCount] = useState(0);
+  useEffect(() => {
+    fetch('/api/onboardees').then(r => r.json())
+      .then(d => setOnboardingCount((d.rows ?? []).filter((p: any) => p.status !== 'Complete').length))
+      .catch(() => {});
+  }, [pathname]);
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const INVITE_PWD = 'litson2026';
@@ -120,6 +128,11 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
               {item.badgeKey === 'tasks' && (pendingTaskCount ?? 0) > 0 && (
                 <span className="bg-litred text-white text-xs font-semibold px-2 py-0.5 rounded-full leading-none">
                   {pendingTaskCount}
+                </span>
+              )}
+              {item.badgeKey === 'onboarding' && onboardingCount > 0 && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full leading-none" style={{ background: '#c9a24a', color: '#1b2230' }}>
+                  {onboardingCount}
                 </span>
               )}
             </Link>

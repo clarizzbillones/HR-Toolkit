@@ -14,6 +14,8 @@ async function getStats() {
   const [nextPayroll] = await sql`SELECT run_date, cutoff FROM payroll_periods WHERE run_date >= ${today} ORDER BY run_date ASC LIMIT 1`;
   const [{ n: empCount }] = await sql`SELECT COUNT(*)::int as n FROM employees`;
   const [{ n: reviewsDone }] = await sql`SELECT COUNT(*)::int as n FROM employees WHERE review_6mo_status = 'Complete'`;
+  let onboarding = 0;
+  try { const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM onboardees WHERE status <> 'Complete'`; onboarding = n ?? 0; } catch { /* table not created yet */ }
   const payrollDaysLeft = nextPayroll
     ? Math.ceil((new Date(nextPayroll.run_date).getTime() - Date.now()) / 86400000)
     : null;
@@ -27,6 +29,7 @@ async function getStats() {
     nextPayrollDate: nextPayroll?.run_date ?? null,
     empCount: empCount ?? 0,
     reviewsDone: reviewsDone ?? 0,
+    onboarding,
   };
 }
 

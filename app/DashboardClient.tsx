@@ -14,6 +14,7 @@ interface Props {
   nextPayrollDate: string | null;
   empCount: number;
   reviewsDone: number;
+  onboarding: number;
 }
 
 function fmtDate(iso: string) {
@@ -76,6 +77,12 @@ const modules = [
     descFn: (p: Props) => `Q2 cycle — ${p.reviewsDone} of ${p.empCount} reviews complete.`,
     badgeFn: (p: Props) => p.empCount - p.reviewsDone > 0 ? `${p.empCount - p.reviewsDone} remaining` : 'All complete',
     badgeColor: '#5b6473',
+  },
+  {
+    href: '/onboarding', label: 'Onboarding',
+    icon: <OfferIcon />, iconBg: 'bg-[#fdf3e8]', iconColor: 'text-[#b07d2a]',
+    descFn: (p: Props) => p.onboarding > 0 ? `${p.onboarding} new hire${p.onboarding > 1 ? 's' : ''} in progress.` : 'Add a new hire and track their setup.',
+    badgeFn: (p: Props) => p.onboarding > 0 ? `${p.onboarding} in progress` : null, badgeColor: '#c9a24a',
   },
   {
     href: '/reports', label: 'Reports',
