@@ -586,7 +586,7 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick summary</label>
               <div className="flex items-center gap-3">
-                <input ref={fileRef} type="file" accept=".pdf,.txt,.csv,.xlsx,.xls,.md" className="hidden"
+                <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.xlsx,.xls,.md" className="hidden"
                   onChange={e => { if (e.target.files?.[0]) { parseSummaryFile(e.target.files[0]); e.target.value = ''; } }} />
                 <button onClick={() => fileRef.current?.click()} disabled={parsing}
                   className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{parsing ? 'Parsing…' : '↑ Upload & parse summary'}</button>
