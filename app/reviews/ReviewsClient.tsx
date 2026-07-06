@@ -344,7 +344,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         <div className="mt-6 bg-white border border-border rounded-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">All employees · reviews</div>
-            <span className="text-xs text-text-muted">Click a name to view summary &amp; edit dates</span>
+            <span className="text-xs text-text-muted">Click a name to upload/view review documents &amp; edit dates</span>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-[#f1ece3]">
@@ -541,8 +541,6 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
     await fetch('/api/reviews/docs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: employee.id, which: target }) });
   }
 
-  const hasExternalSync = Boolean(employee.review_6mo_summary || employee.review_1yr_summary);
-
   async function save() {
     setBusy(true);
     try {
@@ -619,17 +617,17 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
             </div>
           ))}
 
-          {/* Quick notes */}
+          {/* Optional notes */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Quick notes</label>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Notes (optional)</label>
               {linkedUrl && (
                 <a href={reportsUrl(linkedUrl)} target="_blank" rel="noopener noreferrer"
                   className="text-xs font-semibold text-[#2f7d5b] hover:underline">Open Reports ↗</a>
               )}
             </div>
-            <textarea value={summary} onChange={e => setSummary(e.target.value)} rows={3}
-              placeholder="Any other notes about this employee…"
+            <textarea value={summary} onChange={e => setSummary(e.target.value)} rows={2}
+              placeholder="Any short note about this employee (optional)…"
               className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
           </div>
 
