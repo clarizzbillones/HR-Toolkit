@@ -191,6 +191,26 @@ export async function POST(req: Request) {
     const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
     return NextResponse.json({ items });
   }
+  // Duplicate every item from one guide into another (append; source untouched)
+  if (body.action === 'duplicate') {
+    const from = (body.from ?? '').toString();
+    const to = (body.to ?? '').toString();
+    if (!from || !to || from === to) return NextResponse.json({ error: 'Bad from/to' }, { status: 400 });
+    const src = await sql`SELECT * FROM onboarding_items WHERE guide = ${from} AND kind <> 'meta' ORDER BY kind, sort_order ASC`;
+    const base: Record<string, number> = {};
+    const counter: Record<string, number> = {};
+    for (const kind of ['section', 'schedule', 'sop', 'tool', 'table', 'task']) {
+      const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${to} AND kind = ${kind}`;
+      base[kind] = (mx ?? -1) + 1; counter[kind] = 0;
+    }
+    for (const r of src as any[]) {
+      const so = base[r.kind] + (counter[r.kind]++);
+      await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, done, sort_order)
+        VALUES (${cuid()}, ${to}, ${r.kind}, ${r.title}, ${r.body}, ${r.day}, ${r.assignee}, ${r.location}, ${r.url}, ${r.owner}, false, ${so})`;
+    }
+    const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
+    return NextResponse.json({ items });
+  }
   const guide = (body.guide ?? 'General').toString();
   const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task'].includes(body.kind) ? body.kind : 'section';
   const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${guide} AND kind = ${kind}`;

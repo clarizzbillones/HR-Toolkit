@@ -132,6 +132,13 @@ export default function OnboardingClient() {
     setItems(prev => [...prev, item]); setGuide(name);
     showToast(`Created “${name}” guide`);
   }
+  async function copyGuideFrom(from: string) {
+    if (!confirm(`Copy the entire “${from}” guide into “${guide}”? The “${from}” guide stays unchanged; its content is added here.`)) return;
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'duplicate', from, to: guide }) });
+    const { items } = await res.json();
+    setItems(items ?? []);
+    showToast(`Copied “${from}” into “${guide}”`);
+  }
   async function deleteGuide() {
     if (guide === 'General') { showToast('Keep at least the General guide'); return; }
     if (!confirm(`Delete the entire “${guide}” guide? This cannot be undone.`)) return;
@@ -334,7 +341,12 @@ export default function OnboardingClient() {
           </button>
         ))}
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
-        {guide !== 'General' && !draftMode && <button onClick={deleteGuide} className="ml-auto text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>}
+        {guide !== 'General' && !draftMode && (
+          <div className="ml-auto flex items-center gap-3">
+            <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
+            <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
+          </div>
+        )}
       </div>
       )}
 
