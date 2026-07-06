@@ -15,6 +15,8 @@ interface Props {
   empCount: number;
   reviewsDone: number;
   onboarding: number;
+  birthdays: { name: string; dob: string }[];
+  anniversaries: { name: string; years: number; date: string }[];
 }
 
 function fmtDate(iso: string) {
@@ -169,6 +171,42 @@ export default function DashboardClient(props: Props) {
             sub="complete this cycle"
             accent="#6b5b8a" href="/reviews"
           />
+        </div>
+
+        {/* Upcoming birthdays & anniversaries (this month) */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-white border border-border rounded-card p-5" style={{ borderTop: '3px solid #c9a24a' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold tracking-widest uppercase text-[#8a6d3b]">🎂 Birthdays this month</div>
+              <a href="/reports" className="text-xs font-semibold text-[#8a6d3b] hover:underline">Monthly pack ↗</a>
+            </div>
+            {props.birthdays.length ? (
+              <div className="flex flex-wrap gap-2">
+                {props.birthdays.map((b, i) => (
+                  <div key={i} className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
+                    <span className="font-semibold text-text-primary">{b.name}</span>
+                    <span className="text-text-muted text-xs ml-1.5">{b.dob}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-text-muted">None this month.</p>}
+          </div>
+          <div className="bg-white border border-border rounded-card p-5" style={{ borderTop: '3px solid #8a6d3b' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold tracking-widest uppercase text-[#6b5427]">🎉 Work anniversaries this month</div>
+              <a href="/reports" className="text-xs font-semibold text-[#6b5427] hover:underline">Monthly pack ↗</a>
+            </div>
+            {props.anniversaries.length ? (
+              <div className="flex flex-wrap gap-2">
+                {props.anniversaries.map((a, i) => (
+                  <div key={i} className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
+                    <span className="font-semibold text-text-primary">{a.name}</span>
+                    <span className="text-text-muted text-xs ml-1.5">{a.years} {a.years === 1 ? 'yr' : 'yrs'} · {a.date}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-text-muted">None this month.</p>}
+          </div>
         </div>
 
         {/* Module grid */}
