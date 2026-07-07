@@ -74,6 +74,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const blankParticipant = { name: '', email: '', type: 'Peer reviewer' };
   const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string }[] }>(
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
+  const [showReminders, setShowReminders] = useState(false);
+  const [invites, setInvites] = useState<{ id: string; employee: string; participant_name: string | null; participant_email: string; participant_type: string | null; review_type: string | null; deadline: string | null; completed: boolean; last_reminded_on: string | null }[]>([]);
+
+  async function openReminders() {
+    setShowReminders(true);
+    try {
+      const d = await (await fetch('/api/reviews/invites')).json();
+      setInvites(d.rows ?? []);
+    } catch { showToast('Could not load reminders'); }
+  }
+  async function toggleInviteDone(id: string, completed: boolean) {
+    setInvites(prev => prev.map(x => x.id === id ? { ...x, completed } : x));
+    await fetch('/api/reviews/invites', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, completed }) });
+    showToast(completed ? 'Marked complete — reminders stopped' : 'Marked pending — reminders resume');
+  }
+  async function removeInvite(id: string) {
+    setInvites(prev => prev.filter(x => x.id !== id));
+    await fetch('/api/reviews/invites', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+  }
 
   async function previewInvites() {
     const w = window.open('', '_blank');
@@ -329,6 +348,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <button onClick={() => window.open('/api/reviews/invite-remind?preview=1', '_blank')}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >⏳ Preview reminder</button>
+            <button onClick={openReminders}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >🔔 Reminders</button>
             <button onClick={sendTestReminder}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >📧 Test email</button>
@@ -666,6 +688,57 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <button onClick={saveForReminders} disabled={inviteBusy} title="Records these participants so reminders go out, without sending an email now"
                 className="border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🔔 Save for reminders (no email)</button>
               <button onClick={sendInvites} disabled={inviteBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">{inviteBusy ? 'Sending…' : 'Send invitations'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Review reminders manager ---- */}
+      {showReminders && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowReminders(false)}>
+          <div className="bg-white rounded-card w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Review reminders</h2>
+                <p className="text-xs text-text-muted">Mark a participant <b>Complete</b> to stop their reminders. Pending ones still get the 3-day &amp; 1-day nudges.</p>
+              </div>
+              <button onClick={() => setShowReminders(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-auto p-6 space-y-5">
+              {invites.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-6">No tracked invites yet. Send invites (or use “Save for reminders”) to add participants here.</p>
+              ) : (
+                Object.entries(invites.reduce((acc, inv) => { (acc[inv.employee] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>)).map(([emp, list]) => (
+                  <div key={emp}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[13px] font-semibold text-text-primary">{emp}</div>
+                      <div className="text-xs text-text-muted">{list[0].review_type ? `${list[0].review_type} · ` : ''}{list[0].deadline ? `due ${formatDate(list[0].deadline)}` : ''}</div>
+                    </div>
+                    <div className="border border-border-light rounded-ctrl divide-y divide-[#f1ece3]">
+                      {list.map(inv => (
+                        <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-text-primary truncate">{inv.participant_name || inv.participant_email}</div>
+                            <div className="text-xs text-text-muted truncate">{inv.participant_type ?? 'Participant'} · {inv.participant_email}</div>
+                          </div>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${inv.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>
+                            {inv.completed ? 'Complete' : 'Pending'}
+                          </span>
+                          <button onClick={() => toggleInviteDone(inv.id, !inv.completed)}
+                            className={`text-xs font-semibold px-3 py-1 rounded-ctrl border shrink-0 ${inv.completed ? 'border-border-light text-ink hover:bg-canvas' : 'border-[#2f7d5b] text-[#2f7d5b] hover:bg-[#eef5f1]'}`}>
+                            {inv.completed ? '↺ Mark pending' : '✓ Mark complete'}
+                          </button>
+                          <button onClick={() => removeInvite(inv.id)} title="Remove — no more reminders"
+                            className="text-text-muted hover:text-litred-alt text-sm px-1 shrink-0">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end">
+              <button onClick={() => setShowReminders(false)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Done</button>
             </div>
           </div>
         </div>

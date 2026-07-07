@@ -63,6 +63,26 @@ export async function recordInvites(invite: InviteInput) {
   }
 }
 
+// List all tracked invites (for the reminders manager UI), newest review first.
+export async function listInvites() {
+  await ensureInviteTable();
+  return await sql`SELECT id, employee, participant_name, participant_email, participant_type,
+    review_type, deadline, completed, last_reminded_on
+    FROM review_invites ORDER BY deadline DESC NULLS LAST, employee ASC, created_at ASC` as any[];
+}
+
+// Mark a participant's review complete (stops their reminders) or pending again.
+export async function setInviteCompleted(id: string, completed: boolean) {
+  await ensureInviteTable();
+  await sql`UPDATE review_invites SET completed = ${completed} WHERE id = ${id}`;
+}
+
+// Remove a tracked invite entirely (no more reminders for it).
+export async function deleteInvite(id: string) {
+  await ensureInviteTable();
+  await sql`DELETE FROM review_invites WHERE id = ${id}`;
+}
+
 // Reminders that are due to go out today (at a REMINDER_MARKS boundary and not
 // already reminded today).
 async function dueReminders() {
