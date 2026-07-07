@@ -68,6 +68,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
   const [showEmbed, setShowEmbed] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const blankParticipant = { name: '', email: '', type: 'Peer reviewer' };
+  const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string }[] }>(
+    { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
+
+  async function sendInvites() {
+    if (!invite.employee.trim()) { showToast('Enter who is being reviewed'); return; }
+    const parts = invite.participants.filter(p => p.email.trim());
+    if (!parts.length) { showToast('Add at least one participant email'); return; }
+    setInviteBusy(true);
+    try {
+      const res = await fetch('/api/reviews/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...invite, participants: parts }) });
+      const d = await res.json();
+      if (res.ok) { showToast(`✓ Sent ${d.sent} invite${d.sent > 1 ? 's' : ''}${d.failed ? ` · ${d.failed} failed` : ''}`); setShowInvite(false); }
+      else showToast(d.error ?? 'Could not send invites');
+    } catch { showToast('Could not send invites'); }
+    setInviteBusy(false);
+  }
 
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
@@ -228,9 +247,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <button onClick={sendTestReminder}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >📧 Test email</button>
-            <button onClick={runReminderNow}
+            <button onClick={() => setShowInvite(true)}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >▶ Run reminder now</button>
+            >✉ Send review invites</button>
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
@@ -479,6 +498,74 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
                 {saving ? 'Saving…' : 'Schedule'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Send review invites ---- */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowInvite(false)}>
+          <div className="bg-white rounded-card w-full max-w-xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Send review invitations</h2>
+                <p className="text-xs text-text-muted">Emails each person their form link, who to review, and the deadline.</p>
+              </div>
+              <button onClick={() => setShowInvite(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-auto p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee being reviewed</label>
+                  <input value={invite.employee} onChange={e => setInvite(v => ({ ...v, employee: e.target.value }))} list="emp-names"
+                    placeholder="e.g. Caitlin Giuliano" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  <datalist id="emp-names">{employees.map(e => <option key={e.id} value={e.name} />)}</datalist>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review type</label>
+                  <select value={invite.reviewType} onChange={e => setInvite(v => ({ ...v, reviewType: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                    {['', '6-month', '1-year', 'Annual', '90-day'].map(t => <option key={t} value={t}>{t || '—'}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Deadline</label>
+                  <input type="date" value={invite.deadline} onChange={e => setInvite(v => ({ ...v, deadline: e.target.value }))}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review form link</label>
+                  <input value={invite.link} onChange={e => setInvite(v => ({ ...v, link: e.target.value }))}
+                    placeholder="https://firm-evaluator.lovable.app/..." className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-2">Participants</label>
+                <div className="space-y-2">
+                  {invite.participants.map((p, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input value={p.name} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))}
+                        placeholder="Name" className="w-32 border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink" />
+                      <input value={p.email} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, email: e.target.value } : x) }))}
+                        placeholder="email@litson.co" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink" />
+                      <select value={p.type} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, type: e.target.value } : x) }))}
+                        className="border border-border-light rounded-ctrl px-2 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                        {['Peer reviewer', 'Self-assessment', 'Manager'].map(t => <option key={t}>{t}</option>)}
+                      </select>
+                      <button onClick={() => setInvite(v => ({ ...v, participants: v.participants.filter((_, j) => j !== i) }))}
+                        className="text-text-muted hover:text-litred-alt text-sm px-1">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setInvite(v => ({ ...v, participants: [...v.participants, { ...blankParticipant }] }))}
+                  className="mt-2 text-sm font-semibold text-text-muted hover:text-ink">+ Add participant</button>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+              <button onClick={() => setShowInvite(false)} className="border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
+              <button onClick={sendInvites} disabled={inviteBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">{inviteBusy ? 'Sending…' : 'Send invitations'}</button>
             </div>
           </div>
         </div>
