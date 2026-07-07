@@ -8,7 +8,7 @@ import { sendMail, sendMailAsApp } from '@/lib/graph';
 const RECIPIENT = process.env.REVIEW_REMINDER_EMAIL ?? 'clarizz@litson.co';
 // Mailbox the app-only cron sends *from* (defaults to the recipient's own mailbox)
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? RECIPIENT;
-const TARGET_DAYS = [30, 15, 10];
+const TARGET_DAYS = [30, 15, 10, 7, 3, 1];
 
 function daysUntil(dateStr: string): number {
   const t = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
@@ -48,7 +48,7 @@ async function handle(req: Request) {
     subject = 'Performance review reminders — test message';
     body = `<div style="font-family:${SANS};font-size:14px;line-height:1.65;color:#2a2a2a">
       <p>Hi Clarizz,</p>
-      <p>This is a quick test of the automated performance-review reminders. Going forward, you'll receive a note like this at <b>30, 15, and 10 days</b> before each employee's 6-month or 1-year review.</p>
+      <p>This is a quick test of the automated performance-review reminders. Going forward, you'll receive a note like this at <b>30, 15, 10, 7, 3, and 1 day</b> before each employee's 6-month or 1-year review (whichever marks are still ahead for shorter-notice reviews).</p>
       <p>No action is needed for this test message.</p>
       <p style="margin-top:20px">Warm regards,<br>LITSON HR</p>
     </div>`;
