@@ -17,8 +17,25 @@ function daysUntil(dateStr: string): number {
   return Math.round((d.getTime() - t.getTime()) / 86400000);
 }
 
+const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
+function fmtDate(iso: string) {
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
 function emailBody(rows: { name: string; role: string; type: string; date: string; days: number }[]) {
-  return `<p>Hi,</p><p>These performance reviews are approaching:</p><ul>${rows.map(d => `<li><b>${d.name}</b> (${d.role}) — ${d.type} in <b>${d.days} days</b> · due ${d.date}</li>`).join('')}</ul><p>— LITSON HR Toolkit</p>`;
+  return `<div style="font-family:${SANS};font-size:14px;line-height:1.65;color:#2a2a2a">
+    <p>Hi Clarizz,</p>
+    <p>Here's a friendly heads-up on the performance reviews coming due. Please set aside time to prepare and complete each one before its due date.</p>
+    <table style="border-collapse:collapse;margin:14px 0">
+      ${rows.map(d => `<tr>
+        <td style="padding:7px 16px 7px 0;font-weight:600;color:#1b2a3d;font-family:${SANS};font-size:14px">${d.name}</td>
+        <td style="padding:7px 16px 7px 0;color:#555;font-family:${SANS};font-size:14px">${d.type}</td>
+        <td style="padding:7px 0;color:#555;font-family:${SANS};font-size:14px">due ${fmtDate(d.date)} &middot; in ${d.days} days</td>
+      </tr>`).join('')}
+    </table>
+    <p>You can review and update any of these anytime in the LITSON HR Toolkit.</p>
+    <p style="margin-top:20px">Warm regards,<br>LITSON HR</p>
+  </div>`;
 }
 
 async function handle(req: Request) {
@@ -28,8 +45,13 @@ async function handle(req: Request) {
 
   let subject: string, body: string, count = 0;
   if (test) {
-    subject = 'Test — LITSON performance review reminder';
-    body = `<p>✅ This is a test.</p><p>Automated performance-review reminders are set to email <b>${RECIPIENT}</b> at <b>30, 15, and 10 days</b> before each employee's 6-month or 1-year review.</p><p>— LITSON HR Toolkit</p>`;
+    subject = 'Performance review reminders — test message';
+    body = `<div style="font-family:${SANS};font-size:14px;line-height:1.65;color:#2a2a2a">
+      <p>Hi Clarizz,</p>
+      <p>This is a quick test of the automated performance-review reminders. Going forward, you'll receive a note like this at <b>30, 15, and 10 days</b> before each employee's 6-month or 1-year review.</p>
+      <p>No action is needed for this test message.</p>
+      <p style="margin-top:20px">Warm regards,<br>LITSON HR</p>
+    </div>`;
   } else {
     const emps = await sql`SELECT name, role, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees` as any[];
     const due: { name: string; role: string; type: string; date: string; days: number }[] = [];
@@ -52,24 +74,24 @@ async function handle(req: Request) {
     ];
     count = due.length;
     rows.sort((a, b) => a.days - b.days);
-    subject = `Performance reviews coming up — ${rows.length} at 30/15/10 days`;
+    subject = `Performance review reminder — ${rows.length} coming up`;
     body = emailBody(rows);
   }
 
   // Preview mode — render the email in the browser instead of sending
   if (preview) {
     const page = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${subject}</title></head>
-      <body style="margin:0;background:#f1ece3;font-family:'Helvetica Neue',Arial,sans-serif">
+      <body style="margin:0;background:#f1ece3;font-family:${SANS}">
         <div style="max-width:620px;margin:30px auto;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e6ddcd">
-          <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:18px 24px;border-bottom:4px solid #c9a24a;color:#fff">
+          <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:18px 24px;border-bottom:4px solid #c9a24a;color:#fff;font-family:${SANS}">
             <div style="font-size:18px;font-weight:800;letter-spacing:.15em">LITSON</div>
             <div style="font-size:10px;color:#c9a24a;letter-spacing:.1em;font-weight:600">HR TOOLKIT · REVIEW REMINDER</div>
           </div>
-          <div style="padding:6px 24px 4px;color:#8a7f6d;font-size:12px">To: ${RECIPIENT}</div>
-          <div style="padding:0 24px 6px;font-size:15px;font-weight:700;color:#1b2a3d">${subject}</div>
-          <div style="padding:8px 24px 22px;color:#333;font-size:14px;line-height:1.6">${body}</div>
+          <div style="padding:10px 24px 4px;color:#8a7f6d;font-size:12px;font-family:${SANS}">To: ${RECIPIENT}</div>
+          <div style="padding:0 24px 8px;font-size:15px;font-weight:700;color:#1b2a3d;font-family:${SANS}">${subject}</div>
+          <div style="padding:4px 24px 22px">${body}</div>
         </div>
-        <div style="text-align:center;color:#8a7f6d;font-size:11px">Preview only — this is what the reminder email will look like.</div>
+        <div style="text-align:center;color:#8a7f6d;font-size:11px;font-family:${SANS}">Preview only — this is what the reminder email will look like.</div>
       </body></html>`;
     return new NextResponse(page, { headers: { 'Content-Type': 'text/html' } });
   }
