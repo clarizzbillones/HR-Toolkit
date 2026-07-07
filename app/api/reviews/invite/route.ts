@@ -28,13 +28,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, scheduled: withEmail.length, sent: 0 });
   }
 
-  const messages = participants.filter((p: any) => (p.email ?? '').trim() || preview)
-    .map((p: any) => buildMessage(employee, link, deadline, reviewType, p));
-
-  // Preview mode — return the rendered emails without sending
+  // Preview mode — render every participant with an email (regardless of status)
   if (preview) {
+    const messages = participants.filter((p: any) => (p.email ?? '').trim())
+      .map((p: any) => buildMessage(employee, link, deadline, reviewType, p));
     return NextResponse.json({ preview: true, cc: CC, messages: messages.map(m => ({ to: m.to || '(participant)', type: m.type, subject: m.subject, html: m.html })) });
   }
+
+  // Only email participants who aren't already marked complete.
+  const emailable = participants.filter((p: any) => (p.email ?? '').trim() && !p.completed);
 
   const session = await getServerSession(authOptions);
   const userToken = (session as any)?.accessToken as string | undefined;
@@ -44,7 +46,8 @@ export async function POST(req: Request) {
   };
 
   const results: { email: string; ok: boolean; error?: string }[] = [];
-  for (const m of messages) {
+  for (const p of emailable) {
+    const m = buildMessage(employee, link, deadline, reviewType, p);
     if (!m.to) continue;
     const r = await send(m.to, m.subject, m.html);
     results.push({ email: m.to, ok: r.ok, error: (r as any).error });
@@ -52,15 +55,14 @@ export async function POST(req: Request) {
 
   const sent = results.filter(r => r.ok).length;
   const failed = results.filter(r => !r.ok);
-  if (sent === 0) return NextResponse.json({ error: `Could not send. ${failed[0]?.error ?? ''}`, results }, { status: 502 });
+  if (emailable.length && sent === 0) return NextResponse.json({ error: `Could not send. ${failed[0]?.error ?? ''}`, results }, { status: 502 });
 
-  // Remember who was invited so we can send them reminders as the deadline nears.
-  // Only records the participants whose email actually sent.
+  // Remember everyone with an email (including those marked complete) so
+  // reminders fire for the pending ones and skip the completed ones.
   try {
-    const okEmails = new Set(results.filter(r => r.ok).map(r => r.email.toLowerCase()));
     await recordInvites({
       employee, link, deadline, reviewType,
-      participants: participants.filter((p: any) => okEmails.has((p.email ?? '').trim().toLowerCase())),
+      participants: participants.filter((p: any) => (p.email ?? '').trim()),
     });
   } catch { /* reminders are best-effort; don't fail the send */ }
 

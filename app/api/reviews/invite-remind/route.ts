@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { SANS } from '@/lib/reviewEmail';
-import { previewInviteReminders, sendDueInviteReminders } from '@/lib/inviteReminders';
+import { previewInviteReminders, sendDueInviteReminders, sendRemindersForEmployee } from '@/lib/inviteReminders';
 
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
 const CC = process.env.REVIEW_REMINDER_EMAIL ?? 'clarizz@litson.co';
@@ -32,4 +32,17 @@ async function handle(req: Request) {
 }
 
 export async function GET(req: Request) { return handle(req); }  // cron + preview
-export async function POST(req: Request) { return handle(req); } // manual test button
+
+// POST { employee } sends an on-demand reminder to that reviewee's pending
+// participants now. Without a body it behaves like GET (send all due today).
+export async function POST(req: Request) {
+  let body: any = {};
+  try { body = await req.json(); } catch { /* no body */ }
+  if (body?.employee) {
+    const session = await getServerSession(authOptions);
+    const userToken = (session as any)?.accessToken as string | undefined;
+    const res = await sendRemindersForEmployee(body.employee, { userToken, sender: SENDER, cc: CC });
+    return NextResponse.json({ ok: true, ...res });
+  }
+  return handle(req);
+}

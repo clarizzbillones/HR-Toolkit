@@ -71,8 +71,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [showEmbed, setShowEmbed] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
-  const blankParticipant = { name: '', email: '', type: 'Peer reviewer' };
-  const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string }[] }>(
+  const blankParticipant = { name: '', email: '', type: 'Peer reviewer', completed: false };
+  const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string; completed: boolean }[] }>(
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
   const [showReminders, setShowReminders] = useState(false);
   const [invites, setInvites] = useState<{ id: string; employee: string; participant_name: string | null; participant_email: string; participant_type: string | null; review_type: string | null; deadline: string | null; completed: boolean; last_reminded_on: string | null }[]>([]);
@@ -121,6 +121,18 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       else showToast(d.error ?? 'Could not save for reminders');
     } catch { showToast('Could not save for reminders'); }
     setInviteBusy(false);
+  }
+  // On-demand: remind this reviewee's pending (not-completed) participants now.
+  async function sendReminderNow(name: string) {
+    showToast('Sending reminder…');
+    try {
+      const res = await fetch('/api/reviews/invite-remind', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee: name }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Could not send reminder'); return; }
+      if (d.sent) showToast(`✓ Reminder sent to ${d.sent} pending participant${d.sent > 1 ? 's' : ''}`);
+      else if (d.total) showToast('All participants are marked complete — nobody to remind');
+      else showToast('No tracked participants yet — add them via Send review invites');
+    } catch { showToast('Could not send reminder'); }
   }
   async function sendInvites() {
     if (!invite.employee.trim()) { showToast('Enter who is being reviewed'); return; }
@@ -422,7 +434,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       </button>
                     )}
                     <button
-                      onClick={() => showToast('Reminder sent!')}
+                      onClick={() => sendReminderNow(upNext.employee.name)}
                       className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors"
                     >Send reminder</button>
                     <select
@@ -672,6 +684,11 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         className="border border-border-light rounded-ctrl px-2 py-2 text-sm bg-white focus:outline-none focus:border-ink">
                         {['Peer reviewer', 'Self-assessment', 'Manager'].map(t => <option key={t}>{t}</option>)}
                       </select>
+                      <button type="button" onClick={() => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, completed: !x.completed } : x) }))}
+                        title={p.completed ? 'Completed — will not be emailed or reminded. Click to set pending.' : 'Mark as completed to skip the invite & reminders'}
+                        className={`text-xs font-semibold px-2 py-2 rounded-ctrl border shrink-0 whitespace-nowrap ${p.completed ? 'border-[#2f7d5b] text-[#2f7d5b] bg-[#eef5f1]' : 'border-border-light text-text-muted'}`}>
+                        {p.completed ? '✓ Done' : 'Pending'}
+                      </button>
                       <button onClick={() => setInvite(v => ({ ...v, participants: v.participants.filter((_, j) => j !== i) }))}
                         className="text-text-muted hover:text-litred-alt text-sm px-1">✕</button>
                     </div>

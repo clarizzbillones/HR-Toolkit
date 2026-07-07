@@ -40,26 +40,26 @@ interface InviteInput {
   link?: string;
   deadline?: string;
   reviewType?: string;
-  participants: { name?: string; email?: string; type?: string }[];
+  participants: { name?: string; email?: string; type?: string; completed?: boolean }[];
 }
 
-// Save the invites just sent so they can be reminded later. Re-sending the
-// same person for the same review replaces the earlier (uncompleted) row so
-// reminders aren't duplicated.
+// Save the invites just sent so they can be reminded later. Re-recording the
+// same person for the same review replaces their earlier row (carrying the
+// given completed status) so reminders aren't duplicated.
 export async function recordInvites(invite: InviteInput) {
   await ensureInviteTable();
   const parts = (invite.participants ?? []).filter(p => (p.email ?? '').trim() && (invite.deadline ?? '').trim());
   for (const p of parts) {
     const email = (p.email ?? '').trim();
     await sql`DELETE FROM review_invites
-      WHERE completed = FALSE
-        AND lower(participant_email) = ${email.toLowerCase()}
+      WHERE lower(participant_email) = ${email.toLowerCase()}
         AND employee = ${invite.employee}
         AND coalesce(review_type,'') = ${invite.reviewType ?? ''}`;
     await sql`INSERT INTO review_invites
-      (id, employee, participant_name, participant_email, participant_type, review_type, link, deadline)
+      (id, employee, participant_name, participant_email, participant_type, review_type, link, deadline, completed)
       VALUES (${cuid()}, ${invite.employee}, ${(p.name ?? '').trim() || null}, ${email},
-              ${p.type ?? null}, ${invite.reviewType ?? null}, ${invite.link ?? null}, ${invite.deadline ?? null})`;
+              ${p.type ?? null}, ${invite.reviewType ?? null}, ${invite.link ?? null}, ${invite.deadline ?? null},
+              ${p.completed ?? false})`;
   }
 }
 
@@ -116,6 +116,32 @@ export async function previewInviteReminders() {
     { name: 'Jordan Lee', email: 'jordan@litson.co', type: 'Peer reviewer' },
     { isReminder: true, countdownDays: 3 });
   return [{ to: sample.to, subject: sample.subject, html: sample.html, sample: true }];
+}
+
+// Send an on-demand reminder now to all pending (not completed) participants
+// of a specific reviewee, regardless of the REMINDER_MARKS schedule.
+export async function sendRemindersForEmployee(employee: string, opts: { userToken?: string; sender: string; cc?: string }) {
+  await ensureInviteTable();
+  const today = todayCst();
+  const rows = await sql`SELECT * FROM review_invites
+    WHERE completed = FALSE AND employee = ${employee} AND participant_email IS NOT NULL` as any[];
+  const send = async (to: string, subject: string, html: string) => {
+    if (opts.userToken) { const r = await sendMail(opts.userToken, to, subject, html, opts.cc); if (r.ok) return { ok: true }; }
+    return await sendMailAsApp(opts.sender, to, subject, html, opts.cc);
+  };
+  let sent = 0, failed = 0;
+  for (const r of rows) {
+    const completeBy = r.deadline ? shiftDays(r.deadline, -PREP_BUFFER_DAYS) : '';
+    const countdownDays = completeBy ? daysUntil(completeBy) : undefined;
+    const m = buildMessage(r.employee, r.link ?? '', r.deadline ?? '', r.review_type ?? '',
+      { name: r.participant_name, email: r.participant_email, type: r.participant_type },
+      { isReminder: true, countdownDays });
+    if (!m.to) continue;
+    const res = await send(m.to, m.subject, m.html);
+    if (res.ok) { sent++; await sql`UPDATE review_invites SET last_reminded_on = ${today} WHERE id = ${r.id}`; }
+    else failed++;
+  }
+  return { total: rows.length, sent, failed };
 }
 
 // Send any reminders due today. Prefers the signed-in user's token, falling
