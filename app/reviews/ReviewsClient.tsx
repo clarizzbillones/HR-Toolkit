@@ -108,22 +108,40 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     fetch('/api/staffing').then(r => r.json()).then(data => setStaff(data.rows ?? [])).catch(() => {});
   }, []);
 
-  // Look up a person's role/position by name across employees and the staff directory
+  // Compare two people's names loosely so minor differences (a middle name,
+  // extra spaces, casing) still count as the same person: exact match, or the
+  // same first + last name.
+  function sameName(a: string, b: string): boolean {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const na = norm(a), nb = norm(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const pa = na.split(' '), pb = nb.split(' ');
+    return pa[0] === pb[0] && pa[pa.length - 1] === pb[pb.length - 1];
+  }
+
+  // Look up a person's role/position by name. Prefer the staff directory
+  // (position) since it's the more accurate source of truth, then fall back
+  // to the employee record's role.
   function roleForName(name: string): string | null {
-    const n = name.trim().toLowerCase();
-    if (!n) return null;
-    const emp = employees.find(e => e.name.trim().toLowerCase() === n);
-    if (emp?.role) return emp.role;
-    const st = staff.find(s => s.name.trim().toLowerCase() === n);
-    return st?.position || null;
+    if (!name.trim()) return null;
+    const st = staff.find(s => sameName(s.name, name));
+    if (st?.position) return st.position;
+    const emp = employees.find(e => sameName(e.name, name));
+    return emp?.role || null;
   }
 
   // Look up a person's email by name from the staff directory
   function emailForName(name: string): string {
-    const n = name.trim().toLowerCase();
-    if (!n) return '';
-    const st = staff.find(s => s.name.trim().toLowerCase() === n);
+    if (!name.trim()) return '';
+    const st = staff.find(s => sameName(s.name, name));
     return st?.email || '';
+  }
+
+  // Role to display for an employee, preferring the (more accurate) staff
+  // directory position and falling back to the stored employee role.
+  function displayRole(e: Employee): string {
+    return roleForName(e.name) || e.role;
   }
 
   async function connectDash() {
@@ -351,7 +369,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         {upNext.employee.name} — {upNext.type}
                       </button>
                       <div className="text-sm text-white/50 mt-1">
-                        {formatDate(toYmd(upNext.date))} · {upNext.employee.role}
+                        {formatDate(toYmd(upNext.date))} · {displayRole(upNext.employee)}
                       </div>
                     </div>
                   </div>
@@ -458,7 +476,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   <tr key={e.id} className="border-t border-[#f1ece3] hover:bg-canvas transition-colors">
                     <td className="px-5 py-3">
                       <button onClick={() => setDetail(e)} className="font-medium text-text-primary hover:text-ink hover:underline text-left">{e.name}</button>
-                      <div className="text-xs text-text-muted">{e.role}</div>
+                      <div className="text-xs text-text-muted">{displayRole(e)}</div>
                     </td>
                     <td className="px-5 py-3 text-text-secondary">{e.dept}</td>
                     <td className="px-5 py-3 text-text-muted">
