@@ -147,7 +147,14 @@ export default function DashboardClient(props: Props) {
       </header>
 
       <div className="flex-1 overflow-auto p-8">
-        {/* KPI strip */}
+        {/* KPI strip — boxes flash red when a deadline is almost missed (≤3 days / overdue) */}
+        {(() => {
+          const payrollDays = props.payrollDaysLeft;
+          const payrollUrgent = payrollDays !== null && payrollDays <= 3;
+          const reviewDeadline = props.deadlines.filter(d => d.kind === 'review').map(d => d.days).sort((a, b) => a - b)[0];
+          const reviewUrgent = reviewDeadline !== undefined && reviewDeadline <= 3;
+          const urgencyText = (d: number) => d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'due today!' : d === 1 ? 'due tomorrow!' : `${d} days left`;
+          return (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <KpiCard
             label="Open Tasks" value={props.pendingCount}
@@ -163,43 +170,17 @@ export default function DashboardClient(props: Props) {
           <KpiCard
             label="Next Payroll"
             value={props.payrollDaysLeft !== null ? `${props.payrollDaysLeft}d` : '—'}
-            sub={props.cutoffToday ? 'cutoff today!' : 'days away'}
-            subColor={props.cutoffToday ? '#b07d2a' : undefined}
-            accent="#b07d2a" href="/payroll"
+            sub={payrollUrgent && payrollDays !== null ? `⚠ deadline ${urgencyText(payrollDays)}` : props.cutoffToday ? 'cutoff today!' : 'days away'}
+            subColor={payrollUrgent ? '#b0412f' : props.cutoffToday ? '#b07d2a' : undefined}
+            accent="#b07d2a" href="/payroll" urgent={payrollUrgent}
           />
           <KpiCard
             label="Reviews" value={`${props.reviewsDone}/${props.empCount}`}
-            sub="complete this cycle"
-            accent="#6b5b8a" href="/reviews"
+            sub={reviewUrgent && reviewDeadline !== undefined ? `⚠ review ${urgencyText(reviewDeadline)}` : 'complete this cycle'}
+            subColor={reviewUrgent ? '#b0412f' : undefined}
+            accent="#6b5b8a" href="/reviews" urgent={reviewUrgent}
           />
         </div>
-
-        {/* Upcoming deadlines — flagged by urgency */}
-        {props.deadlines.length > 0 && (() => {
-          const flag = (d: number) => d < 0 ? { c: '#b0412f', bg: '#fdeaea', t: `${Math.abs(d)}d overdue` }
-            : d <= 3 ? { c: '#b0412f', bg: '#fdeaea', t: d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d} days` }
-            : d <= 7 ? { c: '#c2410c', bg: '#fdeee2', t: `${d} days` }
-            : d <= 15 ? { c: '#b07d2a', bg: '#f7efe1', t: `${d} days` }
-            : { c: '#5b6473', bg: '#f1ece3', t: `${d} days` };
-          return (
-            <div className="bg-white border rounded-card p-5 mb-6" style={{ borderTop: '3px solid #b0412f' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-bold tracking-widest uppercase text-[#b0412f]">⚠ Upcoming Deadlines</div>
-                <span className="text-xs text-text-muted">Next 30 days</span>
-              </div>
-              <div className="space-y-1.5">
-                {props.deadlines.map((d, i) => {
-                  const f = flag(d.days);
-                  return (
-                    <div key={i} className="flex items-center gap-3 py-1.5 border-b border-[#f1ece3] last:border-0">
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ color: f.c, background: f.bg }}>{f.t}</span>
-                      <span className="text-sm font-medium text-text-primary flex-1 truncate">{d.label}</span>
-                      <span className="text-xs text-text-muted">{new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           );
         })()}
 
@@ -292,19 +273,20 @@ export default function DashboardClient(props: Props) {
   );
 }
 
-function KpiCard({ label, value, sub, subColor, accent, href }: {
-  label: string; value: string | number; sub: string; subColor?: string; accent: string; href: string;
+function KpiCard({ label, value, sub, subColor, accent, href, urgent }: {
+  label: string; value: string | number; sub: string; subColor?: string; accent: string; href: string; urgent?: boolean;
 }) {
+  const c = urgent ? '#b0412f' : accent;
   return (
     <Link href={href}
-      className="rounded-card p-5 hover:shadow-lg transition-all block group relative overflow-hidden"
-      style={{ background: '#fff', border: `1px solid ${accent}33`, borderTop: `4px solid ${accent}`, boxShadow: `0 1px 3px ${accent}1a` }}>
-      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ background: accent }} />
+      className={`rounded-card p-5 hover:shadow-lg transition-all block group relative overflow-hidden ${urgent ? 'ring-2 ring-[#b0412f]' : ''}`}
+      style={{ background: '#fff', border: `1px solid ${c}33`, borderTop: `4px solid ${c}`, boxShadow: urgent ? '0 2px 10px #b0412f33' : `0 1px 3px ${accent}1a` }}>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: c, opacity: urgent ? 0.09 : 0.05 }} />
       <div className="relative flex items-center justify-between mb-1">
-        <div className="text-[11px] uppercase tracking-widest font-bold" style={{ color: accent }}>{label}</div>
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: accent }} />
+        <div className="text-[11px] uppercase tracking-widest font-bold" style={{ color: c }}>{label}</div>
+        <span className={`w-2.5 h-2.5 rounded-full ${urgent ? 'animate-pulse' : ''}`} style={{ background: c }} />
       </div>
-      <div className="relative font-spectral text-[42px] font-bold leading-none mt-2" style={{ color: accent }}>
+      <div className="relative font-spectral text-[42px] font-bold leading-none mt-2" style={{ color: c }}>
         {value}
       </div>
       <div className="relative text-xs mt-2.5 font-semibold" style={{ color: subColor ?? '#6b6355' }}>{sub}</div>
