@@ -14,6 +14,20 @@ function fmtDate(iso: string) {
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// Ask participants to finish this many days before the actual review date,
+// so there is prep time before the review itself.
+const PREP_BUFFER_DAYS = 2;
+
+// Shift a YYYY-MM-DD date by n days, returning a YYYY-MM-DD string.
+function shiftDays(iso: string, n: number): string {
+  if (!iso) return iso;
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00');
+  if (isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function wrap(subject: string, inner: string) {
   return `<body style="margin:0;background:#f1ece3;font-family:${SANS}">
     <div style="max-width:600px;margin:24px auto;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e6ddcd">
@@ -34,16 +48,18 @@ function button(link: string, label: string) {
 
 // Build the { to, subject, html } message for one participant
 function buildMessage(employee: string, link: string, deadline: string, reviewType: string, p: any) {
-  const due = deadline ? ` by <b>${fmtDate(deadline)}</b>` : '';
+  // Ask participants to complete a couple of days before the actual review date.
+  const completeBy = deadline ? shiftDays(deadline, -PREP_BUFFER_DAYS) : '';
+  const due = completeBy ? ` by <b>${fmtDate(completeBy)}</b>` : '';
   const label = reviewType ? `${reviewType} ` : '';
   const name = (p.name ?? '').trim() || 'there';
   let subject: string, inner: string;
   if (p.type === 'Self-assessment') {
-    subject = `Your self-assessment${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
+    subject = `Your self-assessment${completeBy ? ` — due ${fmtDate(completeBy)}` : ''}`;
     inner = `<p>Hi ${name},</p><p>As part of your ${label}performance review, please complete your <b>self-assessment</b>${due}.</p>${button(link, 'Open the self-assessment form')}<p>Thank you!</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
   } else {
     const roleWord = p.type === 'Manager' ? 'manager review' : 'peer review';
-    subject = `${p.type === 'Manager' ? 'Manager' : 'Peer'} review request: ${employee}${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
+    subject = `${p.type === 'Manager' ? 'Manager' : 'Peer'} review request: ${employee}${completeBy ? ` — due ${fmtDate(completeBy)}` : ''}`;
     inner = `<p>Hi ${name},</p><p>You've been asked to complete a <b>${roleWord}</b> for <b>${employee}</b> as part of their ${label}performance review. Please complete it${due}.</p>${button(link, `Open the review form`)}<p>Thank you for taking the time.</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
   }
   return { to: (p.email ?? '').trim(), type: p.type, subject, html: wrap(subject, inner) };
