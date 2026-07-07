@@ -48,11 +48,11 @@ export default async function ReviewsPage() {
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_summary TEXT`;
   await sql`UPDATE employees SET name = 'Carly Crotty' WHERE name = 'Carly Crolly'`;
 
-  // One-time reseed: replace placeholder roster with the real firm roster.
-  // Gated on "Catie Toole" being absent, so it runs exactly once.
-  const [{ c }] = await sql`SELECT COUNT(*)::int AS c FROM employees WHERE name = 'Catie Toole'`;
-  if (!c) {
-    await sql`DELETE FROM employees`;
+  // Seed the firm roster only when the table is essentially empty. This never
+  // deletes existing rows, so it can never wipe manually-entered review dates,
+  // roles, or statuses. Rows that already exist are left untouched.
+  const [{ total }] = await sql`SELECT COUNT(*)::int AS total FROM employees`;
+  if (total < 5) {
     for (const [id, name, role, dept] of ROSTER) {
       if (id === 'emp_caitlin_giuliano') {
         await sql`INSERT INTO employees (id, name, role, dept, review_6mo_date, review_6mo_status)
