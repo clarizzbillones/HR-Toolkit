@@ -720,6 +720,16 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                   className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
               </div>
               <div className="flex items-center gap-1">
+                {(() => {
+                  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+                  const active = filterFrom === today && filterTo === today;
+                  return (
+                    <button onClick={() => { setFilterFrom(today); setFilterTo(today); }}
+                      className={`text-xs font-semibold px-2 py-1 rounded-ctrl transition-colors ${active ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
+                      Today
+                    </button>
+                  );
+                })()}
                 {['Jun','Jul','Aug','Sep'].map((label, i) => {
                   const y = 2026; const m = i + 6;
                   const from = `${y}-${String(m).padStart(2,'0')}-01`;

@@ -371,13 +371,17 @@ function MonthlyTab({ data }: { data: any }) {
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
   const { pto, trips, contractors, reviews, cashout, staff } = data;
 
+  // Two comparison months, user-selectable. Default: current month vs previous.
   const now = new Date();
-  const thisY = now.getFullYear(), thisM = now.getMonth();
-  const last = new Date(thisY, thisM - 1, 1);
-  const thisKey = `${thisY}-${String(thisM + 1).padStart(2, '0')}`;
-  const lastKey = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}`;
+  const defA = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const defB = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const [thisKey, setThisKey] = useState(defA);
+  const [lastKey, setLastKey] = useState(defB);
+  const thisY = parseInt(thisKey.slice(0, 4)), thisM = parseInt(thisKey.slice(5, 7)) - 1;
+  const lastY = parseInt(lastKey.slice(0, 4)), lastM = parseInt(lastKey.slice(5, 7)) - 1;
   const thisLabel = monthLabel(thisY, thisM);
-  const lastLabel = monthLabel(last.getFullYear(), last.getMonth());
+  const lastLabel = monthLabel(lastY, lastM);
 
   const cName = (c: any) => c.contractor ?? c.name ?? '—';
   const cDate = (c: any) => (c.pay_date ?? c.due_date ?? '');
@@ -423,8 +427,8 @@ function MonthlyTab({ data }: { data: any }) {
     { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripOf(thisKey).reduce((s: number, t: any) => s + num(t.cost), 0), lastV: tripOf(lastKey).reduce((s: number, t: any) => s + num(t.cost), 0) },
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorOf(thisKey).reduce((s: number, c: any) => s + num(c.amount), 0), lastV: contractorOf(lastKey).reduce((s: number, c: any) => s + num(c.amount), 0) },
     { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).filter(r => r.status !== 'Complete').length, lastV: reviewOf(lastKey).filter(r => r.status !== 'Complete').length },
-    { label: 'Birthdays', color: '#c9a24a', money: false, thisV: birthdaysOf(thisM).length, lastV: birthdaysOf(last.getMonth()).length },
-    { label: 'Anniversaries', color: '#8a6d3b', money: false, thisV: anniversariesOf(thisM, thisY).length, lastV: anniversariesOf(last.getMonth(), last.getFullYear()).length },
+    { label: 'Birthdays', color: '#c9a24a', money: false, thisV: birthdaysOf(thisM).length, lastV: birthdaysOf(lastM).length },
+    { label: 'Anniversaries', color: '#8a6d3b', money: false, thisV: anniversariesOf(thisM, thisY).length, lastV: anniversariesOf(lastM, lastY).length },
   ];
 
   function csvSection(lines: string[], title: string, headers: string[], rowsThis: any[][], rowsLast: any[][]) {
@@ -441,8 +445,8 @@ function MonthlyTab({ data }: { data: any }) {
     csvSection(lines, 'TRIPS', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], tripOf(thisKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]), tripOf(lastKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]));
     csvSection(lines, 'CONTRACTOR PAYMENTS', ['Name', 'Date', 'Amount', 'Note'], contractorOf(thisKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]), contractorOf(lastKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]));
     csvSection(lines, 'PERFORMANCE REVIEWS', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewOf(thisKey).map(r => [r.name, r.role, r.type, r.date, r.status]), reviewOf(lastKey).map(r => [r.name, r.role, r.type, r.date, r.status]));
-    csvSection(lines, 'BIRTHDAYS', ['Name', 'DOB'], birthdaysOf(thisM).map((e: any) => [e.name, e.dob]), birthdaysOf(last.getMonth()).map((e: any) => [e.name, e.dob]));
-    csvSection(lines, 'WORK ANNIVERSARIES', ['Name', 'Years', 'Since'], anniversariesOf(thisM, thisY).map((e: any) => [e.name, e.years, e.start_date]), anniversariesOf(last.getMonth(), last.getFullYear()).map((e: any) => [e.name, e.years, e.start_date]));
+    csvSection(lines, 'BIRTHDAYS', ['Name', 'DOB'], birthdaysOf(thisM).map((e: any) => [e.name, e.dob]), birthdaysOf(lastM).map((e: any) => [e.name, e.dob]));
+    csvSection(lines, 'WORK ANNIVERSARIES', ['Name', 'Years', 'Since'], anniversariesOf(thisM, thisY).map((e: any) => [e.name, e.years, e.start_date]), anniversariesOf(lastM, lastY).map((e: any) => [e.name, e.years, e.start_date]));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Monthly Pack — ${thisLabel} vs ${lastLabel}.csv`; a.click();
     showToast('CSV downloaded');
@@ -490,8 +494,8 @@ function MonthlyTab({ data }: { data: any }) {
         ${gap}${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
         ${gap}${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
         ${gap}${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
-        ${gap}${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(last.getMonth()), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
-        ${gap}${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(last.getMonth(), last.getFullYear()), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
+        ${gap}${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(lastM), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
+        ${gap}${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(lastM, lastY), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
       </table>`;
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Monthly Pack</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${body}</body></html>`;
     const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
@@ -558,7 +562,7 @@ function MonthlyTab({ data }: { data: any }) {
       <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px"><span style="width:10px;height:22px;border-radius:99px;background:${color}"></span><h2 style="font-size:14px;font-weight:700;color:${fg};margin:0;text-transform:uppercase;letter-spacing:.05em">${title}</h2></div>
       <div style="display:flex;gap:18px">
         <div style="flex:1;border:2px solid ${color};border-radius:8px;padding:10px;background:${color}10"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color};color:#fff">Current</span> ${esc(thisLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(thisM, thisY) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
-        <div style="flex:1;border:2px solid ${color}55;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color}33;color:${fg}">Previous</span> ${esc(lastLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(last.getMonth(), last.getFullYear()) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
+        <div style="flex:1;border:2px solid ${color}55;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:${fg};margin-bottom:6px"><span style="padding:1px 6px;border-radius:4px;font-size:8px;background:${color}33;color:${fg}">Previous</span> ${esc(lastLabel)}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${cards(lastM, lastY) || '<span style="color:#999;font-size:11px">None</span>'}</div></div>
       </div></div>`;
     const bdayCards = (mi: number) => birthdaysOf(mi).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎂 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${esc(e.dob)}</div></div>`).join('');
     const annCards = (mi: number, yr: number) => anniversariesOf(mi, yr).map((e: any) => `<div style="border:1px solid #e6ddcd;border-radius:6px;padding:5px 9px;font-size:11px"><div style="font-weight:600">🎉 ${esc(e.name)}</div><div style="color:#999;font-size:9px">${e.years} ${e.years === 1 ? 'year' : 'years'} · since ${esc(e.start_date)}</div></div>`).join('');
@@ -690,7 +694,13 @@ function MonthlyTab({ data }: { data: any }) {
     <div className="space-y-6">
       {/* Header + downloads */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-sm text-text-muted">Comparing <span className="font-semibold text-text-primary">{thisLabel}</span> vs <span className="font-semibold text-text-primary">{lastLabel}</span> — side by side</span>
+        <span className="text-sm text-text-muted">Comparing</span>
+        <input type="month" value={thisKey} onChange={e => e.target.value && setThisKey(e.target.value)}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" title="First month (left / current column)" />
+        <span className="text-sm text-text-muted">vs</span>
+        <input type="month" value={lastKey} onChange={e => e.target.value && setLastKey(e.target.value)}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" title="Second month (right / comparison column)" />
+        <span className="text-sm text-text-muted">— side by side</span>
         <div className="ml-auto flex gap-2">
           <button onClick={printPack} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Print / Save PDF</button>
           <button onClick={downloadXls} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Download Excel</button>
@@ -739,10 +749,10 @@ function MonthlyTab({ data }: { data: any }) {
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#c9a24a]" />
           <div className="text-sm font-bold uppercase tracking-wider text-[#8a6d3b]">Birthdays</div>
-          <span className="text-xs text-text-muted">{thisLabel}: {birthdaysOf(thisM).length} · {lastLabel}: {birthdaysOf(last.getMonth()).length}</span>
+          <span className="text-xs text-text-muted">{thisLabel}: {birthdaysOf(thisM).length} · {lastLabel}: {birthdaysOf(lastM).length}</span>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {[{ lbl: thisLabel, mi: thisM, cur: true }, { lbl: lastLabel, mi: last.getMonth(), cur: false }].map(({ lbl, mi, cur }) => (
+          {[{ lbl: thisLabel, mi: thisM, cur: true }, { lbl: lastLabel, mi: lastM, cur: false }].map(({ lbl, mi, cur }) => (
             <div key={lbl} className="rounded-card p-3" style={{ border: `2px solid #c9a24a${cur ? '' : '55'}`, background: cur ? '#c9a24a10' : '#fff' }}>
               <div className="text-xs font-bold text-[#8a6d3b] mb-1.5 flex items-center gap-2">
                 <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: cur ? '#c9a24a' : '#c9a24a33', color: cur ? '#fff' : '#8a6d3b' }}>{cur ? 'Current' : 'Previous'}</span>
@@ -765,10 +775,10 @@ function MonthlyTab({ data }: { data: any }) {
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
           <div className="text-sm font-bold uppercase tracking-wider text-[#6b5427]">Work Anniversaries</div>
-          <span className="text-xs text-text-muted">{thisLabel}: {anniversariesOf(thisM, thisY).length} · {lastLabel}: {anniversariesOf(last.getMonth(), last.getFullYear()).length}</span>
+          <span className="text-xs text-text-muted">{thisLabel}: {anniversariesOf(thisM, thisY).length} · {lastLabel}: {anniversariesOf(lastM, lastY).length}</span>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {[{ lbl: thisLabel, mi: thisM, yr: thisY, cur: true }, { lbl: lastLabel, mi: last.getMonth(), yr: last.getFullYear(), cur: false }].map(({ lbl, mi, yr, cur }) => (
+          {[{ lbl: thisLabel, mi: thisM, yr: thisY, cur: true }, { lbl: lastLabel, mi: lastM, yr: lastY, cur: false }].map(({ lbl, mi, yr, cur }) => (
             <div key={lbl} className="rounded-card p-3" style={{ border: `2px solid #8a6d3b${cur ? '' : '55'}`, background: cur ? '#8a6d3b10' : '#fff' }}>
               <div className="text-xs font-bold text-[#6b5427] mb-1.5 flex items-center gap-2">
                 <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: cur ? '#8a6d3b' : '#8a6d3b33', color: cur ? '#fff' : '#6b5427' }}>{cur ? 'Current' : 'Previous'}</span>
