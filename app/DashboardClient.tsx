@@ -266,15 +266,18 @@ function KpiCard({ label, value, sub, subColor, accent, href }: {
   label: string; value: string | number; sub: string; subColor?: string; accent: string; href: string;
 }) {
   return (
-    <Link href={href} className="bg-white border border-border rounded-card p-5 hover:shadow-card hover:border-[#d0c8b8] transition-all block group">
-      <div className="flex items-start justify-between mb-1">
-        <div className="text-xs text-text-muted uppercase tracking-widest font-semibold">{label}</div>
-        <div className="w-2 h-2 rounded-full mt-0.5 opacity-60" style={{ background: accent }} />
+    <Link href={href}
+      className="rounded-card p-5 hover:shadow-lg transition-all block group relative overflow-hidden"
+      style={{ background: '#fff', border: `1px solid ${accent}33`, borderTop: `4px solid ${accent}`, boxShadow: `0 1px 3px ${accent}1a` }}>
+      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ background: accent }} />
+      <div className="relative flex items-center justify-between mb-1">
+        <div className="text-[11px] uppercase tracking-widest font-bold" style={{ color: accent }}>{label}</div>
+        <span className="w-2.5 h-2.5 rounded-full" style={{ background: accent }} />
       </div>
-      <div className="font-spectral text-[34px] font-semibold text-text-primary leading-none mt-2" style={{ color: accent }}>
+      <div className="relative font-spectral text-[42px] font-bold leading-none mt-2" style={{ color: accent }}>
         {value}
       </div>
-      <div className="text-xs mt-2 font-medium" style={{ color: subColor ?? '#8b8478' }}>{sub}</div>
+      <div className="relative text-xs mt-2.5 font-semibold" style={{ color: subColor ?? '#6b6355' }}>{sub}</div>
     </Link>
   );
 }

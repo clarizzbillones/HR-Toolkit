@@ -136,6 +136,14 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     showToast(`Deleted ${ids.length} task${ids.length > 1 ? 's' : ''}`);
   }
 
+  async function updateTitle(id: string, title: string) {
+    if (!title.trim()) return;
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    const { task } = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? task : t));
+    if (selected?.id === id) setSelected(task);
+  }
+
   async function updateDueDate(id: string, due: string) {
     const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ due_tag: due || null }) });
     const { task } = await res.json();
@@ -387,8 +395,14 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           <div className="bg-white rounded-card w-full max-w-lg shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-5 border-b border-border flex items-start gap-3">
               <div className="flex-1">
-                <div className="font-semibold text-text-primary">{selected.title}</div>
-                {selected.sub && <div className="text-sm text-text-muted mt-0.5">{selected.sub}</div>}
+                <input
+                  key={selected.id}
+                  defaultValue={selected.title}
+                  onBlur={e => { if (e.target.value.trim() && e.target.value.trim() !== selected.title) updateTitle(selected.id, e.target.value); }}
+                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  className="w-full font-semibold text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded-ctrl px-2 py-1 -mx-2 focus:outline-none"
+                />
+                {selected.sub && <div className="text-sm text-text-muted mt-0.5 px-0.5">{selected.sub}</div>}
               </div>
               <button onClick={() => setSelected(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>
