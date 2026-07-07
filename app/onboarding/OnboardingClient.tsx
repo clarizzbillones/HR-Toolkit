@@ -188,6 +188,18 @@ export default function OnboardingClient() {
     setDragId(null);
     if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
   }
+  // Move a section up (dir -1) or down (dir +1) by swapping order with its neighbour.
+  async function moveSection(id: string, dir: -1 | 1) {
+    const all = items.filter(i => i.guide === guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+    const idx = all.findIndex(i => i.id === id);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= all.length) return;
+    const ids = all.map(i => i.id);
+    [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
+    const updated = ids.map((id, i) => ({ id, sort_order: i }));
+    setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
+    if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+  }
   function startEdit(s: Item) { setEditing(s.id); setDraft({ title: s.title, body: s.body ?? '' }); }
   async function saveEdit(id: string) { await patch(id, { title: draft.title, body: draft.body }); setEditing(null); showToast('Saved'); }
 
@@ -216,6 +228,12 @@ export default function OnboardingClient() {
         <div className="p-5 group">
           <div className="flex items-start gap-2">
             <span className="cursor-grab select-none text-text-faint opacity-0 group-hover:opacity-100 mt-1" title="Drag to reorder">⠿</span>
+            <div className="flex flex-col -mt-0.5 opacity-0 group-hover:opacity-100">
+              <button disabled={sections.findIndex(x => x.id === s.id) === 0} onClick={() => moveSection(s.id, -1)} title="Move up"
+                className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▲</button>
+              <button disabled={sections.findIndex(x => x.id === s.id) === sections.length - 1} onClick={() => moveSection(s.id, 1)} title="Move down"
+                className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▼</button>
+            </div>
             <h2 className="font-spectral text-[17px] font-semibold text-text-primary flex-1" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
             <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Edit</button>
             {guides.length > 1 && <button onClick={() => copyToGuide(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Copy to…</button>}
