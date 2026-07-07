@@ -143,13 +143,20 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     if (!form.name || !form.date) return;
     setSaving(true);
     try {
-      const payload: Record<string, string> = { name: form.name, role: form.role || 'Employee', dept: form.dept };
-      if (form.type === '6mo') payload.review_6mo_date = form.date;
-      else payload.review_1yr_date = form.date;
-      const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.employee) {
-        setEmployees(prev => [...prev, data.employee]);
+      const dateField = form.type === '6mo' ? 'review_6mo_date' : 'review_1yr_date';
+      const statusField = form.type === '6mo' ? 'review_6mo_status' : 'review_1yr_status';
+      // If this employee already exists, UPDATE their review date instead of creating a duplicate
+      const existing = employees.find(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase());
+      let employee: Employee | undefined;
+      if (existing) {
+        employee = await patchEmployee(existing.id, { [dateField]: form.date, [statusField]: existing[statusField as keyof Employee] === 'Complete' ? 'Scheduled' : (existing[statusField as keyof Employee] as string) || 'Scheduled' }) ?? undefined;
+      } else {
+        const payload: Record<string, string> = { name: form.name, role: form.role || 'Employee', dept: form.dept, [dateField]: form.date };
+        const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (data.employee) { employee = data.employee; setEmployees(prev => [...prev, data.employee]); }
+      }
+      if (employee) {
         setShowSchedule(false);
         showToast(`${form.name}'s review scheduled — now send invites`);
         // Advance to the invite step, pre-filled from the review just scheduled
@@ -480,8 +487,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee Name</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Full name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} list="schedule-emp-names"
+                  placeholder="Pick existing or type a new name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <datalist id="schedule-emp-names">{employees.map(e => <option key={e.id} value={e.name} />)}</datalist>
+                {employees.some(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase()) && form.name && (
+                  <p className="text-[11px] text-[#2f7d5b] mt-1">Existing employee — this updates their review date.</p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Role</label>
