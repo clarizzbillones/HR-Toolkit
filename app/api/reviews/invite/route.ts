@@ -10,9 +10,23 @@ const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
 const CC = process.env.REVIEW_REMINDER_EMAIL ?? 'clarizz@litson.co';
 
 export async function POST(req: Request) {
-  const { employee, link, deadline, reviewType, participants, preview } = await req.json();
+  const { employee, link, deadline, reviewType, participants, preview, scheduleOnly } = await req.json();
   if (!employee?.trim()) return NextResponse.json({ error: 'Employee name required' }, { status: 400 });
   if (!Array.isArray(participants) || !participants.length) return NextResponse.json({ error: 'Add at least one participant' }, { status: 400 });
+
+  // Schedule-only: record participants for reminders WITHOUT sending any email.
+  // Use this when the initial invite was already sent manually.
+  if (scheduleOnly) {
+    if (!deadline?.trim()) return NextResponse.json({ error: 'Set a deadline so reminders can be scheduled' }, { status: 400 });
+    const withEmail = participants.filter((p: any) => (p.email ?? '').trim());
+    if (!withEmail.length) return NextResponse.json({ error: 'Add at least one participant email' }, { status: 400 });
+    try {
+      await recordInvites({ employee, link, deadline, reviewType, participants: withEmail });
+    } catch {
+      return NextResponse.json({ error: 'Could not save participants for reminders' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, scheduled: withEmail.length, sent: 0 });
+  }
 
   const messages = participants.filter((p: any) => (p.email ?? '').trim() || preview)
     .map((p: any) => buildMessage(employee, link, deadline, reviewType, p));

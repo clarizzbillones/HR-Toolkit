@@ -87,6 +87,22 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       w?.document.close();
     } catch { showToast('Could not preview'); w?.close(); }
   }
+  // Record participants for reminders WITHOUT sending an email now — for when
+  // the initial invite was already sent manually.
+  async function saveForReminders() {
+    if (!invite.employee.trim()) { showToast('Enter who is being reviewed'); return; }
+    if (!invite.deadline) { showToast('Set a deadline so reminders can be scheduled'); return; }
+    const parts = invite.participants.filter(p => p.email.trim());
+    if (!parts.length) { showToast('Add at least one participant email'); return; }
+    setInviteBusy(true);
+    try {
+      const res = await fetch('/api/reviews/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...invite, participants: parts, scheduleOnly: true }) });
+      const d = await res.json();
+      if (res.ok) { showToast(`✓ ${d.scheduled} set for reminders — no email sent`); setShowInvite(false); }
+      else showToast(d.error ?? 'Could not save for reminders');
+    } catch { showToast('Could not save for reminders'); }
+    setInviteBusy(false);
+  }
   async function sendInvites() {
     if (!invite.employee.trim()) { showToast('Enter who is being reviewed'); return; }
     const parts = invite.participants.filter(p => p.email.trim());
@@ -647,6 +663,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <span className="text-xs text-text-muted mr-auto">A copy is CC'd to you.</span>
               <button onClick={() => setShowInvite(false)} className="border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
               <button onClick={previewInvites} className="border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">👁 Preview</button>
+              <button onClick={saveForReminders} disabled={inviteBusy} title="Records these participants so reminders go out, without sending an email now"
+                className="border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🔔 Save for reminders (no email)</button>
               <button onClick={sendInvites} disabled={inviteBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">{inviteBusy ? 'Sending…' : 'Send invitations'}</button>
             </div>
           </div>
