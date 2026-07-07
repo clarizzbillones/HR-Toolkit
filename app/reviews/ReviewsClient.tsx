@@ -151,8 +151,17 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       if (data.employee) {
         setEmployees(prev => [...prev, data.employee]);
         setShowSchedule(false);
+        showToast(`${form.name}'s review scheduled — now send invites`);
+        // Advance to the invite step, pre-filled from the review just scheduled
+        setInvite({
+          employee: form.name,
+          reviewType: form.type === '6mo' ? '6-month' : '1-year',
+          link: linkedUrl || '',
+          deadline: form.date,
+          participants: [{ ...blankParticipant }],
+        });
         setForm({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' });
-        showToast(`${form.name}'s review scheduled for ${form.date}`);
+        setShowInvite(true);
       }
     } finally {
       setSaving(false);
@@ -508,7 +517,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               </button>
               <button onClick={scheduleReview} disabled={saving || !form.name || !form.date}
                 className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
-                {saving ? 'Saving…' : 'Schedule'}
+                {saving ? 'Saving…' : 'Schedule → next: invites'}
               </button>
             </div>
           </div>
