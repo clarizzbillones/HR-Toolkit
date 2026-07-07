@@ -217,10 +217,11 @@ export default function OnboardingClient() {
       className={`bg-white border border-border rounded-card overflow-hidden ${dragId === s.id ? 'opacity-40' : ''}`}>
       {editing === s.id ? (
         <div className="p-5 space-y-3">
-          <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+          <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} placeholder="Section title"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm font-semibold focus:outline-none focus:border-ink" />
-          <textarea value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} rows={6}
+          <textarea value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} rows={6} placeholder="Write the section content…"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+          <p className="text-[11px] text-text-muted">Tip: paste a link and it becomes clickable. For a friendly label use <code>[Label](https://link)</code>.</p>
           <div className="flex gap-2">
             <button onClick={() => saveEdit(s.id)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Save</button>
             <button onClick={() => setEditing(null)} className="text-sm text-text-muted px-3">Cancel</button>
@@ -236,12 +237,17 @@ export default function OnboardingClient() {
               <button disabled={sections.findIndex(x => x.id === s.id) === sections.length - 1} onClick={() => moveSection(s.id, 1)} title="Move down"
                 className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▼</button>
             </div>
-            <h2 className="font-spectral text-[17px] font-semibold text-text-primary flex-1" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
-            <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Edit</button>
+            <h2 onClick={() => startEdit(s)} title="Click to edit"
+              className="font-spectral text-[17px] font-semibold text-text-primary flex-1 cursor-text hover:text-ink" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
+            <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-60 group-hover:opacity-100">✎ Edit</button>
             {guides.length > 1 && <button onClick={() => copyToGuide(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-0 group-hover:opacity-100">Copy to…</button>}
             <button onClick={() => remove(s.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea] opacity-0 group-hover:opacity-100">Delete</button>
           </div>
-          <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3">{linkify(s.body)}</p>
+          {(s.body ?? '').trim()
+            ? <p onClick={e => { if ((e.target as HTMLElement).tagName !== 'A') startEdit(s); }} title="Click to edit"
+                className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3 cursor-text">{linkify(s.body)}</p>
+            : <p onClick={() => startEdit(s)} title="Click to edit"
+                className="text-sm text-text-faint italic mt-2 leading-relaxed pl-3 cursor-text hover:text-text-muted">Click to add content…</p>}
         </div>
       )}
     </div>
