@@ -97,6 +97,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       else showToast(d.error ?? 'Could not send email');
     } catch { showToast('Could not send email'); }
   }
+  async function runReminderNow() {
+    showToast('Running reminder check…');
+    try {
+      const res = await fetch('/api/reviews/remind', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok && d.sent) showToast(`✓ Reminder emailed to ${d.to} (${d.sent} review${d.sent > 1 ? 's' : ''})`);
+      else if (res.ok) showToast(d.message ?? 'No reviews are 30/15/10 days out right now');
+      else showToast(d.error ?? 'Could not send email');
+    } catch { showToast('Could not send email'); }
+  }
 
   async function scheduleReview() {
     if (!form.name || !form.date) return;
@@ -214,7 +224,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           <div className="flex items-center gap-2.5">
             <button onClick={sendTestReminder}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >📧 Test reminder email</button>
+            >📧 Test email</button>
+            <button onClick={runReminderNow}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >▶ Run reminder now</button>
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
