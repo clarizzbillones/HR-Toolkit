@@ -7,22 +7,24 @@ interface Item {
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
 }
-// Render clickable links in section text.
+// Render section text with clickable links and **bold**.
 // Supports [Label](https://url) for a friendly label; bare URLs are shortened.
 function linkify(text: string | null) {
   const src = String(text ?? '');
-  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
-  const out: React.ReactNode[] = [];
+  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)|\*\*([^*]+)\*\*/g;
+  const out: ReactNode[] = [];
   let last = 0, m: RegExpExecArray | null, i = 0;
   const cls = "text-[#3f6b8a] underline font-medium";
   while ((m = re.exec(src))) {
     if (m.index > last) out.push(<span key={i++}>{src.slice(last, m.index)}</span>);
     if (m[1]) {
       out.push(<a key={i++} href={m[2]} target="_blank" rel="noopener noreferrer" className={cls}>{m[1]}</a>);
-    } else {
+    } else if (m[3]) {
       const url = m[3]; let label = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
       if (label.length > 42) label = label.slice(0, 42) + '…';
       out.push(<a key={i++} href={url} target="_blank" rel="noopener noreferrer" className={cls}>{label} ↗</a>);
+    } else if (m[4]) {
+      out.push(<strong key={i++} className="font-semibold text-text-primary">{m[4]}</strong>);
     }
     last = m.index + m[0].length;
   }
@@ -214,7 +216,35 @@ export default function OnboardingClient() {
     setDraft(d => ({ ...d, body: next }));
     setTimeout(() => { if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = pos + 2; } }, 0);
   }
-  // Enter on a bullet line continues the list; Enter on an empty bullet ends it.
+  // Prefix the line at the cursor with the next number in the list.
+  function insertNumber() {
+    const ta = bodyRef.current;
+    const text = draft.body;
+    const pos = ta ? ta.selectionStart : text.length;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    if (/^\d+\.\s/.test(text.slice(lineStart))) return; // already numbered
+    let n = 1;
+    if (lineStart > 0) {
+      const prevStart = text.lastIndexOf('\n', lineStart - 2) + 1;
+      const mm = text.slice(prevStart, lineStart - 1).match(/^(\d+)\.\s/);
+      if (mm) n = parseInt(mm[1]) + 1;
+    }
+    const prefix = `${n}. `;
+    const next = text.slice(0, lineStart) + prefix + text.slice(lineStart);
+    setDraft(d => ({ ...d, body: next }));
+    setTimeout(() => { if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = pos + prefix.length; } }, 0);
+  }
+  // Wrap the selection (or a placeholder) in **bold**.
+  function insertBold() {
+    const ta = bodyRef.current; if (!ta) return;
+    const text = draft.body;
+    const s = ta.selectionStart, e2 = ta.selectionEnd;
+    const sel = text.slice(s, e2) || 'bold text';
+    const next = text.slice(0, s) + '**' + sel + '**' + text.slice(e2);
+    setDraft(d => ({ ...d, body: next }));
+    setTimeout(() => { ta.focus(); ta.selectionStart = s + 2; ta.selectionEnd = s + 2 + sel.length; }, 0);
+  }
+  // Enter continues a bullet or numbered list; Enter on an empty marker ends it.
   function onBodyKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (e.key !== 'Enter' || e.shiftKey) return;
     const ta = e.currentTarget;
@@ -222,14 +252,17 @@ export default function OnboardingClient() {
     const pos = ta.selectionStart;
     const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
     const line = text.slice(lineStart, pos);
-    if (!/^•\s/.test(line)) return;
+    const numMatch = line.match(/^(\d+)\.\s/);
+    const isBullet = /^•\s/.test(line);
+    if (!isBullet && !numMatch) return;
     e.preventDefault();
-    if (line.trim() === '•') {
+    const emptyMarker = isBullet ? line.trim() === '•' : line.trim() === `${numMatch![1]}.`;
+    if (emptyMarker) {
       const next = text.slice(0, lineStart) + text.slice(pos);
       setDraft(d => ({ ...d, body: next }));
       setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = lineStart; }, 0);
     } else {
-      const ins = '\n• ';
+      const ins = isBullet ? '\n• ' : `\n${parseInt(numMatch![1]) + 1}. `;
       const next = text.slice(0, pos) + ins + text.slice(pos);
       setDraft(d => ({ ...d, body: next }));
       setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = pos + ins.length; }, 0);
@@ -252,10 +285,14 @@ export default function OnboardingClient() {
         <div className="p-5 space-y-3">
           <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} placeholder="Section title"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm font-semibold focus:outline-none focus:border-ink" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button type="button" onClick={insertBullet} title="Add a bullet to this line"
               className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">• Bullet</button>
-            <span className="text-[11px] text-text-muted">Press Enter to keep the list going.</span>
+            <button type="button" onClick={insertNumber} title="Number this line"
+              className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">1. Number</button>
+            <button type="button" onClick={insertBold} title="Bold the selected text"
+              className="text-xs font-bold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">B Bold</button>
+            <span className="text-[11px] text-text-muted">Enter keeps lists going · select text then Bold.</span>
           </div>
           <textarea ref={bodyRef} value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} onKeyDown={onBodyKeyDown} rows={6} placeholder="Write the section content…"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
@@ -324,7 +361,8 @@ export default function OnboardingClient() {
         <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px;margin:0 0 6px">${esc(s.title)}</h2>
         <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '')
           .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#3f6b8a">$1</a>')
-          .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })}</div>
+          .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</div>
       </section>`).join('');
     const schedHtml = schedule.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
