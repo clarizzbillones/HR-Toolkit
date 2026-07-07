@@ -222,6 +222,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees · times in CST</p>
           </div>
           <div className="flex items-center gap-2.5">
+            <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >👁 Preview email</button>
             <button onClick={sendTestReminder}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >📧 Test email</button>
