@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
@@ -56,6 +56,8 @@ export default function OnboardingClient() {
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
+  const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
+  useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
 
   function tasksFor(g: string) { return items.filter(i => i.guide === g && i.kind === 'task'); }
@@ -333,6 +335,121 @@ export default function OnboardingClient() {
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildText())}`;
   }
 
+  // ---- Reorderable content blocks (left column) ----
+  const DEFAULT_BLOCK_ORDER = ['sections', 'schedule', 'tools', 'sop', 'tables'];
+  const scheduleShown = schedule.length > 0 || guide === 'General';
+  const blockShown: Record<string, boolean> = { sections: true, schedule: scheduleShown, tools: true, sop: true, tables: true };
+  // Saved order for this guide, sanitized to known keys with any missing appended.
+  const blockOrder = (() => {
+    const saved = blockOrders[guide];
+    const arr = (saved && saved.length ? saved : DEFAULT_BLOCK_ORDER).filter(k => DEFAULT_BLOCK_ORDER.includes(k));
+    for (const k of DEFAULT_BLOCK_ORDER) if (!arr.includes(k)) arr.push(k);
+    return arr;
+  })();
+  const visibleBlocks = blockOrder.filter(k => blockShown[k]);
+  async function moveBlock(k: string, dir: -1 | 1) {
+    const vis = visibleBlocks.slice();
+    const i = vis.indexOf(k), j = i + dir;
+    if (i < 0 || j < 0 || j >= vis.length) return;
+    [vis[i], vis[j]] = [vis[j], vis[i]];
+    const full = [...vis, ...DEFAULT_BLOCK_ORDER.filter(x => !vis.includes(x))];
+    setBlockOrders(prev => ({ ...prev, [guide]: full }));
+    await fetch('/api/onboarding/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guide, order: full }) });
+  }
+  const BlockWrap = ({ k, children }: { k: string; children: ReactNode }) => {
+    const i = visibleBlocks.indexOf(k);
+    return (
+      <div className="relative group/blk">
+        <div className="absolute -top-2 right-1 z-10 flex gap-0.5 opacity-0 group-hover/blk:opacity-100">
+          <button disabled={i === 0} onClick={() => moveBlock(k, -1)} title="Move block up"
+            className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▲</button>
+          <button disabled={i === visibleBlocks.length - 1} onClick={() => moveBlock(k, 1)} title="Move block down"
+            className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▼</button>
+        </div>
+        {children}
+      </div>
+    );
+  };
+  const blockNodes: Record<string, ReactNode> = {
+    sections: (
+      <div className="space-y-4">
+        {sections.map(SectionCard)}
+        <button onClick={addSection} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add section</button>
+      </div>
+    ),
+    schedule: scheduleShown ? (
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
+          <h2 className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">2-Week Training Schedule</h2>
+        </div>
+        <div className="bg-white border border-border rounded-card overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead className="bg-[#e9f0f5]"><tr>
+              {['Date', 'Agenda', 'Assignee', 'Notes', 'Location', ''].map(h => <th key={h} className="text-left px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#3f6b8a]">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {schedule.map(r => (
+                <tr key={r.id} className="group">
+                  <td className={cell + ' w-28'}><input value={r.day ?? ''} onChange={e => patch(r.id, { day: e.target.value })} className={inp + ' font-medium'} /></td>
+                  <td className={cell}><input value={r.title ?? ''} onChange={e => patch(r.id, { title: e.target.value })} className={inp} /></td>
+                  <td className={cell + ' w-40'}><input value={r.assignee ?? ''} onChange={e => patch(r.id, { assignee: e.target.value })} className={inp + ' text-text-muted'} /></td>
+                  <td className={cell + ' w-32'}><input value={r.body ?? ''} onChange={e => patch(r.id, { body: e.target.value })} className={inp + ' text-text-muted'} /></td>
+                  <td className={cell + ' w-28'}><input value={r.location ?? ''} onChange={e => patch(r.id, { location: e.target.value })} className={inp + ' text-text-muted'} /></td>
+                  <td className={cell + ' w-8 text-right'}><button onClick={() => remove(r.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button onClick={() => add('schedule', { day: 'Day', title: 'New activity' })} className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-ink border-t border-[#f1ece3]">+ Add row</button>
+        </div>
+      </div>
+    ) : null,
+    tools: <LinkBlock kind="tool" title="Tools" color="#6b4f8a" list={tools} placeholder="Tool name" />,
+    sop: <LinkBlock kind="sop" title="SOP Links" color="#3f6b8a" list={links} placeholder="SOP name" />,
+    tables: (
+      <div className="space-y-6">
+        {tables.map(t => {
+          const d = parseTable(t.body);
+          return (
+            <div key={t.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
+                <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })} className="text-sm font-bold uppercase tracking-wider text-[#6b5427] bg-transparent focus:outline-none flex-1" />
+                <button onClick={() => remove(t.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete table</button>
+              </div>
+              <div className="bg-white border border-border rounded-card overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#f0ece4]"><tr>
+                    {d.headers.map((h, ci) => (
+                      <th key={ci} className="text-left px-2 py-2"><input value={h} onChange={e => { const n = { ...d, headers: d.headers.map((x, i) => i === ci ? e.target.value : x) }; saveTable(t.id, n); }} className="w-full bg-transparent text-[11px] font-bold uppercase tracking-wider text-[#8a6d3b] focus:outline-none" /></th>
+                    ))}
+                    <th className="w-8" />
+                  </tr></thead>
+                  <tbody>
+                    {d.rows.map((row, ri) => (
+                      <tr key={ri} className="group border-t border-[#f1ece3]">
+                        {row.map((c, ci) => (
+                          <td key={ci} className="px-2 py-1.5 align-top"><textarea rows={1} value={c} onChange={e => { const rows = d.rows.map((r, i) => i === ri ? r.map((x, j) => j === ci ? e.target.value : x) : r); saveTable(t.id, { ...d, rows }); }} className="w-full bg-transparent text-sm text-text-secondary focus:outline-none focus:bg-canvas rounded resize-none" /></td>
+                        ))}
+                        <td className="px-1 text-right"><button onClick={() => saveTable(t.id, { ...d, rows: d.rows.filter((_, i) => i !== ri) })} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex gap-3 border-t border-[#f1ece3] px-3 py-2">
+                  <button onClick={() => saveTable(t.id, { ...d, rows: [...d.rows, d.headers.map(() => '')] })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Row</button>
+                  <button onClick={() => saveTable(t.id, { headers: [...d.headers, 'Column'], rows: d.rows.map(r => [...r, '']) })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Column</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) })} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
+      </div>
+    ),
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
@@ -401,87 +518,10 @@ export default function OnboardingClient() {
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-7xl">
           <div className="xl:col-span-2 space-y-6">
-            {/* Sections — drag the ⠿ grip to reorder any section anywhere */}
-            <div className="space-y-4">
-              {sections.map(SectionCard)}
-              <button onClick={addSection} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add section</button>
-            </div>
-
-            {/* Schedule table */}
-            {(schedule.length > 0 || guide === 'General') && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">2-Week Training Schedule</h2>
-              </div>
-              <div className="bg-white border border-border rounded-card overflow-x-auto">
-                <table className="w-full text-sm min-w-[720px]">
-                  <thead className="bg-[#e9f0f5]"><tr>
-                    {['Date', 'Agenda', 'Assignee', 'Notes', 'Location', ''].map(h => <th key={h} className="text-left px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#3f6b8a]">{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {schedule.map(r => (
-                      <tr key={r.id} className="group">
-                        <td className={cell + ' w-28'}><input value={r.day ?? ''} onChange={e => patch(r.id, { day: e.target.value })} className={inp + ' font-medium'} /></td>
-                        <td className={cell}><input value={r.title ?? ''} onChange={e => patch(r.id, { title: e.target.value })} className={inp} /></td>
-                        <td className={cell + ' w-40'}><input value={r.assignee ?? ''} onChange={e => patch(r.id, { assignee: e.target.value })} className={inp + ' text-text-muted'} /></td>
-                        <td className={cell + ' w-32'}><input value={r.body ?? ''} onChange={e => patch(r.id, { body: e.target.value })} className={inp + ' text-text-muted'} /></td>
-                        <td className={cell + ' w-28'}><input value={r.location ?? ''} onChange={e => patch(r.id, { location: e.target.value })} className={inp + ' text-text-muted'} /></td>
-                        <td className={cell + ' w-8 text-right'}><button onClick={() => remove(r.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <button onClick={() => add('schedule', { day: 'Day', title: 'New activity' })} className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-ink border-t border-[#f1ece3]">+ Add row</button>
-              </div>
-            </div>
-            )}
-
-            {/* Tools */}
-            <LinkBlock kind="tool" title="Tools" color="#6b4f8a" list={tools} placeholder="Tool name" />
-
-            {/* SOP Links */}
-            <LinkBlock kind="sop" title="SOP Links" color="#3f6b8a" list={links} placeholder="SOP name" />
-
-            {/* Tables */}
-            {tables.map(t => {
-              const d = parseTable(t.body);
-              return (
-                <div key={t.id}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
-                    <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })} className="text-sm font-bold uppercase tracking-wider text-[#6b5427] bg-transparent focus:outline-none flex-1" />
-                    <button onClick={() => remove(t.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete table</button>
-                  </div>
-                  <div className="bg-white border border-border rounded-card overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-[#f0ece4]"><tr>
-                        {d.headers.map((h, ci) => (
-                          <th key={ci} className="text-left px-2 py-2"><input value={h} onChange={e => { const n = { ...d, headers: d.headers.map((x, i) => i === ci ? e.target.value : x) }; saveTable(t.id, n); }} className="w-full bg-transparent text-[11px] font-bold uppercase tracking-wider text-[#8a6d3b] focus:outline-none" /></th>
-                        ))}
-                        <th className="w-8" />
-                      </tr></thead>
-                      <tbody>
-                        {d.rows.map((row, ri) => (
-                          <tr key={ri} className="group border-t border-[#f1ece3]">
-                            {row.map((c, ci) => (
-                              <td key={ci} className="px-2 py-1.5 align-top"><textarea rows={1} value={c} onChange={e => { const rows = d.rows.map((r, i) => i === ri ? r.map((x, j) => j === ci ? e.target.value : x) : r); saveTable(t.id, { ...d, rows }); }} className="w-full bg-transparent text-sm text-text-secondary focus:outline-none focus:bg-canvas rounded resize-none" /></td>
-                            ))}
-                            <td className="px-1 text-right"><button onClick={() => saveTable(t.id, { ...d, rows: d.rows.filter((_, i) => i !== ri) })} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className="flex gap-3 border-t border-[#f1ece3] px-3 py-2">
-                      <button onClick={() => saveTable(t.id, { ...d, rows: [...d.rows, d.headers.map(() => '')] })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Row</button>
-                      <button onClick={() => saveTable(t.id, { headers: [...d.headers, 'Column'], rows: d.rows.map(r => [...r, '']) })} className="text-sm font-semibold text-text-muted hover:text-ink">+ Column</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) })} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
-
+            {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
+            {visibleBlocks.map(k => (
+              <BlockWrap key={k} k={k}>{blockNodes[k]}</BlockWrap>
+            ))}
           </div>
 
           {/* Checklist — grouped by who owns the to-do */}
