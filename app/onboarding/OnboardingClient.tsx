@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
@@ -202,6 +202,39 @@ export default function OnboardingClient() {
     setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
     if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
   }
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  // Prefix the line at the cursor with a bullet (or bullet the empty line).
+  function insertBullet() {
+    const ta = bodyRef.current;
+    const text = draft.body;
+    const pos = ta ? ta.selectionStart : text.length;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    if (text.slice(lineStart).startsWith('• ')) return; // already bulleted
+    const next = text.slice(0, lineStart) + '• ' + text.slice(lineStart);
+    setDraft(d => ({ ...d, body: next }));
+    setTimeout(() => { if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = pos + 2; } }, 0);
+  }
+  // Enter on a bullet line continues the list; Enter on an empty bullet ends it.
+  function onBodyKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    const ta = e.currentTarget;
+    const text = draft.body;
+    const pos = ta.selectionStart;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    const line = text.slice(lineStart, pos);
+    if (!/^•\s/.test(line)) return;
+    e.preventDefault();
+    if (line.trim() === '•') {
+      const next = text.slice(0, lineStart) + text.slice(pos);
+      setDraft(d => ({ ...d, body: next }));
+      setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = lineStart; }, 0);
+    } else {
+      const ins = '\n• ';
+      const next = text.slice(0, pos) + ins + text.slice(pos);
+      setDraft(d => ({ ...d, body: next }));
+      setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = pos + ins.length; }, 0);
+    }
+  }
   function startEdit(s: Item) { setEditing(s.id); setDraft({ title: s.title, body: s.body ?? '' }); }
   async function saveEdit(id: string) { await patch(id, { title: draft.title, body: draft.body }); setEditing(null); showToast('Saved'); }
 
@@ -219,7 +252,12 @@ export default function OnboardingClient() {
         <div className="p-5 space-y-3">
           <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} placeholder="Section title"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm font-semibold focus:outline-none focus:border-ink" />
-          <textarea value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} rows={6} placeholder="Write the section content…"
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={insertBullet} title="Add a bullet to this line"
+              className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">• Bullet</button>
+            <span className="text-[11px] text-text-muted">Press Enter to keep the list going.</span>
+          </div>
+          <textarea ref={bodyRef} value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} onKeyDown={onBodyKeyDown} rows={6} placeholder="Write the section content…"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           <p className="text-[11px] text-text-muted">Tip: paste a link and it becomes clickable. For a friendly label use <code>[Label](https://link)</code>.</p>
           <div className="flex gap-2">
