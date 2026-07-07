@@ -61,6 +61,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const { showToast } = useToast();
   const { pushUndo } = useUndo();
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [staff, setStaff] = useState<{ id: string; name: string; position: string | null; email: string | null }[]>([]);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
@@ -104,7 +105,26 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     fetch('/api/connections').then(r => r.json()).then(data => {
       if (data.reviews_url) { setLinkedUrl(data.reviews_url); setDashUrl(data.reviews_url); }
     }).catch(() => {});
+    fetch('/api/staffing').then(r => r.json()).then(data => setStaff(data.rows ?? [])).catch(() => {});
   }, []);
+
+  // Look up a person's role/position by name across employees and the staff directory
+  function roleForName(name: string): string | null {
+    const n = name.trim().toLowerCase();
+    if (!n) return null;
+    const emp = employees.find(e => e.name.trim().toLowerCase() === n);
+    if (emp?.role) return emp.role;
+    const st = staff.find(s => s.name.trim().toLowerCase() === n);
+    return st?.position || null;
+  }
+
+  // Look up a person's email by name from the staff directory
+  function emailForName(name: string): string {
+    const n = name.trim().toLowerCase();
+    if (!n) return '';
+    const st = staff.find(s => s.name.trim().toLowerCase() === n);
+    return st?.email || '';
+  }
 
   async function connectDash() {
     if (!dashUrl) return;
@@ -487,9 +507,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee Name</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} list="schedule-emp-names"
+                <input value={form.name} onChange={e => { const name = e.target.value; const role = roleForName(name); setForm(f => ({ ...f, name, role: role ?? f.role })); }} list="schedule-emp-names"
                   placeholder="Pick existing or type a new name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-                <datalist id="schedule-emp-names">{employees.map(e => <option key={e.id} value={e.name} />)}</datalist>
+                <datalist id="schedule-emp-names">
+                  {employees.map(e => <option key={e.id} value={e.name} />)}
+                  {staff.filter(s => !employees.some(e => e.name.trim().toLowerCase() === s.name.trim().toLowerCase())).map(s => <option key={s.id} value={s.name} />)}
+                </datalist>
                 {employees.some(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase()) && form.name && (
                   <p className="text-[11px] text-[#2f7d5b] mt-1">Existing employee — this updates their review date.</p>
                 )}
@@ -578,11 +601,15 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <div className="space-y-2">
                   {invite.participants.map((p, i) => (
                     <div key={i} className="flex gap-2 items-center">
-                      <input value={p.name} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))}
-                        placeholder="Name" className="w-32 border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink" />
+                      <select value={p.name} onChange={e => { const name = e.target.value; const email = emailForName(name); setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, name, email: email || x.email } : x) })); }}
+                        className="w-40 border border-border-light rounded-ctrl px-2 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                        <option value="">Select staff…</option>
+                        {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                        {p.name && !staff.some(s => s.name === p.name) && <option value={p.name}>{p.name}</option>}
+                      </select>
                       <input value={p.email} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, email: e.target.value } : x) }))}
                         placeholder="email@litson.co" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink" />
-                      <select value={p.type} onChange={e => setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? { ...x, type: e.target.value } : x) }))}
+                      <select value={p.type} onChange={e => { const type = e.target.value; setInvite(v => ({ ...v, participants: v.participants.map((x, j) => j === i ? (type === 'Self-assessment' ? { ...x, type, name: v.employee, email: emailForName(v.employee) || x.email } : { ...x, type }) : x) })); }}
                         className="border border-border-light rounded-ctrl px-2 py-2 text-sm bg-white focus:outline-none focus:border-ink">
                         {['Peer reviewer', 'Self-assessment', 'Manager'].map(t => <option key={t}>{t}</option>)}
                       </select>
