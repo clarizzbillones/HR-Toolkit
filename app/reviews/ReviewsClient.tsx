@@ -310,6 +310,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >👁 Preview email</button>
+            <button onClick={() => window.open('/api/reviews/invite-remind?preview=1', '_blank')}
+              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >⏳ Preview reminder</button>
             <button onClick={sendTestReminder}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >📧 Test email</button>

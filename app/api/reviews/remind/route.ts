@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
 import { sendMail, sendMailAsApp } from '@/lib/graph';
+import { sendDueInviteReminders } from '@/lib/inviteReminders';
 
 const RECIPIENT = process.env.REVIEW_REMINDER_EMAIL ?? 'clarizz@litson.co';
 // Mailbox the app-only cron sends *from* (defaults to the recipient's own mailbox)
@@ -42,6 +43,12 @@ async function handle(req: Request) {
   const params = new URL(req.url).searchParams;
   const test = params.get('test');
   const preview = params.get('preview');
+
+  // On real cron runs, also send any participant review reminders that are due
+  // today. Best-effort — never let it block the HR summary email.
+  if (!preview && !test) {
+    try { await sendDueInviteReminders({ sender: SENDER, cc: RECIPIENT }); } catch { /* ignore */ }
+  }
 
   let subject: string, body: string, count = 0;
   if (test) {
