@@ -74,6 +74,18 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string }[] }>(
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
 
+  async function previewInvites() {
+    const w = window.open('', '_blank');
+    try {
+      const res = await fetch('/api/reviews/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...invite, preview: true }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Nothing to preview'); w?.close(); return; }
+      const blocks = (d.messages ?? []).map((m: any) =>
+        `<div style="max-width:640px;margin:0 auto 24px"><div style="font-size:12px;color:#8a7f6d;font-family:sans-serif;padding:8px 4px">To: ${m.to} · CC: ${d.cc} · <b>${m.subject}</b></div>${m.html}</div>`).join('');
+      w?.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invite preview</title></head><body style="margin:0;background:#f1ece3;padding:20px 0">${blocks || '<p style="text-align:center">Add participants to preview.</p>'}</body></html>`);
+      w?.document.close();
+    } catch { showToast('Could not preview'); w?.close(); }
+  }
   async function sendInvites() {
     if (!invite.employee.trim()) { showToast('Enter who is being reviewed'); return; }
     const parts = invite.participants.filter(p => p.email.trim());
@@ -563,8 +575,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   className="mt-2 text-sm font-semibold text-text-muted hover:text-ink">+ Add participant</button>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
+            <div className="px-6 py-4 border-t border-border flex gap-2 justify-end items-center">
+              <span className="text-xs text-text-muted mr-auto">A copy is CC'd to you.</span>
               <button onClick={() => setShowInvite(false)} className="border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
+              <button onClick={previewInvites} className="border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">👁 Preview</button>
               <button onClick={sendInvites} disabled={inviteBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">{inviteBusy ? 'Sending…' : 'Send invitations'}</button>
             </div>
           </div>

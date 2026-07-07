@@ -55,15 +55,20 @@ export async function getAppToken(): Promise<string | null> {
   } catch { return null; }
 }
 
+function ccList(cc?: string | string[]) {
+  const arr = (Array.isArray(cc) ? cc : cc ? [cc] : []).filter(Boolean);
+  return arr.length ? { ccRecipients: arr.map(a => ({ emailAddress: { address: a } })) } : {};
+}
+
 // Send mail as a specific mailbox using the app-only token
-export async function sendMailAsApp(fromUpn: string, to: string, subject: string, body: string) {
+export async function sendMailAsApp(fromUpn: string, to: string, subject: string, body: string, cc?: string | string[]) {
   const token = await getAppToken();
   if (!token) return { ok: false, error: 'App credentials not configured (AZURE_AD_CLIENT_ID/SECRET/TENANT_ID)' };
   try {
     const res = await fetch(`${GRAPH_BASE}/users/${encodeURIComponent(fromUpn)}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: to } }] } }),
+      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: to } }], ...ccList(cc) } }),
     });
     if (!res.ok) return { ok: false, error: `Graph sendMail ${res.status}: ${(await res.text()).slice(0, 300)}` };
     return { ok: true };
@@ -74,7 +79,8 @@ export async function sendMail(
   accessToken: string,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  cc?: string | string[]
 ) {
   try {
     await graphFetch('/me/sendMail', accessToken, {
@@ -84,6 +90,7 @@ export async function sendMail(
           subject,
           body: { contentType: 'HTML', content: body },
           toRecipients: [{ emailAddress: { address: to } }],
+          ...ccList(cc),
         },
       }),
     });

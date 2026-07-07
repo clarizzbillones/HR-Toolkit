@@ -6,6 +6,7 @@ import { sendMail, sendMailAsApp } from '@/lib/graph';
 
 const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
+const CC = process.env.REVIEW_REMINDER_EMAIL ?? 'clarizz@litson.co';
 
 function fmtDate(iso: string) {
   if (!iso) return '';
@@ -31,41 +32,52 @@ function button(link: string, label: string) {
     <p style="font-size:12px;color:#888">Or paste this link: <a href="${link}" style="color:#3f6b8a">${link}</a></p>`;
 }
 
+// Build the { to, subject, html } message for one participant
+function buildMessage(employee: string, link: string, deadline: string, reviewType: string, p: any) {
+  const due = deadline ? ` by <b>${fmtDate(deadline)}</b>` : '';
+  const label = reviewType ? `${reviewType} ` : '';
+  const name = (p.name ?? '').trim() || 'there';
+  let subject: string, inner: string;
+  if (p.type === 'Self-assessment') {
+    subject = `Your self-assessment${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
+    inner = `<p>Hi ${name},</p><p>As part of your ${label}performance review, please complete your <b>self-assessment</b>${due}.</p>${button(link, 'Open the self-assessment form')}<p>Thank you!</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
+  } else {
+    const roleWord = p.type === 'Manager' ? 'manager review' : 'peer review';
+    subject = `${p.type === 'Manager' ? 'Manager' : 'Peer'} review request: ${employee}${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
+    inner = `<p>Hi ${name},</p><p>You've been asked to complete a <b>${roleWord}</b> for <b>${employee}</b> as part of their ${label}performance review. Please complete it${due}.</p>${button(link, `Open the review form`)}<p>Thank you for taking the time.</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
+  }
+  return { to: (p.email ?? '').trim(), type: p.type, subject, html: wrap(subject, inner) };
+}
+
 export async function POST(req: Request) {
-  const { employee, link, deadline, reviewType, participants } = await req.json();
+  const { employee, link, deadline, reviewType, participants, preview } = await req.json();
   if (!employee?.trim()) return NextResponse.json({ error: 'Employee name required' }, { status: 400 });
   if (!Array.isArray(participants) || !participants.length) return NextResponse.json({ error: 'Add at least one participant' }, { status: 400 });
+
+  const messages = participants.filter((p: any) => (p.email ?? '').trim() || preview)
+    .map((p: any) => buildMessage(employee, link, deadline, reviewType, p));
+
+  // Preview mode — return the rendered emails without sending
+  if (preview) {
+    return NextResponse.json({ preview: true, cc: CC, messages: messages.map(m => ({ to: m.to || '(participant)', type: m.type, subject: m.subject, html: m.html })) });
+  }
 
   const session = await getServerSession(authOptions);
   const userToken = (session as any)?.accessToken as string | undefined;
   const send = async (to: string, subject: string, html: string) => {
-    if (userToken) { const r = await sendMail(userToken, to, subject, html); if (r.ok) return { ok: true }; }
-    return await sendMailAsApp(SENDER, to, subject, html);
+    if (userToken) { const r = await sendMail(userToken, to, subject, html, CC); if (r.ok) return { ok: true }; }
+    return await sendMailAsApp(SENDER, to, subject, html, CC);
   };
 
-  const due = deadline ? ` by <b>${fmtDate(deadline)}</b>` : '';
-  const label = reviewType ? `${reviewType} ` : '';
   const results: { email: string; ok: boolean; error?: string }[] = [];
-
-  for (const p of participants) {
-    const to = (p.email ?? '').trim();
-    if (!to) continue;
-    const name = (p.name ?? '').trim() || 'there';
-    let subject: string, inner: string;
-    if (p.type === 'Self-assessment') {
-      subject = `Your self-assessment${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
-      inner = `<p>Hi ${name},</p><p>As part of your ${label}performance review, please complete your <b>self-assessment</b>${due}.</p>${button(link, 'Open the self-assessment form')}<p>Thank you!</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
-    } else {
-      const roleWord = p.type === 'Manager' ? 'manager review' : 'peer review';
-      subject = `${p.type === 'Manager' ? 'Manager' : 'Peer'} review request: ${employee}${deadline ? ` — due ${fmtDate(deadline)}` : ''}`;
-      inner = `<p>Hi ${name},</p><p>You've been asked to complete a <b>${roleWord}</b> for <b>${employee}</b> as part of their ${label}performance review. Please complete it${due}.</p>${button(link, `Open the review form`)}<p>Thank you for taking the time.</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
-    }
-    const r = await send(to, subject, wrap(subject, inner));
-    results.push({ email: to, ok: r.ok, error: (r as any).error });
+  for (const m of messages) {
+    if (!m.to) continue;
+    const r = await send(m.to, m.subject, m.html);
+    results.push({ email: m.to, ok: r.ok, error: (r as any).error });
   }
 
   const sent = results.filter(r => r.ok).length;
   const failed = results.filter(r => !r.ok);
   if (sent === 0) return NextResponse.json({ error: `Could not send. ${failed[0]?.error ?? ''}`, results }, { status: 502 });
-  return NextResponse.json({ ok: true, sent, failed: failed.length, results });
+  return NextResponse.json({ ok: true, sent, failed: failed.length, cc: CC, results });
 }

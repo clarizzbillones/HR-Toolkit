@@ -34,6 +34,30 @@ async function getStats() {
   const payrollDaysLeft = nextPayroll
     ? Math.ceil((new Date(nextPayroll.run_date).getTime() - Date.now()) / 86400000)
     : null;
+
+  // Upcoming deadlines (next 30 days) — payroll + performance reviews, flagged by urgency
+  const daysUntil = (s: string) => {
+    const t = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    t.setHours(0, 0, 0, 0);
+    const d = new Date(String(s).slice(0, 10) + 'T00:00:00');
+    return Math.round((d.getTime() - t.getTime()) / 86400000);
+  };
+  const deadlines: { label: string; date: string; days: number; kind: string }[] = [];
+  try {
+    const [np] = await sql`SELECT cutoff FROM payroll_periods WHERE cutoff >= ${today} AND status NOT IN ('Processed') ORDER BY cutoff ASC LIMIT 1` as any[];
+    if (np?.cutoff) deadlines.push({ label: 'Payroll — deadline to run', date: np.cutoff.slice(0, 10), days: daysUntil(np.cutoff), kind: 'payroll' });
+  } catch { /* ignore */ }
+  try {
+    const revs = await sql`SELECT name, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees` as any[];
+    for (const e of revs) {
+      for (const [date, status, type] of [[e.review_6mo_date, e.review_6mo_status, '6-month review'], [e.review_1yr_date, e.review_1yr_status, '1-year review']] as [string, string, string][]) {
+        if (!date || status === 'Complete') continue;
+        const days = daysUntil(date);
+        if (days >= -7 && days <= 30) deadlines.push({ label: `${e.name} — ${type}`, date: String(date).slice(0, 10), days, kind: 'review' });
+      }
+    }
+  } catch { /* ignore */ }
+  deadlines.sort((a, b) => a.days - b.days);
   return {
     pendingCount: pendingCount ?? 0,
     doneCount: doneCount ?? 0,
@@ -47,6 +71,7 @@ async function getStats() {
     onboarding,
     birthdays,
     anniversaries,
+    deadlines: deadlines.slice(0, 8),
   };
 }
 

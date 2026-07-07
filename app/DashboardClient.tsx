@@ -17,6 +17,7 @@ interface Props {
   onboarding: number;
   birthdays: { name: string; dob: string }[];
   anniversaries: { name: string; years: number; date: string }[];
+  deadlines: { label: string; date: string; days: number; kind: string }[];
 }
 
 function fmtDate(iso: string) {
@@ -172,6 +173,35 @@ export default function DashboardClient(props: Props) {
             accent="#6b5b8a" href="/reviews"
           />
         </div>
+
+        {/* Upcoming deadlines — flagged by urgency */}
+        {props.deadlines.length > 0 && (() => {
+          const flag = (d: number) => d < 0 ? { c: '#b0412f', bg: '#fdeaea', t: `${Math.abs(d)}d overdue` }
+            : d <= 3 ? { c: '#b0412f', bg: '#fdeaea', t: d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d} days` }
+            : d <= 7 ? { c: '#c2410c', bg: '#fdeee2', t: `${d} days` }
+            : d <= 15 ? { c: '#b07d2a', bg: '#f7efe1', t: `${d} days` }
+            : { c: '#5b6473', bg: '#f1ece3', t: `${d} days` };
+          return (
+            <div className="bg-white border rounded-card p-5 mb-6" style={{ borderTop: '3px solid #b0412f' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-bold tracking-widest uppercase text-[#b0412f]">⚠ Upcoming Deadlines</div>
+                <span className="text-xs text-text-muted">Next 30 days</span>
+              </div>
+              <div className="space-y-1.5">
+                {props.deadlines.map((d, i) => {
+                  const f = flag(d.days);
+                  return (
+                    <div key={i} className="flex items-center gap-3 py-1.5 border-b border-[#f1ece3] last:border-0">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ color: f.c, background: f.bg }}>{f.t}</span>
+                      <span className="text-sm font-medium text-text-primary flex-1 truncate">{d.label}</span>
+                      <span className="text-xs text-text-muted">{new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Upcoming birthdays & anniversaries (this month) */}
         <div className="grid grid-cols-2 gap-4 mb-6">
