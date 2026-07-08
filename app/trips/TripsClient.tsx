@@ -39,7 +39,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
   const fileRef = useRef<HTMLInputElement>(null);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
-  const [activeTab, setActiveTab] = useState<'local' | 'report' | 'live'>('local');
+  const [activeTab, setActiveTab] = useState<'local' | 'report' | 'live'>('report');
   const embedUrl = linkedUrl || 'https://trip-desk.lovable.app/';
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
 
   async function disconnectDash() {
     setLinkedUrl(''); setDashUrl('');
-    setActiveTab('local');
+    setActiveTab('report');
     await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trips_url: null }) });
     showToast('Disconnected');
   }
@@ -124,10 +124,6 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5">
             <button
-              onClick={() => setActiveTab('local')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-ctrl transition-colors ${activeTab === 'local' ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
-            >Local view</button>
-            <button
               onClick={() => setActiveTab('report')}
               className={`text-xs font-semibold px-3 py-1.5 rounded-ctrl transition-colors flex items-center gap-1.5 ${activeTab === 'report' ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
             >📊 Monthly report</button>
@@ -144,7 +140,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
           <EditGate>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
               onChange={e => { if (e.target.files?.[0]) { importFile(e.target.files[0]); e.target.value = ''; } }} />
-            <button onClick={() => fileRef.current?.click()} disabled={importing}
+            <button onClick={() => { setActiveTab('local'); fileRef.current?.click(); }} disabled={importing}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors disabled:opacity-50">
               {importing ? 'Importing…' : '↑ Import CSV/XLSX'}
             </button>
@@ -153,7 +149,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
                 🗑 Clear all
               </button>
             )}
-            <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
+            <button onClick={() => { setActiveTab('local'); setShowAdd(v => !v); }} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
               ＋ New Request
             </button>
           </EditGate>
