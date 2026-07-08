@@ -438,20 +438,6 @@ export default function OnboardingClient() {
     setBlockOrders(prev => ({ ...prev, [guide]: full }));
     await fetch('/api/onboarding/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guide, order: full }) });
   }
-  const BlockWrap = ({ k, children }: { k: string; children: ReactNode }) => {
-    const i = visibleBlocks.indexOf(k);
-    return (
-      <div className="relative group/blk">
-        <div className="absolute -top-2 right-1 z-10 flex gap-0.5 opacity-0 group-hover/blk:opacity-100">
-          <button disabled={i === 0} onClick={() => moveBlock(k, -1)} title="Move block up"
-            className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▲</button>
-          <button disabled={i === visibleBlocks.length - 1} onClick={() => moveBlock(k, 1)} title="Move block down"
-            className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▼</button>
-        </div>
-        {children}
-      </div>
-    );
-  };
   const blockNodes: Record<string, ReactNode> = {
     sections: (
       <div className="space-y-4">
@@ -487,8 +473,8 @@ export default function OnboardingClient() {
         </div>
       </div>
     ) : null,
-    tools: <LinkBlock kind="tool" title="Tools" color="#6b4f8a" list={tools} placeholder="Tool name" />,
-    sop: <LinkBlock kind="sop" title="SOP Links" color="#3f6b8a" list={links} placeholder="SOP name" />,
+    tools: LinkBlock({ kind: 'tool', title: 'Tools', color: '#6b4f8a', list: tools, placeholder: 'Tool name' }),
+    sop: LinkBlock({ kind: 'sop', title: 'SOP Links', color: '#3f6b8a', list: links, placeholder: 'SOP name' }),
     tables: (
       <div className="space-y-6">
         {tables.map(t => {
@@ -601,8 +587,16 @@ export default function OnboardingClient() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-7xl">
           <div className="xl:col-span-2 space-y-6">
             {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
-            {visibleBlocks.map(k => (
-              <BlockWrap key={k} k={k}>{blockNodes[k]}</BlockWrap>
+            {visibleBlocks.map((k, i) => (
+              <div key={k} className="relative group/blk">
+                <div className="absolute -top-2 right-1 z-10 flex gap-0.5 opacity-0 group-hover/blk:opacity-100">
+                  <button disabled={i === 0} onClick={() => moveBlock(k, -1)} title="Move block up"
+                    className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▲</button>
+                  <button disabled={i === visibleBlocks.length - 1} onClick={() => moveBlock(k, 1)} title="Move block down"
+                    className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▼</button>
+                </div>
+                {blockNodes[k]}
+              </div>
             ))}
           </div>
 
