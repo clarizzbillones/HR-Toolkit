@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
@@ -10,6 +10,7 @@ interface Staff {
   dob: string | null; favorite_color: string | null; favorite_treat: string | null;
   note: string | null; ktn: string | null; marriott: string | null; delta: string | null;
   southwest?: string | null; american?: string | null; weight?: string | null; offboarded?: string | null;
+  extra?: string | null;
 }
 interface Vendor {
   id: string; entity: string | null; name: string | null; phone: string | null;
@@ -133,6 +134,28 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [editV, setEditV] = useState<Partial<Vendor> | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [customCols, setCustomCols] = useState<string[]>([]);
+  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => setCustomCols(d.columns ?? [])).catch(() => {}); }, []);
+
+  // Read a custom-column value from a row's JSON `extra` field.
+  function extraVal(r: Staff, name: string): string {
+    try { return (JSON.parse(r.extra ?? '{}') || {})[name] ?? ''; } catch { return ''; }
+  }
+  async function addCustomColumn() {
+    const name = window.prompt('New column name (e.g. "T-shirt size")')?.trim();
+    if (!name) return;
+    if (customCols.includes(name) || EMP_COLUMNS.some(c => c.label.toLowerCase() === name.toLowerCase())) { showToast('That column already exists'); return; }
+    const next = [...customCols, name];
+    setCustomCols(next);
+    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ columns: next }) });
+    showToast(`Added column “${name}”`);
+  }
+  async function removeCustomColumn(name: string) {
+    if (!window.confirm(`Remove the “${name}” column? Existing values are kept in the data but hidden.`)) return;
+    const next = customCols.filter(c => c !== name);
+    setCustomCols(next);
+    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ columns: next }) });
+  }
 
   const active = TABS.find(t => t.key === tab)!;
   const s = search.toLowerCase();
@@ -239,7 +262,15 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
           {cols.map(c => <th key={c.key}
             className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider ${c.key === 'name' ? 'sticky left-0 z-20' : ''}`}
             style={{ color: active.text, ...(c.key === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>{c.label}</th>)}
-          <th className="px-4 py-3" />
+          {kind === 'employees' && customCols.map(name => (
+            <th key={'x_' + name} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap" style={{ color: active.text }}>
+              {name}
+              <button onClick={() => removeCustomColumn(name)} title="Remove column" className="ml-1.5 text-text-muted hover:text-litred-alt opacity-0 group-hover/col:opacity-100">✕</button>
+            </th>
+          ))}
+          {kind === 'employees'
+            ? <th className="px-2 py-3"><button onClick={addCustomColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
+            : <th className="px-4 py-3" />}
         </tr></thead>
         <tbody>
           {data.map(r => (
@@ -256,13 +287,16 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                     : (r[c.key] ?? '—') || '—'}
                 </td>
               ))}
+              {kind === 'employees' && customCols.map(name => (
+                <td key={'x_' + name} className="px-4 py-3 text-text-muted whitespace-nowrap">{extraVal(r, name) || '—'}</td>
+              ))}
               <td className="px-4 py-3 text-right whitespace-nowrap">
                 <button onClick={() => setEditStaff({ data: r, kind })} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                 <button onClick={() => delStaff(kind, r.id)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
               </td>
             </tr>
           ))}
-          {!data.length && <tr><td colSpan={cols.length + 1} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
+          {!data.length && <tr><td colSpan={cols.length + (kind === 'employees' ? customCols.length : 0) + 1} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
         </tbody>
       </table>
     );
@@ -373,6 +407,20 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                   )}
                 </div>
               ))}
+              {editStaff.kind === 'employees' && customCols.map(name => {
+                const cur = (() => { try { return (JSON.parse(editStaff.data.extra ?? '{}') || {})[name] ?? ''; } catch { return ''; } })();
+                return (
+                  <div key={'x_' + name}>
+                    <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">{name}</label>
+                    <input value={cur} onChange={e => setEditStaff(p => {
+                      if (!p) return p;
+                      let obj: Record<string, string> = {}; try { obj = JSON.parse(p.data.extra ?? '{}') || {}; } catch { obj = {}; }
+                      obj[name] = e.target.value;
+                      return { ...p, data: { ...p.data, extra: JSON.stringify(obj) } };
+                    })} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
+                );
+              })}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2 justify-end">
               <button onClick={() => setEditStaff(null)} className="border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
