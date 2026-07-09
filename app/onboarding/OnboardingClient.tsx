@@ -64,16 +64,6 @@ export default function OnboardingClient() {
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
   const [nhExclude, setNhExclude] = useState<string[]>([]);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskOwner, setNewTaskOwner] = useState('New Hire');
-  // Add a checklist item to a specific guide (used from the Dashboard).
-  async function addTask(guideName: string, title: string, owner: string) {
-    const t = title.trim(); if (!t) return;
-    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', guide: guideName, title: t, owner }) });
-    const { item } = await res.json();
-    if (item) setItems(prev => [...prev, item]);
-    setNewTaskTitle('');
-  }
   async function createComposed() {
     const name = nhName.trim();
     if (!name || !nhSources.length) { showToast('Enter a name and pick at least one guide'); return; }
@@ -847,29 +837,14 @@ export default function OnboardingClient() {
                     {list.map(t => {
                       const isDone = !!prog[t.title];
                       return (
-                        <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
-                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] cursor-pointer" />
+                        <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas cursor-pointer">
+                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b]" />
                           <span className={`flex-1 text-sm ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`}>{t.title}</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${(t.owner ?? '') === 'HR' ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{(t.owner ?? '') === 'HR' ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}</span>
-                          <button onClick={() => remove(t.id)} title="Remove this item from the checklist"
-                            className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
-                        </div>
+                        </label>
                       );
                     })}
-                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet — add some below.</p>}
-                    <div className="flex items-center gap-2 px-2 pt-2 mt-1 border-t border-[#f1ece3]">
-                      <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') addTask(person.guide, newTaskTitle, newTaskOwner); }}
-                        placeholder="Add a checklist item…"
-                        className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
-                      <select value={newTaskOwner} onChange={e => setNewTaskOwner(e.target.value)}
-                        className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
-                        <option value="New Hire">New Hire</option>
-                        <option value="HR">HR</option>
-                      </select>
-                      <button onClick={() => addTask(person.guide, newTaskTitle, newTaskOwner)} disabled={!newTaskTitle.trim()}
-                        className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Add</button>
-                    </div>
+                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet.</p>}
                   </div>
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>
