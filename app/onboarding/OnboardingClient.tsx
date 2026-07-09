@@ -86,17 +86,12 @@ export default function OnboardingClient() {
   // Merge items from source guides (in order), de-duplicating shared blocks by
   // kind+title, then dropping any explicitly excluded ones.
   function mergeGuideItems(sources: string[], exclude: string[] = []) {
-    const seen = new Set<string>();
+    // Show every block from every source guide, in the chosen order. No auto
+    // de-dup — you decide what to keep via the include/exclude checkboxes.
     const deduped = sources
       .flatMap((g, gi) => items.filter(i => i.guide === g).map(i => ({ i, gi })))
       .sort((a, b) => a.gi - b.gi || a.i.sort_order - b.i.sort_order)
-      .map(x => x.i)
-      .filter(it => {
-        // Only collapse blocks that are TRULY identical (same title AND content),
-        // so same-titled-but-different sections from each guide both show.
-        const k = [it.kind, (it.title ?? '').trim().toLowerCase(), (it.body ?? '').trim(), it.day ?? '', it.url ?? ''].join('|');
-        if (seen.has(k)) return false; seen.add(k); return true;
-      });
+      .map(x => x.i);
     return { deduped, visible: deduped.filter(it => !exclude.includes(it.id)) };
   }
   async function deleteComposed(name: string) {
@@ -454,6 +449,7 @@ export default function OnboardingClient() {
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:24px;font-weight:800;letter-spacing:.18em">LITSON</div>
           <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc(guide.toUpperCase())} ONBOARDING GUIDE</div>
+          ${hire.trim() ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(hire.trim())}</div>` : ''}
         </div>
         <div style="padding:24px 32px">${guideInnerHtml()}</div>
       </body></html>`;
@@ -710,6 +706,7 @@ export default function OnboardingClient() {
                                     onChange={() => setNhExclude(prev => inc ? [...prev, it.id] : prev.filter(x => x !== it.id))}
                                     className="w-3.5 h-3.5 shrink-0" />
                                   <span className={`truncate ${inc ? 'text-text-primary' : 'line-through text-text-muted'}`}>{it.title || '(untitled)'}</span>
+                                  {nhSources.length > 1 && <span className="text-[10px] text-text-muted shrink-0">· {it.guide}</span>}
                                 </label>
                               );
                             })}
