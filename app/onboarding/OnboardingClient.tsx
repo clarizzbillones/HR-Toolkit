@@ -322,7 +322,10 @@ export default function OnboardingClient() {
   function startEdit(s: Item) { setEditing(s.id); setDraft({ title: s.title, body: s.body ?? '' }); }
   async function saveEdit(id: string) { await patch(id, { title: draft.title, body: draft.body }); setEditing(null); showToast('Saved'); }
 
-  const greeting = hire.trim() ? `Hi ${hire.trim()},` : 'Welcome aboard,';
+  // The person's name for greeting/PDF: the typed field, else the combined
+  // guide's own name (which is the new hire's name).
+  const personName = hire.trim() || (isComposed ? guide : '');
+  const greeting = personName ? `Hi ${personName},` : 'Welcome aboard,';
 
   const SectionCard = (s: Item) => (
     <div key={s.id}
@@ -448,8 +451,8 @@ export default function OnboardingClient() {
       <body style="margin:0;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:24px;font-weight:800;letter-spacing:.18em">LITSON</div>
-          <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc(guide.toUpperCase())} ONBOARDING GUIDE</div>
-          ${hire.trim() ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(hire.trim())}</div>` : ''}
+          <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc((isComposed ? guideSources.join(' + ') : guide).toUpperCase())} ONBOARDING GUIDE</div>
+          ${personName ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(personName)}</div>` : ''}
         </div>
         <div style="padding:24px 32px">${guideInnerHtml()}</div>
       </body></html>`;
