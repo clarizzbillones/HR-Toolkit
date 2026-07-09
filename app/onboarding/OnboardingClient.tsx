@@ -408,12 +408,17 @@ export default function OnboardingClient() {
     </div>
   );
 
-  // Inner HTML for the guide body — shared by the PDF export and the combined
-  // (composed) on-screen view. Uses the derived lists, which are already
-  // merged + de-duplicated for composed guides.
-  function guideInnerHtml() {
+  // Inner HTML for a guide body, from an explicit item list + name. Reused by
+  // the on-screen combined view, the PDF export, and the combine-panel preview.
+  function innerHtmlFor(list: Item[], name: string) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const secHtml = (arr: Item[]) => arr.map(s => `
+    const secs = list.filter(i => i.kind === 'section');
+    const sched = list.filter(i => i.kind === 'schedule');
+    const tls = list.filter(i => i.kind === 'tool');
+    const lnk = list.filter(i => i.kind === 'sop');
+    const tbls = list.filter(i => i.kind === 'table');
+    const greet = name.trim() ? `Hi ${name.trim()},` : 'Welcome aboard,';
+    const secHtml = secs.map(s => `
       <section style="margin:0 0 18px;break-inside:avoid">
         <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px;margin:0 0 6px">${esc(s.title)}</h2>
         <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '')
@@ -421,29 +426,33 @@ export default function OnboardingClient() {
           .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</div>
       </section>`).join('');
-    const schedHtml = schedule.length === 0 ? '' : `
+    const schedHtml = sched.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px">
         <thead><tr style="background:#e9f0f5">${['Date','Agenda','Assignee','Notes','Location'].map(h => `<th style="text-align:left;padding:5px 8px;color:#3f6b8a;font-size:9px;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
-        <tbody>${schedule.map(r => `<tr style="border-top:1px solid #eee">${[r.day, r.title, r.assignee, r.body, r.location].map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+        <tbody>${sched.map(r => `<tr style="border-top:1px solid #eee">${[r.day, r.title, r.assignee, r.body, r.location].map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`;
-    const listHtml = (heading: string, list: Item[]) => list.length === 0 ? '' : `
+    const listHtml = (heading: string, l: Item[]) => l.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #6b4f8a;padding-left:10px;margin:20px 0 6px">${heading}</h2>
-      <ul style="columns:2;font-size:12px;color:#333;padding-left:16px">${list.map(l => `<li style="margin:2px 0">${l.url ? `<a href="${esc(l.url)}" style="color:#3f6b8a">${esc(l.title)}</a>` : esc(l.title)}</li>`).join('')}</ul>`;
-    const toolsHtml = listHtml('Tools', tools);
-    const linksHtml = listHtml('SOP Links', links);
-    const tablesHtml = tables.map(t => { const d = parseTable(t.body); return `
+      <ul style="columns:2;font-size:12px;color:#333;padding-left:16px">${l.map(x => `<li style="margin:2px 0">${x.url ? `<a href="${esc(x.url)}" style="color:#3f6b8a">${esc(x.title)}</a>` : esc(x.title)}</li>`).join('')}</ul>`;
+    const toolsHtml = listHtml('Tools', tls);
+    const linksHtml = listHtml('SOP Links', lnk);
+    const tablesHtml = tbls.map(t => { const d = parseTable(t.body); return `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #8a6d3b;padding-left:10px;margin:20px 0 6px">${esc(t.title)}</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;break-inside:avoid">
         <thead><tr style="background:#f0ece4">${d.headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
     // Checklist lives only in the Dashboard, so it's intentionally not rendered here.
-    return `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
-      ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}`;
+    return `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greet)}</p>
+      ${secHtml}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}`;
   }
 
-  function printGuide() {
+  // On-screen combined view uses the active (merged) items + resolved name.
+  function guideInnerHtml() { return innerHtmlFor(gItems, personName); }
+
+  // Open a print window for an explicit item list, name, and header label.
+  function printFor(list: Item[], name: string, label: string) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson — New Hire Onboarding Guide</title>
@@ -451,12 +460,16 @@ export default function OnboardingClient() {
       <body style="margin:0;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;color:#fff">
           <div style="font-size:24px;font-weight:800;letter-spacing:.18em">LITSON</div>
-          <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc((isComposed ? guideSources.join(' + ') : guide).toUpperCase())} ONBOARDING GUIDE</div>
-          ${personName ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(personName)}</div>` : ''}
+          <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc((label || 'NEW HIRE').toUpperCase())} ONBOARDING GUIDE</div>
+          ${name.trim() ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(name.trim())}</div>` : ''}
         </div>
-        <div style="padding:24px 32px">${guideInnerHtml()}</div>
+        <div style="padding:24px 32px">${innerHtmlFor(list, name)}</div>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
+  }
+
+  function printGuide() {
+    printFor(gItems, personName, isComposed ? guideSources.join(' + ') : guide);
   }
 
   function buildText() {
@@ -722,10 +735,13 @@ export default function OnboardingClient() {
               );
             })()}
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center sticky bottom-0 bg-[#f5f8fb] py-2 -mx-1 px-1 border-t border-[#d9e4ee]">
               <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
                 className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save combined guide</button>
+              <button onClick={() => printFor(mergeGuideItems(nhSources, nhExclude).visible, nhName, nhSources.join(' + '))} disabled={!nhSources.length}
+                className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🖨 Preview PDF</button>
               <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
+              <span className="text-[11px] text-text-muted ml-auto">Save it to get a 👤 tab, or Preview the PDF right now.</span>
             </div>
           </div>
         </div>
