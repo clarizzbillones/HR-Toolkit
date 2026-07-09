@@ -58,18 +58,46 @@ export default function OnboardingClient() {
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
-  const [composed, setComposed] = useState<{ name: string; sources: string[] }[]>([]);
+  const [composed, setComposed] = useState<{ name: string; sources: string[]; exclude: string[] }[]>([]);
   useEffect(() => { fetch('/api/onboarding/compose').then(r => r.json()).then(d => setComposed(d.composed ?? [])).catch(() => {}); }, []);
   const [showNewHire, setShowNewHire] = useState(false);
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
+  const [nhExclude, setNhExclude] = useState<string[]>([]);
   async function createComposed() {
     const name = nhName.trim();
     if (!name || !nhSources.length) { showToast('Enter a name and pick at least one guide'); return; }
-    await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: nhSources }) });
-    setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: nhSources }]);
-    setShowNewHire(false); setNhName(''); setNhSources([]); setGuide(name);
-    showToast('Combined guide created');
+    await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: nhSources, exclude: nhExclude }) });
+    setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: nhSources, exclude: nhExclude }]);
+    setShowNewHire(false); setNhName(''); setNhSources([]); setNhExclude([]); setGuide(name);
+    showToast('Combined guide saved');
+  }
+  function editComposed(c: { name: string; sources: string[]; exclude: string[] }) {
+    setNhName(c.name); setNhSources([...c.sources]); setNhExclude([...c.exclude]); setShowNewHire(true);
+  }
+  // Move a picked source guide earlier/later in the merge order.
+  function moveNhSource(g: string, dir: -1 | 1) {
+    setNhSources(prev => {
+      const i = prev.indexOf(g), j = i + dir;
+      if (i < 0 || j < 0 || j >= prev.length) return prev;
+      const next = prev.slice(); [next[i], next[j]] = [next[j], next[i]]; return next;
+    });
+  }
+  // Merge items from source guides (in order), de-duplicating shared blocks by
+  // kind+title, then dropping any explicitly excluded ones.
+  function mergeGuideItems(sources: string[], exclude: string[] = []) {
+    const seen = new Set<string>();
+    const deduped = sources
+      .flatMap((g, gi) => items.filter(i => i.guide === g).map(i => ({ i, gi })))
+      .sort((a, b) => a.gi - b.gi || a.i.sort_order - b.i.sort_order)
+      .map(x => x.i)
+      .filter(it => {
+        const t = (it.title ?? '').trim().toLowerCase();
+        if (!t) return true; // never collapse untitled items (e.g. blank schedule rows)
+        const k = it.kind + '|' + t;
+        if (seen.has(k)) return false; seen.add(k); return true;
+      });
+    return { deduped, visible: deduped.filter(it => !exclude.includes(it.id)) };
   }
   async function deleteComposed(name: string) {
     await fetch('/api/onboarding/compose', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
@@ -123,17 +151,11 @@ export default function OnboardingClient() {
   const guideSources = composedDef ? composedDef.sources.filter(s => guides.includes(s)) : [guide];
   useEffect(() => { if (guides.length && !guides.includes(guide) && !composedNames.includes(guide)) setGuide(guides[0]); }, [items, composed]); // eslint-disable-line
 
-  // Items for the active view. For composed guides, merge every source guide in
-  // order and drop duplicate blocks (same kind + title) so shared content shows once.
-  const gItems = (() => {
-    if (!isComposed) return items.filter(i => i.guide === guide);
-    const seen = new Set<string>();
-    return guideSources
-      .flatMap((g, gi) => items.filter(i => i.guide === g).map(i => ({ i, gi })))
-      .sort((a, b) => a.gi - b.gi || a.i.sort_order - b.i.sort_order)
-      .map(x => x.i)
-      .filter(it => { const k = it.kind + '|' + (it.title ?? '').trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  })();
+  // Items for the active view. For composed guides, merge the chosen source
+  // guides (in order), de-duplicate shared blocks, and drop excluded ones.
+  const gItems = isComposed
+    ? mergeGuideItems(guideSources, composedDef!.exclude).visible
+    : items.filter(i => i.guide === guide);
   const sections = gItems.filter(i => i.kind === 'section').sort((a, b) => (isComposed ? 0 : a.sort_order - b.sort_order));
   const schedule = gItems.filter(i => i.kind === 'schedule');
   const tools = gItems.filter(i => i.kind === 'tool');
@@ -620,8 +642,9 @@ export default function OnboardingClient() {
             <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
           </div>
         )}
-        {isComposed && (
+        {isComposed && composedDef && (
           <div className="ml-auto flex items-center gap-3">
+            <button onClick={() => editComposed(composedDef)} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⚙ Edit combine</button>
             <button onClick={() => deleteComposed(guide)} className="text-xs font-semibold text-litred-alt hover:underline">Remove “{guide}” combined guide</button>
           </div>
         )}
@@ -629,8 +652,8 @@ export default function OnboardingClient() {
       )}
 
       {view === 'guides' && showNewHire && (
-        <div className="px-8 py-4 bg-[#f5f8fb] border-b border-[#d9e4ee] flex-shrink-0">
-          <div className="max-w-2xl">
+        <div className="px-8 py-4 bg-[#f5f8fb] border-b border-[#d9e4ee] flex-shrink-0 max-h-[60vh] overflow-auto">
+          <div className="max-w-3xl">
             <div className="text-sm font-semibold text-text-primary mb-2">New hire — combine guides</div>
             <div className="flex items-center gap-2 mb-3">
               <input value={nhName} onChange={e => setNhName(e.target.value)} placeholder="Name (e.g. Damon)"
@@ -648,10 +671,64 @@ export default function OnboardingClient() {
                 );
               })}
             </div>
-            {nhSources.length > 0 && <p className="text-[11px] text-text-muted mb-3">Combines: {nhSources.join(' + ')} — shared sections are shown once. Edit content in the source guides; it updates here automatically.</p>}
+
+            {/* Order of the picked guides — which content shows first */}
+            {nhSources.length > 1 && (
+              <div className="mb-3">
+                <div className="text-[11px] font-semibold text-text-muted mb-1">Order (top shows first):</div>
+                <div className="flex flex-col gap-1">
+                  {nhSources.map((g, i) => (
+                    <div key={g} className="flex items-center gap-2 text-sm">
+                      <span className="w-5 text-text-muted text-right">{i + 1}.</span>
+                      <span className="font-medium text-text-primary w-32">{g}</span>
+                      <button disabled={i === 0} onClick={() => moveNhSource(g, -1)} title="Move up"
+                        className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▲</button>
+                      <button disabled={i === nhSources.length - 1} onClick={() => moveNhSource(g, 1)} title="Move down"
+                        className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▼</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Which boxes/blocks to include */}
+            {nhSources.length > 0 && (() => {
+              const { deduped } = mergeGuideItems(nhSources, []);
+              const groups: [Item['kind'], string][] = [['section', 'Sections'], ['schedule', 'Schedule rows'], ['tool', 'Tools'], ['sop', 'SOP Links'], ['table', 'Tables'], ['task', 'Checklist items']];
+              return (
+                <div className="mb-3">
+                  <div className="text-[11px] font-semibold text-text-muted mb-1">Boxes to include (uncheck to leave out):</div>
+                  <div className="border border-border-light rounded-ctrl bg-white p-3 space-y-2.5">
+                    {groups.map(([kind, label]) => {
+                      const list = deduped.filter(it => it.kind === kind);
+                      if (!list.length) return null;
+                      return (
+                        <div key={kind}>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">{label}</div>
+                          <div className="grid grid-cols-2 gap-x-6">
+                            {list.map(it => {
+                              const inc = !nhExclude.includes(it.id);
+                              return (
+                                <label key={it.id} className="flex items-center gap-2 px-1 py-0.5 text-sm cursor-pointer">
+                                  <input type="checkbox" checked={inc}
+                                    onChange={() => setNhExclude(prev => inc ? [...prev, it.id] : prev.filter(x => x !== it.id))}
+                                    className="w-3.5 h-3.5 shrink-0" />
+                                  <span className={`truncate ${inc ? 'text-text-primary' : 'line-through text-text-muted'}`}>{it.title || '(untitled)'}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex gap-2">
               <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
-                className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Create combined guide</button>
+                className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save combined guide</button>
               <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
             </div>
           </div>
