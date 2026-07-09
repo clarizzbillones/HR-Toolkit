@@ -135,7 +135,33 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [customCols, setCustomCols] = useState<string[]>([]);
-  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => setCustomCols(d.columns ?? [])).catch(() => {}); }, []);
+  const [colOrder, setColOrder] = useState<string[]>([]);
+  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); }).catch(() => {}); }, []);
+
+  // Unified, ordered column list for the Employees table (fixed + custom).
+  const empCols: { id: string; label: string; custom: boolean; key?: keyof Staff }[] = (() => {
+    const base = [
+      ...EMP_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key })),
+      ...customCols.map(n => ({ id: n, label: n, custom: true })),
+    ];
+    const byId = new Map(base.map(c => [c.id, c]));
+    const seen = new Set<string>();
+    const out: typeof base = [];
+    for (const id of colOrder) { const c = byId.get(id); if (c && !seen.has(id)) { out.push(c); seen.add(id); } }
+    for (const c of base) if (!seen.has(c.id)) { out.push(c); seen.add(c.id); }
+    // Keep Name pinned to the front (it's the sticky column).
+    out.sort((a, b) => (a.id === 'name' ? -1 : b.id === 'name' ? 1 : 0));
+    return out;
+  })();
+  async function moveCol(id: string, dir: -1 | 1) {
+    if (id === 'name') return;
+    const ids = empCols.map(c => c.id);
+    const i = ids.indexOf(id), j = i + dir;
+    if (i < 0 || j < 1 || j >= ids.length) return; // j>=1 keeps Name first
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setColOrder(ids);
+    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }) });
+  }
 
   // Read a custom-column value from a row's JSON `extra` field.
   function extraVal(r: Staff, name: string): string {
@@ -243,9 +269,11 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       const body = fVen.map(r => VENDOR_COLUMNS.map(c => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','));
       dl('vendors.csv', [VENDOR_COLUMNS.map(c => c.label).join(','), ...body].join('\n'));
     } else {
-      const cols = tab === 'offboarded' ? OFF_COLUMNS : EMP_COLUMNS;
       const data = tab === 'offboarded' ? fOff : fStaff;
-      const body = data.map(r => cols.map(c => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','));
+      const cols = tab === 'offboarded'
+        ? OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))
+        : empCols;
+      const body = data.map(r => cols.map(c => `"${String(c.custom ? extraVal(r, c.id) : ((r as any)[c.key as string] ?? '')).replace(/"/g, '""')}"`).join(','));
       dl(`${tab}.csv`, [cols.map(c => c.label).join(','), ...body].join('\n'));
     }
     showToast('Exported');
@@ -255,40 +283,46 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const BLANK_OFF: Partial<Staff> = Object.fromEntries(OFF_COLUMNS.map(c => [c.key, ''])) as any;
   const BLANK_V: Partial<Vendor> = { entity: '', name: '', phone: '', email: '', website: '', notes: '' };
 
-  function StaffTable({ cols, data, kind }: { cols: { key: keyof Staff; label: string }[]; data: Staff[]; kind: 'employees' | 'offboarded' }) {
+  type UCol = { id: string; label: string; custom: boolean; key?: keyof Staff };
+  function renderStaffCell(c: UCol, r: Staff) {
+    if (c.custom) return extraVal(r, c.id) || '—';
+    const k = c.key!;
+    if (k === 'email' && r.email) return <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>;
+    if (k === 'worker_type') return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>;
+    if (k === 'dob') return toMMDDYYYY(r.dob) || '—';
+    return (r[k] ?? '—') || '—';
+  }
+  function StaffTable({ columns, data, kind, reorderable }: { columns: UCol[]; data: Staff[]; kind: 'employees' | 'offboarded'; reorderable: boolean }) {
     return (
       <table className="w-full text-sm whitespace-nowrap">
         <thead style={{ background: active.soft }}><tr>
-          {cols.map(c => <th key={c.key}
-            className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider ${c.key === 'name' ? 'sticky left-0 z-20' : ''}`}
-            style={{ color: active.text, ...(c.key === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>{c.label}</th>)}
-          {kind === 'employees' && customCols.map(name => (
-            <th key={'x_' + name} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap" style={{ color: active.text }}>
-              {name}
-              <button onClick={() => removeCustomColumn(name)} title="Remove column" className="ml-1.5 text-text-muted hover:text-litred-alt opacity-0 group-hover/col:opacity-100">✕</button>
+          {columns.map((c, i) => (
+            <th key={c.id}
+              className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${c.id === 'name' ? 'sticky left-0 z-20' : ''}`}
+              style={{ color: active.text, ...(c.id === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
+              {c.label}
+              {reorderable && c.id !== 'name' && (
+                <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
+                  <button onClick={() => moveCol(c.id, -1)} disabled={i <= 1} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
+                  <button onClick={() => moveCol(c.id, 1)} disabled={i === columns.length - 1} title="Move right" className="text-text-muted hover:text-ink disabled:opacity-25 ml-0.5">▶</button>
+                  {c.custom && <button onClick={() => removeCustomColumn(c.id)} title="Remove column" className="ml-1 text-text-muted hover:text-litred-alt">✕</button>}
+                </span>
+              )}
             </th>
           ))}
-          {kind === 'employees'
+          {reorderable
             ? <th className="px-2 py-3"><button onClick={addCustomColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
             : <th className="px-4 py-3" />}
         </tr></thead>
         <tbody>
           {data.map(r => (
             <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas group">
-              {cols.map(c => (
-                <td key={c.key}
-                  className={`px-4 py-3 ${c.key === 'name' ? 'font-medium text-text-primary sticky left-0 z-10 bg-white group-hover:bg-canvas' : 'text-text-muted'}`}
-                  style={c.key === 'name' ? { boxShadow: '2px 0 0 #f1ece3' } : undefined}>
-                  {c.key === 'email' && r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>
-                    : c.key === 'worker_type' ? (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>
-                    )
-                    : c.key === 'dob' ? (toMMDDYYYY(r.dob) || '—')
-                    : (r[c.key] ?? '—') || '—'}
+              {columns.map(c => (
+                <td key={c.id}
+                  className={`px-4 py-3 ${c.id === 'name' ? 'font-medium text-text-primary sticky left-0 z-10 bg-white group-hover:bg-canvas' : 'text-text-muted'}`}
+                  style={c.id === 'name' ? { boxShadow: '2px 0 0 #f1ece3' } : undefined}>
+                  {renderStaffCell(c, r)}
                 </td>
-              ))}
-              {kind === 'employees' && customCols.map(name => (
-                <td key={'x_' + name} className="px-4 py-3 text-text-muted whitespace-nowrap">{extraVal(r, name) || '—'}</td>
               ))}
               <td className="px-4 py-3 text-right whitespace-nowrap">
                 <button onClick={() => setEditStaff({ data: r, kind })} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
@@ -296,7 +330,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               </td>
             </tr>
           ))}
-          {!data.length && <tr><td colSpan={cols.length + (kind === 'employees' ? customCols.length : 0) + 1} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
+          {!data.length && <tr><td colSpan={columns.length + 1} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
         </tbody>
       </table>
     );
@@ -350,8 +384,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="bg-white border rounded-card overflow-hidden" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
           <div className="overflow-x-auto">
-            {tab === 'employees' && <StaffTable cols={EMP_COLUMNS} data={fStaff} kind="employees" />}
-            {tab === 'offboarded' && <StaffTable cols={OFF_COLUMNS} data={fOff} kind="offboarded" />}
+            {tab === 'employees' && <StaffTable columns={empCols} data={fStaff} kind="employees" reorderable />}
+            {tab === 'offboarded' && <StaffTable columns={OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))} data={fOff} kind="offboarded" reorderable={false} />}
             {tab === 'vendors' && (
               <table className="w-full text-sm">
                 <thead style={{ background: active.soft }}><tr>
