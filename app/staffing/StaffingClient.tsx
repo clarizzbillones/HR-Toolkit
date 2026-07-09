@@ -136,44 +136,53 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const fileRef = useRef<HTMLInputElement>(null);
   const [customCols, setCustomCols] = useState<string[]>([]);
   const [colOrder, setColOrder] = useState<string[]>([]);
-  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); }).catch(() => {}); }, []);
+  const [offOrder, setOffOrder] = useState<string[]>([]);
+  const [vendorOrder, setVendorOrder] = useState<string[]>([]);
+  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); setOffOrder(d.offOrder ?? []); setVendorOrder(d.vendorOrder ?? []); }).catch(() => {}); }, []);
 
-  // Unified, ordered column list for the Employees table (fixed + custom).
-  const empCols: { id: string; label: string; custom: boolean; key?: keyof Staff }[] = (() => {
-    const base = [
-      ...EMP_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key })),
-      ...customCols.map(n => ({ id: n, label: n, custom: true })),
-    ];
+  // A displayed column: fixed (has key) or custom (stored in `extra`).
+  type UCol = { id: string; label: string; custom: boolean; key?: string };
+  function buildOrdered(base: UCol[], order: string[], pinnedFirstId?: string): UCol[] {
     const byId = new Map(base.map(c => [c.id, c]));
     const seen = new Set<string>();
-    const out: typeof base = [];
-    for (const id of colOrder) { const c = byId.get(id); if (c && !seen.has(id)) { out.push(c); seen.add(id); } }
+    const out: UCol[] = [];
+    for (const id of order) { const c = byId.get(id); if (c && !seen.has(id)) { out.push(c); seen.add(id); } }
     for (const c of base) if (!seen.has(c.id)) { out.push(c); seen.add(c.id); }
-    // Keep Name pinned to the front (it's the sticky column).
-    out.sort((a, b) => (a.id === 'name' ? -1 : b.id === 'name' ? 1 : 0));
+    if (pinnedFirstId) out.sort((a, b) => (a.id === pinnedFirstId ? -1 : b.id === pinnedFirstId ? 1 : 0));
     return out;
-  })();
-  async function persistOrder(ids: string[]) {
-    setColOrder(ids);
-    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }) });
   }
-  async function moveCol(id: string, dir: -1 | 1) {
-    if (id === 'name') return;
-    const ids = empCols.map(c => c.id);
-    const i = ids.indexOf(id), j = i + dir;
-    if (i < 0 || j < 1 || j >= ids.length) return; // j>=1 keeps Name first
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    await persistOrder(ids);
-  }
+  const empCols = buildOrdered([
+    ...EMP_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })),
+    ...customCols.map(n => ({ id: n, label: n, custom: true })),
+  ], colOrder, 'name');
+  const offCols = buildOrdered(OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), offOrder, 'name');
+  const venCols = buildOrdered(VENDOR_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), vendorOrder);
+
   const [dragCol, setDragCol] = useState<string | null>(null);
-  // Drop the dragged column in front of the target column.
-  async function dropColOn(targetId: string) {
-    const dragId = dragCol; setDragCol(null);
-    if (!dragId || dragId === targetId || dragId === 'name' || targetId === 'name') return;
-    const ids = empCols.map(c => c.id);
-    ids.splice(ids.indexOf(dragId), 1);
-    ids.splice(ids.indexOf(targetId), 0, dragId);
-    await persistOrder(ids);
+  type OrderField = 'order' | 'offOrder' | 'vendorOrder';
+  async function persistOrderField(field: OrderField, ids: string[]) {
+    (field === 'order' ? setColOrder : field === 'offOrder' ? setOffOrder : setVendorOrder)(ids);
+    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: ids }) });
+  }
+  function makeMove(field: OrderField, cols: UCol[], pinnedFirstId?: string) {
+    return (id: string, dir: -1 | 1) => {
+      if (id === pinnedFirstId) return;
+      const ids = cols.map(c => c.id); const i = ids.indexOf(id), j = i + dir;
+      const minJ = pinnedFirstId ? 1 : 0;
+      if (i < 0 || j < minJ || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      persistOrderField(field, ids);
+    };
+  }
+  function makeDrop(field: OrderField, cols: UCol[], pinnedFirstId?: string) {
+    return (targetId: string) => {
+      const dragId = dragCol; setDragCol(null);
+      if (!dragId || dragId === targetId || dragId === pinnedFirstId || targetId === pinnedFirstId) return;
+      const ids = cols.map(c => c.id);
+      ids.splice(ids.indexOf(dragId), 1);
+      ids.splice(ids.indexOf(targetId), 0, dragId);
+      persistOrderField(field, ids);
+    };
   }
 
   // Read a custom-column value from a row's JSON `extra` field.
@@ -296,47 +305,65 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const BLANK_OFF: Partial<Staff> = Object.fromEntries(OFF_COLUMNS.map(c => [c.key, ''])) as any;
   const BLANK_V: Partial<Vendor> = { entity: '', name: '', phone: '', email: '', website: '', notes: '' };
 
-  type UCol = { id: string; label: string; custom: boolean; key?: keyof Staff };
   function renderStaffCell(c: UCol, r: Staff) {
     if (c.custom) return extraVal(r, c.id) || '—';
     const k = c.key!;
     if (k === 'email' && r.email) return <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>;
     if (k === 'worker_type') return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>;
     if (k === 'dob') return toMMDDYYYY(r.dob) || '—';
-    return (r[k] ?? '—') || '—';
+    return ((r as any)[k] ?? '—') || '—';
   }
-  function StaffTable({ columns, data, kind, reorderable }: { columns: UCol[]; data: Staff[]; kind: 'employees' | 'offboarded'; reorderable: boolean }) {
+  function renderVendorCell(c: UCol, r: Vendor) {
+    const k = c.key!;
+    if (k === 'email') return r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a> : '—';
+    if (k === 'website') return r.website ? <a href={/^https?:/.test(r.website) ? r.website : `https://${r.website}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] hover:underline">{r.website}</a> : '—';
+    return ((r as any)[k] ?? '—') || '—';
+  }
+  // Shared header row with drag + arrow reordering (used by all three tables).
+  function headerRow(opts: { columns: UCol[]; reorderable: boolean; pinnedFirstId?: string; field: OrderField; onAddColumn?: () => void; onRemoveCol?: (id: string) => void }) {
+    const { columns, reorderable, pinnedFirstId, field, onAddColumn, onRemoveCol } = opts;
+    const move = makeMove(field, columns, pinnedFirstId), drop = makeDrop(field, columns, pinnedFirstId);
+    const firstMovable = pinnedFirstId ? 1 : 0;
+    return (
+      <tr>
+        {columns.map((c, i) => {
+          const movable = reorderable && c.id !== pinnedFirstId;
+          const sticky = !!pinnedFirstId && c.id === pinnedFirstId;
+          return (
+            <th key={c.id}
+              draggable={movable}
+              onDragStart={movable ? (() => setDragCol(c.id)) : undefined}
+              onDragOver={movable ? (e => e.preventDefault()) : undefined}
+              onDrop={movable ? (() => drop(c.id)) : undefined}
+              onDragEnd={() => setDragCol(null)}
+              title={movable ? 'Drag to rearrange' : undefined}
+              className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${sticky ? 'sticky left-0 z-20' : ''} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
+              style={{ color: active.text, ...(sticky ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
+              {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
+              {c.label}
+              {movable && (
+                <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
+                  <button onClick={() => move(c.id, -1)} disabled={i <= firstMovable} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
+                  <button onClick={() => move(c.id, 1)} disabled={i === columns.length - 1} title="Move right" className="text-text-muted hover:text-ink disabled:opacity-25 ml-0.5">▶</button>
+                  {c.custom && onRemoveCol && <button onClick={() => onRemoveCol(c.id)} title="Remove column" className="ml-1 text-text-muted hover:text-litred-alt">✕</button>}
+                </span>
+              )}
+            </th>
+          );
+        })}
+        {onAddColumn
+          ? <th className="px-2 py-3"><button onClick={onAddColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
+          : <th className="px-4 py-3" />}
+      </tr>
+    );
+  }
+  function StaffTable({ columns, data, kind }: { columns: UCol[]; data: Staff[]; kind: 'employees' | 'offboarded' }) {
     return (
       <table className="w-full text-sm whitespace-nowrap">
-        <thead style={{ background: active.soft }}><tr>
-          {columns.map((c, i) => {
-            const movable = reorderable && c.id !== 'name';
-            return (
-              <th key={c.id}
-                draggable={movable}
-                onDragStart={movable ? (() => setDragCol(c.id)) : undefined}
-                onDragOver={movable ? (e => { e.preventDefault(); }) : undefined}
-                onDrop={movable ? (() => dropColOn(c.id)) : undefined}
-                onDragEnd={() => setDragCol(null)}
-                title={movable ? 'Drag to rearrange' : undefined}
-                className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${c.id === 'name' ? 'sticky left-0 z-20' : ''} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
-                style={{ color: active.text, ...(c.id === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
-                {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
-                {c.label}
-                {movable && (
-                  <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
-                    <button onClick={() => moveCol(c.id, -1)} disabled={i <= 1} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
-                    <button onClick={() => moveCol(c.id, 1)} disabled={i === columns.length - 1} title="Move right" className="text-text-muted hover:text-ink disabled:opacity-25 ml-0.5">▶</button>
-                    {c.custom && <button onClick={() => removeCustomColumn(c.id)} title="Remove column" className="ml-1 text-text-muted hover:text-litred-alt">✕</button>}
-                  </span>
-                )}
-              </th>
-            );
-          })}
-          {reorderable
-            ? <th className="px-2 py-3"><button onClick={addCustomColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
-            : <th className="px-4 py-3" />}
-        </tr></thead>
+        <thead style={{ background: active.soft }}>
+          {headerRow({ columns, reorderable: true, pinnedFirstId: 'name', field: kind === 'employees' ? 'order' : 'offOrder',
+            onAddColumn: kind === 'employees' ? addCustomColumn : undefined, onRemoveCol: kind === 'employees' ? removeCustomColumn : undefined })}
+        </thead>
         <tbody>
           {data.map(r => (
             <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas group">
@@ -407,30 +434,26 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="bg-white border rounded-card overflow-hidden" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
           <div className="overflow-x-auto">
-            {tab === 'employees' && <StaffTable columns={empCols} data={fStaff} kind="employees" reorderable />}
-            {tab === 'offboarded' && <StaffTable columns={OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))} data={fOff} kind="offboarded" reorderable={false} />}
+            {tab === 'employees' && <StaffTable columns={empCols} data={fStaff} kind="employees" />}
+            {tab === 'offboarded' && <StaffTable columns={offCols} data={fOff} kind="offboarded" />}
             {tab === 'vendors' && (
-              <table className="w-full text-sm">
-                <thead style={{ background: active.soft }}><tr>
-                  {VENDOR_COLUMNS.map(c => <th key={c.key} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider" style={{ color: active.text }}>{c.label}</th>)}
-                  <th className="px-4 py-3" />
-                </tr></thead>
+              <table className="w-full text-sm whitespace-nowrap">
+                <thead style={{ background: active.soft }}>
+                  {headerRow({ columns: venCols, reorderable: true, field: 'vendorOrder' })}
+                </thead>
                 <tbody>
                   {fVen.map(r => (
                     <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas">
-                      <td className="px-4 py-3 font-medium text-text-primary">{r.entity ?? '—'}</td>
-                      <td className="px-4 py-3 text-text-muted">{r.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-text-muted">{r.phone ?? '—'}</td>
-                      <td className="px-4 py-3">{r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a> : '—'}</td>
-                      <td className="px-4 py-3">{r.website ? <a href={/^https?:/.test(r.website) ? r.website : `https://${r.website}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] hover:underline">{r.website}</a> : '—'}</td>
-                      <td className="px-4 py-3 text-text-muted max-w-[240px] truncate">{r.notes ?? '—'}</td>
+                      {venCols.map(c => (
+                        <td key={c.id} className={`px-4 py-3 ${c.id === 'entity' ? 'font-medium text-text-primary' : 'text-text-muted'} ${c.id === 'notes' ? 'max-w-[240px] truncate' : ''}`}>{renderVendorCell(c, r)}</td>
+                      ))}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={() => setEditV(r)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                         <button onClick={() => delVendor(r.id)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                       </td>
                     </tr>
                   ))}
-                  {!fVen.length && <tr><td colSpan={VENDOR_COLUMNS.length + 1} className="px-4 py-10 text-center text-text-muted">No vendors yet — upload your admin XLSX.</td></tr>}
+                  {!fVen.length && <tr><td colSpan={venCols.length + 1} className="px-4 py-10 text-center text-text-muted">No vendors yet — upload your admin XLSX.</td></tr>}
                 </tbody>
               </table>
             )}
