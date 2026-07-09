@@ -58,6 +58,25 @@ export default function OnboardingClient() {
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
+  const [composed, setComposed] = useState<{ name: string; sources: string[] }[]>([]);
+  useEffect(() => { fetch('/api/onboarding/compose').then(r => r.json()).then(d => setComposed(d.composed ?? [])).catch(() => {}); }, []);
+  const [showNewHire, setShowNewHire] = useState(false);
+  const [nhName, setNhName] = useState('');
+  const [nhSources, setNhSources] = useState<string[]>([]);
+  async function createComposed() {
+    const name = nhName.trim();
+    if (!name || !nhSources.length) { showToast('Enter a name and pick at least one guide'); return; }
+    await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: nhSources }) });
+    setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: nhSources }]);
+    setShowNewHire(false); setNhName(''); setNhSources([]); setGuide(name);
+    showToast('Combined guide created');
+  }
+  async function deleteComposed(name: string) {
+    await fetch('/api/onboarding/compose', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    setComposed(prev => prev.filter(c => c.name !== name));
+    setGuide('General');
+    showToast('Combined guide removed');
+  }
   const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
@@ -95,12 +114,27 @@ export default function OnboardingClient() {
     await fetch('/api/onboardees', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
   }
 
-  // Distinct guides, General first
+  // Distinct building-block guides, General first
   const guides = Array.from(new Set(items.map(i => i.guide))).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
-  useEffect(() => { if (guides.length && !guides.includes(guide)) setGuide(guides[0]); }, [items]); // eslint-disable-line
+  const composedNames = composed.map(c => c.name);
+  const composedDef = composed.find(c => c.name === guide);
+  const isComposed = !!composedDef;
+  // The building-block guides this view draws from (itself, unless composed).
+  const guideSources = composedDef ? composedDef.sources.filter(s => guides.includes(s)) : [guide];
+  useEffect(() => { if (guides.length && !guides.includes(guide) && !composedNames.includes(guide)) setGuide(guides[0]); }, [items, composed]); // eslint-disable-line
 
-  const gItems = items.filter(i => i.guide === guide);
-  const sections = gItems.filter(i => i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+  // Items for the active view. For composed guides, merge every source guide in
+  // order and drop duplicate blocks (same kind + title) so shared content shows once.
+  const gItems = (() => {
+    if (!isComposed) return items.filter(i => i.guide === guide);
+    const seen = new Set<string>();
+    return guideSources
+      .flatMap((g, gi) => items.filter(i => i.guide === g).map(i => ({ i, gi })))
+      .sort((a, b) => a.gi - b.gi || a.i.sort_order - b.i.sort_order)
+      .map(x => x.i)
+      .filter(it => { const k = it.kind + '|' + (it.title ?? '').trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  })();
+  const sections = gItems.filter(i => i.kind === 'section').sort((a, b) => (isComposed ? 0 : a.sort_order - b.sort_order));
   const schedule = gItems.filter(i => i.kind === 'schedule');
   const tools = gItems.filter(i => i.kind === 'tool');
   const links = gItems.filter(i => i.kind === 'sop');
@@ -354,7 +388,10 @@ export default function OnboardingClient() {
     </div>
   );
 
-  function printGuide() {
+  // Inner HTML for the guide body — shared by the PDF export and the combined
+  // (composed) on-screen view. Uses the derived lists, which are already
+  // merged + de-duplicated for composed guides.
+  function guideInnerHtml() {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const secHtml = (arr: Item[]) => arr.map(s => `
       <section style="margin:0 0 18px;break-inside:avoid">
@@ -382,9 +419,15 @@ export default function OnboardingClient() {
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
     // Outbound guide shows only the new-hire checklist — HR tasks stay internal
-    const taskHtml = (guide !== 'Attorney' && hireTasks.length) ? `
+    const taskHtml = ((isComposed || guide !== 'Attorney') && hireTasks.length) ? `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #2f7d5b;padding-left:10px;margin:20px 0 6px">Onboarding Checklist</h2>
       <ul style="list-style:none;padding:0;columns:2;font-size:12px;color:#333">${hireTasks.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul>` : '';
+    return `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
+      ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${taskHtml}`;
+  }
+
+  function printGuide() {
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson — New Hire Onboarding Guide</title>
       <style>@page{size:A4;margin:14mm} body{font-family:${SANS}} h2{break-after:avoid} tr,td,th{break-inside:avoid}</style></head>
@@ -393,10 +436,7 @@ export default function OnboardingClient() {
           <div style="font-size:24px;font-weight:800;letter-spacing:.18em">LITSON</div>
           <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc(guide.toUpperCase())} ONBOARDING GUIDE</div>
         </div>
-        <div style="padding:24px 32px">
-          <p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
-          ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${taskHtml}
-        </div>
+        <div style="padding:24px 32px">${guideInnerHtml()}</div>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
   }
@@ -565,13 +605,57 @@ export default function OnboardingClient() {
           </button>
         ))}
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
-        {guide !== 'General' && !draftMode && (
+        {composed.length > 0 && <span className="mx-1 text-border-light">|</span>}
+        {composed.map(c => (
+          <button key={c.name} onClick={() => setGuide(c.name)}
+            className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors ${guide === c.name ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}
+            title={`Combined: ${c.sources.join(' + ')}`}>
+            👤 {c.name}
+          </button>
+        ))}
+        <button onClick={() => { setNhSources([]); setNhName(''); setShowNewHire(v => !v); }} className="text-sm font-semibold px-3 py-2 text-[#3f6b8a] hover:text-ink">+ New hire (combine)</button>
+        {guide !== 'General' && !draftMode && !isComposed && (
           <div className="ml-auto flex items-center gap-3">
             <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
             <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
           </div>
         )}
+        {isComposed && (
+          <div className="ml-auto flex items-center gap-3">
+            <button onClick={() => deleteComposed(guide)} className="text-xs font-semibold text-litred-alt hover:underline">Remove “{guide}” combined guide</button>
+          </div>
+        )}
       </div>
+      )}
+
+      {view === 'guides' && showNewHire && (
+        <div className="px-8 py-4 bg-[#f5f8fb] border-b border-[#d9e4ee] flex-shrink-0">
+          <div className="max-w-2xl">
+            <div className="text-sm font-semibold text-text-primary mb-2">New hire — combine guides</div>
+            <div className="flex items-center gap-2 mb-3">
+              <input value={nhName} onChange={e => setNhName(e.target.value)} placeholder="Name (e.g. Damon)"
+                className="w-56 border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              <span className="text-xs text-text-muted">then pick which guides apply:</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {guides.map(g => {
+                const on = nhSources.includes(g);
+                return (
+                  <button key={g} onClick={() => setNhSources(prev => on ? prev.filter(x => x !== g) : [...prev, g])}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-ctrl border transition-colors ${on ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:border-ink'}`}>
+                    {on ? '✓ ' : ''}{g}
+                  </button>
+                );
+              })}
+            </div>
+            {nhSources.length > 0 && <p className="text-[11px] text-text-muted mb-3">Combines: {nhSources.join(' + ')} — shared sections are shown once. Edit content in the source guides; it updates here automatically.</p>}
+            <div className="flex gap-2">
+              <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
+                className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Create combined guide</button>
+              <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {view === 'guides' && draftMode && (
@@ -582,7 +666,22 @@ export default function OnboardingClient() {
 
       {view === 'dashboard' && Dashboard()}
 
-      {view === 'guides' && (
+      {view === 'guides' && isComposed && (
+      <div className="flex-1 overflow-auto px-8 py-6">
+        <div className="max-w-4xl">
+          <div className="mb-4 px-4 py-3 bg-[#eef2f7] border border-[#c7d4e2] rounded-card text-sm text-[#3f5a76] flex items-center gap-2 flex-wrap">
+            <span>🧩 <b>{guide}</b> is a combined guide, assembled live from <b>{guideSources.join(' + ') || '—'}</b>. Shared sections show once. Edit content in those guides and it updates here.</span>
+            {guideSources.map(s => (
+              <button key={s} onClick={() => setGuide(s)} className="text-xs font-semibold text-ink border border-border-light bg-white px-2.5 py-1 rounded-ctrl hover:bg-canvas">✎ Edit {s}</button>
+            ))}
+          </div>
+          <div className="bg-white border border-border rounded-card p-6 leading-relaxed [&_h2]:mt-4 [&_a]:text-[#3f6b8a] [&_a]:underline [&_table]:w-full [&_td]:py-1 [&_th]:py-1 [&_th]:text-left"
+            dangerouslySetInnerHTML={{ __html: guideInnerHtml() }} />
+        </div>
+      </div>
+      )}
+
+      {view === 'guides' && !isComposed && (
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className={`grid grid-cols-1 gap-6 max-w-7xl ${guide !== 'Attorney' ? 'xl:grid-cols-3' : ''}`}>
           <div className={`space-y-6 ${guide !== 'Attorney' ? 'xl:col-span-2' : ''}`}>
