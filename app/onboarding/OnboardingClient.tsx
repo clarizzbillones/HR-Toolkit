@@ -92,9 +92,9 @@ export default function OnboardingClient() {
       .sort((a, b) => a.gi - b.gi || a.i.sort_order - b.i.sort_order)
       .map(x => x.i)
       .filter(it => {
-        const t = (it.title ?? '').trim().toLowerCase();
-        if (!t) return true; // never collapse untitled items (e.g. blank schedule rows)
-        const k = it.kind + '|' + t;
+        // Only collapse blocks that are TRULY identical (same title AND content),
+        // so same-titled-but-different sections from each guide both show.
+        const k = [it.kind, (it.title ?? '').trim().toLowerCase(), (it.body ?? '').trim(), it.day ?? '', it.url ?? ''].join('|');
         if (seen.has(k)) return false; seen.add(k); return true;
       });
     return { deduped, visible: deduped.filter(it => !exclude.includes(it.id)) };
