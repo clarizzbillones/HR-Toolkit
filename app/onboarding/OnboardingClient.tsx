@@ -440,12 +440,9 @@ export default function OnboardingClient() {
         <thead><tr style="background:#f0ece4">${d.headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
-    // Outbound guide shows only the new-hire checklist — HR tasks stay internal
-    const taskHtml = ((isComposed || guide !== 'Attorney') && hireTasks.length) ? `
-      <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #2f7d5b;padding-left:10px;margin:20px 0 6px">Onboarding Checklist</h2>
-      <ul style="list-style:none;padding:0;columns:2;font-size:12px;color:#333">${hireTasks.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul>` : '';
+    // Checklist lives only in the Dashboard, so it's intentionally not rendered here.
     return `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greeting)}</p>
-      ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}${taskHtml}`;
+      ${secHtml(sections)}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}`;
   }
 
   function printGuide() {
@@ -470,8 +467,7 @@ export default function OnboardingClient() {
       + (schedule.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
       + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
-      + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '')
-      + ((guide !== 'Attorney' && hireTasks.length) ? `\n\nCHECKLIST\n` + hireTasks.map(t => `- ${t.title}`).join('\n') : '');
+      + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
   function emailGuide() {
@@ -694,7 +690,7 @@ export default function OnboardingClient() {
             {/* Which boxes/blocks to include */}
             {nhSources.length > 0 && (() => {
               const { deduped } = mergeGuideItems(nhSources, []);
-              const groups: [Item['kind'], string][] = [['section', 'Sections'], ['schedule', 'Schedule rows'], ['tool', 'Tools'], ['sop', 'SOP Links'], ['table', 'Tables'], ['task', 'Checklist items']];
+              const groups: [Item['kind'], string][] = [['section', 'Sections'], ['schedule', 'Schedule rows'], ['tool', 'Tools'], ['sop', 'SOP Links'], ['table', 'Tables']];
               return (
                 <div className="mb-3">
                   <div className="text-[11px] font-semibold text-text-muted mb-1">Boxes to include (uncheck to leave out):</div>
