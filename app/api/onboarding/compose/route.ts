@@ -8,7 +8,7 @@ import { sql, cuid } from '@/lib/db';
 export async function GET() {
   try {
     const rows = await sql`SELECT guide, body FROM onboarding_items WHERE kind = 'meta' AND title = 'composed'` as any[];
-    const composed: { name: string; sources: string[]; exclude: string[] }[] = [];
+    const composed: { name: string; sources: string[]; exclude: string[]; headers: Record<string, string> }[] = [];
     for (const r of rows) {
       if (!r.guide) continue;
       try {
@@ -16,7 +16,8 @@ export async function GET() {
         // Legacy format was a bare array of source names.
         const sources = (Array.isArray(parsed) ? parsed : parsed.sources ?? []).map(String);
         const exclude = (Array.isArray(parsed) ? [] : parsed.exclude ?? []).map(String);
-        composed.push({ name: r.guide, sources, exclude });
+        const headers = (!Array.isArray(parsed) && parsed.headers && typeof parsed.headers === 'object') ? parsed.headers : {};
+        composed.push({ name: r.guide, sources, exclude, headers });
       } catch { /* skip */ }
     }
     return NextResponse.json({ composed });
@@ -26,11 +27,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { name, sources, exclude } = await req.json();
+  const { name, sources, exclude, headers } = await req.json();
   if (!name?.trim() || !Array.isArray(sources) || !sources.length) {
     return NextResponse.json({ error: 'name and at least one source guide are required' }, { status: 400 });
   }
-  const body = JSON.stringify({ sources: sources.map(String), exclude: Array.isArray(exclude) ? exclude.map(String) : [] });
+  const body = JSON.stringify({
+    sources: sources.map(String),
+    exclude: Array.isArray(exclude) ? exclude.map(String) : [],
+    headers: (headers && typeof headers === 'object') ? headers : {},
+  });
   await sql`DELETE FROM onboarding_items WHERE kind = 'meta' AND title = 'composed' AND guide = ${name.trim()}`;
   await sql`INSERT INTO onboarding_items (id, guide, kind, title, body) VALUES (${cuid()}, ${name.trim()}, 'meta', 'composed', ${body})`;
   return NextResponse.json({ ok: true });

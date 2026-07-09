@@ -58,22 +58,23 @@ export default function OnboardingClient() {
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
-  const [composed, setComposed] = useState<{ name: string; sources: string[]; exclude: string[] }[]>([]);
+  const [composed, setComposed] = useState<{ name: string; sources: string[]; exclude: string[]; headers: Record<string, string> }[]>([]);
   useEffect(() => { fetch('/api/onboarding/compose').then(r => r.json()).then(d => setComposed(d.composed ?? [])).catch(() => {}); }, []);
   const [showNewHire, setShowNewHire] = useState(false);
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
   const [nhExclude, setNhExclude] = useState<string[]>([]);
+  const [nhHeaders, setNhHeaders] = useState<Record<string, string>>({});
   async function createComposed() {
     const name = nhName.trim();
     if (!name || !nhSources.length) { showToast('Enter a name and pick at least one guide'); return; }
-    await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: nhSources, exclude: nhExclude }) });
-    setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: nhSources, exclude: nhExclude }]);
-    setShowNewHire(false); setNhName(''); setNhSources([]); setNhExclude([]); setGuide(name);
+    await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: nhSources, exclude: nhExclude, headers: nhHeaders }) });
+    setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: nhSources, exclude: nhExclude, headers: nhHeaders }]);
+    setShowNewHire(false); setNhName(''); setNhSources([]); setNhExclude([]); setNhHeaders({}); setGuide(name);
     showToast('Combined guide saved');
   }
-  function editComposed(c: { name: string; sources: string[]; exclude: string[] }) {
-    setNhName(c.name); setNhSources([...c.sources]); setNhExclude([...c.exclude]); setShowNewHire(true);
+  function editComposed(c: { name: string; sources: string[]; exclude: string[]; headers: Record<string, string> }) {
+    setNhName(c.name); setNhSources([...c.sources]); setNhExclude([...c.exclude]); setNhHeaders({ ...(c.headers ?? {}) }); setShowNewHire(true);
   }
   // Move a picked source guide earlier/later in the merge order.
   function moveNhSource(g: string, dir: -1 | 1) {
@@ -410,7 +411,7 @@ export default function OnboardingClient() {
 
   // Inner HTML for a guide body, from an explicit item list + name. Reused by
   // the on-screen combined view, the PDF export, and the combine-panel preview.
-  function innerHtmlFor(list: Item[], name: string) {
+  function innerHtmlFor(list: Item[], name: string, opts?: { noGreeting?: boolean }) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const secs = list.filter(i => i.kind === 'section');
     const sched = list.filter(i => i.kind === 'schedule');
@@ -444,15 +445,37 @@ export default function OnboardingClient() {
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
     // Checklist lives only in the Dashboard, so it's intentionally not rendered here.
-    return `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greet)}</p>
-      ${secHtml}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}`;
+    const greetHtml = opts?.noGreeting ? '' : `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greet)}</p>`;
+    return `${greetHtml}${secHtml}${schedHtml}${toolsHtml}${linksHtml}${tablesHtml}`;
   }
 
-  // On-screen combined view uses the active (merged) items + resolved name.
-  function guideInnerHtml() { return innerHtmlFor(gItems, personName); }
+  // Combined guide: greeting once, then each source guide as its own titled
+  // section with a separator + header (custom label, defaulting to the guide name).
+  function combinedInnerHtml(sources: string[], exclude: string[], headers: Record<string, string> | undefined, name: string) {
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const greet = name.trim() ? `Hi ${name.trim()},` : 'Welcome aboard,';
+    const greetHtml = `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greet)}</p>`;
+    const sep = (label: string) => `<div style="margin:30px 0 14px;border-top:2px solid #c9a24a;padding-top:12px">
+      <div style="font-size:10px;letter-spacing:.14em;color:#c9a24a;font-weight:700;text-transform:uppercase">Section</div>
+      <div style="font-size:18px;font-weight:800;color:#1b2a3d;margin-top:2px">${esc(label)}</div></div>`;
+    const body = sources.map(g => {
+      const list = items.filter(i => i.guide === g && !exclude.includes(i.id)).sort((a, b) => a.sort_order - b.sort_order);
+      if (!list.length) return '';
+      const label = (headers?.[g] && headers[g].trim()) || `${g} Onboarding`;
+      return sep(label) + innerHtmlFor(list, '', { noGreeting: true });
+    }).join('');
+    return greetHtml + body;
+  }
 
-  // Open a print window for an explicit item list, name, and header label.
-  function printFor(list: Item[], name: string, label: string) {
+  // On-screen combined view: grouped-by-source for composed guides, else flat.
+  function guideInnerHtml() {
+    return isComposed
+      ? combinedInnerHtml(guideSources, composedDef!.exclude, composedDef!.headers, personName)
+      : innerHtmlFor(gItems, personName);
+  }
+
+  // Open a print window for pre-built inner HTML, with a name + header label.
+  function printDoc(innerHtml: string, name: string, label: string) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson — New Hire Onboarding Guide</title>
@@ -463,13 +486,13 @@ export default function OnboardingClient() {
           <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">${esc((label || 'NEW HIRE').toUpperCase())} ONBOARDING GUIDE</div>
           ${name.trim() ? `<div style="font-size:20px;font-weight:700;margin-top:10px;color:#fff">${esc(name.trim())}</div>` : ''}
         </div>
-        <div style="padding:24px 32px">${innerHtmlFor(list, name)}</div>
+        <div style="padding:24px 32px">${innerHtml}</div>
       </body></html>`;
     const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
   }
 
   function printGuide() {
-    printFor(gItems, personName, isComposed ? guideSources.join(' + ') : guide);
+    printDoc(guideInnerHtml(), personName, isComposed ? guideSources.join(' + ') : guide);
   }
 
   function buildText() {
@@ -680,19 +703,26 @@ export default function OnboardingClient() {
               })}
             </div>
 
-            {/* Order of the picked guides — which content shows first */}
-            {nhSources.length > 1 && (
+            {/* Order + a section header (titled divider) for each picked guide */}
+            {nhSources.length >= 1 && (
               <div className="mb-3">
-                <div className="text-[11px] font-semibold text-text-muted mb-1">Order (top shows first):</div>
-                <div className="flex flex-col gap-1">
+                <div className="text-[11px] font-semibold text-text-muted mb-1">Order &amp; section headers — each guide gets a titled divider in the combined guide:</div>
+                <div className="flex flex-col gap-1.5">
                   {nhSources.map((g, i) => (
                     <div key={g} className="flex items-center gap-2 text-sm">
                       <span className="w-5 text-text-muted text-right">{i + 1}.</span>
-                      <span className="font-medium text-text-primary w-32">{g}</span>
-                      <button disabled={i === 0} onClick={() => moveNhSource(g, -1)} title="Move up"
-                        className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▲</button>
-                      <button disabled={i === nhSources.length - 1} onClick={() => moveNhSource(g, 1)} title="Move down"
-                        className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▼</button>
+                      <span className="font-medium text-text-primary w-24 shrink-0">{g}</span>
+                      <input value={nhHeaders[g] ?? ''} onChange={e => setNhHeaders(h => ({ ...h, [g]: e.target.value }))}
+                        placeholder={`${g} Onboarding`}
+                        className="flex-1 border border-border-light rounded-ctrl px-2 py-1 text-sm focus:outline-none focus:border-ink" />
+                      {nhSources.length > 1 && (
+                        <>
+                          <button disabled={i === 0} onClick={() => moveNhSource(g, -1)} title="Move up"
+                            className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▲</button>
+                          <button disabled={i === nhSources.length - 1} onClick={() => moveNhSource(g, 1)} title="Move down"
+                            className="text-xs text-text-muted hover:text-ink disabled:opacity-25 px-1">▼</button>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -738,7 +768,7 @@ export default function OnboardingClient() {
             <div className="flex gap-2 items-center sticky bottom-0 bg-[#f5f8fb] py-2 -mx-1 px-1 border-t border-[#d9e4ee]">
               <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
                 className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save combined guide</button>
-              <button onClick={() => printFor(mergeGuideItems(nhSources, nhExclude).visible, nhName, nhSources.join(' + '))} disabled={!nhSources.length}
+              <button onClick={() => printDoc(combinedInnerHtml(nhSources, nhExclude, nhHeaders, nhName), nhName, nhSources.join(' + '))} disabled={!nhSources.length}
                 className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🖨 Preview PDF</button>
               <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
               <span className="text-[11px] text-text-muted ml-auto">Save it to get a 👤 tab, or Preview the PDF right now.</span>
