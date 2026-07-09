@@ -382,7 +382,7 @@ export default function OnboardingClient() {
         <tbody>${d.rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${esc(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`; }).join('');
     // Outbound guide shows only the new-hire checklist — HR tasks stay internal
-    const taskHtml = hireTasks.length ? `
+    const taskHtml = (guide !== 'Attorney' && hireTasks.length) ? `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #2f7d5b;padding-left:10px;margin:20px 0 6px">Onboarding Checklist</h2>
       <ul style="list-style:none;padding:0;columns:2;font-size:12px;color:#333">${hireTasks.map(t => `<li style="margin:2px 0">${t.done ? '☑' : '☐'} ${esc(t.title)}</li>`).join('')}</ul>` : '';
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
@@ -409,7 +409,7 @@ export default function OnboardingClient() {
       + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '')
-      + (hireTasks.length ? `\n\nCHECKLIST\n` + hireTasks.map(t => `- ${t.title}`).join('\n') : '');
+      + ((guide !== 'Attorney' && hireTasks.length) ? `\n\nCHECKLIST\n` + hireTasks.map(t => `- ${t.title}`).join('\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
   function emailGuide() {
@@ -584,8 +584,8 @@ export default function OnboardingClient() {
 
       {view === 'guides' && (
       <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-7xl">
-          <div className="xl:col-span-2 space-y-6">
+        <div className={`grid grid-cols-1 gap-6 max-w-7xl ${guide !== 'Attorney' ? 'xl:grid-cols-3' : ''}`}>
+          <div className={`space-y-6 ${guide !== 'Attorney' ? 'xl:col-span-2' : ''}`}>
             {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
             {visibleBlocks.map((k, i) => (
               <div key={k} className="relative group/blk">
@@ -600,7 +600,8 @@ export default function OnboardingClient() {
             ))}
           </div>
 
-          {/* Checklist — grouped by who owns the to-do */}
+          {/* Checklist — grouped by who owns the to-do (hidden for the Attorney guide) */}
+          {guide !== 'Attorney' && (
           <div className="space-y-4">
             <div className="bg-white border border-border rounded-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between" style={{ borderBottom: '2px solid #2f7d5b' }}>
@@ -627,6 +628,7 @@ export default function OnboardingClient() {
               ))}
             </div>
           </div>
+          )}
         </div>
       </div>
       )}
