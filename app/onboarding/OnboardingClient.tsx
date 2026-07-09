@@ -64,6 +64,16 @@ export default function OnboardingClient() {
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
   const [nhExclude, setNhExclude] = useState<string[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskOwner, setNewTaskOwner] = useState('New Hire');
+  // Add a checklist item to a specific guide (used from the Dashboard).
+  async function addTask(guideName: string, title: string, owner: string) {
+    const t = title.trim(); if (!t) return;
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'task', guide: guideName, title: t, owner }) });
+    const { item } = await res.json();
+    if (item) setItems(prev => [...prev, item]);
+    setNewTaskTitle('');
+  }
   async function createComposed() {
     const name = nhName.trim();
     if (!name || !nhSources.length) { showToast('Enter a name and pick at least one guide'); return; }
@@ -760,8 +770,8 @@ export default function OnboardingClient() {
 
       {view === 'guides' && !isComposed && (
       <div className="flex-1 overflow-auto px-8 py-6">
-        <div className={`grid grid-cols-1 gap-6 max-w-7xl ${guide !== 'Attorney' ? 'xl:grid-cols-3' : ''}`}>
-          <div className={`space-y-6 ${guide !== 'Attorney' ? 'xl:col-span-2' : ''}`}>
+        <div className="max-w-5xl">
+          <div className="space-y-6">
             {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
             {visibleBlocks.map((k, i) => (
               <div key={k} className="relative group/blk">
@@ -776,35 +786,6 @@ export default function OnboardingClient() {
             ))}
           </div>
 
-          {/* Checklist — grouped by who owns the to-do (hidden for the Attorney guide) */}
-          {guide !== 'Attorney' && (
-          <div className="space-y-4">
-            <div className="bg-white border border-border rounded-card overflow-hidden">
-              <div className="px-5 py-3 border-b border-border flex items-center justify-between" style={{ borderBottom: '2px solid #2f7d5b' }}>
-                <h2 className="font-spectral text-[16px] font-semibold text-text-primary">Onboarding Checklist</h2>
-                <span className="text-xs font-semibold text-[#2f7d5b]">{doneCount}/{tasks.length}</span>
-              </div>
-              {([[hireLabel, hireTasks, '#2f7d5b'], ['HR', hrTasks, '#3f6b8a']] as [string, Item[], string][]).map(([label, list, color]) => (
-                <div key={label} className="border-t border-[#f1ece3] first:border-t-0">
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color }}>{label} to-do</div>
-                  <div className="px-3 pb-2 space-y-1">
-                    {list.map(t => (
-                      <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas cursor-pointer group">
-                        <input type="checkbox" checked={t.done} onChange={e => patch(t.id, { done: e.target.checked })} className="w-4 h-4" style={{ accentColor: color }} />
-                        <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
-                          className={`flex-1 bg-transparent text-sm focus:outline-none ${t.done ? 'line-through text-text-muted' : 'text-text-primary'}`} />
-                        <button onClick={() => patch(t.id, { owner: label === 'HR' ? 'New Hire' : 'HR' })} title="Move to the other list"
-                          className="text-[10px] font-semibold text-text-muted hover:text-ink opacity-0 group-hover:opacity-100">⇄</button>
-                        <button onClick={() => remove(t.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
-                      </label>
-                    ))}
-                    <button onClick={() => add('task', { title: 'New item', owner: label })} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add {label.toLowerCase()} item</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          )}
         </div>
       </div>
       )}
@@ -866,14 +847,29 @@ export default function OnboardingClient() {
                     {list.map(t => {
                       const isDone = !!prog[t.title];
                       return (
-                        <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas cursor-pointer">
-                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b]" />
+                        <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] cursor-pointer" />
                           <span className={`flex-1 text-sm ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`}>{t.title}</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${(t.owner ?? '') === 'HR' ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{(t.owner ?? '') === 'HR' ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}</span>
-                        </label>
+                          <button onClick={() => remove(t.id)} title="Remove this item from the checklist"
+                            className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
                       );
                     })}
-                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet.</p>}
+                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet — add some below.</p>}
+                    <div className="flex items-center gap-2 px-2 pt-2 mt-1 border-t border-[#f1ece3]">
+                      <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addTask(person.guide, newTaskTitle, newTaskOwner); }}
+                        placeholder="Add a checklist item…"
+                        className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                      <select value={newTaskOwner} onChange={e => setNewTaskOwner(e.target.value)}
+                        className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                        <option value="New Hire">New Hire</option>
+                        <option value="HR">HR</option>
+                      </select>
+                      <button onClick={() => addTask(person.guide, newTaskTitle, newTaskOwner)} disabled={!newTaskTitle.trim()}
+                        className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Add</button>
+                    </div>
                   </div>
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>
