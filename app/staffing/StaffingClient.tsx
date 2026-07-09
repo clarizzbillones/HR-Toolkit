@@ -153,14 +153,27 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     out.sort((a, b) => (a.id === 'name' ? -1 : b.id === 'name' ? 1 : 0));
     return out;
   })();
+  async function persistOrder(ids: string[]) {
+    setColOrder(ids);
+    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }) });
+  }
   async function moveCol(id: string, dir: -1 | 1) {
     if (id === 'name') return;
     const ids = empCols.map(c => c.id);
     const i = ids.indexOf(id), j = i + dir;
     if (i < 0 || j < 1 || j >= ids.length) return; // j>=1 keeps Name first
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    setColOrder(ids);
-    await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }) });
+    await persistOrder(ids);
+  }
+  const [dragCol, setDragCol] = useState<string | null>(null);
+  // Drop the dragged column in front of the target column.
+  async function dropColOn(targetId: string) {
+    const dragId = dragCol; setDragCol(null);
+    if (!dragId || dragId === targetId || dragId === 'name' || targetId === 'name') return;
+    const ids = empCols.map(c => c.id);
+    ids.splice(ids.indexOf(dragId), 1);
+    ids.splice(ids.indexOf(targetId), 0, dragId);
+    await persistOrder(ids);
   }
 
   // Read a custom-column value from a row's JSON `extra` field.
@@ -296,20 +309,30 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     return (
       <table className="w-full text-sm whitespace-nowrap">
         <thead style={{ background: active.soft }}><tr>
-          {columns.map((c, i) => (
-            <th key={c.id}
-              className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${c.id === 'name' ? 'sticky left-0 z-20' : ''}`}
-              style={{ color: active.text, ...(c.id === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
-              {c.label}
-              {reorderable && c.id !== 'name' && (
-                <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
-                  <button onClick={() => moveCol(c.id, -1)} disabled={i <= 1} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
-                  <button onClick={() => moveCol(c.id, 1)} disabled={i === columns.length - 1} title="Move right" className="text-text-muted hover:text-ink disabled:opacity-25 ml-0.5">▶</button>
-                  {c.custom && <button onClick={() => removeCustomColumn(c.id)} title="Remove column" className="ml-1 text-text-muted hover:text-litred-alt">✕</button>}
-                </span>
-              )}
-            </th>
-          ))}
+          {columns.map((c, i) => {
+            const movable = reorderable && c.id !== 'name';
+            return (
+              <th key={c.id}
+                draggable={movable}
+                onDragStart={movable ? (() => setDragCol(c.id)) : undefined}
+                onDragOver={movable ? (e => { e.preventDefault(); }) : undefined}
+                onDrop={movable ? (() => dropColOn(c.id)) : undefined}
+                onDragEnd={() => setDragCol(null)}
+                title={movable ? 'Drag to rearrange' : undefined}
+                className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${c.id === 'name' ? 'sticky left-0 z-20' : ''} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
+                style={{ color: active.text, ...(c.id === 'name' ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
+                {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
+                {c.label}
+                {movable && (
+                  <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
+                    <button onClick={() => moveCol(c.id, -1)} disabled={i <= 1} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
+                    <button onClick={() => moveCol(c.id, 1)} disabled={i === columns.length - 1} title="Move right" className="text-text-muted hover:text-ink disabled:opacity-25 ml-0.5">▶</button>
+                    {c.custom && <button onClick={() => removeCustomColumn(c.id)} title="Remove column" className="ml-1 text-text-muted hover:text-litred-alt">✕</button>}
+                  </span>
+                )}
+              </th>
+            );
+          })}
           {reorderable
             ? <th className="px-2 py-3"><button onClick={addCustomColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
             : <th className="px-4 py-3" />}
