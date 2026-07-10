@@ -289,14 +289,20 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     setUploading(false);
   }
 
+  // Earliest month present in the pending upload — everything from here onward
+  // is replaced on import; earlier months are left untouched.
+  const importFromMonth = (() => {
+    const months = (preview ?? []).map(p => String(p.start_date ?? '').slice(0, 7)).filter(m => /^\d{4}-\d{2}$/.test(m)).sort();
+    return months[0] ? new Date(months[0] + '-01T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : null;
+  })();
   async function confirmImport() {
     if (!preview) return;
     setImporting(true);
-    const res = await fetch('/api/pto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: preview }) });
+    const res = await fetch('/api/pto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: preview, replaceFrom: true }) });
     const data = await res.json();
     setEntries(data.entries);
     setPreview(null);
-    showToast(`Imported ${preview.length} entries`);
+    showToast(`Imported ${preview.length} entries${importFromMonth ? ` · replaced ${importFromMonth} onward` : ''}`);
     setImporting(false);
   }
 
@@ -535,7 +541,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       {/* Import preview */}
       {preview && (
         <div className="px-8 py-4 bg-[#f7efe1] border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-4 mb-3">
+          <div className="flex items-center gap-4 mb-2">
             <span className="text-sm font-semibold text-text-primary">{preview.length} rows parsed — review before importing</span>
             <button onClick={confirmImport} disabled={importing}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">
@@ -543,6 +549,11 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
             </button>
             <button onClick={() => setPreview(null)} className="text-sm text-text-muted hover:text-text-primary">Cancel</button>
           </div>
+          {importFromMonth && (
+            <p className="text-xs text-[#8a6d3b] mb-3">
+              This replaces PTO from <b>{importFromMonth}</b> onward (to avoid duplicates). Everything <b>before {importFromMonth} is left untouched</b>.
+            </p>
+          )}
           <div className="overflow-x-auto max-h-40 border border-border rounded-card bg-white">
             <table className="text-xs w-full">
               <thead className="bg-[#f1ece3] sticky top-0">
