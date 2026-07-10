@@ -138,6 +138,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [colOrder, setColOrder] = useState<string[]>([]);
   const [offOrder, setOffOrder] = useState<string[]>([]);
   const [vendorOrder, setVendorOrder] = useState<string[]>([]);
+  const [cellEdit, setCellEdit] = useState<{ table: TabKey; id: string; colId: string } | null>(null);
+  const [cellVal, setCellVal] = useState('');
   useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); setOffOrder(d.offOrder ?? []); setVendorOrder(d.vendorOrder ?? []); }).catch(() => {}); }, []);
 
   // A displayed column: fixed (has key) or custom (stored in `extra`).
@@ -183,6 +185,52 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       ids.splice(ids.indexOf(targetId), 0, dragId);
       persistOrderField(field, ids);
     };
+  }
+
+  // Money columns (by name) show a $ and thousands separators.
+  function isMoney(c: UCol) { return /salary|wage|\bpay\b|payrate|\brate\b|amount|compensation|\bincome\b|\$/i.test(c.label); }
+  function fmtMoney(v: any) {
+    const s = String(v ?? '').trim(); if (!s) return '—';
+    const n = Number(s.replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? s : '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  // Inline (click-to-edit) cell handling for all three tables.
+  function startCell(table: TabKey, r: any, c: UCol) {
+    const raw = c.custom ? extraVal(r, c.id) : String(r[c.key!] ?? '');
+    setCellVal(raw); setCellEdit({ table, id: r.id, colId: c.id });
+  }
+  async function commitCell() {
+    const ce = cellEdit; if (!ce) return; setCellEdit(null);
+    const cols = ce.table === 'employees' ? empCols : ce.table === 'offboarded' ? offCols : venCols;
+    const col = cols.find(c => c.id === ce.colId); if (!col) return;
+    const url = ce.table === 'vendors' ? '/api/vendors' : ce.table === 'offboarded' ? '/api/offboarded' : '/api/staffing';
+    const list: any[] = ce.table === 'employees' ? rows : ce.table === 'offboarded' ? offboarded : vendors;
+    const setter: any = ce.table === 'employees' ? setRows : ce.table === 'offboarded' ? setOffboarded : setVendors;
+    const row = list.find(r => r.id === ce.id); if (!row) return;
+    const patch: any = { id: ce.id };
+    if (col.custom) { let obj: any = {}; try { obj = JSON.parse(row.extra ?? '{}') || {}; } catch { /* */ } obj[col.id] = cellVal; patch.extra = JSON.stringify(obj); }
+    else patch[col.key!] = cellVal;
+    try {
+      const res = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      const d = await res.json();
+      if (d.row) setter((prev: any[]) => prev.map(r => r.id === ce.id ? d.row : r));
+    } catch { showToast('Could not save'); }
+  }
+  function cellContent(table: TabKey, r: any, c: UCol) {
+    const editing = cellEdit && cellEdit.table === table && cellEdit.id === r.id && cellEdit.colId === c.id;
+    if (editing) {
+      if (!c.custom && c.key === 'worker_type') {
+        return <select autoFocus value={cellVal} onChange={e => setCellVal(e.target.value)} onBlur={commitCell}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setCellEdit(null); }}
+          className="w-full border border-ink rounded px-1 py-0.5 text-sm bg-white focus:outline-none">{WORKER_TYPES.map(t => <option key={t}>{t}</option>)}</select>;
+      }
+      return <input autoFocus value={cellVal} onChange={e => setCellVal(e.target.value)} onBlur={commitCell}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setCellEdit(null); }}
+        className="w-full min-w-[80px] border border-ink rounded px-1 py-0.5 text-sm focus:outline-none" />;
+    }
+    const display = table === 'vendors' ? renderVendorCell(c, r) : renderStaffCell(c, r);
+    return <div className="cursor-text min-w-[36px] min-h-[1.1em]" title="Click to edit" onClick={e => { if ((e.target as HTMLElement).closest('a')) return; startCell(table, r, c); }}>{display}</div>;
   }
 
   // Read a custom-column value from a row's JSON `extra` field.
@@ -306,18 +354,23 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const BLANK_V: Partial<Vendor> = { entity: '', name: '', phone: '', email: '', website: '', notes: '' };
 
   function renderStaffCell(c: UCol, r: Staff) {
-    if (c.custom) return extraVal(r, c.id) || '—';
-    const k = c.key!;
-    if (k === 'email' && r.email) return <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>;
-    if (k === 'worker_type') return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>;
-    if (k === 'dob') return toMMDDYYYY(r.dob) || '—';
-    return ((r as any)[k] ?? '—') || '—';
+    if (!c.custom) {
+      const k = c.key!;
+      if (k === 'email' && r.email) return <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>;
+      if (k === 'worker_type') return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>;
+      if (k === 'dob') return toMMDDYYYY(r.dob) || '—';
+    }
+    const raw = c.custom ? extraVal(r, c.id) : (r as any)[c.key!];
+    if (isMoney(c)) return fmtMoney(raw);
+    return (raw ?? '—') || '—';
   }
   function renderVendorCell(c: UCol, r: Vendor) {
     const k = c.key!;
     if (k === 'email') return r.email ? <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a> : '—';
     if (k === 'website') return r.website ? <a href={/^https?:/.test(r.website) ? r.website : `https://${r.website}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] hover:underline">{r.website}</a> : '—';
-    return ((r as any)[k] ?? '—') || '—';
+    const raw = (r as any)[k];
+    if (isMoney(c)) return fmtMoney(raw);
+    return (raw ?? '—') || '—';
   }
   // Shared header row with drag + arrow reordering (used by all three tables).
   function headerRow(opts: { columns: UCol[]; reorderable: boolean; pinnedFirstId?: string; field: OrderField; onAddColumn?: () => void; onRemoveCol?: (id: string) => void }) {
@@ -371,7 +424,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                 <td key={c.id}
                   className={`px-4 py-3 ${c.id === 'name' ? 'font-medium text-text-primary sticky left-0 z-10 bg-white group-hover:bg-canvas' : 'text-text-muted'}`}
                   style={c.id === 'name' ? { boxShadow: '2px 0 0 #f1ece3' } : undefined}>
-                  {renderStaffCell(c, r)}
+                  {cellContent(kind, r, c)}
                 </td>
               ))}
               <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -445,7 +498,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                   {fVen.map(r => (
                     <tr key={r.id} className="border-t border-[#f1ece3] hover:bg-canvas">
                       {venCols.map(c => (
-                        <td key={c.id} className={`px-4 py-3 ${c.id === 'entity' ? 'font-medium text-text-primary' : 'text-text-muted'} ${c.id === 'notes' ? 'max-w-[240px] truncate' : ''}`}>{renderVendorCell(c, r)}</td>
+                        <td key={c.id} className={`px-4 py-3 ${c.id === 'entity' ? 'font-medium text-text-primary' : 'text-text-muted'} ${c.id === 'notes' ? 'max-w-[240px] truncate' : ''}`}>{cellContent('vendors', r, c)}</td>
                       ))}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button onClick={() => setEditV(r)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
