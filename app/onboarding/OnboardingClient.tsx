@@ -168,12 +168,15 @@ export default function OnboardingClient() {
     if (draftMode) return;
     await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...fields }) });
   }
-  async function add(kind: Item['kind'], seed: Partial<Item> = {}) {
+  async function add(kind: Item['kind'], seed: Partial<Item> = {}, targetGuide?: string) {
+    // Composed guides aren't real guides, so new items must land in a real
+    // source guide — callers on the combined view pass an explicit targetGuide.
+    const g = targetGuide ?? (isComposed ? guideSources[0] : guide);
     if (draftMode) {
-      const item = { id: 'tmp' + Date.now() + Math.random().toString(36).slice(2, 6), guide, kind, title: '', body: null, day: null, assignee: null, location: null, url: null, owner: null, done: false, sort_order: 9999, ...seed } as Item;
+      const item = { id: 'tmp' + Date.now() + Math.random().toString(36).slice(2, 6), guide: g, kind, title: '', body: null, day: null, assignee: null, location: null, url: null, owner: null, done: false, sort_order: 9999, ...seed } as Item;
       setItems(prev => [...prev, item]); return item;
     }
-    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, guide, ...seed }) });
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, guide: g, ...seed }) });
     const { item } = await res.json();
     setItems(prev => [...prev, item]);
     return item as Item;
@@ -215,8 +218,8 @@ export default function OnboardingClient() {
     setItems(items ?? []);
     showToast('Reset to template');
   }
-  async function addSection() {
-    const item = await add('section', { title: 'New Section', body: '' });
+  async function addSection(targetGuide?: string) {
+    const item = await add('section', { title: 'New Section', body: '' }, targetGuide);
     setEditing(item.id); setDraft({ title: item.title, body: item.body ?? '' });
   }
   async function copyToGuide(s: Item) {
@@ -233,9 +236,10 @@ export default function OnboardingClient() {
   async function reorderSection(targetId: string) {
     if (!dragId || dragId === targetId) { setDragId(null); return; }
     const src = items.find(i => i.id === dragId), tgt = items.find(i => i.id === targetId);
-    if (!src || !tgt || src.kind !== 'section' || tgt.kind !== 'section') { setDragId(null); return; }
-    // Reorder freely across ALL sections in this guide
-    const all = items.filter(i => i.guide === guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+    if (!src || !tgt || src.kind !== 'section' || tgt.kind !== 'section' || src.guide !== tgt.guide) { setDragId(null); return; }
+    // Reorder freely across ALL sections in the dragged item's own guide (works
+    // on the combined view too, where the active guide is a composed name).
+    const all = items.filter(i => i.guide === src.guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
     const ids = all.map(i => i.id);
     ids.splice(ids.indexOf(dragId), 1);
     ids.splice(ids.indexOf(targetId), 0, dragId);
@@ -246,7 +250,8 @@ export default function OnboardingClient() {
   }
   // Move a section up (dir -1) or down (dir +1) by swapping order with its neighbour.
   async function moveSection(id: string, dir: -1 | 1) {
-    const all = items.filter(i => i.guide === guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+    const own = items.find(i => i.id === id)?.guide ?? guide;
+    const all = items.filter(i => i.guide === own && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
     const idx = all.findIndex(i => i.id === id);
     const swap = idx + dir;
     if (idx < 0 || swap < 0 || swap >= all.length) return;
@@ -361,12 +366,18 @@ export default function OnboardingClient() {
         <div className="p-5 group">
           <div className="flex items-start gap-2">
             <span className="cursor-grab select-none text-text-faint opacity-0 group-hover:opacity-100 mt-1" title="Drag to reorder">⠿</span>
-            <div className="flex flex-col -mt-0.5 opacity-0 group-hover:opacity-100">
-              <button disabled={sections.findIndex(x => x.id === s.id) === 0} onClick={() => moveSection(s.id, -1)} title="Move up"
-                className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▲</button>
-              <button disabled={sections.findIndex(x => x.id === s.id) === sections.length - 1} onClick={() => moveSection(s.id, 1)} title="Move down"
-                className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▼</button>
-            </div>
+            {(() => {
+              const sib = items.filter(i => i.guide === s.guide && i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+              const idx = sib.findIndex(x => x.id === s.id);
+              return (
+                <div className="flex flex-col -mt-0.5 opacity-0 group-hover:opacity-100">
+                  <button disabled={idx === 0} onClick={() => moveSection(s.id, -1)} title="Move up"
+                    className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▲</button>
+                  <button disabled={idx === sib.length - 1} onClick={() => moveSection(s.id, 1)} title="Move down"
+                    className="text-[11px] leading-tight text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default">▼</button>
+                </div>
+              );
+            })()}
             <h2 onClick={() => startEdit(s)} title="Click to edit"
               className="font-spectral text-[17px] font-semibold text-text-primary flex-1 cursor-text hover:text-ink" style={{ borderLeft: '3px solid #c9a24a', paddingLeft: 10 }}>{s.title}</h2>
             <button onClick={() => startEdit(s)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas opacity-60 group-hover:opacity-100">✎ Edit</button>
@@ -389,7 +400,7 @@ export default function OnboardingClient() {
   function saveTable(id: string, d: TableData) { patch(id, { body: JSON.stringify(d) }); }
 
   // Reusable editable list (Tools or SOP Links)
-  const LinkBlock = ({ kind, title, color, list, placeholder }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string }) => (
+  const LinkBlock = ({ kind, title, color, list, placeholder, addGuide }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string; addGuide?: string }) => (
     <div>
       <div className="flex items-center gap-2 mb-2">
         <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
@@ -404,7 +415,7 @@ export default function OnboardingClient() {
             <button onClick={() => remove(l.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
           </div>
         ))}
-        <button onClick={() => add(kind, { title: placeholder })} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add</button>
+        <button onClick={() => add(kind, { title: placeholder }, addGuide)} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add</button>
       </div>
     </div>
   );
@@ -522,6 +533,22 @@ export default function OnboardingClient() {
     return arr;
   })();
   const visibleBlocks = blockOrder.filter(k => blockShown[k]);
+  // Block order for a single source guide inside a combined view: its saved
+  // order, showing sections always and other block types only when they carry
+  // items (mirrors what the combined guide already displayed).
+  function composedBlockOrder(g: string, list: Item[]): string[] {
+    const shown: Record<string, boolean> = {
+      sections: true,
+      schedule: list.some(i => i.kind === 'schedule'),
+      tools: list.some(i => i.kind === 'tool'),
+      sop: list.some(i => i.kind === 'sop'),
+      tables: list.some(i => i.kind === 'table'),
+    };
+    const saved = blockOrders[g];
+    const arr = (saved && saved.length ? saved : DEFAULT_BLOCK_ORDER).filter(k => DEFAULT_BLOCK_ORDER.includes(k));
+    for (const k of DEFAULT_BLOCK_ORDER) if (!arr.includes(k)) arr.push(k);
+    return arr.filter(k => shown[k]);
+  }
   async function moveBlock(k: string, dir: -1 | 1) {
     const vis = visibleBlocks.slice();
     const i = vis.indexOf(k), j = i + dir;
@@ -531,14 +558,24 @@ export default function OnboardingClient() {
     setBlockOrders(prev => ({ ...prev, [guide]: full }));
     await fetch('/api/onboarding/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guide, order: full }) });
   }
-  const blockNodes: Record<string, ReactNode> = {
+  // Editable blocks for one guide's item list. Reused by the normal guide view
+  // (its own items) and by each source group inside a combined guide, so edits
+  // on the combined view save straight to the real underlying source items.
+  function blocksFor(list: Item[], srcGuide: string): Record<string, ReactNode> {
+    const secs = list.filter(i => i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
+    const sched = list.filter(i => i.kind === 'schedule');
+    const tls = list.filter(i => i.kind === 'tool');
+    const lnks = list.filter(i => i.kind === 'sop');
+    const tbls = list.filter(i => i.kind === 'table');
+    const schedShown = sched.length > 0 || (srcGuide === 'General' && !isComposed);
+    return {
     sections: (
       <div className="space-y-4">
-        {sections.map(SectionCard)}
-        <button onClick={addSection} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add section</button>
+        {secs.map(SectionCard)}
+        <button onClick={() => addSection(srcGuide)} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add section</button>
       </div>
     ),
-    schedule: scheduleShown ? (
+    schedule: schedShown ? (
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
@@ -550,7 +587,7 @@ export default function OnboardingClient() {
               {['Date', 'Agenda', 'Assignee', 'Notes', 'Location', ''].map(h => <th key={h} className="text-left px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#3f6b8a]">{h}</th>)}
             </tr></thead>
             <tbody>
-              {schedule.map(r => (
+              {sched.map(r => (
                 <tr key={r.id} className="group">
                   <td className={cell + ' w-28'}><input value={r.day ?? ''} onChange={e => patch(r.id, { day: e.target.value })} className={inp + ' font-medium'} /></td>
                   <td className={cell}><input value={r.title ?? ''} onChange={e => patch(r.id, { title: e.target.value })} className={inp} /></td>
@@ -562,15 +599,15 @@ export default function OnboardingClient() {
               ))}
             </tbody>
           </table>
-          <button onClick={() => add('schedule', { day: 'Day', title: 'New activity' })} className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-ink border-t border-[#f1ece3]">+ Add row</button>
+          <button onClick={() => add('schedule', { day: 'Day', title: 'New activity' }, srcGuide)} className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-ink border-t border-[#f1ece3]">+ Add row</button>
         </div>
       </div>
     ) : null,
-    tools: LinkBlock({ kind: 'tool', title: 'Tools', color: '#6b4f8a', list: tools, placeholder: 'Tool name' }),
-    sop: LinkBlock({ kind: 'sop', title: 'SOP Links', color: '#3f6b8a', list: links, placeholder: 'SOP name' }),
+    tools: LinkBlock({ kind: 'tool', title: 'Tools', color: '#6b4f8a', list: tls, placeholder: 'Tool name', addGuide: srcGuide }),
+    sop: LinkBlock({ kind: 'sop', title: 'SOP Links', color: '#3f6b8a', list: lnks, placeholder: 'SOP name', addGuide: srcGuide }),
     tables: (
       <div className="space-y-6">
-        {tables.map(t => {
+        {tbls.map(t => {
           const d = parseTable(t.body);
           return (
             <div key={t.id}>
@@ -606,10 +643,12 @@ export default function OnboardingClient() {
             </div>
           );
         })}
-        <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) })} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
+        <button onClick={() => add('table', { title: 'New Table', body: JSON.stringify({ headers: ['Column 1', 'Column 2'], rows: [['', '']] }) }, srcGuide)} className="w-full border-2 border-dashed border-border-light rounded-card py-2.5 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink transition-colors">+ Add table</button>
       </div>
     ),
-  };
+    };
+  }
+  const blockNodes = blocksFor(gItems, guide);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -785,17 +824,38 @@ export default function OnboardingClient() {
 
       {view === 'dashboard' && Dashboard()}
 
-      {view === 'guides' && isComposed && (
+      {view === 'guides' && isComposed && composedDef && (
       <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="max-w-4xl">
+        <div className="max-w-5xl">
           <div className="mb-4 px-4 py-3 bg-[#eef2f7] border border-[#c7d4e2] rounded-card text-sm text-[#3f5a76] flex items-center gap-2 flex-wrap">
-            <span>🧩 <b>{guide}</b> is a combined guide, assembled live from <b>{guideSources.join(' + ') || '—'}</b>. Shared sections show once. Edit content in those guides and it updates here.</span>
+            <span>🧩 <b>{guide}</b> is a combined guide, assembled from <b>{guideSources.join(' + ') || '—'}</b>. Edit any section right here — changes save to that source guide and update everywhere it appears.</span>
             {guideSources.map(s => (
-              <button key={s} onClick={() => setGuide(s)} className="text-xs font-semibold text-ink border border-border-light bg-white px-2.5 py-1 rounded-ctrl hover:bg-canvas">✎ Edit {s}</button>
+              <button key={s} onClick={() => setGuide(s)} className="text-xs font-semibold text-ink border border-border-light bg-white px-2.5 py-1 rounded-ctrl hover:bg-canvas">Open {s}</button>
             ))}
           </div>
-          <div className="bg-white border border-border rounded-card p-6 leading-relaxed [&_h2]:mt-4 [&_a]:text-[#3f6b8a] [&_a]:underline [&_table]:w-full [&_td]:py-1 [&_th]:py-1 [&_th]:text-left"
-            dangerouslySetInnerHTML={{ __html: guideInnerHtml() }} />
+
+          <p className="font-spectral text-[17px] font-semibold text-text-primary mb-6">{personName.trim() ? `Hi ${personName.trim()},` : 'Welcome aboard,'}</p>
+
+          <div className="space-y-8">
+            {guideSources.map(g => {
+              const list = items.filter(i => i.guide === g && !composedDef.exclude.includes(i.id));
+              if (!list.length) return null;
+              const label = (composedDef.headers?.[g] && composedDef.headers[g].trim()) || `${g} Onboarding`;
+              const nodes = blocksFor(list, g);
+              const order = composedBlockOrder(g, list);
+              return (
+                <div key={g}>
+                  <div className="mb-4 pt-3 border-t-2 border-[#c9a24a]">
+                    <div className="text-[10px] tracking-[0.14em] text-[#c9a24a] font-bold uppercase">Section</div>
+                    <div className="text-[20px] font-extrabold text-text-primary mt-0.5">{label}</div>
+                  </div>
+                  <div className="space-y-6">
+                    {order.map(k => <div key={k}>{nodes[k]}</div>)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       )}
