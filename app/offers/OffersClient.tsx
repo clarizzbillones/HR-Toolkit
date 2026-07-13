@@ -185,7 +185,7 @@ ${bodyHtml}
     const bodyHtml = dec.body.split('\n').map(l =>
       l.trim() === ''
         ? `<div style="height:11pt"></div>`
-        : `<div style="text-align:justify;margin-bottom:0">${esc(l)}</div>`
+        : `<div style="text-align:justify;text-indent:0.5in;margin-bottom:0">${esc(l)}</div>`
     ).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Declination Letter${dec.name ? ' – ' + esc(dec.name) : ''}</title>
@@ -201,17 +201,19 @@ ${bodyHtml}
     J. Alex Little<br>615.985.8189<br>alex@litson.co
   </div>
 </div>
-${dec.date ? `<div style="margin-bottom:11pt">${esc(dec.date)}</div>` : ''}
+${dec.date ? `<div style="text-align:center;margin-bottom:22pt">${esc(dec.date)}</div>` : ''}
 ${dec.name ? `<div>${esc(dec.name)}</div>` : ''}
 ${dec.email ? `<div>${esc(dec.email)}</div>` : ''}
-<div style="height:11pt"></div>
-${dec.re ? `<div style="margin-bottom:11pt"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">${esc(dec.re)}</span></div>` : ''}
+<div style="height:22pt"></div>
+${dec.re ? `<div style="margin-left:0.5in;margin-bottom:16pt"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">${esc(dec.re)}</span></div>` : ''}
 <div style="margin-bottom:11pt">Dear ${esc(salutation)},</div>
 ${bodyHtml}
-<div style="height:11pt"></div>
-<div>Sincerely,</div>
-<div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:1pt 0" alt=""/></div>
-<div>${esc(dec.signer)}</div>
+<div style="height:28pt"></div>
+<div style="margin-left:3.4in">
+  <div>Sincerely,</div>
+  <div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:2pt 0" alt=""/></div>
+  <div style="margin-top:10pt">${esc(dec.signer)}</div>
+</div>
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
   Litson PLLC<br>54 Music Square East, Suite 300<br>Nashville, TN 37203<br>www.litson.co
 </div>
@@ -454,22 +456,24 @@ ${bodyHtml}
 
               {/* Body */}
               <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
-                <p className="mb-3">{dec.date || 'July 13, 2026'}</p>
+                <p className="text-center mb-5">{dec.date || 'July 13, 2026'}</p>
                 <p>{dec.name || 'Recipient Name'}</p>
                 {dec.email && <p>{dec.email}</p>}
-                <p className="mt-3 mb-3"><span className="font-bold">Re:</span><span className="font-bold ml-6">{dec.re}</span></p>
+                <p className="mt-5 mb-4" style={{ marginLeft: '2.5em' }}><span className="font-bold">Re:</span><span className="font-bold ml-6">{dec.re}</span></p>
                 <p className="mb-3">Dear {dec.salutation.trim() || dec.name.trim() || 'Recipient'},</p>
                 <textarea value={dec.body} onChange={e => setD('body', e.target.value)}
                   className="w-full resize-none focus:outline-none border border-transparent hover:border-border-light focus:border-ink rounded-ctrl bg-transparent text-[13px] leading-[1.6] px-1 py-1"
-                  style={{ fontFamily: BODY_FONT, minHeight: '150px' }} />
+                  style={{ fontFamily: BODY_FONT, minHeight: '150px', textIndent: '2.5em', textAlign: 'justify' }} />
               </div>
 
-              {/* Closing + signature */}
+              {/* Closing + signature — indented to the right, matching house style */}
               <div className="px-8 pb-5">
-                <p className="text-[13px] mb-1" style={{ fontFamily: BODY_FONT }}>Sincerely,</p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-0.5" />
-                <p className="text-[13px]" style={{ fontFamily: BODY_FONT }}>{dec.signer}</p>
+                <div style={{ marginLeft: '52%' }}>
+                  <p className="text-[13px]" style={{ fontFamily: BODY_FONT }}>Sincerely,</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
+                  <p className="text-[13px] mt-2" style={{ fontFamily: BODY_FONT }}>{dec.signer}</p>
+                </div>
               </div>
 
               {/* Footer */}
