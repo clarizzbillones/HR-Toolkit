@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import EditGate from '@/components/EditGate';
-import { mergePto } from '@/lib/pto';
+import { mergePto, resolveAlias, normName, workingDays, datesOverlap, EXCLUDED_TYPES, EXCLUDED_TITLE } from '@/lib/pto';
 
 interface PtoEntry {
   id: string; employee: string; start_date: string; end_date: string;
@@ -54,75 +54,12 @@ const SOURCE_LABEL: Record<Source, string> = {
   calendar: 'Calendar only',
 };
 
-const NAME_ALIASES: [RegExp, string][] = [
-  [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
-  [/^(mrg|matt|mg|matt\s+gibbs)$/i, 'Matt Gibbs'],
-  [/^(matthew\s+nunez|matt\s+nunez|nunez)$/i, 'Matthew Nunez'],
-  [/^(syerra|syerra\s+ryan)$/i, 'Syerra Ryan'],
-  [/^(ryan|ryan\s+leite)$/i, 'Ryan Leite'],
-  [/^(sl|clarizz|cb|clarizz\s+ann\s+billones|clarizz\s+ann\s+alon|clarizz\s+alon)$/i, 'Clarizz Ann Billones'],
-  [/^(jr'?|jrg|john|john\s+ross\s+glover|john\s+glover)$/i, 'John Ross Glover'],
-  [/^(clint|clint\s+palmer)$/i, 'Clint Palmer'],
-  [/^(caitlin|caitlin\s+giuliano)$/i, 'Caitlin Giuliano'],
-  [/^(shannen|shannen\s+sharpe)$/i, 'Shannen Sharpe'],
-  [/^(simran|simran\s+jain|simran\s+m\.?\s+jain|simran\s+mohini|simran\s+mohini\s+jain)$/i, 'Simran Mohini Jain'],
-  [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
-  [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
-  [/^(carly|carly\s+cro(?:l{1,2}|tt)y)$/i, 'Carly Crotty'],
-  [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
-  [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
-  [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
-  [/^(amy\s+green)$/i, 'Amy Green'],
-  [/^(amy\s+nelson)$/i, 'Amy Nelson'],
-  [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
-  [/^(paula|paula\s+valle|paula\s+laborne\s+valle|paula\s+laborne)$/i, 'Paula Laborne Valle'],
-  [/^(ridwan|ridwan\s+ahmed)$/i, 'Ridwan Ahmed'],
-  [/^(alex|alex\s+little)$/i, 'Alex Little'],
-  [/^(ashley|ashley\s+abraham)$/i, 'Ashley Abraham'],
-  [/^(fernanda|fernanda\s+guillen)$/i, 'Fernanda Guillen'],
-  [/^(joey|joey\s+mundy)$/i, 'Joey Mundy'],
-  [/^(kelley|kelley\s+hess)$/i, 'Kelley Hess'],
-  [/^(sloan|sloan\s+nickel)$/i, 'Sloan Nickel'],
-  [/^(ted|ted\s+canter)$/i, 'Ted Canter'],
-  [/^(zach|zachary|zachary\s+lawson|zach\s+lawson)$/i, 'Zachary Lawson'],
-  [/^(isabella|isabella\s+maria\s+ardila|isabella\s+ardila)$/i, 'Isabella Maria Ardila'],
-  [/^(naomi|naomi\s+alinajad)$/i, 'Naomi Alinajad'],
-];
-
-// Types to exclude — partial match (covers "Personal Leave (Commonly used for Half day OOO)" etc.)
-const EXCLUDED_TYPES = /wfh|work\s+from\s+home|personal\s+leave|personal/i;
-
-// Calendar event title patterns that indicate it's NOT a time-off entry
-const EXCLUDED_TITLE = /interview|in\s+office|\bwfh\b|work\s+from\s+home|meeting|call|doctor|dr\.|appointment|lunch|training|onboard|orientation|review|check[\s-]?in|1[\s-]?on[\s-]?1|one[\s-]?on[\s-]?one|\bin\s+\w+\s+for\b|[\w']+\s+in\s+\w+|fundraiser|conference|summit|trip\s+to|travel\s+to|visiting|event|gala|retreat/i;
-
-function resolveAlias(n: string): string {
-  const t = n.trim();
-  for (const [re, canonical] of NAME_ALIASES) {
-    if (re.test(t)) return canonical;
-  }
-  return t;
-}
-
-function normName(n: string) { return resolveAlias(n).trim().toLowerCase().replace(/\s+/g, ' '); }
-
-function workingDays(start: string, end: string) {
-  let count = 0;
-  const cur = new Date(start + 'T12:00:00');
-  const last = new Date(end + 'T12:00:00');
-  while (cur <= last) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
-}
+// Name aliasing + PTO filters (EXCLUDED_TYPES/TITLE), working-day counting and
+// overlap all come from lib/pto — the single source of truth shared with the
+// PTO report, the /api/pto/today endpoint, and the EOD modal.
 
 function fmtShort(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function datesOverlap(as: string, ae: string, bs: string, be: string) {
-  return as <= be && ae >= bs;
 }
 
 function mapPtoRows(rows: Record<string, string>[]): Omit<PtoEntry, 'id' | 'status'>[] {

@@ -1,52 +1,11 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from './Toast';
+// Shared name aliasing so PTO-today names dedupe the same way everywhere.
+import { resolveAlias } from '@/lib/pto';
 
 interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string; notes: string; completed_date?: string;
-}
-
-const NAME_ALIASES: [RegExp, string][] = [
-  [/^(vms|victoria|victoria\s+seeley)$/i, 'Victoria Seeley'],
-  [/^(mrg|matt|mg|matt\s+gibbs)$/i, 'Matt Gibbs'],
-  [/^(matthew\s+nunez|matt\s+nunez|nunez)$/i, 'Matthew Nunez'],
-  [/^(syerra|syerra\s+ryan)$/i, 'Syerra Ryan'],
-  [/^(ryan|ryan\s+leite)$/i, 'Ryan Leite'],
-  [/^(sl|clarizz|cb|clarizz\s+ann\s+billones|clarizz\s+ann\s+alon|clarizz\s+alon)$/i, 'Clarizz Ann Billones'],
-  [/^(jr'?|jrg|john|john\s+ross\s+glover|john\s+glover)$/i, 'John Ross Glover'],
-  [/^(clint|clint\s+palmer)$/i, 'Clint Palmer'],
-  [/^(caitlin|caitlin\s+giuliano)$/i, 'Caitlin Giuliano'],
-  [/^(shannen|shannen\s+sharpe)$/i, 'Shannen Sharpe'],
-  [/^(simran|simran\s+mohini|simran\s+mohini\s+jain)$/i, 'Simran Mohini Jain'],
-  [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
-  [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
-  [/^(carly|carly\s+cro(?:l{1,2}|tt)y)$/i, 'Carly Crotty'],
-  [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
-  [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
-  [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
-  [/^(amy\s+green)$/i, 'Amy Green'],
-  [/^(amy\s+nelson)$/i, 'Amy Nelson'],
-  [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
-  [/^(paula|paula\s+valle|paula\s+laborne\s+valle|paula\s+laborne)$/i, 'Paula Laborne Valle'],
-  [/^(ridwan|ridwan\s+ahmed)$/i, 'Ridwan Ahmed'],
-  [/^(alex|alex\s+little)$/i, 'Alex Little'],
-  [/^(ashley|ashley\s+abraham)$/i, 'Ashley Abraham'],
-  [/^(fernanda|fernanda\s+guillen)$/i, 'Fernanda Guillen'],
-  [/^(joey|joey\s+mundy)$/i, 'Joey Mundy'],
-  [/^(kelley|kelley\s+hess)$/i, 'Kelley Hess'],
-  [/^(sloan|sloan\s+nickel)$/i, 'Sloan Nickel'],
-  [/^(ted|ted\s+canter)$/i, 'Ted Canter'],
-  [/^(zach|zachary|zachary\s+lawson|zach\s+lawson)$/i, 'Zachary Lawson'],
-  [/^(isabella|isabella\s+maria\s+ardila|isabella\s+ardila)$/i, 'Isabella Maria Ardila'],
-  [/^(naomi|naomi\s+alinajad)$/i, 'Naomi Alinajad'],
-];
-
-function resolveAlias(n: string): string {
-  const t = n.trim();
-  for (const [re, canonical] of NAME_ALIASES) {
-    if (re.test(t)) return canonical;
-  }
-  return t;
 }
 
 function dedupeNames(names: string[]): string[] {
