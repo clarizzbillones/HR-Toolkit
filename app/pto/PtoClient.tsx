@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import EditGate from '@/components/EditGate';
+import { mergePto } from '@/lib/pto';
 
 interface PtoEntry {
   id: string; employee: string; start_date: string; end_date: string;
@@ -375,81 +376,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   }
 
   // --- Merge & dedup ---
-  const merged = useMemo<MergedRow[]>(() => {
-    const rows: MergedRow[] = [];
-    const usedCalIds = new Set<string>();
-
-    // Start with report entries — skip WFH, half-day / partial entries (< 1 day)
-    entries.forEach(e => {
-      if (EXCLUDED_TYPES.test(e.type)) return; // skip WFH
-      const days = e.days || workingDays(e.start_date, e.end_date);
-      if (days < 1) return; // skip partial / half-day leave
-
-      const canonicalEmployee = resolveAlias(e.employee);
-      // Find matching calendar event (same person, overlapping dates) — mark as duplicate
-      const calMatch = calEvents.find(c =>
-        normName(c.name) === normName(e.employee) && datesOverlap(e.start_date, e.end_date, c.start, c.end)
-      );
-      if (calMatch) usedCalIds.add(calMatch.id);
-      rows.push({
-        key: e.id,
-        employee: canonicalEmployee,
-        start: e.start_date,
-        end: e.end_date,
-        days,
-        type: e.type,
-        status: e.status,
-        source: calMatch ? 'both' : 'report',
-        calTitle: calMatch?.title,
-      });
-    });
-
-    // Add calendar-only events — skip WFH, non-PTO titles, < 1 day, old events
-    calEvents.forEach(c => {
-      if (usedCalIds.has(c.id)) return;
-      if (hiddenCalIds.has(c.id)) return; // user removed it from the report (Outlook untouched)
-      if (c.end < '2026-06-01') return;
-      if (EXCLUDED_TYPES.test(c.tag)) return; // skip WFH
-      if (EXCLUDED_TITLE.test(c.title)) return; // skip meetings/notes/interviews
-      const days = workingDays(c.start, c.end);
-      if (days < 1) return; // skip partial / half-day calendar events
-      rows.push({
-        key: c.id,
-        employee: resolveAlias(c.name),
-        start: c.start,
-        end: c.end,
-        days,
-        type: c.tag,
-        status: 'Calendar',
-        source: 'calendar',
-        calTitle: c.title,
-      });
-    });
-
-    // Full dedup: sort by source priority (report/both beat calendar), then eliminate
-    // any row whose canonical name + date range overlaps a higher-priority row.
-    const SOURCE_RANK: Record<Source, number> = { both: 0, report: 1, calendar: 2 };
-    const sorted = rows.sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
-
-    const kept: MergedRow[] = [];
-    for (const row of sorted) {
-      const canon = normName(row.employee);
-      const duplicate = kept.find(k =>
-        normName(k.employee) === canon &&
-        datesOverlap(row.start, row.end, k.start, k.end)
-      );
-      if (duplicate) {
-        // Absorb calendar title if the kept row doesn't have one
-        if (!duplicate.calTitle && row.calTitle) duplicate.calTitle = row.calTitle;
-        // Upgrade source to 'both' if the incoming row adds a different source
-        if (duplicate.source !== row.source) duplicate.source = 'both';
-      } else {
-        kept.push({ ...row });
-      }
-    }
-
-    return kept.sort((a, b) => a.start.localeCompare(b.start));
-  }, [entries, calEvents, hiddenCalIds]);
+  // Use the SHARED mergePto (lib/pto) so the PTO dashboard and the PTO Report
+  // dashboard render from one identical code path — same inputs, same output.
+  const merged = useMemo<MergedRow[]>(
+    () => mergePto(entries, calEvents, [...hiddenCalIds]) as MergedRow[],
+    [entries, calEvents, hiddenCalIds]
+  );
 
   // Apply filters
   const filtered = useMemo(() => merged.filter(r => {
