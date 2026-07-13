@@ -23,7 +23,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(clint|clint\s+palmer)$/i, 'Clint Palmer'],
   [/^(caitlin|caitlin\s+giuliano)$/i, 'Caitlin Giuliano'],
   [/^(shannen|shannen\s+sharpe)$/i, 'Shannen Sharpe'],
-  [/^(simran|simran\s+mohini|simran\s+mohini\s+jain)$/i, 'Simran Mohini Jain'],
+  [/^(simran|simran\s+jain|simran\s+m\.?\s+jain|simran\s+mohini|simran\s+mohini\s+jain)$/i, 'Simran Mohini Jain'],
   [/^(kelynn|kl|ke'?lynn|ke'?lynn\s+enalls)$/i, "Ke'Lynn Enalls"],
   [/^(ct|catie|catie\s+toole|catherine\s+tool(e)?)$/i, 'Catie Toole'],
   [/^(carly|carly\s+cro(?:l{1,2}|tt)y)$/i, 'Carly Crotty'],
