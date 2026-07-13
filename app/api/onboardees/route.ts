@@ -11,6 +11,10 @@ async function ensureTable() {
     status text DEFAULT 'In Progress', progress text DEFAULT '{}',
     created_at timestamptz DEFAULT now()
   )`;
+  // Journey stage (offer_sent → offer_viewed → offer_accepted → onboarding →
+  // complete) and a scheduled onboarding date, both added after the fact.
+  await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS stage text DEFAULT 'onboarding'`;
+  await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS onboarding_date text`;
 }
 
 // Make sure the Staffing directory can receive a completed onboardee
@@ -35,8 +39,8 @@ export async function POST(req: Request) {
   const b = await req.json();
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
-  await sql`INSERT INTO onboardees (id, name, email, position, worker_type, guide, start_date, dob, phone, status, progress)
-    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}')`;
+  await sql`INSERT INTO onboardees (id, name, email, position, worker_type, guide, start_date, dob, phone, status, progress, stage, onboarding_date)
+    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}', ${b.stage ?? 'onboarding'}, ${b.onboarding_date ?? null})`;
   const [row] = await sql`SELECT * FROM onboardees WHERE id = ${id}`;
   return NextResponse.json({ row }, { status: 201 });
 }
@@ -46,13 +50,13 @@ export async function PATCH(req: Request) {
   const { id, complete, progress, ...f } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   if (progress !== undefined) await sql`UPDATE onboardees SET progress = ${JSON.stringify(progress)} WHERE id = ${id}`;
-  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status'] as const) {
+  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date'] as const) {
     if (f[k] !== undefined) await sql`UPDATE onboardees SET ${sql(k)} = ${f[k]} WHERE id = ${id}`;
   }
   // On completion, push the person into the Staffing directory
   if (complete) {
     const [p] = await sql`SELECT * FROM onboardees WHERE id = ${id}`;
-    await sql`UPDATE onboardees SET status = 'Complete' WHERE id = ${id}`;
+    await sql`UPDATE onboardees SET status = 'Complete', stage = 'complete' WHERE id = ${id}`;
     if (p) {
       await ensureStaff();
       const exists = await sql`SELECT id FROM staff_directory WHERE lower(name) = lower(${p.name}) LIMIT 1`;

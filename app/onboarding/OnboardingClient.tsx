@@ -32,6 +32,25 @@ function linkify(text: string | null) {
   return out;
 }
 
+// New-hire journey: offer letter sent → viewed → accepted → onboarding → hired.
+const STAGES: { key: string; label: string; icon: string }[] = [
+  { key: 'offer_sent', label: 'Offer sent', icon: '📤' },
+  { key: 'offer_viewed', label: 'Viewed', icon: '👀' },
+  { key: 'offer_accepted', label: 'Accepted', icon: '✍️' },
+  { key: 'onboarding', label: 'Onboarding', icon: '🚀' },
+  { key: 'complete', label: 'Hire complete', icon: '✓' },
+];
+function stageOf(person: any): string {
+  if (person?.status === 'Complete') return 'complete';
+  return STAGES.some(s => s.key === person?.stage) ? person.stage : 'onboarding';
+}
+function stageIndex(key: string) { const i = STAGES.findIndex(s => s.key === key); return i < 0 ? 3 : i; }
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return '';
+  const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 interface TableData { headers: string[]; rows: string[][] }
 function parseTable(body: string | null): TableData {
   try { const t = JSON.parse(body ?? ''); if (Array.isArray(t.headers) && Array.isArray(t.rows)) return t; } catch { /* ignore */ }
@@ -54,7 +73,7 @@ export default function OnboardingClient() {
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', start_date: '', dob: '', phone: '' };
+  const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', start_date: '', onboarding_date: '', dob: '', phone: '' };
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
@@ -118,6 +137,14 @@ export default function OnboardingClient() {
     const { row } = await res.json();
     setPeople(prev => [row, ...prev]); setShowAdd(false); setNewForm({ ...blankNew }); setSelected(row.id);
     showToast('Onboarding started');
+  }
+  async function patchOnboardee(id: string, fields: Record<string, any>) {
+    setPeople(prev => prev.map(p => p.id === id ? { ...p, ...fields } : p));
+    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...fields }) });
+  }
+  async function setStage(person: any, key: string) {
+    if (key === 'complete') { completeOnboardee(person); return; }
+    await patchOnboardee(person.id, { stage: key, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}) });
   }
   async function toggleTask(person: any, title: string, val: boolean) {
     const prog = { ...parseProg(person.progress), [title]: val };
@@ -903,6 +930,12 @@ export default function OnboardingClient() {
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${complete ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{complete ? 'Complete' : `${pct}%`}</span>
                   </div>
                   <div className="text-xs text-text-muted mt-0.5">{p.position || p.worker_type} · {p.guide} guide</div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {(() => { const st = STAGES.find(s => s.key === stageOf(p)) ?? STAGES[3]; return (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eef2f7] text-[#3f5a76]">{st.icon} {st.label}</span>
+                    ); })()}
+                    {p.start_date && <span className="text-[11px] text-text-muted">Starts {fmtDate(p.start_date)}</span>}
+                  </div>
                   <div className="mt-2 h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: complete ? '#2f7d5b' : '#c9a24a' }} />
                   </div>
@@ -926,7 +959,7 @@ export default function OnboardingClient() {
                   <div className="px-5 py-4 border-b border-border flex items-start gap-3">
                     <div className="flex-1">
                       <h2 className="font-spectral text-[19px] font-semibold text-text-primary">{person.name}</h2>
-                      <p className="text-sm text-text-muted">{[person.position, person.email, person.start_date && `Starts ${person.start_date}`].filter(Boolean).join(' · ')}</p>
+                      <p className="text-sm text-text-muted">{[person.position, person.email].filter(Boolean).join(' · ')}</p>
                       <div className="flex gap-2 mt-1.5 text-[11px]">
                         <span className="font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{person.worker_type}</span>
                         <span className="font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{person.guide} guide</span>
@@ -935,6 +968,50 @@ export default function OnboardingClient() {
                     </div>
                     <button onClick={() => deleteOnboardee(person.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Remove</button>
                   </div>
+
+                  {/* Hiring journey: offer sent → viewed → accepted → onboarding → hired */}
+                  <div className="px-5 py-4 border-b border-border bg-[#faf8f4]">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2.5">Hiring journey</div>
+                    <div className="flex items-center flex-wrap gap-y-1">
+                      {STAGES.map((s, i) => {
+                        const curr = stageIndex(stageOf(person));
+                        const reached = i <= curr;
+                        const active = i === curr;
+                        const isComplete = s.key === 'complete';
+                        const clickable = !isComplete || allDone || stageOf(person) === 'complete';
+                        return (
+                          <div key={s.key} className="flex items-center">
+                            <button onClick={() => clickable && setStage(person, s.key)} disabled={!clickable}
+                              title={isComplete && !clickable ? 'Finish all tasks first' : `Set stage: ${s.label}`}
+                              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                                active ? 'bg-ink text-white border-ink'
+                                : reached ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8] hover:bg-[#e2efe8]'
+                                : 'bg-white text-text-muted border-border-light hover:border-ink'} ${clickable ? '' : 'opacity-40 cursor-default'}`}>
+                              <span>{s.icon}</span><span>{s.label}</span>
+                            </button>
+                            {i < STAGES.length - 1 && <span className={`w-4 h-0.5 mx-0.5 ${i < curr ? 'bg-[#2f7d5b]' : 'bg-[#e5ddd0]'}`} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Key dates — editable inline */}
+                  <div className="px-5 py-4 border-b border-border grid grid-cols-2 gap-4 max-w-md">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Start date</label>
+                      <input type="date" value={person.start_date ?? ''} onChange={e => patchOnboardee(person.id, { start_date: e.target.value })}
+                        className="w-full border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                      {person.start_date && <p className="text-[11px] text-text-muted mt-1">{fmtDate(person.start_date)}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Onboarding date</label>
+                      <input type="date" value={person.onboarding_date ?? ''} onChange={e => patchOnboardee(person.id, { onboarding_date: e.target.value })}
+                        className="w-full border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                      {person.onboarding_date && <p className="text-[11px] text-text-muted mt-1">{fmtDate(person.onboarding_date)}</p>}
+                    </div>
+                  </div>
+
                   <div className="p-4 space-y-1">
                     {list.map(t => {
                       const isDone = !!prog[t.title];
@@ -973,10 +1050,10 @@ export default function OnboardingClient() {
                 <button onClick={() => setShowAdd(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
               </div>
               <div className="p-6 grid grid-cols-2 gap-4">
-                {([['Name', 'name'], ['Email', 'email'], ['Position', 'position'], ['Phone', 'phone'], ['Start date', 'start_date'], ['DOB', 'dob']] as [string, keyof typeof newForm][]).map(([l, k]) => (
+                {([['Name', 'name'], ['Email', 'email'], ['Position', 'position'], ['Phone', 'phone'], ['Start date', 'start_date'], ['Onboarding date', 'onboarding_date'], ['DOB', 'dob']] as [string, keyof typeof newForm][]).map(([l, k]) => (
                   <div key={k} className={k === 'name' ? 'col-span-2' : ''}>
                     <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">{l}</label>
-                    <input type={k === 'start_date' ? 'date' : 'text'} value={newForm[k]} onChange={e => setNewForm(f => ({ ...f, [k]: e.target.value }))}
+                    <input type={k === 'start_date' || k === 'onboarding_date' ? 'date' : 'text'} value={newForm[k]} onChange={e => setNewForm(f => ({ ...f, [k]: e.target.value }))}
                       placeholder={k === 'dob' ? 'MM/DD/YYYY' : undefined}
                       className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
                   </div>
