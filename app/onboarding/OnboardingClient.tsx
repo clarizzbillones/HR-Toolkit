@@ -1114,18 +1114,29 @@ export default function OnboardingClient() {
 
                   {person.guide !== 'None' && (
                   <div className="p-4 space-y-1">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1 px-2">Guide checklist</div>
+                    <div className="flex items-center justify-between px-2 mb-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Guide checklist</div>
+                      <span className="text-[10px] text-text-faint">Edits apply to the {person.guide} guide</span>
+                    </div>
                     {list.map(t => {
                       const isDone = !!prog[t.title];
+                      const isHR = (t.owner ?? '') === 'HR';
                       return (
-                        <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas cursor-pointer">
-                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b]" />
-                          <span className={`flex-1 text-sm ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`}>{t.title}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${(t.owner ?? '') === 'HR' ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{(t.owner ?? '') === 'HR' ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}</span>
-                        </label>
+                        <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
+                          <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
+                            className={`flex-1 text-sm bg-transparent focus:outline-none ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`} />
+                          <button onClick={() => patch(t.id, { owner: isHR ? '' : 'HR' })} title="Toggle who owns this task"
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isHR ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>
+                            {isHR ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}
+                          </button>
+                          <button onClick={() => remove(t.id)} title="Delete task" className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100 shrink-0">✕</button>
+                        </div>
                       );
                     })}
-                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet.</p>}
+                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-2">No checklist items yet.</p>}
+                    <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, person.guide)}
+                      className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
                   </div>
                   )}
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between">
