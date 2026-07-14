@@ -275,6 +275,22 @@ export default function OnboardingClient() {
     setDragId(null);
     if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
   }
+  // Drag & drop reordering for 2-week training schedule rows, scoped to the
+  // dragged row's own guide (works on the combined view too).
+  const [schedDragId, setSchedDragId] = useState<string | null>(null);
+  async function reorderSchedule(targetId: string) {
+    if (!schedDragId || schedDragId === targetId) { setSchedDragId(null); return; }
+    const src = items.find(i => i.id === schedDragId), tgt = items.find(i => i.id === targetId);
+    if (!src || !tgt || src.kind !== 'schedule' || tgt.kind !== 'schedule' || src.guide !== tgt.guide) { setSchedDragId(null); return; }
+    const all = items.filter(i => i.guide === src.guide && i.kind === 'schedule').sort((a, b) => a.sort_order - b.sort_order);
+    const ids = all.map(i => i.id);
+    ids.splice(ids.indexOf(schedDragId), 1);
+    ids.splice(ids.indexOf(targetId), 0, schedDragId);
+    const updated = ids.map((id, i) => ({ id, sort_order: i }));
+    setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
+    setSchedDragId(null);
+    if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+  }
   // Move a section up (dir -1) or down (dir +1) by swapping order with its neighbour.
   async function moveSection(id: string, dir: -1 | 1) {
     const own = items.find(i => i.id === id)?.guide ?? guide;
@@ -590,7 +606,7 @@ export default function OnboardingClient() {
   // on the combined view save straight to the real underlying source items.
   function blocksFor(list: Item[], srcGuide: string): Record<string, ReactNode> {
     const secs = list.filter(i => i.kind === 'section').sort((a, b) => a.sort_order - b.sort_order);
-    const sched = list.filter(i => i.kind === 'schedule');
+    const sched = list.filter(i => i.kind === 'schedule').sort((a, b) => a.sort_order - b.sort_order);
     const tls = list.filter(i => i.kind === 'tool');
     const lnks = list.filter(i => i.kind === 'sop');
     const tbls = list.filter(i => i.kind === 'table');
@@ -611,11 +627,18 @@ export default function OnboardingClient() {
         <div className="bg-white border border-border rounded-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-[#e9f0f5]"><tr>
-              {['Date', 'Agenda', 'Assignee', 'Notes', 'Location', ''].map(h => <th key={h} className="text-left px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#3f6b8a]">{h}</th>)}
+              {['', 'Date', 'Agenda', 'Assignee', 'Notes', 'Location', ''].map((h, i) => <th key={i} className="text-left px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#3f6b8a]">{h}</th>)}
             </tr></thead>
             <tbody>
               {sched.map(r => (
-                <tr key={r.id} className="group">
+                <tr key={r.id}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => reorderSchedule(r.id)}
+                  className={`group ${schedDragId === r.id ? 'opacity-40' : ''}`}>
+                  <td className={cell + ' w-6 text-center'}>
+                    <span draggable onDragStart={() => setSchedDragId(r.id)} onDragEnd={() => setSchedDragId(null)}
+                      className="cursor-grab select-none text-text-faint opacity-0 group-hover:opacity-100" title="Drag to reorder">⠿</span>
+                  </td>
                   <td className={cell + ' w-28'}><input value={r.day ?? ''} onChange={e => patch(r.id, { day: e.target.value })} className={inp + ' font-medium'} /></td>
                   <td className={cell}><input value={r.title ?? ''} onChange={e => patch(r.id, { title: e.target.value })} className={inp} /></td>
                   <td className={cell + ' w-40'}><input value={r.assignee ?? ''} onChange={e => patch(r.id, { assignee: e.target.value })} className={inp + ' text-text-muted'} /></td>
