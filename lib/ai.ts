@@ -14,8 +14,6 @@ export interface OfferParams {
   notes: string;
   firm: string;
   cadence: string;
-  signerName?: string;
-  signerTitle?: string;
 }
 
 export interface SopParams {
@@ -44,8 +42,6 @@ export function localOffer(p: OfferParams): string {
   const startDisplay = p.startDate
     ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : '[Start Date TBD]';
-  const signerName = p.signerName || 'Alex Little';
-  const signerTitle = p.signerTitle || 'Founding & Managing Partner';
 
   if (p.employeeType === 'contractor') {
     return `[DATE_CENTERED]${todayStr()}
@@ -76,8 +72,8 @@ cc:    Zack Lawson, Founding Partner
 [/CC_BLOCK]
 Very truly yours,
 
-${signerName}
-${signerTitle}`;
+Alex Little
+Founding & Managing Partner`;
   }
 
   const article = /^[aeiou]/i.test(p.role.trim()) ? 'an' : 'a';
@@ -97,10 +93,14 @@ Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid 
 
 Your anticipated start date will be ${startDisplay}. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us. Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns.
 
+[CC_BLOCK]
+cc:    Zack Lawson, Founding Partner
+         Catie Toole, Director of Operations
+[/CC_BLOCK]
 Very truly yours,
 
-${signerName}
-${signerTitle}`;
+Alex Little
+Founding & Managing Partner`;
 }
 
 export function localSop(p: SopParams): string {
@@ -159,10 +159,8 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
       ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       : '[Start Date TBD]';
     const sal = Number(p.salary).toLocaleString('en-US');
-    const signerName = p.signerName || 'Alex Little';
-    const signerTitle = p.signerTitle || 'Founding & Managing Partner';
     if (p.employeeType === 'contractor') {
-      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with monthly compensation of $${sal} payable monthly; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "${signerName}"; "${signerTitle}". Return ONLY the letter text, no preamble.`;
+      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with monthly compensation of $${sal} payable monthly; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Return ONLY the letter text, no preamble.`;
     } else {
       prompt = `Draft a W-2 employment offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Match this exact structure and tone:
 
@@ -175,9 +173,10 @@ candidate email
 Paragraph 1: "We are pleased to extend an offer for you to join ${p.firm} PLLC as ${/^[aeiou]/i.test(p.role.trim()) ? 'an' : 'a'} ${p.role}. This letter is to confirm the details of our employment offer in writing."
 Paragraph 2: "Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. Your benefits will include health, dental, and life insurance, to which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have completed one year of employment. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time."${p.notes ? ' Also include: ' + p.notes + '.' : ''}
 Paragraph 3: "Your anticipated start date will be ${startDisplay}. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us. Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns."
+Then a cc block on its own lines: "cc:    Zack Lawson, Founding Partner" then "         Catie Toole, Director of Operations"
 "Very truly yours,"
-"${signerName}"
-"${signerTitle}"
+"Alex Little"
+"Founding & Managing Partner"
 Return ONLY the letter text.`;
     }
   } else {

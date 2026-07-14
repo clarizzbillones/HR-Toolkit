@@ -23,8 +23,6 @@ export async function POST(req: Request) {
         notes: params.notes ?? '',
         firm,
         cadence,
-        signerName: params.signerName ?? '',
-        signerTitle: params.signerTitle ?? '',
       });
       return NextResponse.json({ text });
     }
