@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
   await sql`INSERT INTO onboardees (id, name, email, position, worker_type, guide, start_date, dob, phone, status, progress, stage, onboarding_date)
-    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}', ${b.stage ?? 'onboarding'}, ${b.onboarding_date ?? null})`;
+    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}', ${b.stage ?? null}, ${b.onboarding_date ?? null})`;
   const [row] = await sql`SELECT * FROM onboardees WHERE id = ${id}`;
   return NextResponse.json({ row }, { status: 201 });
 }

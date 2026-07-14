@@ -42,9 +42,10 @@ const STAGES: { key: string; label: string; icon: string }[] = [
 ];
 function stageOf(person: any): string {
   if (person?.status === 'Complete') return 'complete';
-  return STAGES.some(s => s.key === person?.stage) ? person.stage : 'onboarding';
+  // '' = not started / none selected — the default for a brand-new hire.
+  return STAGES.some(s => s.key === person?.stage) ? person.stage : '';
 }
-function stageIndex(key: string) { const i = STAGES.findIndex(s => s.key === key); return i < 0 ? 3 : i; }
+function stageIndex(key: string) { return STAGES.findIndex(s => s.key === key); }
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '';
   const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
@@ -144,7 +145,9 @@ export default function OnboardingClient() {
   }
   async function setStage(person: any, key: string) {
     if (key === 'complete') { completeOnboardee(person); return; }
-    await patchOnboardee(person.id, { stage: key, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}) });
+    // Click the current stage again to clear it back to none / not started.
+    const next = stageOf(person) === key ? '' : key;
+    await patchOnboardee(person.id, { stage: next, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}) });
   }
   async function toggleTask(person: any, title: string, val: boolean) {
     const prog = { ...parseProg(person.progress), [title]: val };
@@ -954,8 +957,10 @@ export default function OnboardingClient() {
                   </div>
                   <div className="text-xs text-text-muted mt-0.5">{p.position || p.worker_type} · {p.guide} guide</div>
                   <div className="flex items-center gap-2 mt-1.5">
-                    {(() => { const st = STAGES.find(s => s.key === stageOf(p)) ?? STAGES[3]; return (
+                    {(() => { const st = STAGES.find(s => s.key === stageOf(p)); return st ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eef2f7] text-[#3f5a76]">{st.icon} {st.label}</span>
+                    ) : (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-muted">Not started</span>
                     ); })()}
                     {p.start_date && <span className="text-[11px] text-text-muted">Starts {fmtDate(p.start_date)}</span>}
                   </div>
@@ -994,7 +999,7 @@ export default function OnboardingClient() {
 
                   {/* Hiring journey: offer sent → viewed → accepted → onboarding → hired */}
                   <div className="px-5 py-4 border-b border-border bg-[#faf8f4]">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2.5">Hiring journey</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2.5">Hiring journey{stageOf(person) === '' && <span className="ml-2 font-semibold text-text-faint normal-case tracking-normal">· Not started — pick a stage</span>}</div>
                     <div className="flex items-center flex-wrap gap-y-1">
                       {STAGES.map((s, i) => {
                         const curr = stageIndex(stageOf(person));
