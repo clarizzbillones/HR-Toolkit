@@ -994,8 +994,16 @@ export default function OnboardingClient() {
                     ) : (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-muted">Not started</span>
                     ); })()}
-                    {p.start_date && <span className="text-[11px] text-text-muted">Starts {fmtDate(p.start_date)}</span>}
                   </div>
+                  {p.start_date ? (
+                    <div className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold text-[#2f6b45] bg-[#eef5f1] border border-[#cfe4d8] px-2.5 py-1 rounded-ctrl">
+                      <span aria-hidden>📅</span><span>Starts {fmtDate(p.start_date)}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-text-muted bg-[#f7f4ef] border border-border-light px-2.5 py-1 rounded-ctrl">
+                      <span aria-hidden>📅</span><span>No start date set</span>
+                    </div>
+                  )}
                   <div className="mt-2 h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: complete ? '#2f7d5b' : '#c9a24a' }} />
                   </div>
