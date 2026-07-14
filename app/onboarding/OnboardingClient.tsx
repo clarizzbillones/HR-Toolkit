@@ -46,6 +46,15 @@ function stageOf(person: any): string {
   return STAGES.some(s => s.key === person?.stage) ? person.stage : '';
 }
 function stageIndex(key: string) { return STAGES.findIndex(s => s.key === key); }
+
+// Category tags for the person. Re-hires / transfers often skip the standard
+// guide and are tracked with their own plan/to-do list instead.
+const TAGS = ['New hire', 'Re-hire', 'Transfer', 'Promotion', 'Intern', 'Seasonal'];
+interface Todo { id: string; text: string; done: boolean }
+function todosOf(person: any): Todo[] {
+  try { const t = JSON.parse(person?.todos ?? '[]'); return Array.isArray(t) ? t : []; } catch { return []; }
+}
+
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '';
   const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
@@ -74,7 +83,7 @@ export default function OnboardingClient() {
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', start_date: '', onboarding_date: '', dob: '', phone: '' };
+  const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', tag: 'New hire', start_date: '', onboarding_date: '', dob: '', phone: '' };
   const [newForm, setNewForm] = useState({ ...blankNew });
 
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
@@ -128,9 +137,15 @@ export default function OnboardingClient() {
   function tasksFor(g: string) { return items.filter(i => i.guide === g && i.kind === 'task'); }
   const parseProg = (p: any) => { try { return JSON.parse(p ?? '{}') || {}; } catch { return {}; } };
   function progressOf(person: any) {
+    // Combine the guide checklist with the person's own plan/to-dos, so re-hires
+    // who skip the guide are still tracked (and can be marked complete).
     const t = tasksFor(person.guide); const prog = parseProg(person.progress);
-    const done = t.filter(x => prog[x.title]).length;
-    return { done, total: t.length, pct: t.length ? Math.round(done / t.length * 100) : 0 };
+    const guideDone = t.filter(x => prog[x.title]).length;
+    const todos = todosOf(person);
+    const todoDone = todos.filter(td => td.done).length;
+    const total = t.length + todos.length;
+    const done = guideDone + todoDone;
+    return { done, total, pct: total ? Math.round(done / total * 100) : 0 };
   }
   async function addOnboardee() {
     if (!newForm.name.trim()) { showToast('Name required'); return; }
@@ -148,6 +163,22 @@ export default function OnboardingClient() {
     // Click the current stage again to clear it back to none / not started.
     const next = stageOf(person) === key ? '' : key;
     await patchOnboardee(person.id, { stage: next, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}) });
+  }
+  const [newTodo, setNewTodo] = useState('');
+  function saveTodos(person: any, todos: Todo[]) { patchOnboardee(person.id, { todos }); }
+  function addTodo(person: any, text: string) {
+    const t = text.trim(); if (!t) return;
+    saveTodos(person, [...todosOf(person), { id: 't' + Date.now() + Math.random().toString(36).slice(2, 6), text: t, done: false }]);
+    setNewTodo('');
+  }
+  function toggleTodo(person: any, id: string, done: boolean) {
+    saveTodos(person, todosOf(person).map(td => td.id === id ? { ...td, done } : td));
+  }
+  function editTodo(person: any, id: string, text: string) {
+    saveTodos(person, todosOf(person).map(td => td.id === id ? { ...td, text } : td));
+  }
+  function removeTodo(person: any, id: string) {
+    saveTodos(person, todosOf(person).filter(td => td.id !== id));
   }
   async function toggleTask(person: any, title: string, val: boolean) {
     const prog = { ...parseProg(person.progress), [title]: val };
@@ -955,8 +986,9 @@ export default function OnboardingClient() {
                     <div className="font-semibold text-text-primary truncate">{p.name}</div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${complete ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{complete ? 'Complete' : `${pct}%`}</span>
                   </div>
-                  <div className="text-xs text-text-muted mt-0.5">{p.position || p.worker_type} · {p.guide} guide</div>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="text-xs text-text-muted mt-0.5">{p.position || p.worker_type} · {p.guide === 'None' ? 'No guide' : `${p.guide} guide`}</div>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {p.tag && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#ede9f5] text-[#6b5b8a]">{p.tag}</span>}
                     {(() => { const st = STAGES.find(s => s.key === stageOf(p)); return st ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#eef2f7] text-[#3f5a76]">{st.icon} {st.label}</span>
                     ) : (
@@ -988,9 +1020,10 @@ export default function OnboardingClient() {
                     <div className="flex-1">
                       <h2 className="font-spectral text-[19px] font-semibold text-text-primary">{person.name}</h2>
                       <p className="text-sm text-text-muted">{[person.position, person.email].filter(Boolean).join(' · ')}</p>
-                      <div className="flex gap-2 mt-1.5 text-[11px]">
+                      <div className="flex gap-2 mt-1.5 text-[11px] flex-wrap items-center">
                         <span className="font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">{person.worker_type}</span>
-                        <span className="font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{person.guide} guide</span>
+                        {person.tag && <span className="font-semibold px-2 py-0.5 rounded-full bg-[#ede9f5] text-[#6b5b8a]">{person.tag}</span>}
+                        <span className="font-semibold px-2 py-0.5 rounded-full bg-[#e9f0f5] text-[#3f6b8a]">{person.guide === 'None' ? 'No guide' : `${person.guide} guide`}</span>
                         <span className="font-semibold px-2 py-0.5 rounded-full bg-[#f7efe1] text-[#b07d2a]">{pct}% complete</span>
                       </div>
                     </div>
@@ -1024,8 +1057,8 @@ export default function OnboardingClient() {
                     </div>
                   </div>
 
-                  {/* Key dates — editable inline */}
-                  <div className="px-5 py-4 border-b border-border grid grid-cols-2 gap-4 max-w-md">
+                  {/* Key dates + tag — editable inline */}
+                  <div className="px-5 py-4 border-b border-border grid grid-cols-3 gap-4 max-w-2xl">
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Start date</label>
                       <input type="date" value={person.start_date ?? ''} onChange={e => patchOnboardee(person.id, { start_date: e.target.value })}
@@ -1038,9 +1071,42 @@ export default function OnboardingClient() {
                         className="w-full border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
                       {person.onboarding_date && <p className="text-[11px] text-text-muted mt-1">{fmtDate(person.onboarding_date)}</p>}
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Tag</label>
+                      <select value={person.tag ?? ''} onChange={e => patchOnboardee(person.id, { tag: e.target.value })}
+                        className="w-full border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                        <option value="">— none —</option>
+                        {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
                   </div>
 
+                  {/* Plan & To-dos — the user's own tracking list (works for re-hires
+                      and anyone skipping the standard guide) */}
+                  <div className="px-5 py-4 border-b border-border">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">Plan &amp; To-dos</div>
+                    <div className="space-y-1">
+                      {todosOf(person).map(td => (
+                        <div key={td.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+                          <input type="checkbox" checked={td.done} onChange={e => toggleTodo(person, td.id, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b]" />
+                          <input value={td.text} onChange={e => editTodo(person, td.id, e.target.value)}
+                            className={`flex-1 text-sm bg-transparent focus:outline-none ${td.done ? 'line-through text-text-muted' : 'text-text-primary'}`} />
+                          <button onClick={() => removeTodo(person, td.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
+                      ))}
+                      {todosOf(person).length === 0 && <p className="text-sm text-text-faint italic px-2 py-1">No items yet — add your plan or to-dos below.</p>}
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addTodo(person, newTodo); }}
+                        placeholder="Add a to-do (e.g. re-activate email, confirm equipment)…"
+                        className="flex-1 border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                      <button onClick={() => addTodo(person, newTodo)} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">Add</button>
+                    </div>
+                  </div>
+
+                  {person.guide !== 'None' && (
                   <div className="p-4 space-y-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1 px-2">Guide checklist</div>
                     {list.map(t => {
                       const isDone = !!prog[t.title];
                       return (
@@ -1053,6 +1119,7 @@ export default function OnboardingClient() {
                     })}
                     {list.length === 0 && <p className="text-sm text-text-muted px-2 py-3">This guide has no checklist items yet.</p>}
                   </div>
+                  )}
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>
                     {person.status === 'Complete' ? (
@@ -1093,9 +1160,17 @@ export default function OnboardingClient() {
                   </select>
                 </div>
                 <div>
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Tag</label>
+                  <select value={newForm.tag} onChange={e => setNewForm(f => ({ ...f, tag: e.target.value }))} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                    <option value="">— none —</option>
+                    {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Onboarding guide</label>
                   <select value={newForm.guide} onChange={e => setNewForm(f => ({ ...f, guide: e.target.value }))} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
                     {guides.map(g => <option key={g}>{g}</option>)}
+                    <option value="None">None (no guide — track with plan/to-dos)</option>
                   </select>
                 </div>
               </div>

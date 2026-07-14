@@ -15,6 +15,10 @@ async function ensureTable() {
   // complete) and a scheduled onboarding date, both added after the fact.
   await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS stage text DEFAULT 'onboarding'`;
   await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS onboarding_date text`;
+  // A category tag (New hire / Re-hire / Transfer …) and a personal plan/to-do
+  // list, so people who skip the standard guide can still be tracked.
+  await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS tag text`;
+  await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS todos text DEFAULT '[]'`;
 }
 
 // Make sure the Staffing directory can receive a completed onboardee
@@ -39,18 +43,19 @@ export async function POST(req: Request) {
   const b = await req.json();
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
-  await sql`INSERT INTO onboardees (id, name, email, position, worker_type, guide, start_date, dob, phone, status, progress, stage, onboarding_date)
-    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}', ${b.stage ?? null}, ${b.onboarding_date ?? null})`;
+  await sql`INSERT INTO onboardees (id, name, email, position, worker_type, guide, start_date, dob, phone, status, progress, stage, onboarding_date, tag, todos)
+    VALUES (${id}, ${b.name}, ${b.email ?? null}, ${b.position ?? null}, ${b.worker_type ?? 'Employee'}, ${b.guide ?? 'General'}, ${b.start_date ?? null}, ${b.dob ?? null}, ${b.phone ?? null}, 'In Progress', '{}', ${b.stage ?? null}, ${b.onboarding_date ?? null}, ${b.tag ?? null}, '[]')`;
   const [row] = await sql`SELECT * FROM onboardees WHERE id = ${id}`;
   return NextResponse.json({ row }, { status: 201 });
 }
 
 export async function PATCH(req: Request) {
   await ensureTable();
-  const { id, complete, progress, ...f } = await req.json();
+  const { id, complete, progress, todos, ...f } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   if (progress !== undefined) await sql`UPDATE onboardees SET progress = ${JSON.stringify(progress)} WHERE id = ${id}`;
-  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date'] as const) {
+  if (todos !== undefined) await sql`UPDATE onboardees SET todos = ${JSON.stringify(todos)} WHERE id = ${id}`;
+  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date', 'tag'] as const) {
     if (f[k] !== undefined) await sql`UPDATE onboardees SET ${sql(k)} = ${f[k]} WHERE id = ${id}`;
   }
   // On completion, push the person into the Staffing directory
