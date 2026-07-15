@@ -184,7 +184,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
   useEffect(() => {
     setGreeting(eventType === 'birthday'
       ? 'Wishing you a wonderful birthday and a year ahead full of joy!'
-      : 'Thank you for your dedication and all you bring to the firm. Here is to many more years together!');
+      : 'Thank you for your dedication and all you bring to the firm. Here’s to many more years together!');
     if (eventType === 'anniversary') setPhotoUrl(null);
   }, [eventType]);
 
