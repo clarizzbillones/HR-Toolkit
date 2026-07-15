@@ -22,7 +22,7 @@ export interface OfferParams {
 // Compensation phrase for a 1099 contractor. Compensation is hourly or monthly;
 // the pay schedule (payable basis) is monthly, weekly, or bi-weekly.
 export function contractorCompPhrase(rateBasis: string | undefined, payBasis: string | undefined, sal: string): string {
-  const comp = rateBasis === 'hourly' ? `hourly compensation of $${sal} per hour` : `monthly compensation of $${sal}`;
+  const comp = rateBasis === 'hourly' ? `compensation of $${sal} per hour` : `monthly compensation of $${sal}`;
   const pay = payBasis === 'weekly' ? 'weekly' : payBasis === 'biweekly' ? 'bi-weekly' : 'monthly';
   return `${comp}, payable on a ${pay} basis`;
 }
