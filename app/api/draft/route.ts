@@ -23,6 +23,7 @@ export async function POST(req: Request) {
         notes: params.notes ?? '',
         firm,
         cadence,
+        rateBasis: params.rateBasis === 'hourly' ? 'hourly' : 'monthly',
       });
       return NextResponse.json({ text });
     }

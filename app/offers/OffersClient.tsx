@@ -38,6 +38,7 @@ export default function OffersClient() {
   const { showToast } = useToast();
   const [letterKind, setLetterKind] = useState<LetterKind>('offer');
   const [empType, setEmpType] = useState<EmpType>('contractor');
+  const [rateBasis, setRateBasis] = useState<'monthly' | 'hourly'>('monthly');
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -63,6 +64,7 @@ export default function OffersClient() {
           startDate: form.startDate,
           location: form.location,
           notes: form.notes,
+          rateBasis: empType === 'contractor' ? rateBasis : 'monthly',
         }),
       });
       const data = await res.json();
@@ -236,7 +238,7 @@ ${bodyHtml}
     ['Email', 'email', 'email'],
     ['Role / Title *', 'role', 'text'],
     ...(empType === 'employee' ? [['Department', 'dept', 'text'] as [string, keyof Form, string]] : []),
-    [empType === 'contractor' ? 'Monthly Rate ($) *' : 'Annual Salary ($) *', 'salary', 'text'],
+    [empType === 'contractor' ? (rateBasis === 'hourly' ? 'Hourly Rate ($) *' : 'Monthly Rate ($) *') : 'Annual Salary ($) *', 'salary', 'text'],
     ['Start Date', 'startDate', 'date'],
     ['Location', 'location', 'text'],
   ];
@@ -289,6 +291,24 @@ ${bodyHtml}
                 </button>
               </div>
             </div>
+
+            {empType === 'contractor' && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Compensation Basis</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setRateBasis('monthly')}
+                    className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                      rateBasis === 'monthly' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
+                    Monthly
+                  </button>
+                  <button onClick={() => setRateBasis('hourly')}
+                    className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                      rateBasis === 'hourly' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
+                    Hourly
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted pt-1">Candidate Details</div>
 
