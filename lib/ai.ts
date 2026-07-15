@@ -14,16 +14,17 @@ export interface OfferParams {
   notes: string;
   firm: string;
   cadence: string;
-  rateBasis?: 'monthly' | 'weekly' | 'biweekly' | 'hourly';
+  rateBasis?: 'monthly' | 'hourly';
+  payBasis?: 'monthly' | 'weekly' | 'biweekly';
   salutationTitle?: string;
 }
 
-// Compensation phrase for a 1099 contractor, by pay basis.
-export function contractorCompPhrase(basis: string | undefined, sal: string): string {
-  if (basis === 'hourly') return `hourly compensation of $${sal} per hour`;
-  if (basis === 'weekly') return `weekly compensation of $${sal}, payable on a weekly basis`;
-  if (basis === 'biweekly') return `bi-weekly compensation of $${sal}, payable on a bi-weekly basis`;
-  return `monthly compensation of $${sal}, payable on a monthly basis`;
+// Compensation phrase for a 1099 contractor. Compensation is hourly or monthly;
+// the pay schedule (payable basis) is monthly, weekly, or bi-weekly.
+export function contractorCompPhrase(rateBasis: string | undefined, payBasis: string | undefined, sal: string): string {
+  const comp = rateBasis === 'hourly' ? `hourly compensation of $${sal} per hour` : `monthly compensation of $${sal}`;
+  const pay = payBasis === 'weekly' ? 'weekly' : payBasis === 'biweekly' ? 'bi-weekly' : 'monthly';
+  return `${comp}, payable on a ${pay} basis`;
 }
 
 export interface SopParams {
@@ -65,7 +66,7 @@ ${p.name}${p.email ? '\n' + p.email : ''}
 
 Dear ${salutation},
 
-${p.firm} PLLC is pleased to offer you the opportunity to join our team as an ${p.role}. This independent contractor role provides ${contractorCompPhrase(p.rateBasis, sal)}.
+${p.firm} PLLC is pleased to offer you the opportunity to join our team as an ${p.role}. This independent contractor role provides ${contractorCompPhrase(p.rateBasis, p.payBasis, sal)}.
 
 Please note that this engagement is structured as a 1099 independent contractor relationship and not as a W-2 employment relationship. Your performance and our working relationship will be reviewed periodically, with the possibility of continuation at the sole discretion of ${p.firm} PLLC.
 
@@ -172,7 +173,7 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
       : '[Start Date TBD]';
     const sal = Number(p.salary).toLocaleString('en-US');
     if (p.employeeType === 'contractor') {
-      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with ${contractorCompPhrase(p.rateBasis, sal)}; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Return ONLY the letter text, no preamble.`;
+      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with ${contractorCompPhrase(p.rateBasis, p.payBasis, sal)}; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Return ONLY the letter text, no preamble.`;
     } else {
       prompt = `Draft a W-2 employment offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Match this exact structure and tone:
 

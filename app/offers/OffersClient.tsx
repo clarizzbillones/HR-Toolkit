@@ -38,7 +38,8 @@ export default function OffersClient() {
   const { showToast } = useToast();
   const [letterKind, setLetterKind] = useState<LetterKind>('offer');
   const [empType, setEmpType] = useState<EmpType>('contractor');
-  const [rateBasis, setRateBasis] = useState<'monthly' | 'weekly' | 'biweekly' | 'hourly'>('monthly');
+  const [rateBasis, setRateBasis] = useState<'monthly' | 'hourly'>('monthly');
+  const [payBasis, setPayBasis] = useState<'monthly' | 'weekly' | 'biweekly'>('monthly');
   const [salTitle, setSalTitle] = useState('');
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
@@ -66,6 +67,7 @@ export default function OffersClient() {
           location: form.location,
           notes: form.notes,
           rateBasis: empType === 'contractor' ? rateBasis : 'monthly',
+          payBasis: empType === 'contractor' ? payBasis : 'monthly',
           salutationTitle: salTitle,
         }),
       });
@@ -240,7 +242,7 @@ ${bodyHtml}
     ['Email', 'email', 'email'],
     ['Role / Title *', 'role', 'text'],
     ...(empType === 'employee' ? [['Department', 'dept', 'text'] as [string, keyof Form, string]] : []),
-    [empType === 'contractor' ? ({ monthly: 'Monthly Rate ($) *', weekly: 'Weekly Rate ($) *', biweekly: 'Bi-weekly Rate ($) *', hourly: 'Hourly Rate ($) *' }[rateBasis]) : 'Annual Salary ($) *', 'salary', 'text'],
+    [empType === 'contractor' ? (rateBasis === 'hourly' ? 'Hourly Rate ($) *' : 'Monthly Rate ($) *') : 'Annual Salary ($) *', 'salary', 'text'],
     ['Start Date', 'startDate', 'date'],
     ['Location', 'location', 'text'],
   ];
@@ -295,18 +297,32 @@ ${bodyHtml}
             </div>
 
             {empType === 'contractor' && (
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Compensation Basis</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {([['monthly', 'Monthly'], ['weekly', 'Weekly'], ['biweekly', 'Bi-weekly'], ['hourly', 'Hourly']] as const).map(([val, label]) => (
-                    <button key={val} onClick={() => setRateBasis(val)}
-                      className={clsx('py-2 text-sm font-semibold rounded-ctrl border transition-colors',
-                        rateBasis === val ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
-                      {label}
-                    </button>
-                  ))}
+              <>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Compensation</div>
+                  <div className="flex gap-2">
+                    {([['monthly', 'Monthly'], ['hourly', 'Hourly']] as const).map(([val, label]) => (
+                      <button key={val} onClick={() => setRateBasis(val)}
+                        className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                          rateBasis === val ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Payable Basis</div>
+                  <div className="flex gap-2">
+                    {([['monthly', 'Monthly'], ['weekly', 'Weekly'], ['biweekly', 'Bi-weekly']] as const).map(([val, label]) => (
+                      <button key={val} onClick={() => setPayBasis(val)}
+                        className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                          payBasis === val ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted pt-1">Candidate Details</div>

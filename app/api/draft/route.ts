@@ -23,7 +23,8 @@ export async function POST(req: Request) {
         notes: params.notes ?? '',
         firm,
         cadence,
-        rateBasis: ['monthly', 'weekly', 'biweekly', 'hourly'].includes(params.rateBasis) ? params.rateBasis : 'monthly',
+        rateBasis: params.rateBasis === 'hourly' ? 'hourly' : 'monthly',
+        payBasis: ['monthly', 'weekly', 'biweekly'].includes(params.payBasis) ? params.payBasis : 'monthly',
         salutationTitle: params.salutationTitle ?? '',
       });
       return NextResponse.json({ text });
