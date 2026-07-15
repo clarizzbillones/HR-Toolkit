@@ -170,6 +170,17 @@ export default function DesignClient({ employees }: { employees: { name: string 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [format, setFormat] = useState<'png' | 'jpeg'>('png');
 
+  // Employee-name dropdown (shared by birthday + anniversary)
+  const [nameOpen, setNameOpen] = useState(false);
+  const nameBoxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onDoc(e: MouseEvent) { if (nameBoxRef.current && !nameBoxRef.current.contains(e.target as Node)) setNameOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const nameOptions = employees.map(e => e.name).filter(Boolean);
+  const filteredNames = name.trim() ? nameOptions.filter(nm => nm.toLowerCase().includes(name.trim().toLowerCase())) : nameOptions;
+
   useEffect(() => {
     setGreeting(eventType === 'birthday'
       ? 'Wishing you a wonderful birthday and a year ahead full of joy!'
@@ -444,10 +455,23 @@ export default function DesignClient({ employees }: { employees: { name: string 
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-text-primary mb-1.5">Name</label>
-                  <input list="emp-names" value={name} onChange={e => setName(e.target.value)}
-                    placeholder={eventType === 'birthday' ? 'e.g. Priya Raman' : 'e.g. David Thornton'}
-                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-                  <datalist id="emp-names">{employees.map(e => <option key={e.name} value={e.name} />)}</datalist>
+                  <div className="relative" ref={nameBoxRef}>
+                    <div className="flex">
+                      <input value={name} onChange={e => { setName(e.target.value); setNameOpen(true); }} onFocus={() => setNameOpen(true)}
+                        placeholder={eventType === 'birthday' ? 'e.g. Priya Raman' : 'e.g. David Thornton'}
+                        className="w-full border border-border-light rounded-l-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                      <button type="button" onClick={() => setNameOpen(o => !o)} title="Choose an employee"
+                        className="border border-l-0 border-border-light rounded-r-ctrl px-2.5 bg-white text-text-muted hover:text-ink">▾</button>
+                    </div>
+                    {nameOpen && filteredNames.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto bg-white border border-border-light rounded-ctrl shadow-lg">
+                        {filteredNames.map(nm => (
+                          <button key={nm} type="button" onClick={() => { setName(nm); setNameOpen(false); }}
+                            className="w-full text-left px-3 py-1.5 text-sm text-text-primary hover:bg-canvas">{nm}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {eventType === 'anniversary' && (
