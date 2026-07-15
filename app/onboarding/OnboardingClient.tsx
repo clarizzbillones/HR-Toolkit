@@ -472,7 +472,9 @@ export default function OnboardingClient() {
   );
 
   const cell = "px-3 py-2 text-sm border-t border-[#f1ece3]";
-  const inp = "w-full bg-transparent focus:outline-none focus:bg-canvas rounded px-1 -mx-1";
+  // Clear click-to-edit affordance: shows a hover tint + text cursor so cells
+  // read as editable, and a gold ring when focused.
+  const inp = "w-full bg-transparent rounded px-1.5 py-0.5 -mx-1 cursor-text transition-colors hover:bg-[#f3efe7] focus:bg-white focus:ring-1 focus:ring-[#c9a24a] focus:outline-none";
 
   function saveTable(id: string, d: TableData) { patch(id, { body: JSON.stringify(d) }); }
 
@@ -657,6 +659,7 @@ export default function OnboardingClient() {
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">2-Week Training Schedule</h2>
+          <span className="text-[11px] text-text-muted font-normal normal-case tracking-normal">— click any cell to edit</span>
         </div>
         <div className="bg-white border border-border rounded-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
