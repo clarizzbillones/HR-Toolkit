@@ -61,7 +61,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const { showToast } = useToast();
   const { pushUndo } = useUndo();
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [staff, setStaff] = useState<{ id: string; name: string; position: string | null; email: string | null }[]>([]);
+  const [staff, setStaff] = useState<{ id: string; name: string; position: string | null; email: string | null; start_date: string | null }[]>([]);
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
@@ -189,6 +189,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   // directory position and falling back to the stored employee role.
   function displayRole(e: Employee): string {
     return roleForName(e.name) || e.role;
+  }
+
+  // Hire date for an employee — prefer the Staffing directory start date,
+  // fall back to the stored hire_date. Returns a display string.
+  function hireDateDisplay(e: Employee): string {
+    const st = staff.find(s => sameName(s.name, e.name));
+    const raw = (st?.start_date && st.start_date.trim()) ? st.start_date : (e.hire_date || '');
+    if (!raw) return '—';
+    const d = new Date(raw.slice(0, 10) + 'T12:00:00');
+    return isNaN(d.getTime()) ? raw : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   async function connectDash() {
@@ -517,7 +527,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           </div>
           <table className="w-full text-sm">
             <thead className="bg-[#f1ece3]">
-              <tr>{['Employee', 'Department', 'Last review', 'Next review', 'Status', ''].map(h => (
+              <tr>{['Employee', 'Hire date', 'Department', 'Last review', 'Next review', 'Status', ''].map(h => (
                 <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
               ))}</tr>
             </thead>
@@ -531,6 +541,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       <button onClick={() => setDetail(e)} className="font-medium text-text-primary hover:text-ink hover:underline text-left">{e.name}</button>
                       <div className="text-xs text-text-muted">{displayRole(e)}</div>
                     </td>
+                    <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{hireDateDisplay(e)}</td>
                     <td className="px-5 py-3 text-text-secondary">{e.dept}</td>
                     <td className="px-5 py-3 text-text-muted">
                       {last ? <><span className="text-text-secondary">{formatDate(last.date)}</span><span className="text-xs block text-text-muted">{last.type}</span></> : '—'}
