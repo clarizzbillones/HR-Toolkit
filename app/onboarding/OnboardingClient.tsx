@@ -806,14 +806,28 @@ export default function OnboardingClient() {
       )}
 
       {view === 'guides' && showNewHire && (
-        <div className="px-8 py-4 bg-[#f5f8fb] border-b border-[#d9e4ee] flex-shrink-0 max-h-[60vh] overflow-auto">
+        <div className="px-8 py-4 bg-[#f5f8fb] border-b border-[#d9e4ee] flex-1 min-h-0 overflow-auto">
           <div className="max-w-3xl">
-            <div className="text-sm font-semibold text-text-primary mb-2">New hire — combine guides</div>
-            <div className="flex items-center gap-2 mb-3">
-              <input value={nhName} onChange={e => setNhName(e.target.value)} placeholder="Name (e.g. Damon)"
-                className="w-56 border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-              <span className="text-xs text-text-muted">then pick which guides apply:</span>
+            {/* Sticky header: name + save always visible, no scrolling needed */}
+            <div className="sticky top-0 z-10 bg-[#f5f8fb] -mx-1 px-1 pt-1 pb-3 border-b border-[#d9e4ee] mb-3">
+              <div className="text-sm font-semibold text-text-primary mb-2">New combined guide</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input value={nhName} onChange={e => setNhName(e.target.value)} placeholder="Name this guide (e.g. Damon)"
+                  className="w-64 border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
+                  className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save combined guide</button>
+                <button onClick={() => printDoc(combinedInnerHtml(nhSources, nhExclude, nhHeaders, nhName), nhName, nhSources.join(' + '))} disabled={!nhSources.length}
+                  className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🖨 Preview PDF</button>
+                <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
+              </div>
+              {(!nhName.trim() || !nhSources.length) && (
+                <p className="text-[11px] text-[#b0412f] mt-1.5">
+                  {!nhName.trim() && !nhSources.length ? 'Enter a name and pick at least one guide below to save.'
+                    : !nhName.trim() ? 'Enter a name above to save.' : 'Pick at least one guide below to save.'}
+                </p>
+              )}
             </div>
+            <div className="text-xs text-text-muted mb-2">Pick which guides apply:</div>
             <div className="flex flex-wrap gap-2 mb-3">
               {guides.map(g => {
                 const on = nhSources.includes(g);
@@ -888,13 +902,10 @@ export default function OnboardingClient() {
               );
             })()}
 
-            <div className="flex gap-2 items-center sticky bottom-0 bg-[#f5f8fb] py-2 -mx-1 px-1 border-t border-[#d9e4ee]">
+            <div className="flex gap-2 items-center py-2">
               <button onClick={createComposed} disabled={!nhName.trim() || !nhSources.length}
                 className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save combined guide</button>
-              <button onClick={() => printDoc(combinedInnerHtml(nhSources, nhExclude, nhHeaders, nhName), nhName, nhSources.join(' + '))} disabled={!nhSources.length}
-                className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-40">🖨 Preview PDF</button>
-              <button onClick={() => setShowNewHire(false)} className="text-sm text-text-muted px-3">Cancel</button>
-              <span className="text-[11px] text-text-muted ml-auto">Save it to get a 👤 tab, or Preview the PDF right now.</span>
+              <span className="text-[11px] text-text-muted">Saving gives it a 👤 tab you can open, edit, and export.</span>
             </div>
           </div>
         </div>
@@ -908,7 +919,7 @@ export default function OnboardingClient() {
 
       {view === 'dashboard' && Dashboard()}
 
-      {view === 'guides' && isComposed && composedDef && (
+      {view === 'guides' && !showNewHire && isComposed && composedDef && (
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="mb-4 px-4 py-3 bg-[#eef2f7] border border-[#c7d4e2] rounded-card text-sm text-[#3f5a76] flex items-center gap-2 flex-wrap">
@@ -944,7 +955,7 @@ export default function OnboardingClient() {
       </div>
       )}
 
-      {view === 'guides' && !isComposed && (
+      {view === 'guides' && !showNewHire && !isComposed && (
       <div className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="space-y-6">
