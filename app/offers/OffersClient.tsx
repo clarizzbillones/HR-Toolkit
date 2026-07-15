@@ -38,7 +38,8 @@ export default function OffersClient() {
   const { showToast } = useToast();
   const [letterKind, setLetterKind] = useState<LetterKind>('offer');
   const [empType, setEmpType] = useState<EmpType>('contractor');
-  const [rateBasis, setRateBasis] = useState<'monthly' | 'hourly'>('monthly');
+  const [rateBasis, setRateBasis] = useState<'monthly' | 'weekly' | 'biweekly' | 'hourly'>('monthly');
+  const [salTitle, setSalTitle] = useState('');
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -65,6 +66,7 @@ export default function OffersClient() {
           location: form.location,
           notes: form.notes,
           rateBasis: empType === 'contractor' ? rateBasis : 'monthly',
+          salutationTitle: salTitle,
         }),
       });
       const data = await res.json();
@@ -238,7 +240,7 @@ ${bodyHtml}
     ['Email', 'email', 'email'],
     ['Role / Title *', 'role', 'text'],
     ...(empType === 'employee' ? [['Department', 'dept', 'text'] as [string, keyof Form, string]] : []),
-    [empType === 'contractor' ? (rateBasis === 'hourly' ? 'Hourly Rate ($) *' : 'Monthly Rate ($) *') : 'Annual Salary ($) *', 'salary', 'text'],
+    [empType === 'contractor' ? ({ monthly: 'Monthly Rate ($) *', weekly: 'Weekly Rate ($) *', biweekly: 'Bi-weekly Rate ($) *', hourly: 'Hourly Rate ($) *' }[rateBasis]) : 'Annual Salary ($) *', 'salary', 'text'],
     ['Start Date', 'startDate', 'date'],
     ['Location', 'location', 'text'],
   ];
@@ -295,22 +297,28 @@ ${bodyHtml}
             {empType === 'contractor' && (
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Compensation Basis</div>
-                <div className="flex gap-2">
-                  <button onClick={() => setRateBasis('monthly')}
-                    className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
-                      rateBasis === 'monthly' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
-                    Monthly
-                  </button>
-                  <button onClick={() => setRateBasis('hourly')}
-                    className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
-                      rateBasis === 'hourly' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
-                    Hourly
-                  </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {([['monthly', 'Monthly'], ['weekly', 'Weekly'], ['biweekly', 'Bi-weekly'], ['hourly', 'Hourly']] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => setRateBasis(val)}
+                      className={clsx('py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                        rateBasis === val ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink')}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
 
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted pt-1">Candidate Details</div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1">Salutation</label>
+              <select value={salTitle} onChange={e => setSalTitle(e.target.value)}
+                className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">First name (Dear [First],)</option>
+                {['Mr.', 'Ms.', 'Mrs.', 'Mx.', 'Dr.'].map(t => <option key={t} value={t}>{t} [Last name]</option>)}
+              </select>
+            </div>
 
             {fields.map(([label, key, type]) => (
               <div key={key}>
