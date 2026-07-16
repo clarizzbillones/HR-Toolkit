@@ -174,9 +174,24 @@ async function migrate() {
   await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'seed_version', ${String(SEED_VERSION)})`;
 }
 
+// The onboarding checklist is a single global list (guide '__checklist') used
+// for every new hire, regardless of their guide. Seed it once from Andrew's
+// guide (Attorney) — his checklist becomes the standard for everyone.
+async function ensureGlobalChecklist() {
+  const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = '__checklist' AND kind = 'task'`;
+  if (n > 0) return;
+  let src = await sql`SELECT title, owner FROM onboarding_items WHERE guide = 'Attorney' AND kind = 'task' ORDER BY sort_order ASC`;
+  if (!src.length) src = await sql`SELECT title, owner FROM onboarding_items WHERE guide = 'General' AND kind = 'task' ORDER BY sort_order ASC`;
+  let k = 0;
+  for (const r of src as any[]) {
+    await sql`INSERT INTO onboarding_items (id, guide, kind, title, owner, sort_order) VALUES (${cuid()}, '__checklist', 'task', ${r.title}, ${r.owner}, ${k++})`;
+  }
+}
+
 export async function GET() {
   await ensureTable();
   await migrate();
+  await ensureGlobalChecklist();
   const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
   return NextResponse.json({ items });
 }

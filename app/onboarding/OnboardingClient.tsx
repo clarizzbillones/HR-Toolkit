@@ -50,6 +50,8 @@ function stageIndex(key: string) { return STAGES.findIndex(s => s.key === key); 
 // Category tags for the person. Re-hires / transfers often skip the standard
 // guide and are tracked with their own plan/to-do list instead.
 const TAGS = ['New hire', 'Re-hire', 'Transfer', 'Promotion', 'Intern', 'Seasonal'];
+// Reserved guide key holding the single global onboarding checklist.
+const CHECKLIST_GUIDE = '__checklist';
 interface Todo { id: string; text: string; done: boolean }
 function todosOf(person: any): Todo[] {
   try { const t = JSON.parse(person?.todos ?? '[]'); return Array.isArray(t) ? t : []; } catch { return []; }
@@ -135,7 +137,9 @@ export default function OnboardingClient() {
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
 
-  function tasksFor(g: string) { return items.filter(i => i.guide === g && i.kind === 'task'); }
+  // The onboarding checklist is one global list shared by every new hire,
+  // independent of which guide they're on (stored under CHECKLIST_GUIDE).
+  function tasksFor(_g?: string) { return items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE); }
   const parseProg = (p: any) => { try { return JSON.parse(p ?? '{}') || {}; } catch { return {}; } };
   function progressOf(person: any) {
     // Combine the guide checklist with the person's own plan/to-dos, so re-hires
@@ -207,7 +211,7 @@ export default function OnboardingClient() {
   }
 
   // Distinct building-block guides, General first
-  const guides = Array.from(new Set(items.map(i => i.guide))).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
+  const guides = Array.from(new Set(items.map(i => i.guide))).filter(g => g !== CHECKLIST_GUIDE).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
   const composedNames = composed.map(c => c.name);
   const composedDef = composed.find(c => c.name === guide);
   const isComposed = !!composedDef;
@@ -1165,11 +1169,10 @@ export default function OnboardingClient() {
                     </div>
                   </div>
 
-                  {person.guide !== 'None' && (
                   <div className="p-4 space-y-1">
                     <div className="flex items-center justify-between px-2 mb-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Guide checklist</div>
-                      <span className="text-[10px] text-text-faint">Edits apply to the {person.guide} guide</span>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding checklist</div>
+                      <span className="text-[10px] text-text-faint">Shared checklist — edits apply to every new hire</span>
                     </div>
                     {list.map(t => {
                       const isDone = !!prog[t.title];
@@ -1188,10 +1191,9 @@ export default function OnboardingClient() {
                       );
                     })}
                     {list.length === 0 && <p className="text-sm text-text-muted px-2 py-2">No checklist items yet.</p>}
-                    <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, person.guide)}
+                    <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)}
                       className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
                   </div>
-                  )}
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between gap-3 flex-wrap">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>
                     {person.status === 'Complete' ? (
