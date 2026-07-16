@@ -46,7 +46,47 @@ export default async function ReviewsPage() {
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_date TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_6mo_summary TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_1yr_summary TEXT`;
+  // New review model: last_review_date is the only writable date; the next
+  // review, cycle, tenure and status are all derived on read. review_history
+  // holds one { date, peer_reviewers[], notes } per completed review.
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_review_date TEXT`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_history TEXT`;
   await sql`UPDATE employees SET name = 'Carly Crotty' WHERE name = 'Carly Crolly'`;
+
+  // Ensure the two clerks who were missing from the review roster exist
+  // (principals Alex Little & Zachary Lawson are intentionally excluded from
+  // reviews and filtered out in the UI). Additive only — never deletes.
+  await sql`INSERT INTO employees (id, name, role, dept) VALUES ('emp_carly_crolly', 'Carly Crotty', 'Law Clerk', 'Legal Support') ON CONFLICT (id) DO NOTHING`;
+  await sql`INSERT INTO employees (id, name, role, dept) VALUES ('emp_kelynn_enalls', 'Ke''Lynn Enalls', 'Summer Law Clerk', 'Legal Support') ON CONFLICT (id) DO NOTHING`;
+
+  // Backfill last review dates + peer reviewers (spec §8). Idempotent: only
+  // sets a row that has no last_review_date yet, so it never clobbers edits.
+  // "Monica" (2025-11-18) from the legacy history is NOT on the roster — skipped.
+  const BACKFILL: [string, string, string[]][] = [
+    ['Sloan Nickel', '2025-10-15', []],
+    ['Brittany Brewer', '2025-10-21', []],
+    ['Fernanda Guillen', '2025-11-11', ['Ally', 'Paula']],
+    ['Ted Canter', '2025-11-19', ['JR', 'Zach']],
+    ['Ashley Abraham', '2025-12-03', ['JR', 'Ted']],
+    ['Shannen Sharpe', '2026-01-14', ['Victoria', 'Ted', 'Alex', 'Clint', 'Zach', 'Catie']],
+    ['Victoria Seeley', '2026-02-04', ['Catie', 'Alex', 'Alicia']],
+    ['Joey Mundy', '2026-02-04', ['JR', 'Ally', 'Ted']],
+    ['Paula Laborne Valle', '2026-02-04', ['Ally', 'JR', 'Caitlin']],
+    ['Clint Palmer', '2026-02-19', ['Catie', 'Shannen', 'Ryan']],
+    ['Ally Foresman', '2026-02-19', ['Ted', 'Alicia', 'Ryan']],
+    ['Ridwan Ahmed', '2026-02-19', ['Sloan', 'JR', 'Ted']],
+    ['Alicia Van Huizen', '2026-05-07', ['Caitlin', 'Zack', 'Brent']],
+    ['Ryan Leite', '2026-05-07', ['Victoria', 'Matt', 'Catie', 'Caitlin', 'Brittany']],
+    ['Matt Gibbs', '2026-05-14', ['Catie', 'Brent', 'Caitlin']],
+    ['Amy Green', '2026-05-14', ['Caitlin', 'Zack', 'JR']],
+    ['John Ross Glover', '2026-05-28', ['Alicia', 'Amy', 'Brent', 'Caitlin']],
+    ['Caitlin Giuliano', '2026-07-02', []],
+  ];
+  for (const [name, date, peers] of BACKFILL) {
+    const history = JSON.stringify([{ date, peer_reviewers: peers, notes: '' }]);
+    await sql`UPDATE employees SET last_review_date = ${date}, review_history = ${history}
+      WHERE lower(name) = lower(${name}) AND (last_review_date IS NULL OR last_review_date = '')`;
+  }
 
   // Seed the firm roster only when the table is essentially empty. This never
   // deletes existing rows, so it can never wipe manually-entered review dates,

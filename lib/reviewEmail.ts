@@ -64,22 +64,25 @@ export function buildMessage(
   // Participants are asked to complete a couple of days before the review date.
   const completeBy = deadline ? shiftDays(deadline, -PREP_BUFFER_DAYS) : '';
   const due = completeBy ? ` by <b>${fmtDate(completeBy)}</b>` : '';
-  const label = reviewType ? `${reviewType} ` : '';
+  // Staff-facing copy never names the milestone (6-month / 1-year / 1.5-year).
+  // Reviews are one repeating cycle; everyone is only ever told "Performance
+  // Review". reviewType is accepted for back-compat but not shown to staff.
+  void reviewType;
   const name = (p.name ?? '').trim() || 'there';
   const countdown = isReminder && opts?.countdownDays != null ? countdownBadge(opts.countdownDays) : '';
   let subject: string, inner: string;
   if (p.type === 'Self-assessment') {
     subject = `${isReminder ? 'Reminder: ' : ''}Your self-assessment${completeBy ? ` — due ${fmtDate(completeBy)}` : ''}`;
     const lead = isReminder
-      ? `<p>Hi ${name},</p>${countdown}<p>Just a friendly reminder to complete your <b>self-assessment</b>${due} as part of your ${label}performance review.</p>`
-      : `<p>Hi ${name},</p><p>As part of your ${label}performance review, please complete your <b>self-assessment</b>${due}.</p>`;
+      ? `<p>Hi ${name},</p>${countdown}<p>Just a friendly reminder to complete your <b>self-assessment</b>${due} as part of your Performance Review.</p>`
+      : `<p>Hi ${name},</p><p>As part of your Performance Review, please complete your <b>self-assessment</b>${due}.</p>`;
     inner = `${lead}${button(link, 'Open the self-assessment form')}<p>Thank you!</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
   } else {
     const roleWord = p.type === 'Manager' ? 'manager review' : 'peer review';
     subject = `${isReminder ? 'Reminder: ' : ''}${p.type === 'Manager' ? 'Manager' : 'Peer'} review request: ${employee}${completeBy ? ` — due ${fmtDate(completeBy)}` : ''}`;
     const lead = isReminder
-      ? `<p>Hi ${name},</p>${countdown}<p>A friendly reminder to complete your <b>${roleWord}</b> for <b>${employee}</b>${due}, as part of their ${label}performance review.</p>`
-      : `<p>Hi ${name},</p><p>You've been asked to complete a <b>${roleWord}</b> for <b>${employee}</b> as part of their ${label}performance review. Please complete it${due}.</p>`;
+      ? `<p>Hi ${name},</p>${countdown}<p>A friendly reminder to complete your <b>${roleWord}</b> for <b>${employee}</b>${due}, as part of their Performance Review.</p>`
+      : `<p>Hi ${name},</p><p>You've been asked to complete a <b>${roleWord}</b> for <b>${employee}</b> as part of their Performance Review. Please complete it${due}.</p>`;
     inner = `${lead}${button(link, 'Open the review form')}<p>Thank you for taking the time.</p><p style="margin-top:18px">Warm regards,<br>LITSON HR</p>`;
   }
   return { to: (p.email ?? '').trim(), type: p.type, subject, html: wrap(subject, inner) };

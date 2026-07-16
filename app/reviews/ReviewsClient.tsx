@@ -2,14 +2,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
-import { reviewDateStr as sharedReviewDateStr } from '@/lib/reviews';
+import { computeReview, parseHistory, REVIEW_STATUSES, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
+  last_review_date: string | null; review_history: string | null;
   review_6mo_status: string | null; review_6mo_date: string | null; review_6mo_summary: string | null;
   review_1yr_status: string | null; review_1yr_date: string | null; review_1yr_summary: string | null;
   review_notes: string | null;
 }
+
+// Principals are intentionally excluded from the performance-review cycle.
+const REVIEW_EXCLUDED = new Set(['alex little', 'zachary lawson']);
+
+// Staff-facing wording — never a milestone name.
+const REVIEW_LABEL = 'Performance Review';
 
 type ReviewType = '6-month review' | '1-year review';
 
@@ -35,8 +42,8 @@ function daysUntilCST(dateStr: string): number {
 
 function relLabel(days: number): string {
   if (days < 0) return `${Math.abs(days)}d overdue`;
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
+  if (days === 0) return 'due today';
+  if (days === 1) return 'in 1d';
   return `in ${days}d`;
 }
 
@@ -44,10 +51,14 @@ function formatDate(dateStr: string) {
   return new Date(dateStr.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Effective review date derivation is shared with Reports (lib/reviews)
-function reviewDateStr(e: Employee, kind: '6mo' | '1yr'): string | null {
-  return sharedReviewDateStr(e as any, kind);
-}
+// Pill colors for each review status (spec §6).
+const STATUS_PILL: Record<ReviewStatus, string> = {
+  'Overdue': 'bg-[#fdeaea] text-[#b0412f]',
+  'Review week': 'bg-[#f7efe1] text-[#b07d2a]',
+  'Forms due': 'bg-[#faf3e6] text-[#c19653]',
+  'Send forms': 'bg-[#e9f0f5] text-[#3f6b8a]',
+  'Scheduled': 'bg-[#eef5f1] text-[#2f7d5b]',
+};
 
 // Open the connected dashboard link directly. We don't append a path because
 // the external dashboard's routing is unknown (guessing a path caused 404s).
@@ -65,7 +76,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
-  const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' as '6mo' | '1yr' });
+  const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', peers: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -234,36 +245,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     } catch { showToast('Could not send email'); }
   }
 
-  async function scheduleReview() {
+  // Log a COMPLETED review: set last_review_date + append to review_history.
+  // The next review, cycle, tenure and status all recompute automatically.
+  async function logReview() {
     if (!form.name || !form.date) return;
     setSaving(true);
     try {
-      const dateField = form.type === '6mo' ? 'review_6mo_date' : 'review_1yr_date';
-      const statusField = form.type === '6mo' ? 'review_6mo_status' : 'review_1yr_status';
-      // If this employee already exists, UPDATE their review date instead of creating a duplicate
-      const existing = employees.find(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase());
-      let employee: Employee | undefined;
-      if (existing) {
-        employee = await patchEmployee(existing.id, { [dateField]: form.date, [statusField]: existing[statusField as keyof Employee] === 'Complete' ? 'Scheduled' : (existing[statusField as keyof Employee] as string) || 'Scheduled' }) ?? undefined;
-      } else {
-        const payload: Record<string, string> = { name: form.name, role: form.role || 'Employee', dept: form.dept, [dateField]: form.date };
-        const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const peers = form.peers.split(',').map(s => s.trim()).filter(Boolean);
+      let existing = employees.find(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase());
+      if (!existing) {
+        const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, role: form.role || 'Employee', dept: form.dept }) });
         const data = await res.json();
-        if (data.employee) { employee = data.employee; setEmployees(prev => [...prev, data.employee]); }
+        if (data.employee) { existing = data.employee; setEmployees(prev => [...prev, data.employee]); }
       }
-      if (employee) {
+      if (existing) {
+        const history = [...parseHistory(existing.review_history), { date: form.date, peer_reviewers: peers, notes: form.notes }];
+        await patchEmployee(existing.id, { last_review_date: form.date, review_history: JSON.stringify(history) });
         setShowSchedule(false);
-        showToast(`${form.name}'s review scheduled — now send invites`);
-        // Advance to the invite step, pre-filled from the review just scheduled
-        setInvite({
-          employee: form.name,
-          reviewType: form.type === '6mo' ? '6-month' : '1-year',
-          link: linkedUrl || '',
-          deadline: form.date,
-          participants: [{ ...blankParticipant }],
-        });
-        setForm({ name: '', role: '', dept: 'Operations', date: '', type: '6mo' });
-        setShowInvite(true);
+        showToast(`Logged ${form.name}'s review — next review rescheduled automatically`);
+        setForm({ name: '', role: '', dept: 'Operations', date: '', peers: '', notes: '' });
       }
     } finally {
       setSaving(false);
@@ -293,96 +293,63 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     }
   }
 
-  // ---- Upcoming reviews across all employees ----
-  const upcoming: ReviewItem[] = employees
-    .flatMap(e => {
-      const out: ReviewItem[] = [];
-      const d6 = reviewDateStr(e, '6mo');
-      if (d6 && e.review_6mo_status !== 'Complete') out.push({ employee: e, type: '6-month review', date: new Date(d6 + 'T12:00:00'), days: daysUntilCST(d6) });
-      const d12 = reviewDateStr(e, '1yr');
-      if (d12 && e.review_1yr_status !== 'Complete') out.push({ employee: e, type: '1-year review', date: new Date(d12 + 'T12:00:00'), days: daysUntilCST(d12) });
-      return out;
-    })
-    .sort((a, b) => a.days - b.days);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const [statusFilter, setStatusFilter] = useState<ReviewStatus | 'All'>('All');
 
-  const upNext = upcoming[0];
-  const thenDue = upcoming.slice(1, 4);
-
-  const allStatuses = employees.flatMap(e => [e.review_6mo_status ?? 'Not Started', e.review_1yr_status ?? 'Not Started']);
-  const total = allStatuses.length;
-  const counts = {
-    Complete: allStatuses.filter(s => s === 'Complete').length,
-    'In progress': allStatuses.filter(s => s === 'In Progress').length,
-    Scheduled: allStatuses.filter(s => s === 'Scheduled').length,
-    'Not started': allStatuses.filter(s => s === 'Not Started').length,
-  };
-
-  const depts = [...new Set(employees.map(e => e.dept))].filter(Boolean);
-  const byDept = depts.map(dept => {
-    const group = employees.filter(e => e.dept === dept);
-    const done = group.flatMap(e => [e.review_6mo_status, e.review_1yr_status]).filter(s => s === 'Complete').length;
-    return { dept, pct: Math.round((done / (group.length * 2)) * 100) };
-  }).sort((a, b) => b.pct - a.pct);
-
-  // ---- Per-employee "last" and "next" review computation for the roster table ----
-  function lastReview(e: Employee): { type: ReviewType; date: string } | null {
-    const done: { type: ReviewType; date: string }[] = [];
-    const d6 = reviewDateStr(e, '6mo');
-    if (d6 && e.review_6mo_status === 'Complete') done.push({ type: '6-month review', date: d6 });
-    const d12 = reviewDateStr(e, '1yr');
-    if (d12 && e.review_1yr_status === 'Complete') done.push({ type: '1-year review', date: d12 });
-    if (!done.length) return null;
-    return done.sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  // Raw hire date used as the review anchor — Staffing start date preferred,
+  // else the stored hire_date. Same source the Hire date column displays.
+  function hireOf(e: Employee): string | null {
+    const st = staff.find(s => sameName(s.name, e.name));
+    const raw = (st?.start_date && st.start_date.trim()) ? st.start_date : (e.hire_date || '');
+    return raw ? raw.slice(0, 10) : null;
   }
-  function nextReview(e: Employee): { type: ReviewType; date: string; days: number } | null {
-    const pend: { type: ReviewType; date: string; days: number }[] = [];
-    const d6 = reviewDateStr(e, '6mo');
-    if (d6 && e.review_6mo_status !== 'Complete') pend.push({ type: '6-month review', date: d6, days: daysUntilCST(d6) });
-    const d12 = reviewDateStr(e, '1yr');
-    if (d12 && e.review_1yr_status !== 'Complete') pend.push({ type: '1-year review', date: d12, days: daysUntilCST(d12) });
-    if (!pend.length) return null;
-    return pend.sort((a, b) => a.days - b.days)[0];
+  function lastOf(e: Employee): string | null {
+    if (e.last_review_date && e.last_review_date.trim()) return e.last_review_date.slice(0, 10);
+    const h = parseHistory(e.review_history);
+    return h.length ? h.map(x => x.date).sort().slice(-1)[0] : null;
   }
+  function computeFor(e: Employee) { return computeReview(hireOf(e), lastOf(e), today); }
 
-  const roster = [...employees].sort((a, b) => {
-    const na = nextReview(a), nb = nextReview(b);
-    if (na && nb) return na.days - nb.days;
-    if (na) return -1;
-    if (nb) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  // Everyone in the review cycle (principals excluded), each with derived fields.
+  const tracked = employees.filter(e => !REVIEW_EXCLUDED.has(e.name.trim().toLowerCase()));
+  const rosterAll = tracked.map(e => ({ e, c: computeFor(e), last: lastOf(e) }))
+    .sort((a, b) => {
+      if (!a.c.next && !b.c.next) return a.e.name.localeCompare(b.e.name);
+      if (!a.c.next) return 1;
+      if (!b.c.next) return -1;
+      return a.c.next.localeCompare(b.c.next); // next review ascending → overdue first
+    });
+  const roster = statusFilter === 'All' ? rosterAll : rosterAll.filter(r => r.c.status === statusFilter);
 
-  const upNextStatusField = upNext ? (upNext.type === '6-month review' ? 'review_6mo_status' : 'review_1yr_status') : 'review_6mo_status';
-  const upNextStatusValue = upNext ? (upNext.type === '6-month review' ? upNext.employee.review_6mo_status : upNext.employee.review_1yr_status) : 'Not Started';
+  const overdueCount = rosterAll.filter(r => r.c.status === 'Overdue').length;
+  const reviewWeekCount = rosterAll.filter(r => r.c.status === 'Review week').length;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
-            <p className="text-sm text-text-muted mt-0.5">6-month &amp; 1-year reviews · tracking {employees.length} employees · times in CST</p>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Performance Reviews</h1>
+              {overdueCount > 0 && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#fdeaea] text-[#b0412f]">{overdueCount} overdue</span>}
+              {reviewWeekCount > 0 && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#f7efe1] text-[#b07d2a]">{reviewWeekCount} review week</span>}
+            </div>
+            <p className="text-sm text-text-muted mt-0.5">Reviews every 6 months · tracking {tracked.length} employees · times in CST</p>
           </div>
           <div className="flex items-center gap-2.5">
             <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >👁 Preview email</button>
-            <button onClick={() => window.open('/api/reviews/invite-remind?preview=1', '_blank')}
-              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >⏳ Preview reminder</button>
             <button onClick={openReminders}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >🔔 Reminders</button>
-            <button onClick={sendTestReminder}
-              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >📧 Test email</button>
             <button onClick={() => setShowInvite(true)}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >✉ Send review invites</button>
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
-            >+ Schedule Review</button>
+            >+ Log a review</button>
           </div>
         </div>
       </header>
@@ -412,172 +379,63 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       </div>
 
       <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="grid grid-cols-[1fr_288px] gap-6 items-start">
-          <div className="flex flex-col gap-4">
-            {upNext ? (
-              <div className="bg-ink rounded-card p-6 text-white">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="flex gap-6 items-start">
-                    <div className="text-center min-w-[64px]">
-                      <div className="text-4xl font-spectral font-semibold text-gold leading-none">
-                        {upNext.days < 0 ? Math.abs(upNext.days) : upNext.days}
-                      </div>
-                      <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
-                        {upNext.days < 0 ? 'DAYS OVERDUE' : upNext.days === 0 ? 'TODAY' : upNext.days === 1 ? 'DAY (TMRW)' : 'DAYS'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">UP NEXT</div>
-                      <button onClick={() => setDetail(upNext.employee)} className="font-spectral text-[19px] font-semibold leading-tight text-left hover:text-gold transition-colors">
-                        {upNext.employee.name} — {upNext.type}
-                      </button>
-                      <div className="text-sm text-white/50 mt-1">
-                        {formatDate(toYmd(upNext.date))} · {displayRole(upNext.employee)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 shrink-0 w-[130px]">
-                    {linkedUrl && (
-                      <button onClick={() => setShowEmbed(true)}
-                        className="text-center bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors">
-                        Open form
-                      </button>
-                    )}
-                    <button
-                      onClick={() => sendReminderNow(upNext.employee.name)}
-                      className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors"
-                    >Send reminder</button>
-                    <select
-                      value={upNextStatusValue ?? 'Not Started'}
-                      onChange={e => patchEmployee(upNext.employee.id, { [upNextStatusField]: e.target.value })}
-                      className="text-xs bg-white/10 text-white border border-white/20 rounded-ctrl px-2 py-1.5"
-                    >
-                      {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => (
-                        <option key={s} value={s} className="text-ink">{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-ink rounded-card p-6 text-white/50 text-sm">All reviews are up to date.</div>
-            )}
-
-            {thenDue.length > 0 && (
-              <div className="bg-white border border-border rounded-card p-5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">THEN DUE</div>
-                <div className="flex flex-col gap-2.5">
-                  {thenDue.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <div>
-                        <button onClick={() => setDetail(r.employee)} className="font-medium text-text-primary hover:text-ink hover:underline">{r.employee.name}</button>
-                        <span className="text-text-muted ml-2 text-xs">{r.type}</span>
-                      </div>
-                      <span className="text-text-muted">{relLabel(r.days)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="bg-white border border-border rounded-card p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">
-                Status breakdown · {total} reviews
-              </div>
-              {(Object.entries(counts) as [string, number][]).map(([label, count]) => (
-                <div key={label} className="mb-3 last:mb-0">
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-text-secondary">{label}</span>
-                    <span className="font-semibold text-text-primary">{count}</span>
-                  </div>
-                  <div className="h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{
-                      width: `${total ? (count / total) * 100 : 0}%`,
-                      background: label === 'Complete' ? '#2f7d5b' : label === 'In progress' ? '#c9a24a' : label === 'Scheduled' ? '#3f6b8a' : '#ddd5c6',
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-white border border-border rounded-card p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-4">Completion by group</div>
-              {byDept.map(({ dept, pct }) => (
-                <div key={dept} className="mb-3 last:mb-0">
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-text-secondary">{dept}</span>
-                    <span className="font-semibold text-text-primary">{pct}%</span>
-                  </div>
-                  <div className="h-1.5 bg-[#f1ece3] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-[#2f7d5b] transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ---- All employees roster ---- */}
-        <div className="mt-6 bg-white border border-border rounded-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        {/* ---- All employees · reviews (sorted by next review, overdue first) ---- */}
+        <div className="bg-white border border-border rounded-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
             <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">All employees · reviews</div>
-            <span className="text-xs text-text-muted">Click a name to upload/view review documents &amp; edit dates</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-text-muted">Filter:</span>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as ReviewStatus | 'All')}
+                className="text-xs border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
+                {(['All', ...REVIEW_STATUSES] as const).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[860px]">
             <thead className="bg-[#f1ece3]">
-              <tr>{['Employee', 'Hire date', 'Department', 'Last review', 'Next review', 'Status', ''].map(h => (
+              <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Tenure', 'Cycle', 'Status', ''].map(h => (
                 <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
-              {roster.map(e => {
-                const last = lastReview(e);
-                const next = nextReview(e);
-                return (
-                  <tr key={e.id} className="border-t border-[#f1ece3] hover:bg-canvas transition-colors">
-                    <td className="px-5 py-3">
-                      <button onClick={() => setDetail(e)} className="font-medium text-text-primary hover:text-ink hover:underline text-left">{e.name}</button>
-                      <div className="text-xs text-text-muted">{displayRole(e)}</div>
-                    </td>
-                    <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{hireDateDisplay(e)}</td>
-                    <td className="px-5 py-3 text-text-secondary">{e.dept}</td>
-                    <td className="px-5 py-3 text-text-muted">
-                      {last ? <><span className="text-text-secondary">{formatDate(last.date)}</span><span className="text-xs block text-text-muted">{last.type}</span></> : '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      {next ? (
-                        <>
-                          <span className="text-text-primary font-medium">{formatDate(next.date)}</span>
-                          <span className={`text-xs block ${next.days < 0 ? 'text-litred-alt' : next.days <= 1 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
-                            {next.type} · {relLabel(next.days)}
-                          </span>
-                        </>
-                      ) : <span className="text-text-muted">—</span>}
-                    </td>
-                    <td className="px-5 py-3">
-                      {next ? (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          (next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) === 'In Progress' ? 'bg-[#f7efe1] text-[#b07d2a]' :
-                          (next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) === 'Scheduled' ? 'bg-[#e9f0f5] text-[#3f6b8a]' :
-                          'bg-[#f1ece3] text-text-muted'
-                        }`}>
-                          {(next.type === '6-month review' ? e.review_6mo_status : e.review_1yr_status) ?? 'Not Started'}
+              {roster.map(({ e, c, last }) => (
+                <tr key={e.id} className="border-t border-[#f1ece3] hover:bg-canvas transition-colors">
+                  <td className="px-5 py-3">
+                    <button onClick={() => setDetail(e)} className="font-medium text-text-primary hover:text-ink hover:underline text-left">{e.name}</button>
+                    <div className="text-xs text-text-muted">{displayRole(e)}</div>
+                  </td>
+                  <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{hireDateDisplay(e)}</td>
+                  <td className="px-5 py-3 text-text-muted whitespace-nowrap">{last ? formatDate(last) : '—'}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    {c.next ? (
+                      <>
+                        <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
+                        <span className={`text-xs block ${c.days != null && c.days < 0 ? 'text-litred-alt font-semibold' : c.days != null && c.days <= 14 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
+                          {c.days != null ? relLabel(c.days) : ''}
                         </span>
-                      ) : last
-                        ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b]">All complete</span>
-                        : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-muted">Not Started</span>}
-                    </td>
-                    <td className="px-5 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
-                      <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </>
+                    ) : <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>}
+                  </td>
+                  <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{c.tenure}</td>
+                  <td className="px-5 py-3 text-text-secondary">{c.cycle ?? '—'}</td>
+                  <td className="px-5 py-3">
+                    {c.status
+                      ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_PILL[c.status]}`}>{c.status}</span>
+                      : <span className="text-text-muted text-xs">—</span>}
+                  </td>
+                  <td className="px-5 py-3 text-right whitespace-nowrap">
+                    <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Log / edit</button>
+                    <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                  </td>
+                </tr>
+              ))}
+              {roster.length === 0 && (
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-text-muted text-sm">No employees match this filter.</td></tr>
+              )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -585,45 +443,32 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       {showSchedule && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowSchedule(false)}>
           <div className="bg-white rounded-card p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-4">Schedule a Review</h2>
+            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-1">Log a completed review</h2>
+            <p className="text-xs text-text-muted mb-4">Enter the date the review actually happened. The next review reschedules automatically off the hire date.</p>
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee Name</label>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee</label>
                 <input value={form.name} onChange={e => { const name = e.target.value; const role = roleForName(name); setForm(f => ({ ...f, name, role: role ?? f.role })); }} list="schedule-emp-names"
                   placeholder="Pick existing or type a new name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
                 <datalist id="schedule-emp-names">
                   {employees.map(e => <option key={e.id} value={e.name} />)}
                   {staff.filter(s => !employees.some(e => e.name.trim().toLowerCase() === s.name.trim().toLowerCase())).map(s => <option key={s.id} value={s.name} />)}
                 </datalist>
-                {employees.some(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase()) && form.name && (
-                  <p className="text-[11px] text-[#2f7d5b] mt-1">Existing employee — this updates their review date.</p>
-                )}
               </div>
               <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Role</label>
-                <input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                  placeholder="e.g. Associate" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Department</label>
-                <select value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}
-                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink">
-                  <option>Operations</option>
-                  <option>Attorneys</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review Type</label>
-                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as '6mo' | '1yr' }))}
-                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink">
-                  <option value="6mo">6-Month Review</option>
-                  <option value="1yr">1-Year Review</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review Date</label>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review date (actual)</label>
                 <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                   className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Peer reviewers <span className="font-normal normal-case">(comma-separated, optional)</span></label>
+                <input value={form.peers} onChange={e => setForm(f => ({ ...f, peers: e.target.value }))}
+                  placeholder="e.g. Ally, Paula, JR" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Notes <span className="font-normal normal-case">(optional)</span></label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
               </div>
             </div>
             <div className="flex gap-2 mt-5">
@@ -631,9 +476,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover transition-colors">
                 Cancel
               </button>
-              <button onClick={scheduleReview} disabled={saving || !form.name || !form.date}
+              <button onClick={logReview} disabled={saving || !form.name || !form.date}
                 className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors disabled:opacity-40">
-                {saving ? 'Saving…' : 'Schedule → next: invites'}
+                {saving ? 'Saving…' : 'Log review'}
               </button>
             </div>
           </div>
@@ -825,11 +670,11 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   const [role, setRole] = useState(employee.role);
   const [dept, setDept] = useState(employee.dept);
   const [hire, setHire] = useState(employee.hire_date?.slice(0, 10) ?? '');
-  const [d6, setD6] = useState(employee.review_6mo_date?.slice(0, 10) ?? '');
-  const [s6, setS6] = useState(employee.review_6mo_status ?? 'Not Started');
-  const [d12, setD12] = useState(employee.review_1yr_date?.slice(0, 10) ?? '');
-  const [s12, setS12] = useState(employee.review_1yr_status ?? 'Not Started');
-  const [summary, setSummary] = useState(employee.review_notes ?? '');
+  const history = parseHistory(employee.review_history);
+  const latest = history.length ? history.slice().sort((a, b) => a.date.localeCompare(b.date))[history.length - 1] : null;
+  const [lastRev, setLastRev] = useState(employee.last_review_date?.slice(0, 10) ?? latest?.date ?? '');
+  const [peers, setPeers] = useState((latest?.peer_reviewers ?? []).join(', '));
+  const [summary, setSummary] = useState(latest?.notes ?? employee.review_notes ?? '');
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState<{ '6mo': string | null; '1yr': string | null }>({ '6mo': null, '1yr': null });
   const [uploading, setUploading] = useState<'6mo' | '1yr' | null>(null);
@@ -863,21 +708,28 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   async function save() {
     setBusy(true);
     try {
+      // Rebuild history: the latest entry carries the current last review date,
+      // peer reviewers and notes. Older entries are preserved.
+      const older = history.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, -1);
+      const peerList = peers.split(',').map(s => s.trim()).filter(Boolean);
+      const rebuilt = lastRev
+        ? [...older, { date: lastRev, peer_reviewers: peerList, notes: summary }]
+        : older;
       await onSave({
         name: name.trim() || employee.name,
         role: role.trim() || employee.role,
         dept: dept.trim() || employee.dept,
         hire_date: hire || null,
-        review_6mo_date: d6 || null,
-        review_6mo_status: s6,
-        review_1yr_date: d12 || null,
-        review_1yr_status: s12,
+        last_review_date: lastRev || null,
+        review_history: JSON.stringify(rebuilt),
         review_notes: summary || null,
       });
     } finally {
       setBusy(false);
     }
   }
+  // Computed next review for read-only display in the drawer.
+  const drawerNext = computeReview(hire || null, lastRev || null, new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }));
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
@@ -951,32 +803,51 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Hire date</label>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Hire date <span className="font-normal normal-case">(review anchor)</span></label>
             <input type="date" value={hire} onChange={e => setHire(e.target.value)}
               className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-            <p className="text-[11px] text-text-muted mt-1">If no manual dates are set, reviews auto-calculate from hire date (+6 / +12 months).</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">6-month date</label>
-              <input type="date" value={d6} onChange={e => setD6(e.target.value)}
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Last review date</label>
+              <input type="date" value={lastRev} onChange={e => setLastRev(e.target.value)}
                 className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
-              <select value={s6} onChange={e => setS6(e.target.value)}
-                className="w-full mt-2 border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
-                {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => <option key={s}>{s}</option>)}
-              </select>
+              <p className="text-[11px] text-text-muted mt-1">The only writable date — everything else derives from it.</p>
             </div>
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">1-year date</label>
-              <input type="date" value={d12} onChange={e => setD12(e.target.value)}
-                className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
-              <select value={s12} onChange={e => setS12(e.target.value)}
-                className="w-full mt-2 border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink">
-                {['Not Started', 'Scheduled', 'In Progress', 'Complete'].map(s => <option key={s}>{s}</option>)}
-              </select>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Next review <span className="font-normal normal-case">(auto)</span></label>
+              <div className="border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
+                {drawerNext.next ? (
+                  <>
+                    <div className="font-medium text-text-primary">{formatDate(drawerNext.next)}</div>
+                    <div className="text-[11px] text-text-muted">{drawerNext.tenure} · cycle {drawerNext.cycle}{drawerNext.status ? ` · ${drawerNext.status}` : ''}</div>
+                  </>
+                ) : <span className="text-text-muted">Set a hire date</span>}
+              </div>
             </div>
           </div>
+
+          <div>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Peer reviewers <span className="font-normal normal-case">(comma-separated)</span></label>
+            <input value={peers} onChange={e => setPeers(e.target.value)} placeholder="e.g. Ally, Paula, JR"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+          </div>
+
+          {history.length > 1 && (
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review history</label>
+              <div className="border border-border-light rounded-ctrl divide-y divide-[#f1ece3]">
+                {history.slice().sort((a, b) => b.date.localeCompare(a.date)).map((h, i) => (
+                  <div key={i} className="px-3 py-2 text-sm">
+                    <span className="font-medium text-text-primary">{formatDate(h.date)}</span>
+                    {h.peer_reviewers.length > 0 && <span className="text-text-muted"> · peers: {h.peer_reviewers.join(', ')}</span>}
+                    {h.notes && <div className="text-[12px] text-text-muted mt-0.5">{h.notes}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-border flex gap-2 sticky bottom-0 bg-white">
