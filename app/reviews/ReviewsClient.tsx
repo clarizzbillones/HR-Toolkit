@@ -295,6 +295,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const [statusFilter, setStatusFilter] = useState<ReviewStatus | 'All'>('All');
+  const [search, setSearch] = useState('');
 
   // Raw hire date used as the review anchor — Staffing start date preferred,
   // else the stored hire_date. Same source the Hire date column displays.
@@ -319,7 +320,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       if (!b.c.next) return -1;
       return a.c.next.localeCompare(b.c.next); // next review ascending → overdue first
     });
-  const roster = statusFilter === 'All' ? rosterAll : rosterAll.filter(r => r.c.status === statusFilter);
+  const q = search.trim().toLowerCase();
+  // While searching, ignore the status filter so a name always turns up.
+  const roster = rosterAll.filter(r => q
+    ? (r.e.name.toLowerCase().includes(q) || (displayRole(r.e) || '').toLowerCase().includes(q))
+    : (statusFilter === 'All' || r.c.status === statusFilter)
+  );
 
   const overdueCount = rosterAll.filter(r => r.c.status === 'Overdue').length;
   const reviewWeekCount = rosterAll.filter(r => r.c.status === 'Review week').length;
@@ -443,7 +449,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         <div className="bg-white border border-border rounded-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
             <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">All employees · reviews</div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">🔍</span>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…"
+                  className="w-48 border border-border-light rounded-ctrl pl-7 pr-6 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                {search && (
+                  <button onClick={() => setSearch('')} title="Clear"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-ink text-xs">✕</button>
+                )}
+              </div>
               <span className="text-[11px] text-text-muted">Filter:</span>
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as ReviewStatus | 'All')}
                 className="text-xs border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
