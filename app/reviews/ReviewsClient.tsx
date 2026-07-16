@@ -324,6 +324,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const overdueCount = rosterAll.filter(r => r.c.status === 'Overdue').length;
   const reviewWeekCount = rosterAll.filter(r => r.c.status === 'Review week').length;
 
+  // The single most-imminent review to act on next (soonest date, overdue first)
+  // plus the few after it — for the "up next" banner.
+  const withNext = rosterAll.filter(r => r.c.next && r.c.days != null);
+  const upNext = withNext[0] ?? null;
+  const thenDue = withNext.slice(1, 4);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
@@ -379,6 +385,60 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       </div>
 
       <div className="flex-1 overflow-auto px-8 py-6">
+        {/* ---- Up next: the most imminent review to act on ---- */}
+        {upNext && (
+          <div className="bg-ink rounded-card p-6 text-white mb-6">
+            <div className="flex items-start justify-between gap-6 flex-wrap">
+              <div className="flex gap-6 items-start">
+                <div className="text-center min-w-[64px]">
+                  <div className="text-4xl font-spectral font-semibold text-gold leading-none">
+                    {upNext.c.days != null ? Math.abs(upNext.c.days) : ''}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-widest text-white/40 mt-1">
+                    {upNext.c.days != null && upNext.c.days < 0 ? 'DAYS OVERDUE' : upNext.c.days === 0 ? 'TODAY' : 'DAYS'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Up next · next scheduled review</div>
+                  <button onClick={() => setDetail(upNext.e)} className="font-spectral text-[19px] font-semibold leading-tight text-left hover:text-gold transition-colors">
+                    {upNext.e.name} — Performance Review
+                  </button>
+                  <div className="text-sm text-white/50 mt-1 flex items-center gap-2 flex-wrap">
+                    <span>{upNext.c.next ? formatDate(upNext.c.next) : ''} · {displayRole(upNext.e)}</span>
+                    {upNext.c.status && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_PILL[upNext.c.status]}`}>{upNext.c.status}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 shrink-0 w-[150px]">
+                {linkedUrl && (
+                  <button onClick={() => setShowEmbed(true)}
+                    className="text-center bg-gold text-ink-darkest text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-gold-light transition-colors">
+                    Open form
+                  </button>
+                )}
+                <button onClick={() => sendReminderNow(upNext.e.name)}
+                  className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
+                  Send reminder
+                </button>
+                <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: '', peers: '', notes: '' }); setShowSchedule(true); }}
+                  className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
+                  Log completed
+                </button>
+              </div>
+            </div>
+            {thenDue.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap gap-x-6 gap-y-1 text-sm text-white/60">
+                <span className="text-[10px] uppercase tracking-widest text-white/40 self-center">Then due</span>
+                {thenDue.map((r, i) => (
+                  <button key={i} onClick={() => setDetail(r.e)} className="hover:text-gold transition-colors">
+                    {r.e.name} <span className="text-white/40">· {r.c.days != null ? relLabel(r.c.days) : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ---- All employees · reviews (sorted by next review, overdue first) ---- */}
         <div className="bg-white border border-border rounded-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
