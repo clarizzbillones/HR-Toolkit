@@ -3,7 +3,7 @@
 // copy guarantee (spec §7).
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { nextReviewDate, reviewCycle, tenureLabel, addMonths, statusFor } from './reviews';
+import { nextReviewDate, reviewCycle, tenureLabel, addMonths, statusFor, computeReview } from './reviews';
 
 let failures = 0;
 function eq(label: string, got: any, exp: any) {
@@ -38,6 +38,21 @@ eq('status 15', statusFor(15), 'Forms due');
 eq('status 14', statusFor(14), 'Review week');
 eq('status 0', statusFor(0), 'Review week');
 eq('status <0', statusFor(-1), 'Overdue');
+
+// Roll-forward: a review missed past the ~90-day grace window advances to the
+// next milestone; one still within the window stays overdue.
+{
+  const t = '2026-07-16';
+  const fer = computeReview('2025-02-25', '2025-11-11', t); // 1yr missed by ~141d
+  eq('roll · Fer next', fer.next, '2026-08-25');
+  eq('roll · Fer cycle', fer.cycle, 3);
+  eq('roll · Fer tenure', fer.tenure, '1.5 yr');
+  const recent = computeReview('2026-01-10', null, t); // 6mo due Jul 10, ~6d overdue
+  eq('roll · recent stays overdue', recent.next, '2026-07-10');
+  eq('roll · recent status', recent.status, 'Overdue');
+  const future = computeReview('2026-05-01', null, t); // future, untouched
+  eq('roll · future untouched', future.next, '2026-11-01');
+}
 
 // §7 — no staff-facing template interpolates tenure_label or cycle_number
 for (const rel of ['reviewEmail.ts', 'inviteReminders.ts']) {

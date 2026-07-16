@@ -98,11 +98,26 @@ export interface ReviewCompute {
   days: number | null;
   status: ReviewStatus | null;
 }
+// A missed review stays actionable (Overdue) for this catch-up window; once it
+// is more than this many days past due it is considered missed and the schedule
+// rolls forward to the next 6-month milestone.
+export const ROLL_GRACE_DAYS = 90;
+
 // `override` lets HR reschedule the upcoming review off the predicted date
-// (real reviews don't always land on the exact computed day). Cycle and tenure
-// still describe the same upcoming review; only the date/status shift.
+// (real reviews don't always land on the exact computed day). If a review is
+// missed past the grace window, the next date/cycle/tenure roll forward to the
+// next milestone that's still within reach.
 export function computeReview(hireDate: string | null, lastReview: string | null, today: string, override?: string | null): ReviewCompute {
-  const computed = nextReviewDate(hireDate, lastReview);
+  let cycle = reviewCycle(hireDate, lastReview);
+  let computed = nextReviewDate(hireDate, lastReview);
+  if (hireDate && cycle != null && computed) {
+    // Skip milestones that are more than the grace window overdue.
+    let guard = 0;
+    while (daysBetween(computed, today) > ROLL_GRACE_DAYS && guard++ < 240) {
+      cycle += 1;
+      computed = addMonths(hireDate, cycle * 6);
+    }
+  }
   const ov = override && override.trim() ? override.slice(0, 10) : null;
   const next = ov ?? computed;
   const days = daysUntilDue(next, today);
@@ -110,8 +125,8 @@ export function computeReview(hireDate: string | null, lastReview: string | null
     next,
     computed,
     overridden: !!ov,
-    cycle: reviewCycle(hireDate, lastReview),
-    tenure: tenureLabel(hireDate, lastReview),
+    cycle,
+    tenure: cycle != null ? (cycle * 0.5).toFixed(1) + ' yr' : '—',
     days,
     status: statusFor(days),
   };
