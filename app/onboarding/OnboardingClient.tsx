@@ -1013,7 +1013,16 @@ export default function OnboardingClient() {
               );
             })()}
             {(() => {
-              const list = people.filter(p => dashTab === 'hired' ? p.status === 'Complete' : p.status !== 'Complete');
+              const list = people
+                .filter(p => dashTab === 'hired' ? p.status === 'Complete' : p.status !== 'Complete')
+                .sort((a, b) => {
+                  // Soonest start date first; entries without a start date go last.
+                  const sa = (a.start_date || '').slice(0, 10), sb = (b.start_date || '').slice(0, 10);
+                  if (!sa && !sb) return a.name.localeCompare(b.name);
+                  if (!sa) return 1;
+                  if (!sb) return -1;
+                  return sa.localeCompare(sb);
+                });
               if (!list.length) return (
                 <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-6 text-center">
                   {dashTab === 'hired' ? 'No hires yet — complete an onboarding to move someone here.' : 'No one onboarding yet — click “Add new hire”.'}
