@@ -4,7 +4,7 @@ import { sql } from '@/lib/db';
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const allowed = ['name', 'role', 'dept', 'birthday', 'hire_date', 'last_review_date', 'review_history', 'review_6mo_status', 'review_6mo_date', 'review_6mo_reviewer', 'review_6mo_summary', 'review_1yr_status', 'review_1yr_date', 'review_1yr_reviewer', 'review_1yr_summary', 'review_notes'];
+  const allowed = ['name', 'role', 'dept', 'birthday', 'hire_date', 'last_review_date', 'review_history', 'next_review_override', 'review_6mo_status', 'review_6mo_date', 'review_6mo_reviewer', 'review_6mo_summary', 'review_1yr_status', 'review_1yr_date', 'review_1yr_reviewer', 'review_1yr_summary', 'review_notes'];
   const sets = Object.keys(body).filter(k => allowed.includes(k));
   if (!sets.length) return NextResponse.json({ error: 'No valid fields' }, { status: 400 });
   const updates = Object.fromEntries(sets.map(k => [k, body[k]]));

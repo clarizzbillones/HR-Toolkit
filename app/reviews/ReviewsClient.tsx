@@ -6,7 +6,7 @@ import { computeReview, parseHistory, REVIEW_STATUSES, type ReviewStatus, type R
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
-  last_review_date: string | null; review_history: string | null;
+  last_review_date: string | null; review_history: string | null; next_review_override: string | null;
   review_6mo_status: string | null; review_6mo_date: string | null; review_6mo_summary: string | null;
   review_1yr_status: string | null; review_1yr_date: string | null; review_1yr_summary: string | null;
   review_notes: string | null;
@@ -260,7 +260,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       }
       if (existing) {
         const history = [...parseHistory(existing.review_history), { date: form.date, peer_reviewers: peers, notes: form.notes }];
-        await patchEmployee(existing.id, { last_review_date: form.date, review_history: JSON.stringify(history) });
+        await patchEmployee(existing.id, { last_review_date: form.date, review_history: JSON.stringify(history), next_review_override: null });
         setShowSchedule(false);
         showToast(`Logged ${form.name}'s review — next review rescheduled automatically`);
         setForm({ name: '', role: '', dept: 'Operations', date: '', peers: '', notes: '' });
@@ -309,7 +309,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     const h = parseHistory(e.review_history);
     return h.length ? h.map(x => x.date).sort().slice(-1)[0] : null;
   }
-  function computeFor(e: Employee) { return computeReview(hireOf(e), lastOf(e), today); }
+  function computeFor(e: Employee) { return computeReview(hireOf(e), lastOf(e), today, e.next_review_override); }
 
   // Everyone in the review cycle (principals excluded), each with derived fields.
   const tracked = employees.filter(e => !REVIEW_EXCLUDED.has(e.name.trim().toLowerCase()));
@@ -486,6 +486,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     {c.next ? (
                       <>
                         <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
+                        {c.overridden && <span className="ml-1 text-[10px] text-[#3f6b8a]" title="Manually rescheduled">✎</span>}
                         <span className={`text-xs block ${c.days != null && c.days < 0 ? 'text-litred-alt font-semibold' : c.days != null && c.days <= 14 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
                           {c.days != null ? relLabel(c.days) : ''}
                         </span>
@@ -697,6 +698,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         <EmployeeDetail
           key={detail.id}
           employee={detail}
+          resolvedHire={hireOf(detail) ?? ''}
+          today={today}
           linkedUrl={linkedUrl}
           onClose={() => setDetail(null)}
           onDelete={() => deleteEmployee(detail)}
@@ -734,8 +737,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 }
 
 // ---- Detail drawer component ----
-function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
+function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onSave, onDelete }: {
   employee: Employee;
+  resolvedHire: string;
+  today: string;
   linkedUrl: string;
   onClose: () => void;
   onSave: (fields: Record<string, string | null>) => Promise<void>;
@@ -744,12 +749,16 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
   const [name, setName] = useState(employee.name);
   const [role, setRole] = useState(employee.role);
   const [dept, setDept] = useState(employee.dept);
-  const [hire, setHire] = useState(employee.hire_date?.slice(0, 10) ?? '');
+  // Hire date auto-detected from Staffing (falls back to the stored hire date).
+  const [hire, setHire] = useState((employee.hire_date?.slice(0, 10) || resolvedHire || '').slice(0, 10));
   const history = parseHistory(employee.review_history);
   const latest = history.length ? history.slice().sort((a, b) => a.date.localeCompare(b.date))[history.length - 1] : null;
   const [lastRev, setLastRev] = useState(employee.last_review_date?.slice(0, 10) ?? latest?.date ?? '');
   const [peers, setPeers] = useState((latest?.peer_reviewers ?? []).join(', '));
   const [summary, setSummary] = useState(latest?.notes ?? employee.review_notes ?? '');
+  // Editable next review: prefilled with the computed prediction (or a saved
+  // override), but the user can reschedule it to the actual review day.
+  const [nextRev, setNextRev] = useState(employee.next_review_override?.slice(0, 10) ?? '');
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState<{ '6mo': string | null; '1yr': string | null }>({ '6mo': null, '1yr': null });
   const [uploading, setUploading] = useState<'6mo' | '1yr' | null>(null);
@@ -790,6 +799,8 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
       const rebuilt = lastRev
         ? [...older, { date: lastRev, peer_reviewers: peerList, notes: summary }]
         : older;
+      // Store the next-review override only when it differs from the prediction.
+      const override = nextRev && nextRev !== predicted ? nextRev : null;
       await onSave({
         name: name.trim() || employee.name,
         role: role.trim() || employee.role,
@@ -797,14 +808,16 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
         hire_date: hire || null,
         last_review_date: lastRev || null,
         review_history: JSON.stringify(rebuilt),
+        next_review_override: override,
         review_notes: summary || null,
       });
     } finally {
       setBusy(false);
     }
   }
-  // Computed next review for read-only display in the drawer.
-  const drawerNext = computeReview(hire || null, lastRev || null, new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }));
+  // Effective next review (override wins) + the underlying prediction.
+  const drawerNext = computeReview(hire || null, lastRev || null, today, nextRev || null);
+  const predicted = drawerNext.computed ?? '';
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
@@ -891,14 +904,14 @@ function EmployeeDetail({ employee, linkedUrl, onClose, onSave, onDelete }: {
               <p className="text-[11px] text-text-muted mt-1">The only writable date — everything else derives from it.</p>
             </div>
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Next review <span className="font-normal normal-case">(auto)</span></label>
-              <div className="border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
-                {drawerNext.next ? (
-                  <>
-                    <div className="font-medium text-text-primary">{formatDate(drawerNext.next)}</div>
-                    <div className="text-[11px] text-text-muted">{drawerNext.tenure} · cycle {drawerNext.cycle}{drawerNext.status ? ` · ${drawerNext.status}` : ''}</div>
-                  </>
-                ) : <span className="text-text-muted">Set a hire date</span>}
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Next review <span className="font-normal normal-case">(predicted — editable)</span></label>
+              <input type="date" value={nextRev || predicted} onChange={e => setNextRev(e.target.value)}
+                className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
+              <div className="text-[11px] text-text-muted mt-1">
+                {drawerNext.tenure} · cycle {drawerNext.cycle ?? '—'}{drawerNext.status ? ` · ${drawerNext.status}` : ''}
+                {nextRev && nextRev !== predicted && predicted && (
+                  <> · <button onClick={() => setNextRev('')} className="text-[#3f6b8a] hover:underline">reset to predicted ({formatDate(predicted)})</button></>
+                )}
               </div>
             </div>
           </div>

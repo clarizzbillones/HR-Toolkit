@@ -90,17 +90,26 @@ export function statusFor(days: number | null): ReviewStatus | null {
 // ---- Everything for one employee, computed on read -------------------------
 
 export interface ReviewCompute {
-  next: string | null;
+  next: string | null;      // the effective next review (override wins)
+  computed: string | null;  // the formula's prediction (before override)
+  overridden: boolean;
   cycle: number | null;
   tenure: string;
   days: number | null;
   status: ReviewStatus | null;
 }
-export function computeReview(hireDate: string | null, lastReview: string | null, today: string): ReviewCompute {
-  const next = nextReviewDate(hireDate, lastReview);
+// `override` lets HR reschedule the upcoming review off the predicted date
+// (real reviews don't always land on the exact computed day). Cycle and tenure
+// still describe the same upcoming review; only the date/status shift.
+export function computeReview(hireDate: string | null, lastReview: string | null, today: string, override?: string | null): ReviewCompute {
+  const computed = nextReviewDate(hireDate, lastReview);
+  const ov = override && override.trim() ? override.slice(0, 10) : null;
+  const next = ov ?? computed;
   const days = daysUntilDue(next, today);
   return {
     next,
+    computed,
+    overridden: !!ov,
     cycle: reviewCycle(hireDate, lastReview),
     tenure: tenureLabel(hireDate, lastReview),
     days,
