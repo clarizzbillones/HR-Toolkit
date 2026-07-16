@@ -82,6 +82,7 @@ export default function OnboardingClient() {
   const [view, setView] = useState<'dashboard' | 'guides'>('dashboard');
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
   const [showAdd, setShowAdd] = useState(false);
   const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', tag: 'New hire', start_date: '', onboarding_date: '', dob: '', phone: '' };
   const [newForm, setNewForm] = useState({ ...blankNew });
@@ -186,11 +187,17 @@ export default function OnboardingClient() {
     await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, progress: prog }) });
   }
   async function completeOnboardee(person: any) {
-    if (!confirm(`Mark ${person.name}'s onboarding complete? Their info will be added to the Staffing tab.`)) return;
+    if (!confirm(`Mark ${person.name} as hired? Their info is added to the Staffing directory and they move to the Hired tab.`)) return;
     const res = await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, complete: true }) });
     const { row } = await res.json();
     setPeople(prev => prev.map(p => p.id === person.id ? row : p));
-    showToast('Complete — added to Staffing');
+    setDashTab('hired');
+    showToast(`${person.name} hired — added to Staffing`);
+  }
+  // Re-push a hired person into Staffing (idempotent — only inserts if missing).
+  async function addToStaffing(person: any) {
+    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, complete: true }) });
+    showToast(`${person.name} is in the Staffing directory`);
   }
   async function deleteOnboardee(id: string) {
     if (!confirm('Remove this onboarding record?')) return;
@@ -989,8 +996,30 @@ export default function OnboardingClient() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
           {/* People list */}
           <div className="space-y-3">
-            {people.length === 0 && <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-6 text-center">No one onboarding yet — click “Add new hire”.</div>}
-            {people.map(p => {
+            {(() => {
+              const activeCount = people.filter(p => p.status !== 'Complete').length;
+              const hiredCount = people.filter(p => p.status === 'Complete').length;
+              return (
+                <div className="flex gap-1 bg-canvas border border-border-light rounded-ctrl p-1">
+                  <button onClick={() => setDashTab('active')}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-ctrl transition-colors ${dashTab === 'active' ? 'bg-ink text-white' : 'text-text-secondary hover:text-text-primary'}`}>
+                    Onboarding{activeCount ? ` (${activeCount})` : ''}
+                  </button>
+                  <button onClick={() => setDashTab('hired')}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-ctrl transition-colors ${dashTab === 'hired' ? 'bg-[#2f7d5b] text-white' : 'text-text-secondary hover:text-text-primary'}`}>
+                    ✓ Hired{hiredCount ? ` (${hiredCount})` : ''}
+                  </button>
+                </div>
+              );
+            })()}
+            {(() => {
+              const list = people.filter(p => dashTab === 'hired' ? p.status === 'Complete' : p.status !== 'Complete');
+              if (!list.length) return (
+                <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-6 text-center">
+                  {dashTab === 'hired' ? 'No hires yet — complete an onboarding to move someone here.' : 'No one onboarding yet — click “Add new hire”.'}
+                </div>
+              );
+              return list.map(p => {
               const { done, total, pct } = progressOf(p);
               const complete = p.status === 'Complete';
               return (
@@ -1024,7 +1053,8 @@ export default function OnboardingClient() {
                   <div className="text-[11px] text-text-muted mt-1">{done}/{total} tasks</div>
                 </button>
               );
-            })}
+            });
+            })()}
           </div>
 
           {/* Detail panel */}
@@ -1153,14 +1183,18 @@ export default function OnboardingClient() {
                       className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
                   </div>
                   )}
-                  <div className="px-5 py-4 border-t border-border flex items-center justify-between">
+                  <div className="px-5 py-4 border-t border-border flex items-center justify-between gap-3 flex-wrap">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>
                     {person.status === 'Complete' ? (
-                      <span className="text-sm font-semibold text-[#2f7d5b]">✓ Completed — added to Staffing</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-[#2f7d5b]">✓ Hired · in Staffing</span>
+                        <a href="/staffing" className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">Open in Staffing ↗</a>
+                        <button onClick={() => addToStaffing(person)} className="text-xs font-semibold text-text-muted border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Re-add if the Staffing record was removed">Re-add to Staffing</button>
+                      </div>
                     ) : (
                       <button onClick={() => completeOnboardee(person)} disabled={!allDone}
                         className="bg-[#2f7d5b] text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-[#236045] disabled:opacity-40"
-                        title={allDone ? '' : 'Finish all tasks first'}>Mark complete → add to Staffing</button>
+                        title={allDone ? '' : 'Finish all tasks first'}>Mark hired → add to Staffing</button>
                     )}
                   </div>
                 </div>
