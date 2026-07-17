@@ -189,42 +189,58 @@ async function ensureGlobalChecklist() {
 }
 
 // One-time: copy the SOP links from Paige's onboarding guide into the General
-// guide. Paige is a "composed" guide, so her SOP links live in her source
-// guides — we gather them (respecting excluded items) and append any that
-// General doesn't already have (matched by title), keeping each link's URL.
-// Runs once; guarded by a meta flag. Safe to no-op if Paige isn't found yet.
+// guide. Paige may be a "composed" guide (her SOP links live in her source
+// guides) and/or a guide named after her directly — we gather from both,
+// respecting excluded items, and append any SOP link General doesn't already
+// have (matched by title), keeping each link's URL. Guarded by a meta flag,
+// but the flag is only set once we actually find SOP links to merge — so it
+// keeps retrying on later loads until Paige's links exist, then sticks.
 async function migratePaigeSopIntoGeneral() {
-  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'paige_sop_to_general_v1' LIMIT 1`;
+  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'paige_sop_to_general_v2' LIMIT 1`;
   if (done.length) return;
-  const metas = await sql`SELECT guide, body FROM onboarding_items WHERE kind = 'meta' AND title = 'composed'` as any[];
-  const paige = metas.find(m => String(m.guide ?? '').toLowerCase().includes('paige'));
-  if (!paige) return; // Paige's guide not created yet — try again on the next load.
-  let sources: string[] = [];
+
+  // Candidate source guides that hold Paige's SOP links.
+  const sourceGuides = new Set<string>();
   const excludeSet = new Set<string>();
-  try {
-    const p = JSON.parse(paige.body);
-    sources = (Array.isArray(p) ? p : p.sources ?? []).map(String);
-    for (const id of (Array.isArray(p) ? [] : p.exclude ?? [])) excludeSet.add(String(id));
-  } catch { /* bad meta body */ }
-  if (sources.length) {
-    // Paige's SOP links, in view order across her source guides.
-    const paigeSop: { title: string; url: string | null }[] = [];
-    for (const g of sources) {
-      const rows = await sql`SELECT id, title, url FROM onboarding_items WHERE guide = ${g} AND kind = 'sop' ORDER BY sort_order ASC` as any[];
-      for (const r of rows) if (!excludeSet.has(r.id)) paigeSop.push({ title: r.title, url: r.url ?? null });
-    }
-    const existing = await sql`SELECT title FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'` as any[];
-    const have = new Set(existing.map(e => String(e.title ?? '').trim().toLowerCase()));
-    const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int AS mx FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'`;
-    let so = (mx ?? -1) + 1;
-    for (const l of paigeSop) {
-      const key = String(l.title ?? '').trim().toLowerCase();
-      if (!key || have.has(key)) continue;
-      have.add(key);
-      await sql`INSERT INTO onboarding_items (id, guide, kind, title, url, sort_order) VALUES (${cuid()}, 'General', 'sop', ${l.title}, ${l.url}, ${so++})`;
+  const composedMetas = await sql`SELECT guide, body FROM onboarding_items WHERE kind = 'meta' AND title = 'composed'` as any[];
+  for (const m of composedMetas) {
+    if (!String(m.guide ?? '').toLowerCase().includes('paige')) continue;
+    try {
+      const p = JSON.parse(m.body);
+      for (const s of (Array.isArray(p) ? p : p.sources ?? [])) sourceGuides.add(String(s));
+      for (const id of (Array.isArray(p) ? [] : p.exclude ?? [])) excludeSet.add(String(id));
+    } catch { /* bad meta body */ }
+  }
+  // Also any real guide named after Paige (in case her links were added directly).
+  const paigeGuides = await sql`SELECT DISTINCT guide FROM onboarding_items WHERE kind = 'sop' AND LOWER(guide) LIKE '%paige%'` as any[];
+  for (const g of paigeGuides) sourceGuides.add(String(g.guide));
+  if (!sourceGuides.size) return; // Paige not found yet — retry next load.
+
+  // Paige's SOP links, in order, de-duplicated by title.
+  const paigeSop: { title: string; url: string | null }[] = [];
+  const seen = new Set<string>();
+  for (const g of sourceGuides) {
+    const rows = await sql`SELECT id, title, url FROM onboarding_items WHERE guide = ${g} AND kind = 'sop' ORDER BY sort_order ASC` as any[];
+    for (const r of rows) {
+      const key = String(r.title ?? '').trim().toLowerCase();
+      if (!key || excludeSet.has(r.id) || seen.has(key)) continue;
+      seen.add(key);
+      paigeSop.push({ title: r.title, url: r.url ?? null });
     }
   }
-  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'paige_sop_to_general_v1', 'done')`;
+  if (!paigeSop.length) return; // Nothing to merge yet — retry next load.
+
+  const existing = await sql`SELECT title FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'` as any[];
+  const have = new Set(existing.map(e => String(e.title ?? '').trim().toLowerCase()));
+  const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int AS mx FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'`;
+  let so = (mx ?? -1) + 1;
+  for (const l of paigeSop) {
+    const key = l.title.trim().toLowerCase();
+    if (have.has(key)) continue;
+    have.add(key);
+    await sql`INSERT INTO onboarding_items (id, guide, kind, title, url, sort_order) VALUES (${cuid()}, 'General', 'sop', ${l.title}, ${l.url}, ${so++})`;
+  }
+  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'paige_sop_to_general_v2', 'done')`;
 }
 
 export async function GET() {
