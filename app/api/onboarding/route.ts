@@ -188,10 +188,50 @@ async function ensureGlobalChecklist() {
   }
 }
 
+// One-time: copy the SOP links from Paige's onboarding guide into the General
+// guide. Paige is a "composed" guide, so her SOP links live in her source
+// guides — we gather them (respecting excluded items) and append any that
+// General doesn't already have (matched by title), keeping each link's URL.
+// Runs once; guarded by a meta flag. Safe to no-op if Paige isn't found yet.
+async function migratePaigeSopIntoGeneral() {
+  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'paige_sop_to_general_v1' LIMIT 1`;
+  if (done.length) return;
+  const metas = await sql`SELECT guide, body FROM onboarding_items WHERE kind = 'meta' AND title = 'composed'` as any[];
+  const paige = metas.find(m => String(m.guide ?? '').toLowerCase().includes('paige'));
+  if (!paige) return; // Paige's guide not created yet — try again on the next load.
+  let sources: string[] = [];
+  const excludeSet = new Set<string>();
+  try {
+    const p = JSON.parse(paige.body);
+    sources = (Array.isArray(p) ? p : p.sources ?? []).map(String);
+    for (const id of (Array.isArray(p) ? [] : p.exclude ?? [])) excludeSet.add(String(id));
+  } catch { /* bad meta body */ }
+  if (sources.length) {
+    // Paige's SOP links, in view order across her source guides.
+    const paigeSop: { title: string; url: string | null }[] = [];
+    for (const g of sources) {
+      const rows = await sql`SELECT id, title, url FROM onboarding_items WHERE guide = ${g} AND kind = 'sop' ORDER BY sort_order ASC` as any[];
+      for (const r of rows) if (!excludeSet.has(r.id)) paigeSop.push({ title: r.title, url: r.url ?? null });
+    }
+    const existing = await sql`SELECT title FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'` as any[];
+    const have = new Set(existing.map(e => String(e.title ?? '').trim().toLowerCase()));
+    const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int AS mx FROM onboarding_items WHERE guide = 'General' AND kind = 'sop'`;
+    let so = (mx ?? -1) + 1;
+    for (const l of paigeSop) {
+      const key = String(l.title ?? '').trim().toLowerCase();
+      if (!key || have.has(key)) continue;
+      have.add(key);
+      await sql`INSERT INTO onboarding_items (id, guide, kind, title, url, sort_order) VALUES (${cuid()}, 'General', 'sop', ${l.title}, ${l.url}, ${so++})`;
+    }
+  }
+  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'paige_sop_to_general_v1', 'done')`;
+}
+
 export async function GET() {
   await ensureTable();
   await migrate();
   await ensureGlobalChecklist();
+  await migratePaigeSopIntoGeneral();
   const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
   return NextResponse.json({ items });
 }
