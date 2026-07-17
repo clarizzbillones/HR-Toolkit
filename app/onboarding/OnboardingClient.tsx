@@ -373,6 +373,42 @@ export default function OnboardingClient() {
     setItems(prev => [...prev, item]);
     showToast(`Copied to “${to}”`);
   }
+  // Copy a whole block of links (Tools or SOP), keeping each item's URL, into
+  // another guide. A combined guide (e.g. Paige) can't hold items itself, so
+  // the links land in its first source guide — which is what its view shows.
+  async function copyLinksToGuide(kind: 'sop' | 'tool', list: Item[]) {
+    const label = kind === 'sop' ? 'SOP link' : 'tool';
+    if (!list.length) { showToast(`No ${label}s here to copy`); return; }
+    const targets = [...guides, ...composedNames].filter(n => n !== guide);
+    if (!targets.length) { showToast('No other guide to copy to'); return; }
+    const to = prompt(`Copy these ${list.length} ${label}${list.length > 1 ? 's' : ''} (with their links) to which guide?\n\n${targets.join(', ')}`, targets[0])?.trim();
+    if (!to) return;
+    const q = to.toLowerCase();
+    // Exact match first, then a forgiving contains-match (so "paige" finds "Paige Nutini").
+    const comp = composed.find(c => c.name.toLowerCase() === q) ?? composed.find(c => c.name.toLowerCase().includes(q));
+    const base = guides.find(g => g.toLowerCase() === q) ?? guides.find(g => g.toLowerCase().includes(q));
+    const destGuide = comp ? (comp.sources[0] ?? '') : (base ?? '');
+    if (!destGuide) { showToast(`Couldn’t find a guide named “${to}”`); return; }
+    const destLabel = comp ? comp.name : destGuide;
+    // If the destination already has links of this kind, let HR decide whether
+    // to make this set THE model (replace) or just add to what's there (append).
+    const existing = items.filter(i => i.guide === destGuide && i.kind === kind);
+    let replace = false;
+    if (existing.length) {
+      replace = confirm(`“${destLabel}” already has ${existing.length} ${label}${existing.length > 1 ? 's' : ''}.\n\nOK  → replace them with these ${list.length} (make this the model).\nCancel → add these on top of the existing ones.`);
+    }
+    if (replace) {
+      for (const e of existing) await fetch('/api/onboarding', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id }) });
+    }
+    const created: Item[] = [];
+    for (const l of list) {
+      const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, guide: destGuide, title: l.title, url: l.url ?? null }) });
+      const { item } = await res.json();
+      if (item) created.push(item);
+    }
+    setItems(prev => [...prev.filter(i => !(replace && i.guide === destGuide && i.kind === kind)), ...created]);
+    showToast(`${replace ? 'Replaced' : 'Copied'} ${created.length} ${label}${created.length > 1 ? 's' : ''} ${replace ? 'in' : 'to'} “${destLabel}”`);
+  }
   const [dragId, setDragId] = useState<string | null>(null);
   // Reorder sections within the same group (intro <50 / closing >=50) via drag & drop
   async function reorderSection(targetId: string) {
@@ -565,6 +601,11 @@ export default function OnboardingClient() {
       <div className="flex items-center gap-2 mb-2">
         <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
         <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</h2>
+        {list.length > 0 && (
+          <button onClick={() => copyLinksToGuide(kind, list)}
+            className="ml-auto text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
+            title={`Copy these ${title} (with their links) to another guide`}>⧉ Copy to…</button>
+        )}
       </div>
       <div className="bg-white border border-border rounded-card p-3 space-y-1">
         {list.map(l => (
