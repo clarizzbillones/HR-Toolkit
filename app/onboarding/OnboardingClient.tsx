@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
@@ -92,6 +92,53 @@ export default function OnboardingClient() {
   useEffect(() => { fetch('/api/onboarding').then(r => r.json()).then(d => setItems(d.items ?? [])); }, []);
   const [composed, setComposed] = useState<{ name: string; sources: string[]; exclude: string[]; headers: Record<string, string> }[]>([]);
   useEffect(() => { fetch('/api/onboarding/compose').then(r => r.json()).then(d => setComposed(d.composed ?? [])).catch(() => {}); }, []);
+
+  // Custom drag order for the guide tabs (base guides + combined guides), saved
+  // per-browser so the order you arrange them in sticks between visits.
+  const [guideOrder, setGuideOrder] = useState<string[]>([]);
+  const [composedOrder, setComposedOrder] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setGuideOrder(JSON.parse(localStorage.getItem('hrkit.ob.guideOrder') || '[]'));
+      setComposedOrder(JSON.parse(localStorage.getItem('hrkit.ob.composedOrder') || '[]'));
+    } catch { /* ignore */ }
+  }, []);
+  const dragName = useRef<string | null>(null);
+  // Names in `order` first (in that order), then any not-yet-ordered names.
+  function applyOrder(names: string[], order: string[]): string[] {
+    const known = order.filter(n => names.includes(n));
+    return [...known, ...names.filter(n => !known.includes(n))];
+  }
+  function moveBefore(list: string[], from: string, to: string): string[] {
+    const arr = list.slice();
+    const fi = arr.indexOf(from);
+    if (fi < 0) return arr;
+    arr.splice(fi, 1);
+    const ti = arr.indexOf(to);
+    arr.splice(ti < 0 ? arr.length : ti, 0, from);
+    return arr;
+  }
+  function dropOnGuide(target: string) {
+    const from = dragName.current; dragName.current = null;
+    if (!from || from === target) return;
+    const next = moveBefore(applyOrder(guides, guideOrder), from, target);
+    setGuideOrder(next);
+    try { localStorage.setItem('hrkit.ob.guideOrder', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+  function dropOnComposed(target: string) {
+    const from = dragName.current; dragName.current = null;
+    if (!from || from === target) return;
+    const next = moveBefore(applyOrder(composed.map(c => c.name), composedOrder), from, target);
+    setComposedOrder(next);
+    try { localStorage.setItem('hrkit.ob.composedOrder', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+
+  // Keep the reader at the same scroll offset when switching between guides, so
+  // you can flip between two people and compare the same table side-by-side
+  // without losing your place.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const savedScroll = useRef(0);
+  useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = savedScroll.current; }, [guide]);
   const [showNewHire, setShowNewHire] = useState(false);
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
@@ -788,18 +835,21 @@ export default function OnboardingClient() {
       {/* Guide selector (guides view only) */}
       {view === 'guides' && (
       <div className="px-8 pt-4 bg-white border-b border-border flex items-center gap-2 flex-wrap flex-shrink-0">
-        {guides.map(g => (
+        {applyOrder(guides, guideOrder).map(g => (
           <button key={g} onClick={() => setGuide(g)}
-            className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors ${guide === g ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}>
+            draggable onDragStart={() => { dragName.current = g; }} onDragOver={e => e.preventDefault()} onDrop={() => dropOnGuide(g)}
+            title="Drag to reorder"
+            className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors cursor-grab active:cursor-grabbing ${guide === g ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}>
             {g}
           </button>
         ))}
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
         {composed.length > 0 && <span className="mx-1 text-border-light">|</span>}
-        {composed.map(c => (
+        {applyOrder(composed.map(c => c.name), composedOrder).map(name => composed.find(c => c.name === name)!).filter(Boolean).map(c => (
           <button key={c.name} onClick={() => setGuide(c.name)}
-            className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors ${guide === c.name ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}
-            title={`Combined: ${c.sources.join(' + ')}`}>
+            draggable onDragStart={() => { dragName.current = c.name; }} onDragOver={e => e.preventDefault()} onDrop={() => dropOnComposed(c.name)}
+            className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors cursor-grab active:cursor-grabbing ${guide === c.name ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}
+            title={`Combined: ${c.sources.join(' + ')} · drag to reorder`}>
             👤 {c.name}
           </button>
         ))}
@@ -934,7 +984,7 @@ export default function OnboardingClient() {
       {view === 'dashboard' && Dashboard()}
 
       {view === 'guides' && !showNewHire && isComposed && composedDef && (
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div ref={scrollRef} onScroll={e => { savedScroll.current = e.currentTarget.scrollTop; }} className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="mb-4 px-4 py-3 bg-[#eef2f7] border border-[#c7d4e2] rounded-card text-sm text-[#3f5a76] flex items-center gap-2 flex-wrap">
             <span>🧩 <b>{guide}</b> is a combined guide, assembled from <b>{guideSources.join(' + ') || '—'}</b>. Edit any section right here — changes save to that source guide and update everywhere it appears.</span>
@@ -970,7 +1020,7 @@ export default function OnboardingClient() {
       )}
 
       {view === 'guides' && !showNewHire && !isComposed && (
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div ref={scrollRef} onScroll={e => { savedScroll.current = e.currentTarget.scrollTop; }} className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="space-y-6">
             {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
