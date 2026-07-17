@@ -6,7 +6,7 @@ import { computeReview, parseHistory, REVIEW_STATUSES, type ReviewStatus, type R
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
-  last_review_date: string | null; review_history: string | null; next_review_override: string | null;
+  last_review_date: string | null; review_history: string | null; next_review_override: string | null; review_status_override: string | null;
   review_6mo_status: string | null; review_6mo_date: string | null; review_6mo_summary: string | null;
   review_1yr_status: string | null; review_1yr_date: string | null; review_1yr_summary: string | null;
   review_notes: string | null;
@@ -76,7 +76,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
-  const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', peers: '', notes: '' });
+  const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -251,7 +251,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     if (!form.name || !form.date) return;
     setSaving(true);
     try {
-      const peers = form.peers.split(',').map(s => s.trim()).filter(Boolean);
       let existing = employees.find(e => e.name.trim().toLowerCase() === form.name.trim().toLowerCase());
       if (!existing) {
         const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, role: form.role || 'Employee', dept: form.dept }) });
@@ -259,11 +258,11 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         if (data.employee) { existing = data.employee; setEmployees(prev => [...prev, data.employee]); }
       }
       if (existing) {
-        const history = [...parseHistory(existing.review_history), { date: form.date, peer_reviewers: peers, notes: form.notes }];
+        const history = [...parseHistory(existing.review_history), { date: form.date, peer_reviewers: [], notes: form.notes }];
         await patchEmployee(existing.id, { last_review_date: form.date, review_history: JSON.stringify(history), next_review_override: null });
         setShowSchedule(false);
         showToast(`Logged ${form.name}'s review — next review rescheduled automatically`);
-        setForm({ name: '', role: '', dept: 'Operations', date: '', peers: '', notes: '' });
+        setForm({ name: '', role: '', dept: 'Operations', date: '', notes: '' });
       }
     } finally {
       setSaving(false);
@@ -309,7 +308,13 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     const h = parseHistory(e.review_history);
     return h.length ? h.map(x => x.date).sort().slice(-1)[0] : null;
   }
-  function computeFor(e: Employee) { return computeReview(hireOf(e), lastOf(e), today, e.next_review_override); }
+  function computeFor(e: Employee) {
+    const c = computeReview(hireOf(e), lastOf(e), today, e.next_review_override);
+    // A manual status override wins over the derived status (date math unchanged).
+    const ov = e.review_status_override;
+    if (ov && (REVIEW_STATUSES as string[]).includes(ov)) return { ...c, status: ov as ReviewStatus };
+    return c;
+  }
 
   // Everyone in the review cycle (principals excluded), each with derived fields.
   const tracked = employees.filter(e => !REVIEW_EXCLUDED.has(e.name.trim().toLowerCase()));
@@ -426,7 +431,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Send reminder
                 </button>
-                <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: '', peers: '', notes: '' }); setShowSchedule(true); }}
+                <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: '', notes: '' }); setShowSchedule(true); }}
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Log completed
                 </button>
@@ -535,11 +540,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review date (actual)</label>
                 <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                   className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Peer reviewers <span className="font-normal normal-case">(comma-separated, optional)</span></label>
-                <input value={form.peers} onChange={e => setForm(f => ({ ...f, peers: e.target.value }))}
-                  placeholder="e.g. Ally, Paula, JR" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Notes <span className="font-normal normal-case">(optional)</span></label>
@@ -754,11 +754,12 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
   const history = parseHistory(employee.review_history);
   const latest = history.length ? history.slice().sort((a, b) => a.date.localeCompare(b.date))[history.length - 1] : null;
   const [lastRev, setLastRev] = useState(employee.last_review_date?.slice(0, 10) ?? latest?.date ?? '');
-  const [peers, setPeers] = useState((latest?.peer_reviewers ?? []).join(', '));
   const [summary, setSummary] = useState(latest?.notes ?? employee.review_notes ?? '');
   // Editable next review: prefilled with the computed prediction (or a saved
   // override), but the user can reschedule it to the actual review day.
   const [nextRev, setNextRev] = useState(employee.next_review_override?.slice(0, 10) ?? '');
+  // Editable status: '' = auto (use the derived status), else a manual override.
+  const [statusOv, setStatusOv] = useState(employee.review_status_override ?? '');
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState<{ '6mo': string | null; '1yr': string | null }>({ '6mo': null, '1yr': null });
   const [uploading, setUploading] = useState<'6mo' | '1yr' | null>(null);
@@ -792,12 +793,11 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
   async function save() {
     setBusy(true);
     try {
-      // Rebuild history: the latest entry carries the current last review date,
-      // peer reviewers and notes. Older entries are preserved.
+      // Rebuild history: the latest entry carries the current last review date
+      // and notes. Older entries are preserved.
       const older = history.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, -1);
-      const peerList = peers.split(',').map(s => s.trim()).filter(Boolean);
       const rebuilt = lastRev
-        ? [...older, { date: lastRev, peer_reviewers: peerList, notes: summary }]
+        ? [...older, { date: lastRev, peer_reviewers: [], notes: summary }]
         : older;
       // Store the next-review override only when it differs from the prediction.
       const override = nextRev && nextRev !== predicted ? nextRev : null;
@@ -809,6 +809,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
         last_review_date: lastRev || null,
         review_history: JSON.stringify(rebuilt),
         next_review_override: override,
+        review_status_override: statusOv || null,
         review_notes: summary || null,
       });
     } finally {
@@ -917,9 +918,13 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Peer reviewers <span className="font-normal normal-case">(comma-separated)</span></label>
-            <input value={peers} onChange={e => setPeers(e.target.value)} placeholder="e.g. Ally, Paula, JR"
-              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Status <span className="font-normal normal-case">(auto from dates, or set manually)</span></label>
+            <select value={statusOv} onChange={e => setStatusOv(e.target.value)}
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink bg-white">
+              <option value="">Auto{drawerNext.status ? ` — ${drawerNext.status}` : ''}</option>
+              {REVIEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {statusOv && <p className="text-[11px] text-text-muted mt-1">Set manually — pick “Auto” to go back to the computed status{drawerNext.status ? ` (${drawerNext.status})` : ''}.</p>}
           </div>
 
           {history.length > 1 && (
@@ -929,7 +934,6 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
                 {history.slice().sort((a, b) => b.date.localeCompare(a.date)).map((h, i) => (
                   <div key={i} className="px-3 py-2 text-sm">
                     <span className="font-medium text-text-primary">{formatDate(h.date)}</span>
-                    {h.peer_reviewers.length > 0 && <span className="text-text-muted"> · peers: {h.peer_reviewers.join(', ')}</span>}
                     {h.notes && <div className="text-[12px] text-text-muted mt-0.5">{h.notes}</div>}
                   </div>
                 ))}

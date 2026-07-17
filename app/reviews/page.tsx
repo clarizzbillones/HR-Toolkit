@@ -54,6 +54,9 @@ export default async function ReviewsPage() {
   // Optional manual override of the predicted next review date (cleared when a
   // review is logged, since the next cycle then recomputes from the hire date).
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS next_review_override TEXT`;
+  // Optional manual override of the derived review status (e.g. force "Scheduled"
+  // when the date math says otherwise). Empty/NULL = use the computed status.
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_status_override TEXT`;
   await sql`UPDATE employees SET name = 'Carly Crotty' WHERE name = 'Carly Crolly'`;
 
   // Ensure the two clerks who were missing from the review roster exist
