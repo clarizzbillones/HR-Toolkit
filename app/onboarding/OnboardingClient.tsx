@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type UIEvent as ReactUIEvent } from 'react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
@@ -133,12 +133,35 @@ export default function OnboardingClient() {
     try { localStorage.setItem('hrkit.ob.composedOrder', JSON.stringify(next)); } catch { /* ignore */ }
   }
 
-  // Keep the reader at the same scroll offset when switching between guides, so
-  // you can flip between two people and compare the same table side-by-side
-  // without losing your place.
+  // Keep the reader on the same section when switching between guides, so you
+  // can flip between two people and compare the same table (Tools, Schedule…)
+  // side-by-side without losing your place. We remember which block is at the
+  // top of the view and re-anchor to the matching block in the next guide;
+  // if it has no such block we fall back to the same scroll offset.
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScroll = useRef(0);
-  useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = savedScroll.current; }, [guide]);
+  const currentSection = useRef<string | null>(null);
+  function handleGuideScroll(e: ReactUIEvent<HTMLDivElement>) {
+    const cont = e.currentTarget;
+    savedScroll.current = cont.scrollTop;
+    const cTop = cont.getBoundingClientRect().top;
+    let top: string | null = null;
+    cont.querySelectorAll('[data-sec]').forEach(el => {
+      if (el.getBoundingClientRect().top - cTop <= 80) top = el.getAttribute('data-sec');
+    });
+    currentSection.current = top;
+  }
+  useLayoutEffect(() => {
+    const cont = scrollRef.current;
+    if (!cont) return;
+    const key = currentSection.current;
+    const el = key ? cont.querySelector(`[data-sec="${key}"]`) : null;
+    if (el) {
+      cont.scrollTop += el.getBoundingClientRect().top - cont.getBoundingClientRect().top - 12;
+    } else {
+      cont.scrollTop = savedScroll.current;
+    }
+  }, [guide]);
   const [showNewHire, setShowNewHire] = useState(false);
   const [nhName, setNhName] = useState('');
   const [nhSources, setNhSources] = useState<string[]>([]);
@@ -984,7 +1007,7 @@ export default function OnboardingClient() {
       {view === 'dashboard' && Dashboard()}
 
       {view === 'guides' && !showNewHire && isComposed && composedDef && (
-      <div ref={scrollRef} onScroll={e => { savedScroll.current = e.currentTarget.scrollTop; }} className="flex-1 overflow-auto px-8 py-6">
+      <div ref={scrollRef} onScroll={handleGuideScroll} className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="mb-4 px-4 py-3 bg-[#eef2f7] border border-[#c7d4e2] rounded-card text-sm text-[#3f5a76] flex items-center gap-2 flex-wrap">
             <span>🧩 <b>{guide}</b> is a combined guide, assembled from <b>{guideSources.join(' + ') || '—'}</b>. Edit any section right here — changes save to that source guide and update everywhere it appears.</span>
@@ -1009,7 +1032,7 @@ export default function OnboardingClient() {
                     <div className="text-[20px] font-extrabold text-text-primary mt-0.5">{label}</div>
                   </div>
                   <div className="space-y-6">
-                    {order.map(k => <div key={k}>{nodes[k]}</div>)}
+                    {order.map(k => <div key={k} data-sec={k}>{nodes[k]}</div>)}
                   </div>
                 </div>
               );
@@ -1020,12 +1043,12 @@ export default function OnboardingClient() {
       )}
 
       {view === 'guides' && !showNewHire && !isComposed && (
-      <div ref={scrollRef} onScroll={e => { savedScroll.current = e.currentTarget.scrollTop; }} className="flex-1 overflow-auto px-8 py-6">
+      <div ref={scrollRef} onScroll={handleGuideScroll} className="flex-1 overflow-auto px-8 py-6">
         <div className="max-w-5xl">
           <div className="space-y-6">
             {/* Blocks render in the saved order; hover a block for ▲▼ to move it */}
             {visibleBlocks.map((k, i) => (
-              <div key={k} className="relative group/blk">
+              <div key={k} data-sec={k} className="relative group/blk">
                 <div className="absolute -top-2 right-1 z-10 flex gap-0.5 opacity-0 group-hover/blk:opacity-100">
                   <button disabled={i === 0} onClick={() => moveBlock(k, -1)} title="Move block up"
                     className="text-xs bg-white border border-border-light rounded px-1.5 py-0.5 text-text-muted hover:text-ink disabled:opacity-25 disabled:cursor-default shadow-sm">▲</button>
