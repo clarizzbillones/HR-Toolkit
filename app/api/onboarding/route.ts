@@ -282,6 +282,26 @@ export async function POST(req: Request) {
     const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
     return NextResponse.json({ items });
   }
+  // Flatten a combined guide (its ordered source guides, minus excluded items)
+  // into a brand-new independent guide whose content can be edited on its own.
+  if (body.action === 'duplicate-composed') {
+    const to = (body.to ?? '').toString().trim();
+    const sources: string[] = Array.isArray(body.sources) ? body.sources.map(String) : [];
+    const exclude = new Set<string>((Array.isArray(body.exclude) ? body.exclude : []).map(String));
+    if (!to || !sources.length) return NextResponse.json({ error: 'Bad to/sources' }, { status: 400 });
+    const counter: Record<string, number> = {};
+    for (const g of sources) {
+      const rows = await sql`SELECT * FROM onboarding_items WHERE guide = ${g} AND kind IN ('section','schedule','sop','tool','table') ORDER BY sort_order ASC` as any[];
+      for (const r of rows) {
+        if (exclude.has(r.id)) continue;
+        const so = (counter[r.kind] = (counter[r.kind] ?? -1) + 1);
+        await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, done, sort_order)
+          VALUES (${cuid()}, ${to}, ${r.kind}, ${r.title}, ${r.body}, ${r.day}, ${r.assignee}, ${r.location}, ${r.url}, ${r.owner}, false, ${so})`;
+      }
+    }
+    const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
+    return NextResponse.json({ items });
+  }
   const guide = (body.guide ?? 'General').toString();
   const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task'].includes(body.kind) ? body.kind : 'section';
   const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${guide} AND kind = ${kind}`;

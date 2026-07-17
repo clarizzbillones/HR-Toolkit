@@ -203,23 +203,22 @@ export default function OnboardingClient() {
     setGuide('General');
     showToast('Combined guide removed');
   }
-  // Duplicate the active guide under a new name. Works for a combined guide
-  // (like Paige — copies its source list/exclusions/headers) and for a plain
-  // building-block guide (copies all of its items into the new guide).
+  // Duplicate the active guide under a new name as a fully independent copy.
+  // A combined guide (like Paige) is flattened into its own editable guide so
+  // changes to the copy never touch the original or its shared sources; a plain
+  // building-block guide has all of its items copied into the new guide.
   async function duplicateGuide() {
     const name = prompt(`Duplicate “${guide}” as:`, `${guide} (copy)`)?.trim();
     if (!name) return;
     if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
-    if (isComposed && composedDef) {
-      await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: composedDef.sources, exclude: composedDef.exclude, headers: composedDef.headers }) });
-      setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: [...composedDef.sources], exclude: [...composedDef.exclude], headers: { ...composedDef.headers } }]);
-    } else {
-      const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'duplicate', from: guide, to: name }) });
-      const { items: newItems } = await res.json();
-      if (Array.isArray(newItems)) setItems(newItems);
-    }
+    const payload = (isComposed && composedDef)
+      ? { action: 'duplicate-composed', to: name, sources: composedDef.sources, exclude: composedDef.exclude }
+      : { action: 'duplicate', from: guide, to: name };
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const { items: newItems } = await res.json();
+    if (Array.isArray(newItems)) setItems(newItems);
     setGuide(name);
-    showToast(`Duplicated “${guide}” → “${name}”`);
+    showToast(`Duplicated “${guide}” → “${name}” (independent copy)`);
   }
   const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
