@@ -203,6 +203,24 @@ export default function OnboardingClient() {
     setGuide('General');
     showToast('Combined guide removed');
   }
+  // Duplicate the active guide under a new name. Works for a combined guide
+  // (like Paige — copies its source list/exclusions/headers) and for a plain
+  // building-block guide (copies all of its items into the new guide).
+  async function duplicateGuide() {
+    const name = prompt(`Duplicate “${guide}” as:`, `${guide} (copy)`)?.trim();
+    if (!name) return;
+    if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
+    if (isComposed && composedDef) {
+      await fetch('/api/onboarding/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sources: composedDef.sources, exclude: composedDef.exclude, headers: composedDef.headers }) });
+      setComposed(prev => [...prev.filter(c => c.name !== name), { name, sources: [...composedDef.sources], exclude: [...composedDef.exclude], headers: { ...composedDef.headers } }]);
+    } else {
+      const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'duplicate', from: guide, to: name }) });
+      const { items: newItems } = await res.json();
+      if (Array.isArray(newItems)) setItems(newItems);
+    }
+    setGuide(name);
+    showToast(`Duplicated “${guide}” → “${name}”`);
+  }
   const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
@@ -918,14 +936,20 @@ export default function OnboardingClient() {
           </button>
         ))}
         <button onClick={() => { setNhSources([]); setNhName(''); setShowNewHire(v => !v); }} className="text-sm font-semibold px-3 py-2 text-[#3f6b8a] hover:text-ink">+ New hire (combine)</button>
-        {guide !== 'General' && !draftMode && !isComposed && (
+        {!draftMode && !isComposed && (
           <div className="ml-auto flex items-center gap-3">
-            <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
-            <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
+            {guide !== 'General' && (
+              <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
+            )}
+            <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
+            {guide !== 'General' && (
+              <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
+            )}
           </div>
         )}
         {isComposed && composedDef && (
           <div className="ml-auto flex items-center gap-3">
+            <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
             <button onClick={() => editComposed(composedDef)} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⚙ Edit combine</button>
             <button onClick={() => deleteComposed(guide)} className="text-xs font-semibold text-litred-alt hover:underline">Remove “{guide}” combined guide</button>
           </div>
