@@ -11,7 +11,13 @@ async function getStats() {
   const [{ n: dueToday }] = await sql`SELECT COUNT(*)::int as n FROM tasks WHERE due_tag = 'Today' AND status NOT IN ('done', 'archived')`;
   // ptoToday is fetched client-side from /api/pto/today (full merge logic)
   const ptoToday = 0;
-  const [nextPayroll] = await sql`SELECT run_date, cutoff FROM payroll_periods WHERE run_date >= ${today} ORDER BY run_date ASC LIMIT 1`;
+  // The next payroll still to run: soonest deadline (cutoff) that hasn't been
+  // processed yet. Once a period is marked Processed the card advances to the
+  // next one automatically. `schedule` tells us the cadence (Weekly, Monthly…).
+  const [nextPayroll] = await sql`
+    SELECT run_date, cutoff, schedule FROM payroll_periods
+    WHERE cutoff >= ${today} AND status NOT IN ('Processed')
+    ORDER BY cutoff ASC, run_date ASC LIMIT 1`;
   const [{ n: empCount }] = await sql`SELECT COUNT(*)::int as n FROM employees`;
   const [{ n: reviewsDone }] = await sql`SELECT COUNT(*)::int as n FROM employees WHERE review_6mo_status = 'Complete'`;
   let onboarding = 0;
@@ -31,10 +37,6 @@ async function getStats() {
       .filter(e => e.m === cm && e.y && e.y < cy).map(e => ({ name: e.name, years: cy - e.y, date: e.date }))
       .sort((a, b) => dayOf(a.date) - dayOf(b.date));
   } catch { /* staffing table not created yet */ }
-  const payrollDaysLeft = nextPayroll
-    ? Math.ceil((new Date(nextPayroll.run_date).getTime() - Date.now()) / 86400000)
-    : null;
-
   // Upcoming deadlines (next 30 days) — payroll + performance reviews, flagged by urgency
   const daysUntil = (s: string) => {
     const t = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
@@ -42,6 +44,15 @@ async function getStats() {
     const d = new Date(String(s).slice(0, 10) + 'T00:00:00');
     return Math.round((d.getTime() - t.getTime()) / 86400000);
   };
+  // Countdown is to the deadline (cutoff) to run this payroll.
+  const payrollDaysLeft = nextPayroll?.cutoff ? daysUntil(nextPayroll.cutoff) : null;
+  // Friendly cadence label for the "what kind of payroll" note.
+  const payrollSchedule = ((s: string | null | undefined) => {
+    if (!s) return null;
+    if (/semi-?monthly/i.test(s)) return 'Semi-monthly';
+    if (/owners|6th of month/i.test(s)) return 'Monthly';
+    return s; // Weekly, Bi-weekly, Monthly, Contractor
+  })(nextPayroll?.schedule);
   const deadlines: { label: string; date: string; days: number; kind: string }[] = [];
   try {
     const [np] = await sql`SELECT cutoff FROM payroll_periods WHERE cutoff >= ${today} AND status NOT IN ('Processed') ORDER BY cutoff ASC LIMIT 1` as any[];
@@ -66,6 +77,7 @@ async function getStats() {
     payrollDaysLeft,
     cutoffToday: nextPayroll?.cutoff === today,
     nextPayrollDate: nextPayroll?.run_date ?? null,
+    payrollSchedule,
     empCount: empCount ?? 0,
     reviewsDone: reviewsDone ?? 0,
     onboarding,

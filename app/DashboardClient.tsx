@@ -12,6 +12,7 @@ interface Props {
   payrollDaysLeft: number | null;
   cutoffToday: boolean;
   nextPayrollDate: string | null;
+  payrollSchedule: string | null;
   empCount: number;
   reviewsDone: number;
   onboarding: number;
@@ -59,7 +60,7 @@ const modules = [
   {
     href: '/payroll', label: 'Payroll',
     icon: <PayrollIcon />, iconBg: 'bg-[#eef5f1]', iconColor: 'text-[#2f7d5b]',
-    descFn: (p: Props) => p.nextPayrollDate ? `Semi-monthly. Next run ${fmtDate(p.nextPayrollDate)}.` : 'No upcoming payroll periods.',
+    descFn: (p: Props) => p.nextPayrollDate ? `${p.payrollSchedule ?? 'Payroll'}. Next run ${fmtDate(p.nextPayrollDate)}.` : 'No upcoming payroll periods.',
     badgeFn: (p: Props) => p.cutoffToday ? 'Cutoff today' : null, badgeColor: '#b07d2a',
   },
   {
@@ -168,9 +169,11 @@ export default function DashboardClient(props: Props) {
             accent="#2f7d5b" href="/pto"
           />
           <KpiCard
-            label="Next Payroll"
+            label={props.payrollSchedule ? `Next Payroll · ${props.payrollSchedule}` : 'Next Payroll'}
             value={props.payrollDaysLeft !== null ? `${props.payrollDaysLeft}d` : '—'}
-            sub={payrollUrgent && payrollDays !== null ? `⚠ deadline ${urgencyText(payrollDays)}` : props.cutoffToday ? 'cutoff today!' : 'days away'}
+            sub={payrollDays === null ? 'no payroll to run'
+              : payrollUrgent ? `⚠ deadline ${urgencyText(payrollDays)}`
+              : `until ${props.payrollSchedule ? props.payrollSchedule.toLowerCase() + ' ' : ''}deadline`}
             subColor={payrollUrgent ? '#b0412f' : props.cutoffToday ? '#b07d2a' : undefined}
             accent="#b07d2a" href="/payroll" urgent={payrollUrgent}
           />
