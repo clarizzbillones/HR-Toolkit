@@ -26,9 +26,9 @@ export function buildAccessInvite(opts: {
   const subject = 'Your access to the Litson HR Toolkit';
   const html = `<!DOCTYPE html><html><body style="margin:0;background:#f4f1ea;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2a2a">
     <div style="max-width:560px;margin:0 auto;padding:24px 16px">
-      <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:22px 28px;border-radius:10px 10px 0 0;border-bottom:4px solid #c9a24a">
-        <div style="font-size:22px;font-weight:800;letter-spacing:.18em;color:#fff">LITSON</div>
-        <div style="font-size:11px;color:#c9a24a;letter-spacing:.12em;font-weight:600">HR TOOLKIT · VIEWER ACCESS</div>
+      <div style="background-color:#ffffff;padding:22px 28px;border-radius:10px 10px 0 0;border:1px solid #e6ddcd;border-bottom:4px solid #c9a24a">
+        <div style="font-size:26px;font-weight:800;letter-spacing:.20em;color:#1b2a3d">LITSON</div>
+        <div style="font-size:11px;color:#8a6d3b;letter-spacing:.12em;font-weight:600;margin-top:2px">HR TOOLKIT · VIEWER ACCESS</div>
       </div>
       <div style="background:#fff;padding:26px 28px;border-radius:0 0 10px 10px;border:1px solid #e6ddcd;border-top:none">
         <p style="font-size:15px;margin:0 0 14px">Hi ${first},</p>
