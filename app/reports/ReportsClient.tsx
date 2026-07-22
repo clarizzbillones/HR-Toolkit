@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { useAccess } from '@/components/AccessProvider';
 import { mergePto } from '@/lib/pto';
 import { reviewRows } from '@/lib/reviews';
 import { mapTripRows } from '@/lib/trips';
@@ -62,10 +63,11 @@ function AttachLink({ tab, id, name }: { tab: string; id: string; name?: string 
 }
 // Row-level attach control: view the attached file, and attach or replace it on
 // an already-saved record (uploads the raw file via multipart).
-function RowAttach({ tab, id, hasAttachment, name, onChange }: { tab: string; id: string; hasAttachment: boolean; name?: string | null; onChange: (name: string) => void }) {
+function RowAttach({ tab, id, hasAttachment, name, onChange, readOnly }: { tab: string; id: string; hasAttachment: boolean; name?: string | null; onChange: (name: string) => void; readOnly?: boolean }) {
   const { showToast } = useToast();
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  if (readOnly) return hasAttachment ? <AttachLink tab={tab} id={id} name={name} /> : <span className="text-text-faint text-xs">—</span>;
   async function upload(file: File) {
     if (file.size > MAX_ATTACH) { showToast('File too large (max 4 MB)'); return; }
     setBusy(true);
@@ -960,6 +962,7 @@ function InsuranceTab() {
   const [reading, setReading] = useState(false);
   const [attach, setAttach] = useState<File | null>(null); // the invoice file to keep on file
   const fileRef = useRef<HTMLInputElement>(null);
+  const { me } = useAccess(); const readOnly = !!me?.restricted;
 
   useEffect(() => { fetch('/api/reports?tab=insurance').then(r => r.json()).then(d => setInvoices(d.invoices ?? [])); }, []);
 
@@ -1004,6 +1007,7 @@ function InsuranceTab() {
 
   return (
     <div>
+      {!readOnly && (
       <div className="flex justify-end items-center gap-2 mb-4">
         <input ref={fileRef} type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,image/*" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) readInvoiceFile(f); }} />
@@ -1014,6 +1018,7 @@ function InsuranceTab() {
         </button>
         <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Invoice</button>
       </div>
+      )}
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-3 gap-4">
           {([['Carrier','carrier'],['Invoice Type','invoiceType'],['Amount ($)','amount'],['Deadline','deadline'],['Coverage Period','coveragePeriod'],['Enrolled Count','enrolledCount']] as [string, keyof typeof form][]).map(([l, k]) => (
@@ -1045,7 +1050,7 @@ function InsuranceTab() {
                 <td className="px-4 py-3 text-text-muted">{inv.deadline}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.coverage_period}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.enrolled_count}</td>
-                <td className="px-4 py-3"><RowAttach tab="insurance" id={inv.id} hasAttachment={!!inv.has_attachment} name={inv.attachment_name}
+                <td className="px-4 py-3"><RowAttach tab="insurance" id={inv.id} hasAttachment={!!inv.has_attachment} name={inv.attachment_name} readOnly={readOnly}
                   onChange={name => setInvoices(p => p.map(x => x.id === inv.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
@@ -1064,6 +1069,7 @@ function ReimbursementsTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ employee: '', purpose: '', amount: '', payoutDate: '' });
   const [attach, setAttach] = useState<File | null>(null);
+  const { me } = useAccess(); const readOnly = !!me?.restricted;
 
   useEffect(() => { fetch('/api/reports?tab=reimbursements').then(r => r.json()).then(d => setRows(d.rows ?? [])); }, []);
 
@@ -1081,7 +1087,7 @@ function ReimbursementsTab() {
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add</button>
+        {!readOnly && <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add</button>}
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-2 gap-4">
@@ -1112,7 +1118,7 @@ function ReimbursementsTab() {
                 <td className="px-4 py-3 text-text-muted">{r.purpose}</td>
                 <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
-                <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name}
+                <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
                   onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
@@ -1133,6 +1139,7 @@ function CashOutTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
   const [attach, setAttach] = useState<File | null>(null);
+  const { me } = useAccess(); const readOnly = !!me?.restricted;
   const CATEGORIES = ['Payroll','Guideline','Distribution','Reimbursement','Travel','Office Supplies','Legal Fees','Software','Marketing','Other'];
 
   function load() {
@@ -1165,7 +1172,7 @@ function CashOutTab() {
           <option>All</option>
           {CATEGORIES.map(c => <option key={c}>{c}</option>)}
         </select>
-        <button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Entry</button>
+        {!readOnly && <button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Entry</button>}
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-3 gap-4">
@@ -1210,7 +1217,7 @@ function CashOutTab() {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.status === 'Paid' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{r.status}</span>
                 </td>
                 <td className="px-4 py-3 text-text-muted">{r.note ?? '—'}</td>
-                <td className="px-4 py-3"><RowAttach tab="cashout" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name}
+                <td className="px-4 py-3"><RowAttach tab="cashout" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
                   onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
@@ -1234,8 +1241,16 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function ReportsClient() {
+  const { me } = useAccess();
+  // Restricted viewers only see the report tabs they were granted.
+  const visibleTabs = me?.restricted ? TABS.filter(t => me.reportTabs.includes(t.key)) : TABS;
   const [tab, setTab] = useState<Tab>('monthly');
   const [monthlyData, setMonthlyData] = useState<any>(null);
+
+  // Keep the active tab within what this person is allowed to see.
+  useEffect(() => {
+    if (visibleTabs.length && !visibleTabs.some(t => t.key === tab)) setTab(visibleTabs[0].key);
+  }, [visibleTabs, tab]);
 
   useEffect(() => {
     if (tab === 'monthly') {
@@ -1246,27 +1261,30 @@ export default function ReportsClient() {
     }
   }, [tab]);
 
+  const active = visibleTabs.some(t => t.key === tab) ? tab : visibleTabs[0]?.key;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Reports</h1>
       </header>
       <div className="flex gap-1 px-8 py-3 border-b border-border bg-white flex-shrink-0">
-        {TABS.map(t => (
+        {visibleTabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx('text-sm font-semibold px-4 py-2 rounded-ctrl transition-colors', tab === t.key ? 'bg-ink text-white' : 'text-text-secondary hover:bg-canvas')}>
+            className={clsx('text-sm font-semibold px-4 py-2 rounded-ctrl transition-colors', active === t.key ? 'bg-ink text-white' : 'text-text-secondary hover:bg-canvas')}>
             {t.label}
           </button>
         ))}
+        {!visibleTabs.length && <span className="text-sm text-text-muted py-2">No report tabs have been shared with your account.</span>}
       </div>
       <div className="flex-1 overflow-auto px-8 py-6">
-        {tab === 'monthly' && <MonthlyTab data={monthlyData} />}
-        {tab === 'trips' && <TripsReportTab />}
-        {tab === 'pto' && <PtoReportTab />}
-        {tab === 'reviews' && <ReviewsReportTab />}
-        {tab === 'insurance' && <InsuranceTab />}
-        {tab === 'reimbursements' && <ReimbursementsTab />}
-        {tab === 'cashout' && <CashOutTab />}
+        {active === 'monthly' && <MonthlyTab data={monthlyData} />}
+        {active === 'trips' && <TripsReportTab />}
+        {active === 'pto' && <PtoReportTab />}
+        {active === 'reviews' && <ReviewsReportTab />}
+        {active === 'insurance' && <InsuranceTab />}
+        {active === 'reimbursements' && <ReimbursementsTab />}
+        {active === 'cashout' && <CashOutTab />}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut, signIn } from 'next-auth/react';
 import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+import { useAccess } from './AccessProvider';
 
 const navItems = [
   { href: '/',          label: 'Dashboard' },
@@ -28,6 +29,7 @@ interface SidebarProps { pendingTaskCount?: number; }
 
 export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -58,7 +60,10 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
       }
     } catch { /* ignore */ }
   }, []);
-  const orderedItems = order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems;
+  const { me } = useAccess();
+  const restricted = !!me?.restricted;
+  const orderedItems = (order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems)
+    .filter(i => !restricted || (me!.sections.includes(i.href)));
   function onDrop(targetHref: string) {
     if (!dragHref || dragHref === targetHref) { setDragHref(null); return; }
     const next = [...order];
@@ -160,6 +165,14 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
             >
               Invite teammate
             </button>
+            {me?.isAdmin && (
+              <button
+                onClick={() => { setMenuOpen(false); router.push('/access'); }}
+                className="w-full text-left px-4 py-3 text-sm text-[#9aa6b6] hover:text-white hover:bg-white/8 transition-colors border-b border-white/10"
+              >
+                🔒 Access control
+              </button>
+            )}
             {status === 'authenticated' ? (
               <button
                 onClick={() => { setMenuOpen(false); signOut({ callbackUrl: '/auth/signin' }); }}
