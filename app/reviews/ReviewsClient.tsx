@@ -723,12 +723,14 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <button onClick={() => setShowEmbed(false)}
               className="shrink-0 text-xs font-semibold text-white bg-ink px-3 py-1 rounded-ctrl hover:bg-ink-dark">✕ Close</button>
           </div>
+          {/* No `sandbox` attribute: this is a trusted internal reports app, and
+              any sandbox (even with allow-downloads) can block its PDF export.
+              Omitting sandbox lets downloads and popups work normally. */}
           <iframe
             src={reportsUrl(linkedUrl)}
             className="flex-1 w-full border-0"
             title="Performance Review Reports"
-            allow="clipboard-read; clipboard-write"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+            allow="clipboard-read; clipboard-write; downloads"
           />
         </div>
       )}
