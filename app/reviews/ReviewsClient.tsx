@@ -728,7 +728,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             className="flex-1 w-full border-0"
             title="Performance Review Reports"
             allow="clipboard-read; clipboard-write"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
           />
         </div>
       )}
