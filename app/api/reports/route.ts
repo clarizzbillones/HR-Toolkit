@@ -41,6 +41,10 @@ export async function GET(req: Request) {
   const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
   const reviews = await sql`SELECT id, name, role, dept, hire_date, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
   const cashout = await sql`SELECT * FROM cashout_ledger ORDER BY date ASC`;
+  let reimbursements: any[] = [];
+  try { reimbursements = await sql`SELECT * FROM reimbursements ORDER BY payout_date ASC`; } catch { /* table may not exist */ }
+  let insurance: any[] = [];
+  try { insurance = await sql`SELECT * FROM insurance_invoices ORDER BY deadline ASC`; } catch { /* table may not exist */ }
   // Birthdays come from the Staffing directory (dob column, MM/DD/YYYY)
   let staff: any[] = [];
   try { staff = await sql`SELECT id, name, dob, start_date FROM staff_directory ORDER BY name ASC`; } catch { /* table may not exist yet */ }
@@ -58,7 +62,7 @@ export async function GET(req: Request) {
     for (const r of await sql`SELECT id, payee, category, date, attachment_name FROM cashout_ledger WHERE attachment_name IS NOT NULL` as any[])
       attachments.push({ tab: 'cashout', id: r.id, name: r.attachment_name, label: `Cash Out — ${r.payee} (${r.category})`, date: r.date });
   } catch { /* column may not exist yet */ }
-  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews, cashout: stripAttachment(cashout), staff, attachments });
+  return NextResponse.json({ pto, trips, contractors, overtime, employees, reviews, cashout: stripAttachment(cashout), reimbursements: stripAttachment(reimbursements), insurance: stripAttachment(insurance), staff, attachments });
 }
 
 export async function POST(req: Request) {

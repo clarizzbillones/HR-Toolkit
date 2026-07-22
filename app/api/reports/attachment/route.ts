@@ -10,6 +10,32 @@ const TABLES: Record<string, string> = {
   cashout: 'cashout_ledger',
 };
 
+// Attach (or replace) a file on an existing record. Multipart upload — raw
+// bytes, so a larger file fits under the serverless request limit than the
+// base64-in-JSON path used when creating a record.
+export async function POST(req: Request) {
+  const form = await req.formData();
+  const tab = String(form.get('tab') ?? '');
+  const id = String(form.get('id') ?? '');
+  const file = form.get('file') as File | null;
+  const table = TABLES[tab];
+  if (!table || !id || !file) return NextResponse.json({ error: 'Missing tab/id/file' }, { status: 400 });
+  if (file.size > 4.3 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max ~4 MB)' }, { status: 413 });
+
+  const b64 = Buffer.from(await file.arrayBuffer()).toString('base64');
+  const dataUrl = `data:${file.type || 'application/octet-stream'};base64,${b64}`;
+  const name = file.name.slice(0, 200);
+  try {
+    await sql`ALTER TABLE ${sql(table)} ADD COLUMN IF NOT EXISTS attachment_name TEXT`;
+    await sql`ALTER TABLE ${sql(table)} ADD COLUMN IF NOT EXISTS attachment_data TEXT`;
+    const res = await sql`UPDATE ${sql(table)} SET attachment_name = ${name}, attachment_data = ${dataUrl} WHERE id = ${id} RETURNING id`;
+    if (!res.length) return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+  } catch (e) {
+    return NextResponse.json({ error: `Could not save attachment (${String(e).slice(0, 100)})` }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, name });
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const tab = url.searchParams.get('tab') ?? '';

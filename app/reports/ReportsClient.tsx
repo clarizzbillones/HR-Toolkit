@@ -60,6 +60,35 @@ function AttachLink({ tab, id, name }: { tab: string; id: string; name?: string 
     </a>
   );
 }
+// Row-level attach control: view the attached file, and attach or replace it on
+// an already-saved record (uploads the raw file via multipart).
+function RowAttach({ tab, id, hasAttachment, name, onChange }: { tab: string; id: string; hasAttachment: boolean; name?: string | null; onChange: (name: string) => void }) {
+  const { showToast } = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  async function upload(file: File) {
+    if (file.size > MAX_ATTACH) { showToast('File too large (max 4 MB)'); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData(); fd.append('tab', tab); fd.append('id', id); fd.append('file', file);
+      const res = await fetch('/api/reports/attachment', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Upload failed'); return; }
+      onChange(d.name); showToast('Attachment saved');
+    } catch { showToast('Upload failed'); }
+    finally { setBusy(false); if (ref.current) ref.current.value = ''; }
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <input ref={ref} type="file" accept={ATTACH_ACCEPT} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      {hasAttachment && <AttachLink tab={tab} id={id} name={name} />}
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+        className="text-xs font-medium text-[#3f6b8a] hover:underline disabled:opacity-50">
+        {busy ? 'Uploading…' : hasAttachment ? 'Replace' : '⇪ Attach'}
+      </button>
+    </span>
+  );
+}
 // Reusable "attach a file" row for the add forms: shows the picked file name,
 // enforces the size cap, and hands the picked File back to the parent.
 function AttachField({ file, onPick, label = 'Attachment (optional)' }: { file: File | null; onPick: (f: File | null) => void; label?: string }) {
@@ -413,7 +442,7 @@ function tripMonthKey(t: any): string {
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, reviews, cashout, staff, attachments } = data;
+  const { pto, trips, contractors, reviews, cashout, staff, attachments, reimbursements, insurance } = data;
 
   // Two comparison months, user-selectable. Default: current month vs previous.
   const now = new Date();
@@ -439,6 +468,10 @@ function MonthlyTab({ data }: { data: any }) {
   const reviewOf = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashoutOf = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashTotalOf = (k: string) => cashoutOf(k).reduce((s: number, c: any) => s + num(c.amount), 0);
+  const reimbOf = (k: string) => (reimbursements ?? []).filter((r: any) => ymOf(r.payout_date) === k).sort((a: any, b: any) => (a.payout_date ?? '').localeCompare(b.payout_date ?? ''));
+  const reimbTotalOf = (k: string) => reimbOf(k).reduce((s: number, r: any) => s + num(r.amount), 0);
+  const insuranceOf = (k: string) => (insurance ?? []).filter((r: any) => ymOf(r.deadline) === k).sort((a: any, b: any) => (a.deadline ?? '').localeCompare(b.deadline ?? ''));
+  const insuranceTotalOf = (k: string) => insuranceOf(k).reduce((s: number, r: any) => s + num(r.amount), 0);
   const ptoDaysOf = (k: string) => ptoOf(k).reduce((s: number, e: any) => s + num(e.days), 0);
   // Birthday month from staffing dob (MM/DD/YYYY, or YYYY-MM-DD fallback)
   const dobMonth = (dob: string) => {
@@ -470,6 +503,8 @@ function MonthlyTab({ data }: { data: any }) {
     { label: 'Trips', color: '#3f6b8a', money: false, thisV: tripOf(thisKey).length, lastV: tripOf(lastKey).length },
     { label: 'Travel Spend (approx.)', color: '#3f6b8a', money: true, approx: true, thisV: tripOf(thisKey).reduce((s: number, t: any) => s + num(t.cost), 0), lastV: tripOf(lastKey).reduce((s: number, t: any) => s + num(t.cost), 0) },
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorOf(thisKey).reduce((s: number, c: any) => s + num(c.amount), 0), lastV: contractorOf(lastKey).reduce((s: number, c: any) => s + num(c.amount), 0) },
+    { label: 'Reimbursements $', color: '#2f7d5b', money: true, thisV: reimbTotalOf(thisKey), lastV: reimbTotalOf(lastKey) },
+    { label: 'Insurance Premiums', color: '#6b4f8a', money: true, thisV: insuranceTotalOf(thisKey), lastV: insuranceTotalOf(lastKey) },
     { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).filter(r => r.status !== 'Complete').length, lastV: reviewOf(lastKey).filter(r => r.status !== 'Complete').length },
     { label: 'Birthdays', color: '#c9a24a', money: false, thisV: birthdaysOf(thisM).length, lastV: birthdaysOf(lastM).length },
     { label: 'Anniversaries', color: '#8a6d3b', money: false, thisV: anniversariesOf(thisM, thisY).length, lastV: anniversariesOf(lastM, lastY).length },
@@ -488,6 +523,8 @@ function MonthlyTab({ data }: { data: any }) {
     csvSection(lines, 'PTO', ['Employee', 'Type', 'Start', 'End', 'Days'], ptoOf(thisKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days]), ptoOf(lastKey).map((e: any) => [e.employee, e.type, e.start_date, e.end_date, e.days]));
     csvSection(lines, 'TRIPS', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], tripOf(thisKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]), tripOf(lastKey).map((t: any) => [t.who, tripDate(t), t.detail, t.matter, num(t.cost), t.status]));
     csvSection(lines, 'CONTRACTOR PAYMENTS', ['Name', 'Date', 'Amount', 'Note'], contractorOf(thisKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]), contractorOf(lastKey).map((c: any) => [cName(c), cDate(c), num(c.amount), cNote(c)]));
+    csvSection(lines, 'REIMBURSEMENTS', ['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt'], reimbOf(thisKey).map((r: any) => [r.employee, r.purpose, num(r.amount), r.payout_date, r.has_attachment ? 'Attached' : '']), reimbOf(lastKey).map((r: any) => [r.employee, r.purpose, num(r.amount), r.payout_date, r.has_attachment ? 'Attached' : '']));
+    csvSection(lines, 'INSURANCE INVOICES', ['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice'], insuranceOf(thisKey).map((r: any) => [r.carrier, r.invoice_type, num(r.amount), r.deadline, r.enrolled_count, r.has_attachment ? 'Attached' : '']), insuranceOf(lastKey).map((r: any) => [r.carrier, r.invoice_type, num(r.amount), r.deadline, r.enrolled_count, r.has_attachment ? 'Attached' : '']));
     csvSection(lines, 'PERFORMANCE REVIEWS', ['Employee', 'Role', 'Review', 'Date', 'Status'], reviewOf(thisKey).map(r => [r.name, r.role, r.type, r.date, r.status]), reviewOf(lastKey).map(r => [r.name, r.role, r.type, r.date, r.status]));
     csvSection(lines, 'BIRTHDAYS', ['Name', 'DOB'], birthdaysOf(thisM).map((e: any) => [e.name, e.dob]), birthdaysOf(lastM).map((e: any) => [e.name, e.dob]));
     csvSection(lines, 'WORK ANNIVERSARIES', ['Name', 'Years', 'Since'], anniversariesOf(thisM, thisY).map((e: any) => [e.name, e.years, e.start_date]), anniversariesOf(lastM, lastY).map((e: any) => [e.name, e.years, e.start_date]));
@@ -537,6 +574,8 @@ function MonthlyTab({ data }: { data: any }) {
         ${gap}${section('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
         ${gap}${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
         ${gap}${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
+        ${gap}${section('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? 'Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
+        ${gap}${section('Insurance Invoices', '#6b4f8a', ['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice'], k => insuranceOf(k).map((r: any) => [esc(r.carrier), esc(r.invoice_type), fmt$(num(r.amount)), esc(r.deadline ?? ''), String(r.enrolled_count ?? ''), r.has_attachment ? 'Attached' : '—']), k => ['Total Premiums', fmt$(insuranceTotalOf(k))])}
         ${gap}${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
         ${gap}${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(lastM), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
         ${gap}${peopleRow('Work Anniversaries', '#8a6d3b', anniversariesOf(thisM, thisY), anniversariesOf(lastM, lastY), (e: any) => `🎉 ${esc(e.name)} — ${e.years} ${e.years === 1 ? 'year' : 'years'} (since ${esc(e.start_date)})`)}
@@ -633,6 +672,8 @@ function MonthlyTab({ data }: { data: any }) {
           ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
           ${pair('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', STATUS(t.status)]))}
           ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
+          ${pair('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? '📎 Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
+          ${pair('Insurance Invoices', '#6b4f8a', ['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice'], k => insuranceOf(k).map((r: any) => [esc(r.carrier), esc(r.invoice_type), fmt$(num(r.amount)), esc(r.deadline ?? ''), String(r.enrolled_count ?? ''), r.has_attachment ? '📎 Attached' : '—']), k => ['Total Premiums', fmt$(insuranceTotalOf(k))])}
           ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), STATUS(r.status)]))}
           ${peopleBlock('Birthdays', '#c9a24a', '#8a6d3b', bdayCards)}
           ${peopleBlock('Work Anniversaries', '#8a6d3b', '#6b5427', annCards)}
@@ -732,6 +773,21 @@ function MonthlyTab({ data }: { data: any }) {
         <td className="px-3 py-2"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${reviewStatusChip(r.status)}`}>{r.status}</span></td>
       </tr>
     ),
+    reimb: (r: any) => (
+      <tr key={r.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{r.employee}</td><td className="px-3 py-2 text-text-muted">{r.purpose}</td>
+        <td className="px-3 py-2 font-semibold">{fmt$(num(r.amount))}</td><td className="px-3 py-2 text-text-muted">{r.payout_date ?? '—'}</td>
+        <td className="px-3 py-2">{r.has_attachment ? <AttachLink tab="reimbursements" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
+      </tr>
+    ),
+    insurance: (r: any) => (
+      <tr key={r.id} className="border-t border-[#f1ece3]">
+        <td className="px-3 py-2 font-medium">{r.carrier}</td><td className="px-3 py-2 text-text-muted">{r.invoice_type}</td>
+        <td className="px-3 py-2 font-semibold">{fmt$(num(r.amount))}</td><td className="px-3 py-2 text-text-muted">{r.deadline}</td>
+        <td className="px-3 py-2 text-text-muted">{r.enrolled_count ?? '—'}</td>
+        <td className="px-3 py-2">{r.has_attachment ? <AttachLink tab="insurance" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
+      </tr>
+    ),
   };
 
   return (
@@ -787,6 +843,12 @@ function MonthlyTab({ data }: { data: any }) {
       <Compare title="Contractor Payments" color="#6b4f8a" headers={['Name', 'Date', 'Amount', 'Note']} renderRow={cellRow.contractor} rowsThis={contractorOf(thisKey)} rowsLast={contractorOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total Contractor $', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
       <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
+      <Compare title="Reimbursements" color="#2f7d5b" subtitle={`${thisLabel}: ${fmt$(reimbTotalOf(thisKey))} · ${lastLabel}: ${fmt$(reimbTotalOf(lastKey))}`}
+        headers={['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt']} renderRow={cellRow.reimb} rowsThis={reimbOf(thisKey)} rowsLast={reimbOf(lastKey)}
+        total={(rows: any[]) => ({ label: 'Total Reimbursements', value: fmt$(rows.reduce((s, r) => s + num(r.amount), 0)) })} />
+      <Compare title="Insurance Invoices" color="#6b4f8a" subtitle={`${thisLabel}: ${fmt$(insuranceTotalOf(thisKey))} · ${lastLabel}: ${fmt$(insuranceTotalOf(lastKey))}`}
+        headers={['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice']} renderRow={cellRow.insurance} rowsThis={insuranceOf(thisKey)} rowsLast={insuranceOf(lastKey)}
+        total={(rows: any[]) => ({ label: 'Total Premiums', value: fmt$(rows.reduce((s, r) => s + num(r.amount), 0)) })} />
       <Compare title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']} renderRow={cellRow.review} rowsThis={reviewOf(thisKey)} rowsLast={reviewOf(lastKey)} />
 
       {(() => {
@@ -983,7 +1045,8 @@ function InsuranceTab() {
                 <td className="px-4 py-3 text-text-muted">{inv.deadline}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.coverage_period}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.enrolled_count}</td>
-                <td className="px-4 py-3">{inv.has_attachment ? <AttachLink tab="insurance" id={inv.id} name={inv.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
+                <td className="px-4 py-3"><RowAttach tab="insurance" id={inv.id} hasAttachment={!!inv.has_attachment} name={inv.attachment_name}
+                  onChange={name => setInvoices(p => p.map(x => x.id === inv.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
             {!invoices.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No invoices</td></tr>}
@@ -1049,7 +1112,8 @@ function ReimbursementsTab() {
                 <td className="px-4 py-3 text-text-muted">{r.purpose}</td>
                 <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
-                <td className="px-4 py-3">{r.has_attachment ? <AttachLink tab="reimbursements" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
+                <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name}
+                  onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
@@ -1146,7 +1210,8 @@ function CashOutTab() {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.status === 'Paid' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{r.status}</span>
                 </td>
                 <td className="px-4 py-3 text-text-muted">{r.note ?? '—'}</td>
-                <td className="px-4 py-3">{r.has_attachment ? <AttachLink tab="cashout" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
+                <td className="px-4 py-3"><RowAttach tab="cashout" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name}
+                  onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
