@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
+import { useAccess } from '@/components/AccessProvider';
 import { computeReview, parseHistory, REVIEW_STATUSES, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
 
 interface Employee {
@@ -70,6 +71,10 @@ function reportsUrl(base: string): string {
 
 export default function ReviewsClient({ initialEmployees }: { initialEmployees: Employee[] }) {
   const { showToast } = useToast();
+  // Limited (viewer) access: can open forms and view/download attached
+  // documents, but cannot edit, delete, log reviews, or send emails.
+  const { me } = useAccess();
+  const readOnly = !!me?.restricted;
   const { pushUndo } = useUndo();
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [staff, setStaff] = useState<{ id: string; name: string; position: string | null; email: string | null; start_date: string | null }[]>([]);
@@ -353,6 +358,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             </div>
             <p className="text-sm text-text-muted mt-0.5">Reviews every 6 months · tracking {tracked.length} employees · times in CST</p>
           </div>
+          {!readOnly && (
           <div className="flex items-center gap-2.5">
             <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
@@ -368,6 +374,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
             >+ Log a review</button>
           </div>
+          )}
         </div>
       </header>
 
@@ -379,8 +386,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <span className="text-text-muted truncate">{linkedUrl}</span>
             <button onClick={() => setShowEmbed(true)}
               className="ml-auto shrink-0 bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-[#236045]">Open Reports</button>
-            <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>
+            {!readOnly && <button onClick={disconnectDash} className="shrink-0 text-xs font-semibold text-text-muted border border-border-light px-3 py-1 rounded-ctrl hover:text-litred-alt">Disconnect</button>}
           </>
+        ) : readOnly ? (
+          <span className="text-text-muted shrink-0">No live dashboard linked yet.</span>
         ) : (
           <>
             <span className="text-text-secondary shrink-0">🔗 Link your live Performance Review dashboard to open each review form &amp; report directly.</span>
@@ -427,14 +436,18 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     Open form
                   </button>
                 )}
+                {!readOnly && (
                 <button onClick={() => sendReminderNow(upNext.e.name)}
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Send reminder
                 </button>
+                )}
+                {!readOnly && (
                 <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: '', notes: '' }); setShowSchedule(true); }}
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Log completed
                 </button>
+                )}
               </div>
             </div>
             {thenDue.length > 0 && (
@@ -506,8 +519,14 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       : <span className="text-text-muted text-xs">—</span>}
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Log / edit</button>
-                    <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                    {readOnly ? (
+                      <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">View</button>
+                    ) : (
+                      <>
+                        <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Log / edit</button>
+                        <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -701,6 +720,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           resolvedHire={hireOf(detail) ?? ''}
           today={today}
           linkedUrl={linkedUrl}
+          readOnly={readOnly}
           onClose={() => setDetail(null)}
           onDelete={() => deleteEmployee(detail)}
           onSave={async (fields) => {
@@ -739,11 +759,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 }
 
 // ---- Detail drawer component ----
-function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onSave, onDelete }: {
+function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, onClose, onSave, onDelete }: {
   employee: Employee;
   resolvedHire: string;
   today: string;
   linkedUrl: string;
+  readOnly?: boolean;
   onClose: () => void;
   onSave: (fields: Record<string, string | null>) => Promise<void>;
   onDelete: () => void;
@@ -833,7 +854,15 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
         </div>
 
-        <div className="px-6 py-5 flex flex-col gap-5">
+        {readOnly && (
+          <div className="px-6 py-2.5 bg-[#eef2f7] border-b border-[#d9e4ee] text-xs font-semibold text-[#3f5a76]">
+            👁 View only — you can open the form and download attached documents, but not edit, delete, or log reviews.
+          </div>
+        )}
+
+        {/* Read-only viewers get a disabled fieldset: every field/button is
+            locked, while document “View” links (anchors) still work. */}
+        <fieldset disabled={readOnly} className="px-6 py-5 flex flex-col gap-5 border-0 m-0 min-w-0">
           {/* Identity */}
           <div className="grid grid-cols-1 gap-3">
             <div>
@@ -864,14 +893,16 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
             <div key={which}>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold uppercase tracking-wide" style={{ color }}>{label}</label>
+                {!readOnly && (
                 <button onClick={() => pickFile(which)} disabled={uploading !== null}
                   className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{uploading === which ? 'Uploading…' : (docs[which] ? '↑ Replace' : '↑ Upload document')}</button>
+                )}
               </div>
               {docs[which] ? (
                 <div className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
                   <span className="flex-1 truncate">📄 {docs[which]}</span>
-                  <a href={`/api/reviews/docs?id=${employee.id}&which=${which}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#3f6b8a] hover:underline">View</a>
-                  <button onClick={() => removeDoc(which)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>
+                  <a href={`/api/reviews/docs?id=${employee.id}&which=${which}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#3f6b8a] hover:underline">View / download</a>
+                  {!readOnly && <button onClick={() => removeDoc(which)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>}
                 </div>
               ) : (
                 <div className="border border-dashed border-border-light rounded-ctrl px-3 py-2 text-xs text-text-muted">No document uploaded yet.</div>
@@ -942,14 +973,16 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, onClose, onS
               </div>
             </div>
           )}
-        </div>
+        </fieldset>
 
         <div className="px-6 py-4 border-t border-border flex gap-2 sticky bottom-0 bg-white">
-          <button onClick={onDelete} className="text-sm font-semibold text-litred-alt border border-border-light px-4 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+          {!readOnly && <button onClick={onDelete} className="text-sm font-semibold text-litred-alt border border-border-light px-4 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
           <button onClick={onClose} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover">Close</button>
+          {!readOnly && (
           <button onClick={save} disabled={busy} className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">
             {busy ? 'Saving…' : 'Save changes'}
           </button>
+          )}
         </div>
       </div>
     </div>
