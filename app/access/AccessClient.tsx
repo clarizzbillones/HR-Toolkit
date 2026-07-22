@@ -11,6 +11,26 @@ export default function AccessClient() {
   const [forbidden, setForbidden] = useState(false);
   const [editing, setEditing] = useState<typeof blank | null>(null);
   const [saving, setSaving] = useState(false);
+  const [emailOnSave, setEmailOnSave] = useState(true);
+  const [preview, setPreview] = useState<{ to: string; subject: string; html: string; src: { email: string; name: string; sections: string[]; reportTabs: string[] } } | null>(null);
+  const [busyEmail, setBusyEmail] = useState('');
+
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  async function previewEmail(g: { email: string; name: string; sections: string[]; reportTabs: string[] }) {
+    const res = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...g, appUrl, preview: true }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error ?? 'Could not build preview'); return; }
+    setPreview({ to: d.to, subject: d.subject, html: d.html, src: { email: g.email, name: g.name, sections: g.sections, reportTabs: g.reportTabs } });
+  }
+  async function sendInvite(g: { email: string; name: string; sections: string[]; reportTabs: string[] }) {
+    setBusyEmail(g.email);
+    try {
+      const res = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...g, appUrl }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Could not send email'); return false; }
+      showToast(`Invite emailed to ${g.email}`); return true;
+    } finally { setBusyEmail(''); }
+  }
 
   async function load() {
     const res = await fetch('/api/access');
@@ -32,8 +52,9 @@ export default function AccessClient() {
       const d = await res.json();
       if (!res.ok) { showToast(d.error ?? 'Could not save'); return; }
       setGrants(prev => [...prev.filter(g => g.email !== d.grant.email), d.grant].sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email)));
-      setEditing(null);
       showToast(`Access saved for ${d.grant.name || d.grant.email}`);
+      if (emailOnSave) await sendInvite(d.grant);
+      setEditing(null);
     } finally { setSaving(false); }
   }
   async function remove(email: string) {
@@ -106,8 +127,13 @@ export default function AccessClient() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
               <button onClick={save} disabled={saving} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{saving ? 'Saving…' : 'Save access'}</button>
+              <button onClick={() => previewEmail(editing)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">👁 Preview email</button>
+              <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d]" checked={emailOnSave} onChange={e => setEmailOnSave(e.target.checked)} />
+                Email them an invite when I save
+              </label>
               <button onClick={() => setEditing(null)} className="text-sm text-text-muted px-3">Cancel</button>
             </div>
           </div>
@@ -132,6 +158,8 @@ export default function AccessClient() {
                     <div className="flex flex-wrap gap-1">{g.reportTabs.length ? g.reportTabs.map(k => <span key={k} className="text-xs bg-[#e9f0f5] text-[#3f6b8a] px-2 py-0.5 rounded-full">{tabLabel(k)}</span>) : <span className="text-text-faint">—</span>}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <button onClick={() => previewEmail(g)} className="text-xs font-semibold text-text-secondary hover:underline mr-3">Preview</button>
+                    <button onClick={() => sendInvite(g)} disabled={busyEmail === g.email} className="text-xs font-semibold text-[#3f6b8a] hover:underline mr-3 disabled:opacity-50">{busyEmail === g.email ? 'Sending…' : '✉ Email invite'}</button>
                     <button onClick={() => setEditing({ email: g.email, name: g.name, sections: [...g.sections], reportTabs: [...g.reportTabs] })} className="text-xs font-semibold text-ink hover:underline mr-3">Edit</button>
                     <button onClick={() => remove(g.email)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>
                   </td>
@@ -142,6 +170,28 @@ export default function AccessClient() {
           </table>
         </div>
       </div>
+
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setPreview(null)}>
+          <div className="bg-white rounded-card w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-text-primary">Invite email preview</div>
+                <div className="text-xs text-text-muted truncate">To: {preview.to} · Subject: {preview.subject}</div>
+              </div>
+              <button onClick={() => setPreview(null)} className="text-text-muted hover:text-text-primary text-xl leading-none shrink-0">×</button>
+            </div>
+            <div className="flex-1 overflow-auto bg-[#f4f1ea]">
+              <div dangerouslySetInnerHTML={{ __html: preview.html }} />
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button onClick={() => setPreview(null)} className="text-sm text-text-muted px-3">Close</button>
+              <button onClick={async () => { const ok = await sendInvite(preview.src); if (ok) setPreview(null); }}
+                className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">✉ Send this email</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
