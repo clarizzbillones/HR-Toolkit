@@ -806,8 +806,35 @@ function InsuranceTab() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ carrier: '', invoiceType: '', amount: '', deadline: '', coveragePeriod: '', enrolledCount: '' });
+  const [reading, setReading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetch('/api/reports?tab=insurance').then(r => r.json()).then(d => setInvoices(d.invoices ?? [])); }, []);
+
+  // Upload an invoice (PDF, DOCX, or a screenshot) — the server reads it and
+  // fills in the form fields automatically; HR reviews and clicks Add.
+  async function readInvoiceFile(file: File) {
+    setReading(true);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/reports/insurance-extract', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Could not read the file'); setShowAdd(true); return; }
+      const f = d.fields ?? {};
+      setForm({
+        carrier: f.carrier ?? '', invoiceType: f.invoiceType ?? '', amount: f.amount ?? '',
+        deadline: f.deadline ?? '', coveragePeriod: f.coveragePeriod ?? '', enrolledCount: f.enrolledCount ?? '',
+      });
+      setShowAdd(true);
+      const got = ['carrier', 'invoiceType', 'amount', 'deadline', 'coveragePeriod', 'enrolledCount'].filter(k => f[k]).length;
+      showToast(got ? `Read ${got} field${got > 1 ? 's' : ''} from ${file.name} — review and click Add` : 'Could not find invoice fields — fill them in manually');
+    } catch {
+      showToast('Could not read the file'); setShowAdd(true);
+    } finally {
+      setReading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
 
   async function add() {
     const res = await fetch('/api/reports?tab=insurance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), enrolledCount: form.enrolledCount ? Number(form.enrolledCount) : null }) });
@@ -820,7 +847,14 @@ function InsuranceTab() {
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end items-center gap-2 mb-4">
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,image/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) readInvoiceFile(f); }} />
+        <button onClick={() => fileRef.current?.click()} disabled={reading}
+          className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50"
+          title="Upload the invoice (PDF, DOCX, or a screenshot) — the fields fill in automatically">
+          {reading ? '⏳ Reading invoice…' : '⇪ Upload invoice (auto-read)'}
+        </button>
         <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Invoice</button>
       </div>
       {showAdd && (
