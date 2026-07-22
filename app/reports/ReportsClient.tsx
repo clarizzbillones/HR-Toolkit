@@ -39,6 +39,50 @@ type Tab = 'monthly' | 'trips' | 'pto' | 'reviews' | 'insurance' | 'reimbursemen
 
 function fmt$(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
+// ---- File attachments (invoices, receipts, supporting docs) ----
+const MAX_ATTACH = 4 * 1024 * 1024; // ~4MB — stays under the serverless request-body limit
+const ATTACH_ACCEPT = '.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,image/*';
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+}
+// A small "view attached file" link for a table row.
+function AttachLink({ tab, id, name }: { tab: string; id: string; name?: string | null }) {
+  const short = name ? (name.length > 20 ? name.slice(0, 20) + '…' : name) : 'View';
+  return (
+    <a href={`/api/reports/attachment?tab=${tab}&id=${id}`} target="_blank" rel="noopener noreferrer"
+      className="text-[#3f6b8a] hover:underline text-xs font-medium inline-flex items-center gap-1" title={name || 'View attachment'}>
+      📎 <span className="truncate max-w-[130px]">{short}</span>
+    </a>
+  );
+}
+// Reusable "attach a file" row for the add forms: shows the picked file name,
+// enforces the size cap, and hands the picked File back to the parent.
+function AttachField({ file, onPick, label = 'Attachment (optional)' }: { file: File | null; onPick: (f: File | null) => void; label?: string }) {
+  const { showToast } = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-text-secondary mb-1">{label}</label>
+      <input ref={ref} type="file" accept={ATTACH_ACCEPT} className="hidden"
+        onChange={e => { const f = e.target.files?.[0] ?? null; if (f && f.size > MAX_ATTACH) { showToast('File too large (max 4 MB)'); if (ref.current) ref.current.value = ''; return; } onPick(f); }} />
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => ref.current?.click()} className="border border-border-light rounded-ctrl px-3 py-2 text-sm text-ink hover:bg-canvas whitespace-nowrap">⇪ Choose file</button>
+        {file ? (
+          <span className="text-xs text-text-secondary inline-flex items-center gap-1 min-w-0">
+            <span className="truncate max-w-[180px]">📎 {file.name}</span>
+            <button type="button" onClick={() => { onPick(null); if (ref.current) ref.current.value = ''; }} className="text-text-muted hover:text-litred-alt">✕</button>
+          </span>
+        ) : <span className="text-xs text-text-muted">PDF, image, or DOCX</span>}
+      </div>
+    </div>
+  );
+}
+
 function downloadCsv(filename: string, header: string[], rows: (string | number)[][]) {
   const esc = (c: string | number) => `"${String(c ?? '').replace(/"/g, '""')}"`;
   const csv = [header, ...rows].map(r => r.map(esc).join(',')).join('\n');
@@ -369,7 +413,7 @@ function tripMonthKey(t: any): string {
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
-  const { pto, trips, contractors, reviews, cashout, staff } = data;
+  const { pto, trips, contractors, reviews, cashout, staff, attachments } = data;
 
   // Two comparison months, user-selectable. Default: current month vs previous.
   const now = new Date();
@@ -745,6 +789,51 @@ function MonthlyTab({ data }: { data: any }) {
       <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
       <Compare title="Performance Reviews" color="#b07d2a" headers={['Employee', 'Role', 'Review', 'Date', 'Status']} renderRow={cellRow.review} rowsThis={reviewOf(thisKey)} rowsLast={reviewOf(lastKey)} />
 
+      {(() => {
+        // Supporting documents (invoices, receipts, cash-out docs) for the two
+        // months being compared, plus any that have no date on record.
+        const inMonth = (k: string) => (attachments ?? []).filter((a: any) => a.date && ymOf(a.date) === k);
+        const undated = (attachments ?? []).filter((a: any) => !a.date);
+        if (!(attachments ?? []).length) return null;
+        return (
+          <section>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
+              <div className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">Supporting Documents</div>
+              <span className="text-xs text-text-muted">{thisLabel}: {inMonth(thisKey).length} · {lastLabel}: {inMonth(lastKey).length}</span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {[{ lbl: thisLabel, k: thisKey, cur: true }, { lbl: lastLabel, k: lastKey, cur: false }].map(({ lbl, k, cur }) => (
+                <div key={lbl} className="rounded-card p-3" style={{ border: `2px solid #3f6b8a${cur ? '' : '55'}`, background: cur ? '#3f6b8a10' : '#fff' }}>
+                  <div className="text-xs font-bold text-[#3f6b8a] mb-1.5 flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] tracking-widest" style={{ background: cur ? '#3f6b8a' : '#3f6b8a33', color: cur ? '#fff' : '#3f6b8a' }}>{cur ? 'Current' : 'Previous'}</span>
+                    {lbl}
+                  </div>
+                  <div className="space-y-1.5">
+                    {inMonth(k).length ? inMonth(k).map((a: any) => (
+                      <div key={a.id} className="bg-white border border-border rounded-ctrl px-3 py-2 text-sm flex items-center justify-between gap-2">
+                        <span className="text-text-secondary truncate">{a.label}</span>
+                        <AttachLink tab={a.tab} id={a.id} name={a.name} />
+                      </div>
+                    )) : <p className="text-sm text-text-muted">None</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {undated.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="text-xs text-text-muted self-center">No date on record:</span>
+                {undated.map((a: any) => (
+                  <span key={a.id} className="bg-white border border-border rounded-ctrl px-3 py-1.5 text-sm inline-flex items-center gap-2">
+                    <span className="text-text-secondary">{a.label}</span> <AttachLink tab={a.tab} id={a.id} name={a.name} />
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
       <section>
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2.5 h-6 rounded-full bg-[#c9a24a]" />
@@ -807,6 +896,7 @@ function InsuranceTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ carrier: '', invoiceType: '', amount: '', deadline: '', coveragePeriod: '', enrolledCount: '' });
   const [reading, setReading] = useState(false);
+  const [attach, setAttach] = useState<File | null>(null); // the invoice file to keep on file
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetch('/api/reports?tab=insurance').then(r => r.json()).then(d => setInvoices(d.invoices ?? [])); }, []);
@@ -825,6 +915,9 @@ function InsuranceTab() {
         carrier: f.carrier ?? '', invoiceType: f.invoiceType ?? '', amount: f.amount ?? '',
         deadline: f.deadline ?? '', coveragePeriod: f.coveragePeriod ?? '', enrolledCount: f.enrolledCount ?? '',
       });
+      // Keep the exact file the reader used, so it stays attached to the record
+      // (unless it's too big to store — then just the extracted fields are kept).
+      setAttach(file.size <= MAX_ATTACH ? file : null);
       setShowAdd(true);
       const got = ['carrier', 'invoiceType', 'amount', 'deadline', 'coveragePeriod', 'enrolledCount'].filter(k => f[k]).length;
       showToast(got ? `Read ${got} field${got > 1 ? 's' : ''} from ${file.name} — review and click Add` : 'Could not find invoice fields — fill them in manually');
@@ -837,10 +930,12 @@ function InsuranceTab() {
   }
 
   async function add() {
-    const res = await fetch('/api/reports?tab=insurance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), enrolledCount: form.enrolledCount ? Number(form.enrolledCount) : null }) });
+    const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
+    const res = await fetch('/api/reports?tab=insurance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), enrolledCount: form.enrolledCount ? Number(form.enrolledCount) : null, ...attachment }) });
     const { invoice } = await res.json();
     setInvoices(p => [...p, invoice]);
     setForm({ carrier: '', invoiceType: '', amount: '', deadline: '', coveragePeriod: '', enrolledCount: '' });
+    setAttach(null);
     setShowAdd(false);
     showToast('Invoice added');
   }
@@ -867,16 +962,17 @@ function InsuranceTab() {
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
           ))}
+          <div className="col-span-3"><AttachField file={attach} onPick={setAttach} label="Invoice file (kept on record)" /></div>
           <div className="col-span-3 flex gap-2">
             <button onClick={add} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add</button>
-            <button onClick={() => setShowAdd(false)} className="text-sm text-text-muted px-3">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setAttach(null); }} className="text-sm text-text-muted px-3">Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Carrier','Type','Amount','Deadline','Coverage Period','Enrolled'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Carrier','Type','Amount','Deadline','Coverage Period','Enrolled','Invoice'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {invoices.map((inv: any) => (
@@ -887,9 +983,10 @@ function InsuranceTab() {
                 <td className="px-4 py-3 text-text-muted">{inv.deadline}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.coverage_period}</td>
                 <td className="px-4 py-3 text-text-muted">{inv.enrolled_count}</td>
+                <td className="px-4 py-3">{inv.has_attachment ? <AttachLink tab="insurance" id={inv.id} name={inv.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
               </tr>
             ))}
-            {!invoices.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No invoices</td></tr>}
+            {!invoices.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No invoices</td></tr>}
           </tbody>
         </table>
       </div>
@@ -903,14 +1000,17 @@ function ReimbursementsTab() {
   const [rows, setRows] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ employee: '', purpose: '', amount: '', payoutDate: '' });
+  const [attach, setAttach] = useState<File | null>(null);
 
   useEffect(() => { fetch('/api/reports?tab=reimbursements').then(r => r.json()).then(d => setRows(d.rows ?? [])); }, []);
 
   async function add() {
-    const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) });
+    const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
+    const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
     setForm({ employee: '', purpose: '', amount: '', payoutDate: '' });
+    setAttach(null);
     setShowAdd(false);
     showToast('Reimbursement added');
   }
@@ -930,16 +1030,17 @@ function ReimbursementsTab() {
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
           ))}
+          <div className="col-span-2"><AttachField file={attach} onPick={setAttach} label="Receipt / invoice (optional)" /></div>
           <div className="col-span-2 flex gap-2">
             <button onClick={add} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add</button>
-            <button onClick={() => setShowAdd(false)} className="text-sm text-text-muted px-3">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setAttach(null); }} className="text-sm text-text-muted px-3">Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Employee','Purpose','Amount','Payout Date'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Employee','Purpose','Amount','Payout Date','Receipt'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
@@ -948,9 +1049,10 @@ function ReimbursementsTab() {
                 <td className="px-4 py-3 text-text-muted">{r.purpose}</td>
                 <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
+                <td className="px-4 py-3">{r.has_attachment ? <AttachLink tab="reimbursements" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
+            {!rows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
           </tbody>
         </table>
       </div>
@@ -966,6 +1068,7 @@ function CashOutTab() {
   const [filterCat, setFilterCat] = useState('All');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
+  const [attach, setAttach] = useState<File | null>(null);
   const CATEGORIES = ['Payroll','Guideline','Distribution','Reimbursement','Travel','Office Supplies','Legal Fees','Software','Marketing','Other'];
 
   function load() {
@@ -978,10 +1081,12 @@ function CashOutTab() {
   useEffect(load, [filterMonth, filterCat]);
 
   async function add() {
-    const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount) }) });
+    const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
+    const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
     setForm({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
+    setAttach(null);
     setShowAdd(false);
     showToast('Entry added');
   }
@@ -1018,16 +1123,17 @@ function CashOutTab() {
               )}
             </div>
           ))}
+          <div className="col-span-3"><AttachField file={attach} onPick={setAttach} label="Supporting document (optional)" /></div>
           <div className="col-span-3 flex gap-2">
             <button onClick={add} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add</button>
-            <button onClick={() => setShowAdd(false)} className="text-sm text-text-muted px-3">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setAttach(null); }} className="text-sm text-text-muted px-3">Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Date','Payee','Category','Amount','Status','Note'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Date','Payee','Category','Amount','Status','Note','Doc'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
@@ -1040,9 +1146,10 @@ function CashOutTab() {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.status === 'Paid' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{r.status}</span>
                 </td>
                 <td className="px-4 py-3 text-text-muted">{r.note ?? '—'}</td>
+                <td className="px-4 py-3">{r.has_attachment ? <AttachLink tab="cashout" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
+            {!rows.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
           </tbody>
         </table>
       </div>
