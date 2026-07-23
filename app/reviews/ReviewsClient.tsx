@@ -92,6 +92,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string; completed: boolean }[] }>(
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
   const [showReminders, setShowReminders] = useState(false);
+  const [showCompletedReminders, setShowCompletedReminders] = useState(false);
   const [invites, setInvites] = useState<{ id: string; employee: string; participant_name: string | null; participant_email: string; participant_type: string | null; review_type: string | null; deadline: string | null; completed: boolean; last_reminded_on: string | null }[]>([]);
 
   async function openReminders() {
@@ -673,10 +674,31 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <button onClick={() => setShowReminders(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>
             <div className="overflow-auto p-6 space-y-5">
-              {invites.length === 0 ? (
-                <p className="text-sm text-text-muted text-center py-6">No tracked invites yet. Send invites (or use “Save for reminders”) to add participants here.</p>
-              ) : (
-                Object.entries(invites.reduce((acc, inv) => { (acc[inv.employee] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>)).map(([emp, list]) => (
+              {(() => {
+                const completedCount = invites.filter(i => i.completed).length;
+                const visible = showCompletedReminders ? invites : invites.filter(i => !i.completed);
+                if (invites.length === 0) {
+                  return <p className="text-sm text-text-muted text-center py-6">No tracked invites yet. Send invites (or use “Save for reminders”) to add participants here.</p>;
+                }
+                if (visible.length === 0) {
+                  return (
+                    <div className="text-center py-6 space-y-2">
+                      <p className="text-sm text-text-muted">🎉 All caught up — every participant is marked complete.</p>
+                      {completedCount > 0 && (
+                        <button onClick={() => setShowCompletedReminders(true)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Show {completedCount} completed</button>
+                      )}
+                    </div>
+                  );
+                }
+                return (<>
+                {completedCount > 0 && (
+                  <div className="flex justify-end -mb-2">
+                    <button onClick={() => setShowCompletedReminders(v => !v)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">
+                      {showCompletedReminders ? 'Hide completed' : `Show ${completedCount} completed`}
+                    </button>
+                  </div>
+                )}
+                {Object.entries(visible.reduce((acc, inv) => { (acc[inv.employee] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>)).map(([emp, list]) => (
                   <div key={emp}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-[13px] font-semibold text-text-primary">{emp}</div>
@@ -702,8 +724,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       ))}
                     </div>
                   </div>
-                ))
-              )}
+                ))}
+                </>);
+              })()}
             </div>
             <div className="px-6 py-4 border-t border-border flex justify-end">
               <button onClick={() => setShowReminders(false)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Done</button>
