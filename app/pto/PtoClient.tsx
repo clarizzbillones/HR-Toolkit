@@ -27,6 +27,7 @@ interface MergedRow {
   status: string;
   source: Source;
   calTitle?: string;
+  calId?: string;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -175,19 +176,35 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
     } finally { setSavingEdit(false); }
   }
 
-  async function deletePto(id: string) {
-    // DB-backed report entry → hard delete (undoable with Ctrl+Z)
+  // Permanently hide a calendar event id so re-syncing/reconnecting never
+  // brings it back. Persisted in app_settings (survives disconnect/reconnect).
+  async function hideCalId(calId: string) {
+    if (!calId || hiddenCalIds.has(calId)) return;
+    const next = new Set(hiddenCalIds); next.add(calId);
+    setHiddenCalIds(next);
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
+  }
+
+  async function deletePto(row: MergedRow) {
+    const id = row.key;
+    // DB-backed report entry → hard delete (undoable with Ctrl+Z).
     const dbEntry = entries.find(x => x.id === id);
     if (dbEntry) {
+      const before = [...hiddenCalIds];
       const res = await fetch(`/api/pto/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setEntries(prev => prev.filter(e => e.id !== id));
+        // If this entry also came from the calendar, hide that calendar copy too
+        // so it doesn't reappear as a "calendar" row on the next sync.
+        if (row.calId) await hideCalId(row.calId);
         pushUndo({ label: `Delete PTO — ${dbEntry.employee}`, req: { url: '/api/pto', method: 'POST', body: { entries: [{ employee: dbEntry.employee, type: dbEntry.type, start_date: dbEntry.start_date, end_date: dbEntry.end_date, days: dbEntry.days, notes: dbEntry.notes ?? '' }] } } });
+        // Undo also restores the prior hidden list (un-hides the calendar copy).
+        if (row.calId) pushUndo({ label: 'Restore calendar entry', req: { url: '/api/connections', method: 'PATCH', body: { hidden_cal_ids: before } } });
         showToast('Entry deleted — Ctrl+Z to undo');
       } else showToast('Could not delete entry');
       return;
     }
-    // Calendar-only entry → hide from the report only (Outlook is untouched)
+    // Calendar-only entry → hide from the report only (Outlook is untouched).
     const before = [...hiddenCalIds];
     const next = new Set(hiddenCalIds); next.add(id);
     setHiddenCalIds(next);
@@ -675,13 +692,13 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                       {r.source === 'calendar' ? (
                         <EditGate>
                           <span className="text-[10px] text-text-faint mr-1.5">Outlook</span>
-                          <button onClick={() => deletePto(r.key)} title="Remove from report only (kept in Outlook)"
+                          <button onClick={() => deletePto(r)} title="Remove from report only (kept in Outlook)"
                             className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </EditGate>
                       ) : (
                         <EditGate>
                           <button onClick={() => openEdit(r.key)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
-                          <button onClick={() => deletePto(r.key)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                          <button onClick={() => deletePto(r)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </EditGate>
                       )}
                     </td>

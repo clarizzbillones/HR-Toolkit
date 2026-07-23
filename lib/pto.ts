@@ -10,6 +10,7 @@ export type PtoSource = 'report' | 'calendar' | 'both';
 export interface MergedPto {
   key: string; employee: string; start: string; end: string;
   days: number; type: string; status: string; source: PtoSource; calTitle?: string;
+  calId?: string; // the matched calendar event id, so deletes can hide it too
 }
 
 const NAME_ALIASES: [RegExp, string][] = [
@@ -79,7 +80,7 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
     if (calMatch) usedCalIds.add(calMatch.id);
     const days = e.days || workingDays(e.start_date, e.end_date);
     if (days < 1) return;
-    rows.push({ key: e.id, employee: resolveAlias(e.employee), start: e.start_date, end: e.end_date, days, type: e.type, status: e.status, source: calMatch ? 'both' : 'report', calTitle: calMatch?.title });
+    rows.push({ key: e.id, employee: resolveAlias(e.employee), start: e.start_date, end: e.end_date, days, type: e.type, status: e.status, source: calMatch ? 'both' : 'report', calTitle: calMatch?.title, calId: calMatch?.id });
   });
 
   (calEvents ?? []).forEach(c => {
@@ -91,7 +92,7 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
     if (EXCLUDED_TITLE.test(c.title)) return;
     const days = workingDays(c.start, c.end);
     if (days < 1) return;
-    rows.push({ key: c.id, employee: resolveAlias(c.name), start: c.start, end: c.end, days, type: c.tag, status: 'Calendar', source: 'calendar', calTitle: c.title });
+    rows.push({ key: c.id, employee: resolveAlias(c.name), start: c.start, end: c.end, days, type: c.tag, status: 'Calendar', source: 'calendar', calTitle: c.title, calId: c.id });
   });
 
   const RANK: Record<PtoSource, number> = { both: 0, report: 1, calendar: 2 };
@@ -100,7 +101,7 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
   for (const row of sorted) {
     const canon = normName(row.employee);
     const dup = kept.find(k => normName(k.employee) === canon && datesOverlap(row.start, row.end, k.start, k.end));
-    if (dup) { if (!dup.calTitle && row.calTitle) dup.calTitle = row.calTitle; if (dup.source !== row.source) dup.source = 'both'; }
+    if (dup) { if (!dup.calTitle && row.calTitle) dup.calTitle = row.calTitle; if (!dup.calId && row.calId) dup.calId = row.calId; if (dup.source !== row.source) dup.source = 'both'; }
     else kept.push({ ...row });
   }
   return kept.sort((a, b) => a.start.localeCompare(b.start));
