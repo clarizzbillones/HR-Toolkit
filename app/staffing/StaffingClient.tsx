@@ -390,8 +390,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               onDrop={movable ? (() => drop(c.id)) : undefined}
               onDragEnd={() => setDragCol(null)}
               title={movable ? 'Drag to rearrange' : undefined}
-              className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap ${sticky ? 'sticky left-0 z-20' : ''} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
-              style={{ color: active.text, ...(sticky ? { background: active.soft, boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
+              className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap sticky top-0 ${sticky ? 'left-0 z-30' : 'z-20'} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
+              style={{ color: active.text, background: active.soft, ...(sticky ? { boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
               {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
               {c.label}
               {movable && (
@@ -405,8 +405,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
           );
         })}
         {onAddColumn
-          ? <th className="px-2 py-3"><button onClick={onAddColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
-          : <th className="px-4 py-3" />}
+          ? <th className="px-2 py-3 sticky top-0 z-20" style={{ background: active.soft }}><button onClick={onAddColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
+          : <th className="px-4 py-3 sticky top-0 z-20" style={{ background: active.soft }} />}
       </tr>
     );
   }
@@ -484,9 +484,9 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="bg-white border rounded-card overflow-hidden" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
-          <div className="overflow-x-auto">
+      <div className="flex-1 min-h-0 px-8 py-6 flex flex-col">
+        <div className="bg-white border rounded-card overflow-hidden flex flex-col flex-1 min-h-0" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
+          <div className="overflow-auto flex-1 min-h-0">
             {tab === 'employees' && <StaffTable columns={empCols} data={fStaff} kind="employees" />}
             {tab === 'offboarded' && <StaffTable columns={offCols} data={fOff} kind="offboarded" />}
             {tab === 'vendors' && (
