@@ -59,6 +59,7 @@ const STATUS_PILL: Record<ReviewStatus, string> = {
   'Forms due': 'bg-[#faf3e6] text-[#c19653]',
   'Send forms': 'bg-[#e9f0f5] text-[#3f6b8a]',
   'Scheduled': 'bg-[#eef5f1] text-[#2f7d5b]',
+  'Not started': 'bg-[#f1ece3] text-[#8b8478]',
 };
 
 // Open the connected dashboard link directly. We don't append a path because

@@ -76,8 +76,10 @@ export function daysUntilDue(nextReview: string | null, today: string): number |
 
 // ---- Status derivation -----------------------------------------------------
 
-export type ReviewStatus = 'Overdue' | 'Review week' | 'Forms due' | 'Send forms' | 'Scheduled';
-export const REVIEW_STATUSES: ReviewStatus[] = ['Overdue', 'Review week', 'Forms due', 'Send forms', 'Scheduled'];
+// 'Not started' is a manual-only status (never produced by statusFor); it's
+// selectable as a status override for people not yet in the review cycle.
+export type ReviewStatus = 'Overdue' | 'Review week' | 'Forms due' | 'Send forms' | 'Scheduled' | 'Not started';
+export const REVIEW_STATUSES: ReviewStatus[] = ['Overdue', 'Review week', 'Forms due', 'Send forms', 'Scheduled', 'Not started'];
 
 export function statusFor(days: number | null): ReviewStatus | null {
   if (days == null) return null;
