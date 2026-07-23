@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
@@ -29,6 +29,22 @@ const DEC_EMPTY: DecForm = {
 function fmtLongDate(d: Date) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
+
+// Escape HTML, then apply lightweight inline markdown so users can bold/italic
+// parts of a letter: **bold**, *italic* (or __bold__ / _italic_). Bold is
+// resolved before italic so the double markers win. Used for both the live
+// preview and the print/PDF output so they always match.
+function escHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function inlineMd(escaped: string) {
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/(^|[^a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g, '$1<em>$2</em>');
+}
+function fmtInline(raw: string) { return inlineMd(escHtml(raw)); }
 
 // General letter — a fully fillable letter on Litson letterhead (no AI) for
 // anything that isn't an offer or declination: financial sponsorship, proof of
@@ -63,6 +79,31 @@ export default function OffersClient() {
   function set(k: keyof Form, v: string) { setForm(p => ({ ...p, [k]: v })); }
   function setD(k: keyof DecForm, v: string) { setDec(p => ({ ...p, [k]: v })); }
   function setG<K extends keyof GenForm>(k: K, v: GenForm[K]) { setGen(p => ({ ...p, [k]: v })); }
+
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Toolbar for the General letter body: wrap the current selection in bold/
+  // italic markers, or prefix the selected line(s) with a bullet.
+  function applyFmt(kind: 'bold' | 'italic' | 'bullet') {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const val = gen.body;
+    let next: string, caret: number;
+    if (kind === 'bullet') {
+      const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+      const block = val.slice(lineStart, Math.max(end, start));
+      const bulleted = (block || '').split('\n').map(l => /^\s*[•\-]\s/.test(l) ? l : '• ' + l).join('\n');
+      next = val.slice(0, lineStart) + bulleted + val.slice(Math.max(end, start));
+      caret = lineStart + bulleted.length;
+    } else {
+      const mark = kind === 'bold' ? '**' : '*';
+      const sel = val.slice(start, end) || (kind === 'bold' ? 'bold text' : 'italic text');
+      next = val.slice(0, start) + mark + sel + mark + val.slice(end);
+      caret = start + mark.length + sel.length + mark.length;
+    }
+    setG('body', next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(caret, caret); });
+  }
 
   async function generate() {
     setGenerating(true);
@@ -255,14 +296,15 @@ ${bodyHtml}
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
     // Body: blank line = paragraph gap; lines starting with • or - become
-    // bullet rows; everything else is a justified paragraph.
+    // bullet rows; **bold** / *italic* are honored inline; everything else is a
+    // justified paragraph.
     const bodyHtml = gen.body.split('\n').map(l => {
       const t = l.trim();
       if (t === '') return `<div style="height:11pt"></div>`;
-      if (/^[•\-•]\s*/.test(t)) {
-        return `<div style="margin-left:1.5em;text-indent:-1em;margin-bottom:2pt">&bull;&nbsp;${esc(t.replace(/^[•\-•]\s*/, ''))}</div>`;
+      if (/^[•\-]\s*/.test(t)) {
+        return `<div style="margin-left:1.5em;text-indent:-1em;margin-bottom:2pt">&bull;&nbsp;${fmtInline(t.replace(/^[•\-]\s*/, ''))}</div>`;
       }
-      return `<div style="text-align:justify;margin-bottom:0">${esc(l)}</div>`;
+      return `<div style="text-align:justify;margin-bottom:0">${fmtInline(l)}</div>`;
     }).join('');
 
     const ccLines = gen.cc.split('\n').map(l => l.trim()).filter(Boolean);
@@ -663,10 +705,18 @@ ${ccHtml}
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Body *</label>
-              <textarea value={gen.body} onChange={e => setG('body', e.target.value)} rows={9}
-                placeholder={"Type the letter here. Leave a blank line between paragraphs.\n\nStart a line with • or - for a bullet point."}
+              <div className="flex items-center gap-1 mb-1.5">
+                <button type="button" onClick={() => applyFmt('bold')} title="Bold selected text (**text**)"
+                  className="px-2.5 py-1 text-sm font-bold rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">B</button>
+                <button type="button" onClick={() => applyFmt('italic')} title="Italicize selected text (*text*)"
+                  className="px-2.5 py-1 text-sm italic rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">I</button>
+                <button type="button" onClick={() => applyFmt('bullet')} title="Turn the current line(s) into bullets"
+                  className="px-2.5 py-1 text-sm rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">• List</button>
+              </div>
+              <textarea ref={bodyRef} value={gen.body} onChange={e => setG('body', e.target.value)} rows={9}
+                placeholder={"Type the letter here. Leave a blank line between paragraphs.\n\nSelect text and use B / I above, or type **bold** and *italic*.\nStart a line with • or - for a bullet point."}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
-              <p className="text-[11px] text-text-muted mt-1">Blank line = new paragraph. Lines starting with • or - become bullets.</p>
+              <p className="text-[11px] text-text-muted mt-1">Blank line = new paragraph. <code>**bold**</code>, <code>*italic*</code>, and lines starting with • or - become bullets.</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -720,8 +770,8 @@ ${ccHtml}
                   ? gen.body.split('\n').map((l, i) => {
                       const t = l.trim();
                       if (t === '') return <div key={i} style={{ height: '11px' }} />;
-                      if (/^[•\-]\s*/.test(t)) return <p key={i} className="mb-1" style={{ marginLeft: '1.5em', textIndent: '-1em' }}>&bull;&nbsp;{t.replace(/^[•\-]\s*/, '')}</p>;
-                      return <p key={i} style={{ textAlign: 'justify' }}>{l}</p>;
+                      if (/^[•\-]\s*/.test(t)) return <p key={i} className="mb-1" style={{ marginLeft: '1.5em', textIndent: '-1em' }} dangerouslySetInnerHTML={{ __html: '&bull;&nbsp;' + fmtInline(t.replace(/^[•\-]\s*/, '')) }} />;
+                      return <p key={i} style={{ textAlign: 'justify' }} dangerouslySetInnerHTML={{ __html: fmtInline(l) }} />;
                     })
                   : <p className="text-text-muted italic">Type the letter body in the form…</p>}
               </div>
