@@ -10,7 +10,7 @@ const navItems = [
   { href: '/',          label: 'Dashboard' },
   { href: '/tasks',     label: 'Open HR Tasks', badgeKey: 'tasks' },
   { href: '/pto',       label: 'PTO & Calendar' },
-  { href: '/offers',    label: 'Offer Letters' },
+  { href: '/offers',    label: 'Letters' },
   { href: '/sop',       label: 'SOP Builder' },
   { href: '/payroll',   label: 'Payroll' },
   { href: '/trips',     label: 'Trip Help Desk' },

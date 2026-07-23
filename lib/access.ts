@@ -7,7 +7,7 @@ export const SECTIONS: { key: string; label: string }[] = [
   { key: '/', label: 'Dashboard' },
   { key: '/tasks', label: 'Open HR Tasks' },
   { key: '/pto', label: 'PTO & Calendar' },
-  { key: '/offers', label: 'Offer Letters' },
+  { key: '/offers', label: 'Letters' },
   { key: '/sop', label: 'SOP Builder' },
   { key: '/payroll', label: 'Payroll' },
   { key: '/trips', label: 'Trip Help Desk' },
