@@ -51,12 +51,13 @@ export function reviewCycle(hireDate: string | null, lastReview: string | null):
   return cyclesClosed + 1;
 }
 
-// Next review date — always hire_date + (cycle × 6) months, so slipped reviews
-// never make future dates drift off the 6/12/18/24 rhythm.
+// Next review date — 6 months after the last completed review (a rolling
+// cadence). For someone never reviewed, the first review is 6 months after
+// their hire date.
 export function nextReviewDate(hireDate: string | null, lastReview: string | null): string | null {
-  const cycle = reviewCycle(hireDate, lastReview);
-  if (!hireDate || cycle == null) return null;
-  return addMonths(hireDate, cycle * 6);
+  if (lastReview) return addMonths(lastReview, 6);
+  if (hireDate) return addMonths(hireDate, 6);
+  return null;
 }
 
 // Tenure of the next review as "0.5 yr", "1.0 yr", "2.5 yr". Derived from the
@@ -110,12 +111,13 @@ export const ROLL_GRACE_DAYS = 90;
 export function computeReview(hireDate: string | null, lastReview: string | null, today: string, override?: string | null): ReviewCompute {
   let cycle = reviewCycle(hireDate, lastReview);
   let computed = nextReviewDate(hireDate, lastReview);
-  if (hireDate && cycle != null && computed) {
-    // Skip milestones that are more than the grace window overdue.
+  if (computed) {
+    // A next review more than the grace window overdue is treated as missed;
+    // roll forward another 6 months until it's back within reach.
     let guard = 0;
     while (daysBetween(computed, today) > ROLL_GRACE_DAYS && guard++ < 240) {
-      cycle += 1;
-      computed = addMonths(hireDate, cycle * 6);
+      computed = addMonths(computed, 6);
+      if (cycle != null) cycle += 1;
     }
   }
   const ov = override && override.trim() ? override.slice(0, 10) : null;
