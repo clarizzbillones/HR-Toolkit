@@ -488,7 +488,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[860px]">
             <thead className="bg-[#f1ece3]">
-              <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Tenure', 'Cycle', 'Status', ''].map(h => (
+              <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Tenure', 'Status', ''].map(h => (
                 <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
               ))}</tr>
             </thead>
@@ -513,7 +513,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     ) : <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>}
                   </td>
                   <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{c.tenure}</td>
-                  <td className="px-5 py-3 text-text-secondary">{c.cycle ?? '—'}</td>
                   <td className="px-5 py-3">
                     {c.status
                       ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_PILL[c.status]}`}>{c.status}</span>
@@ -943,7 +942,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
               <input type="date" value={nextRev || predicted} onChange={e => setNextRev(e.target.value)}
                 className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
               <div className="text-[11px] text-text-muted mt-1">
-                {drawerNext.tenure} · cycle {drawerNext.cycle ?? '—'}{drawerNext.status ? ` · ${drawerNext.status}` : ''}
+                {drawerNext.tenure}{drawerNext.status ? ` · ${drawerNext.status}` : ''}
                 {nextRev && nextRev !== predicted && predicted && (
                   <> · <button onClick={() => setNextRev('')} className="text-[#3f6b8a] hover:underline">reset to predicted ({formatDate(predicted)})</button></>
                 )}
