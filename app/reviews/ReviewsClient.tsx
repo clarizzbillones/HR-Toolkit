@@ -404,7 +404,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="flex-1 min-h-0 px-8 py-6 flex flex-col">
         {/* ---- Up next: the most imminent review to act on ---- */}
         {upNext && (
           <div className="bg-ink rounded-card p-6 text-white mb-6">
@@ -464,8 +464,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         )}
 
         {/* ---- All employees · reviews (sorted by next review, overdue first) ---- */}
-        <div className="bg-white border border-border rounded-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
+        <div className="bg-white border border-border rounded-card overflow-hidden flex flex-col flex-1 min-h-0">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap shrink-0">
             <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">All employees · reviews</div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
@@ -484,11 +484,11 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               </select>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[860px]">
             <thead className="bg-[#f1ece3]">
               <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Tenure', 'Cycle', 'Status', ''].map(h => (
-                <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
+                <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary sticky top-0 z-10 bg-[#f1ece3]">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
