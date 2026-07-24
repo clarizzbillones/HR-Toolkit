@@ -1069,9 +1069,16 @@ function ReimbursementsTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ employee: '', purpose: '', amount: '', payoutDate: '' });
   const [attach, setAttach] = useState<File | null>(null);
+  const [names, setNames] = useState<string[]>([]);
   const { me } = useAccess(); const readOnly = !!me?.restricted;
 
   useEffect(() => { fetch('/api/reports?tab=reimbursements').then(r => r.json()).then(d => setRows(d.rows ?? [])); }, []);
+  useEffect(() => {
+    fetch('/api/staffing').then(r => r.json()).then(d => {
+      const list = Array.from(new Set((d.rows ?? []).map((r: any) => (r.name ?? '').trim()).filter(Boolean))) as string[];
+      setNames(list.sort((a, b) => a.localeCompare(b)));
+    }).catch(() => {});
+  }, []);
 
   async function add() {
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
@@ -1091,7 +1098,17 @@ function ReimbursementsTab() {
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-2 gap-4">
-          {([['Employee','employee'],['Purpose','purpose'],['Amount ($)','amount'],['Payout Date','payoutDate']] as [string, keyof typeof form][]).map(([l, k]) => (
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Employee</label>
+            <input list="reimb-employee-names" value={form.employee}
+              onChange={e => setForm(p => ({ ...p, employee: e.target.value }))}
+              placeholder="Select or type a name"
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink" />
+            <datalist id="reimb-employee-names">
+              {names.map(n => <option key={n} value={n} />)}
+            </datalist>
+          </div>
+          {([['Purpose','purpose'],['Amount ($)','amount'],['Payout Date','payoutDate']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
               <input type={k === 'payoutDate' ? 'date' : k === 'amount' ? 'number' : 'text'} value={form[k]}
