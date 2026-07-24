@@ -176,8 +176,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
               src={linkedUrl}
               className="w-full h-full border-0"
               title="TripDesk Live Dashboard"
-              allow="clipboard-read; clipboard-write"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+              allow="clipboard-read; clipboard-write; downloads"
             />
           </div>
         </div>
@@ -194,8 +193,7 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
             src={embedUrl}
             className="flex-1 w-full border-0"
             title="TripDesk Monthly Report"
-            allow="clipboard-read; clipboard-write"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+            allow="clipboard-read; clipboard-write; downloads"
           />
         </div>
       ) : (
