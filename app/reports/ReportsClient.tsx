@@ -91,6 +91,69 @@ function RowAttach({ tab, id, hasAttachment, name, onChange, readOnly }: { tab: 
     </span>
   );
 }
+// Multiple receipts for one reimbursement: lists each attached file (view +
+// remove) and lets you add more. Backed by /api/reports/reimbursement-attachments.
+function ReimbAttach({ id, readOnly, onCount }: { id: string; readOnly?: boolean; onCount?: (n: number) => void }) {
+  const { showToast } = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [list, setList] = useState<{ id: string; name: string | null }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  async function load() {
+    try {
+      const d = await fetch(`/api/reports/reimbursement-attachments?id=${encodeURIComponent(id)}`).then(r => r.json());
+      const a = d.attachments ?? [];
+      setList(a); onCount?.(a.length);
+    } catch { /* ignore */ }
+    finally { setLoaded(true); }
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+
+  async function upload(file: File) {
+    if (file.size > MAX_ATTACH) { showToast('File too large (max 4 MB)'); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData(); fd.append('id', id); fd.append('file', file);
+      const res = await fetch('/api/reports/reimbursement-attachments', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Upload failed'); return; }
+      await load(); showToast('Receipt attached');
+    } catch { showToast('Upload failed'); }
+    finally { setBusy(false); if (ref.current) ref.current.value = ''; }
+  }
+  async function del(attId: string) {
+    if (!confirm('Remove this receipt?')) return;
+    try {
+      await fetch(`/api/reports/reimbursement-attachments?attId=${encodeURIComponent(attId)}`, { method: 'DELETE' });
+      await load(); showToast('Receipt removed');
+    } catch { showToast('Could not remove'); }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 items-start">
+      {list.map(a => (
+        <span key={a.id} className="inline-flex items-center gap-1">
+          <a href={`/api/reports/reimbursement-attachments?attId=${a.id}`} target="_blank" rel="noopener noreferrer"
+            className="text-[#3f6b8a] hover:underline text-xs font-medium inline-flex items-center gap-1" title={a.name || 'View receipt'}>
+            📎 <span className="truncate max-w-[130px]">{a.name ? (a.name.length > 20 ? a.name.slice(0, 20) + '…' : a.name) : 'View'}</span>
+          </a>
+          {!readOnly && <button type="button" onClick={() => del(a.id)} className="text-text-muted hover:text-litred-alt text-xs" title="Remove receipt">✕</button>}
+        </span>
+      ))}
+      {loaded && !list.length && readOnly && <span className="text-text-faint text-xs">—</span>}
+      {!readOnly && (
+        <>
+          <input ref={ref} type="file" accept={ATTACH_ACCEPT} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+          <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+            className="text-xs font-medium text-[#3f6b8a] hover:underline disabled:opacity-50">
+            {busy ? 'Uploading…' : list.length ? '＋ Add receipt' : '⇪ Attach'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 // Reusable "attach a file" row for the add forms: shows the picked file name,
 // enforces the size cap, and hands the picked File back to the parent.
 function AttachField({ file, onPick, label = 'Attachment (optional)' }: { file: File | null; onPick: (f: File | null) => void; label?: string }) {
@@ -1163,7 +1226,7 @@ function ReimbursementsTab() {
           ))}
           {editId
             ? <div className="col-span-2 text-xs text-text-muted">To change the attached receipt, use the 📎 control in the row.</div>
-            : <div className="col-span-2"><AttachField file={attach} onPick={setAttach} label="Receipt / invoice (optional)" /></div>}
+            : <div className="col-span-2"><AttachField file={attach} onPick={setAttach} label="Receipt / invoice (optional — you can add more after saving)" /></div>}
           <div className="col-span-2 flex gap-2">
             <button onClick={save} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editId ? 'Save changes' : 'Add'}</button>
             <button onClick={resetForm} className="text-sm text-text-muted px-3">Cancel</button>
@@ -1185,8 +1248,7 @@ function ReimbursementsTab() {
                   : <span className="text-text-faint text-xs">—</span>}</td>
                 <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
-                <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
-                  onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
+                <td className="px-4 py-3"><ReimbAttach id={r.id} readOnly={readOnly} /></td>
                 {!readOnly && (
                   <td className="px-4 py-3 whitespace-nowrap text-right">
                     <button onClick={() => startEdit(r)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
