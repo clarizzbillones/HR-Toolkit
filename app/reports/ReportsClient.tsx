@@ -1071,6 +1071,7 @@ function ReimbursementsTab() {
   const [form, setForm] = useState({ employee: '', purpose: '', category: '', amount: '', payoutDate: '' });
   const [attach, setAttach] = useState<File | null>(null);
   const [names, setNames] = useState<string[]>([]);
+  const [editId, setEditId] = useState<string | null>(null);
   const REIMB_CATEGORIES = ['Mileage', 'Meal', 'Accountable Plan'];
   const { me } = useAccess(); const readOnly = !!me?.restricted;
 
@@ -1082,24 +1083,52 @@ function ReimbursementsTab() {
     }).catch(() => {});
   }, []);
 
-  async function add() {
+  function resetForm() {
+    setForm({ employee: '', purpose: '', category: '', amount: '', payoutDate: '' });
+    setAttach(null); setEditId(null); setShowAdd(false);
+  }
+  function startEdit(r: any) {
+    setForm({
+      employee: r.employee ?? '', purpose: r.purpose ?? '', category: r.category ?? '',
+      amount: r.amount != null ? String(r.amount) : '',
+      payoutDate: r.payout_date ? String(r.payout_date).slice(0, 10) : '',
+    });
+    setAttach(null); setEditId(r.id); setShowAdd(true);
+  }
+
+  async function save() {
+    if (editId) {
+      const res = await fetch('/api/reports?tab=reimbursements', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: Number(form.amount) }) });
+      const { row } = await res.json();
+      if (row) setRows(p => p.map(x => x.id === editId ? { ...x, ...row } : x));
+      resetForm();
+      showToast('Reimbursement updated');
+      return;
+    }
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
     const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
-    setForm({ employee: '', purpose: '', category: '', amount: '', payoutDate: '' });
-    setAttach(null);
-    setShowAdd(false);
+    resetForm();
     showToast('Reimbursement added');
+  }
+
+  async function remove(r: any) {
+    if (!confirm(`Delete this reimbursement for ${r.employee || 'this employee'}?`)) return;
+    await fetch(`/api/reports?tab=reimbursements&id=${encodeURIComponent(r.id)}`, { method: 'DELETE' });
+    setRows(p => p.filter(x => x.id !== r.id));
+    if (editId === r.id) resetForm();
+    showToast('Reimbursement deleted');
   }
 
   return (
     <div>
       <div className="flex justify-end mb-4">
-        {!readOnly && <button onClick={() => setShowAdd(v => !v)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add</button>}
+        {!readOnly && <button onClick={() => { if (showAdd) resetForm(); else { resetForm(); setShowAdd(true); } }} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add</button>}
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-2 gap-4">
+          <div className="col-span-2 text-sm font-semibold text-text-primary -mb-1">{editId ? 'Edit reimbursement' : 'New reimbursement'}</div>
           <div>
             <label className="block text-xs font-semibold text-text-secondary mb-1">Employee</label>
             <input list="reimb-employee-names" value={form.employee}
@@ -1132,17 +1161,19 @@ function ReimbursementsTab() {
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
           ))}
-          <div className="col-span-2"><AttachField file={attach} onPick={setAttach} label="Receipt / invoice (optional)" /></div>
+          {editId
+            ? <div className="col-span-2 text-xs text-text-muted">To change the attached receipt, use the 📎 control in the row.</div>
+            : <div className="col-span-2"><AttachField file={attach} onPick={setAttach} label="Receipt / invoice (optional)" /></div>}
           <div className="col-span-2 flex gap-2">
-            <button onClick={add} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add</button>
-            <button onClick={() => { setShowAdd(false); setAttach(null); }} className="text-sm text-text-muted px-3">Cancel</button>
+            <button onClick={save} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editId ? 'Save changes' : 'Add'}</button>
+            <button onClick={resetForm} className="text-sm text-text-muted px-3">Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Employee','Purpose','Category','Amount','Payout Date','Receipt'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {[...['Employee','Purpose','Category','Amount','Payout Date','Receipt'], ...(!readOnly ? [''] : [])].map((h, i) => <th key={h || `act${i}`} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
@@ -1156,16 +1187,22 @@ function ReimbursementsTab() {
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
                 <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
                   onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
+                {!readOnly && (
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <button onClick={() => startEdit(r)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                    <button onClick={() => remove(r)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                  </td>
+                )}
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
+            {!rows.length && <tr><td colSpan={readOnly ? 6 : 7} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-[#e6ddcd] bg-[#faf7f0] font-semibold">
                 <td className="px-4 py-3" colSpan={3}>Total</td>
                 <td className="px-4 py-3">${rows.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0).toLocaleString()}</td>
-                <td className="px-4 py-3" colSpan={2}></td>
+                <td className="px-4 py-3" colSpan={readOnly ? 2 : 3}></td>
               </tr>
             </tfoot>
           )}

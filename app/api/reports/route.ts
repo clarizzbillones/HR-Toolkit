@@ -107,3 +107,43 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ error: 'Unknown tab' }, { status: 400 });
 }
+
+export async function PATCH(req: Request) {
+  const url = new URL(req.url);
+  const tab = url.searchParams.get('tab') ?? '';
+  const body = await req.json();
+  const id = typeof body.id === 'string' ? body.id : null;
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  if (tab === 'reimbursements') {
+    const { employee, purpose, amount, payoutDate, category } = body;
+    await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS category TEXT`;
+    await sql`
+      UPDATE reimbursements SET
+        employee = ${employee ?? ''},
+        purpose = ${purpose ?? ''},
+        category = ${category ?? null},
+        amount = ${amount ?? 0},
+        payout_date = ${payoutDate ?? null}
+      WHERE id = ${id}`;
+    const [row] = await sql`SELECT * FROM reimbursements WHERE id = ${id}`;
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ row: { ...row, attachment_data: undefined, has_attachment: !!row.attachment_data } });
+  }
+
+  return NextResponse.json({ error: 'Unknown tab' }, { status: 400 });
+}
+
+export async function DELETE(req: Request) {
+  const url = new URL(req.url);
+  const tab = url.searchParams.get('tab') ?? '';
+  const id = url.searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  if (tab === 'reimbursements') {
+    await sql`DELETE FROM reimbursements WHERE id = ${id}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: 'Unknown tab' }, { status: 400 });
+}
