@@ -84,11 +84,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ invoice: { ...invoice, attachment_data: undefined, has_attachment: !!invoice.attachment_data } }, { status: 201 });
   }
   if (tab === 'reimbursements') {
-    const { employee, purpose, amount, payoutDate } = body;
+    const { employee, purpose, amount, payoutDate, category } = body;
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS attachment_name TEXT`;
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS attachment_data TEXT`;
+    await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS category TEXT`;
     const id = cuid();
-    await sql`INSERT INTO reimbursements (id,employee,purpose,amount,payout_date,attachment_name,attachment_data) VALUES (${id},${employee},${purpose},${amount},${payoutDate ?? null},${attName},${attData})`;
+    await sql`INSERT INTO reimbursements (id,employee,purpose,category,amount,payout_date,attachment_name,attachment_data) VALUES (${id},${employee},${purpose},${category ?? null},${amount},${payoutDate ?? null},${attName},${attData})`;
     const [row] = await sql`SELECT * FROM reimbursements WHERE id = ${id}`;
     return NextResponse.json({ row: { ...row, attachment_data: undefined, has_attachment: !!row.attachment_data } }, { status: 201 });
   }

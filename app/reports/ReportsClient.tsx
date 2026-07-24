@@ -576,7 +576,7 @@ function MonthlyTab({ data }: { data: any }) {
         ${gap}${section('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
         ${gap}${section('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', statusText(t.status)]))}
         ${gap}${section('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
-        ${gap}${section('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? 'Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
+        ${gap}${section('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Category', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), esc(r.category ?? ''), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? 'Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
         ${gap}${section('Insurance Invoices', '#6b4f8a', ['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice'], k => insuranceOf(k).map((r: any) => [esc(r.carrier), esc(r.invoice_type), fmt$(num(r.amount)), esc(r.deadline ?? ''), String(r.enrolled_count ?? ''), r.has_attachment ? 'Attached' : '—']), k => ['Total Premiums', fmt$(insuranceTotalOf(k))])}
         ${gap}${section('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), statusText(r.status)]))}
         ${gap}${peopleRow('Birthdays', '#c9a24a', birthdaysOf(thisM), birthdaysOf(lastM), (e: any) => `🎂 ${esc(e.name)} — ${esc(e.dob)}`)}
@@ -674,7 +674,7 @@ function MonthlyTab({ data }: { data: any }) {
           ${pair('Paid Time Off', '#2f7d5b', ['Employee', 'Type', 'Start', 'End', 'Days'], k => ptoOf(k).map((e: any) => [esc(e.employee), esc(e.type), esc(e.start_date), esc(e.end_date), String(e.days ?? '')]), k => ['Total PTO Days', `${ptoDaysOf(k)} days · ${ptoOf(k).length} PTOs`])}
           ${pair('Trips & Travel', '#3f6b8a', ['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status'], k => tripOf(k).map((t: any) => [esc(t.who), esc(tripDate(t)), esc(t.detail), esc(t.matter), t.cost != null ? fmt$(num(t.cost)) : '—', STATUS(t.status)]))}
           ${pair('Contractor Payments', '#6b4f8a', ['Name', 'Date', 'Amount', 'Note'], k => contractorOf(k).map((c: any) => [esc(cName(c)), esc(cDate(c)), fmt$(num(c.amount)), esc(cNote(c))]), k => ['Total Contractor $', fmt$(contractorOf(k).reduce((s: number, c: any) => s + num(c.amount), 0))])}
-          ${pair('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? '📎 Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
+          ${pair('Reimbursements', '#2f7d5b', ['Employee', 'Purpose', 'Category', 'Amount', 'Payout Date', 'Receipt'], k => reimbOf(k).map((r: any) => [esc(r.employee), esc(r.purpose), esc(r.category ?? ''), fmt$(num(r.amount)), esc(r.payout_date ?? ''), r.has_attachment ? '📎 Attached' : '—']), k => ['Total Reimbursements', fmt$(reimbTotalOf(k))])}
           ${pair('Insurance Invoices', '#6b4f8a', ['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice'], k => insuranceOf(k).map((r: any) => [esc(r.carrier), esc(r.invoice_type), fmt$(num(r.amount)), esc(r.deadline ?? ''), String(r.enrolled_count ?? ''), r.has_attachment ? '📎 Attached' : '—']), k => ['Total Premiums', fmt$(insuranceTotalOf(k))])}
           ${pair('Performance Reviews', '#b07d2a', ['Employee', 'Role', 'Review', 'Date', 'Status'], k => reviewOf(k).map(r => [esc(r.name), esc(r.role), esc(r.type), esc(r.date ?? ''), STATUS(r.status)]))}
           ${peopleBlock('Birthdays', '#c9a24a', '#8a6d3b', bdayCards)}
@@ -778,6 +778,7 @@ function MonthlyTab({ data }: { data: any }) {
     reimb: (r: any) => (
       <tr key={r.id} className="border-t border-[#f1ece3]">
         <td className="px-3 py-2 font-medium">{r.employee}</td><td className="px-3 py-2 text-text-muted">{r.purpose}</td>
+        <td className="px-3 py-2 text-text-muted">{r.category ?? '—'}</td>
         <td className="px-3 py-2 font-semibold">{fmt$(num(r.amount))}</td><td className="px-3 py-2 text-text-muted">{r.payout_date ?? '—'}</td>
         <td className="px-3 py-2">{r.has_attachment ? <AttachLink tab="reimbursements" id={r.id} name={r.attachment_name} /> : <span className="text-text-faint text-xs">—</span>}</td>
       </tr>
@@ -846,7 +847,7 @@ function MonthlyTab({ data }: { data: any }) {
         total={(rows: any[]) => ({ label: 'Total Contractor $', value: fmt$(rows.reduce((s, c) => s + num(c.amount), 0)) })} />
       <Compare title="Trips & Travel" color="#3f6b8a" headers={['Traveler', 'Travel Date', 'Details', 'Client', 'Cost', 'Status']} renderRow={cellRow.trip} rowsThis={tripOf(thisKey)} rowsLast={tripOf(lastKey)} />
       <Compare title="Reimbursements" color="#2f7d5b" subtitle={`${thisLabel}: ${fmt$(reimbTotalOf(thisKey))} · ${lastLabel}: ${fmt$(reimbTotalOf(lastKey))}`}
-        headers={['Employee', 'Purpose', 'Amount', 'Payout Date', 'Receipt']} renderRow={cellRow.reimb} rowsThis={reimbOf(thisKey)} rowsLast={reimbOf(lastKey)}
+        headers={['Employee', 'Purpose', 'Category', 'Amount', 'Payout Date', 'Receipt']} renderRow={cellRow.reimb} rowsThis={reimbOf(thisKey)} rowsLast={reimbOf(lastKey)}
         total={(rows: any[]) => ({ label: 'Total Reimbursements', value: fmt$(rows.reduce((s, r) => s + num(r.amount), 0)) })} />
       <Compare title="Insurance Invoices" color="#6b4f8a" subtitle={`${thisLabel}: ${fmt$(insuranceTotalOf(thisKey))} · ${lastLabel}: ${fmt$(insuranceTotalOf(lastKey))}`}
         headers={['Carrier', 'Type', 'Amount', 'Deadline', 'Enrolled', 'Invoice']} renderRow={cellRow.insurance} rowsThis={insuranceOf(thisKey)} rowsLast={insuranceOf(lastKey)}
@@ -1067,9 +1068,10 @@ function ReimbursementsTab() {
   const { showToast } = useToast();
   const [rows, setRows] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ employee: '', purpose: '', amount: '', payoutDate: '' });
+  const [form, setForm] = useState({ employee: '', purpose: '', category: '', amount: '', payoutDate: '' });
   const [attach, setAttach] = useState<File | null>(null);
   const [names, setNames] = useState<string[]>([]);
+  const REIMB_CATEGORIES = ['Mileage', 'Meal', 'Accountable Plan'];
   const { me } = useAccess(); const readOnly = !!me?.restricted;
 
   useEffect(() => { fetch('/api/reports?tab=reimbursements').then(r => r.json()).then(d => setRows(d.rows ?? [])); }, []);
@@ -1085,7 +1087,7 @@ function ReimbursementsTab() {
     const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
-    setForm({ employee: '', purpose: '', amount: '', payoutDate: '' });
+    setForm({ employee: '', purpose: '', category: '', amount: '', payoutDate: '' });
     setAttach(null);
     setShowAdd(false);
     showToast('Reimbursement added');
@@ -1108,7 +1110,21 @@ function ReimbursementsTab() {
               {names.map(n => <option key={n} value={n} />)}
             </datalist>
           </div>
-          {([['Purpose','purpose'],['Amount ($)','amount'],['Payout Date','payoutDate']] as [string, keyof typeof form][]).map(([l, k]) => (
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Purpose</label>
+            <input type="text" value={form.purpose}
+              onChange={e => setForm(p => ({ ...p, purpose: e.target.value }))}
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Category</label>
+            <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+              <option value="">Select category…</option>
+              {REIMB_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {([['Amount ($)','amount'],['Payout Date','payoutDate']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
               <input type={k === 'payoutDate' ? 'date' : k === 'amount' ? 'number' : 'text'} value={form[k]}
@@ -1126,21 +1142,33 @@ function ReimbursementsTab() {
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Employee','Purpose','Amount','Payout Date','Receipt'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {['Employee','Purpose','Category','Amount','Payout Date','Receipt'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
               <tr key={r.id} className="border-t border-[#f1ece3]">
                 <td className="px-4 py-3 font-medium">{r.employee}</td>
                 <td className="px-4 py-3 text-text-muted">{r.purpose}</td>
+                <td className="px-4 py-3">{r.category
+                  ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef2f5] text-[#3f6b8a]">{r.category}</span>
+                  : <span className="text-text-faint text-xs">—</span>}</td>
                 <td className="px-4 py-3">${Number(r.amount).toLocaleString()}</td>
                 <td className="px-4 py-3 text-text-muted">{r.payout_date}</td>
                 <td className="px-4 py-3"><RowAttach tab="reimbursements" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
                   onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={5} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-text-muted">No reimbursements</td></tr>}
           </tbody>
+          {rows.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-[#e6ddcd] bg-[#faf7f0] font-semibold">
+                <td className="px-4 py-3" colSpan={3}>Total</td>
+                <td className="px-4 py-3">${rows.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0).toLocaleString()}</td>
+                <td className="px-4 py-3" colSpan={2}></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
