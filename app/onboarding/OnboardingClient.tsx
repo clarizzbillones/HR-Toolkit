@@ -1418,6 +1418,14 @@ export default function OnboardingClient() {
                         {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
+                    {person.tag === 'Re-hire' && (
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Rehire date</label>
+                        <input type="date" value={person.rehire_date ?? ''} onChange={e => patchOnboardee(person.id, { rehire_date: e.target.value })}
+                          className="w-full border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                        {person.rehire_date && <p className="text-[11px] text-text-muted mt-1">{fmtDate(person.rehire_date)}</p>}
+                      </div>
+                    )}
                   </div>
 
                   {/* HR note — free text, surfaces on the status report */}

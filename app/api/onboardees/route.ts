@@ -21,6 +21,8 @@ async function ensureTable() {
   await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS todos text DEFAULT '[]'`;
   // Free-text HR note, shown on the status report.
   await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS note text`;
+  // Original rehire date, for people coming back to the firm.
+  await sql`ALTER TABLE onboardees ADD COLUMN IF NOT EXISTS rehire_date text`;
 }
 
 // Make sure the Staffing directory can receive a completed onboardee
@@ -57,7 +59,7 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   if (progress !== undefined) await sql`UPDATE onboardees SET progress = ${JSON.stringify(progress)} WHERE id = ${id}`;
   if (todos !== undefined) await sql`UPDATE onboardees SET todos = ${JSON.stringify(todos)} WHERE id = ${id}`;
-  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date', 'tag', 'note'] as const) {
+  for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date', 'tag', 'note', 'rehire_date'] as const) {
     if (f[k] !== undefined) await sql`UPDATE onboardees SET ${sql(k)} = ${f[k]} WHERE id = ${id}`;
   }
   // On completion, push the person into the Staffing directory
