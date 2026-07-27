@@ -1368,6 +1368,7 @@ export default function OnboardingClient() {
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: complete ? '#2f7d5b' : '#c9a24a' }} />
                   </div>
                   <div className="text-[11px] text-text-muted mt-1">{done}/{total} tasks</div>
+                  {p.note && <div className="text-[12px] text-black mt-2 leading-snug"><span className="font-bold">Notes:</span> {p.note}</div>}
                 </button>
               );
             });
