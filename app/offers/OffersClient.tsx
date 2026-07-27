@@ -86,9 +86,9 @@ function composeCert(f: CertForm): string {
   const who = f.shortName.trim() || f.name.trim() || 'the employee';
   const pron = f.pronoun.trim() || 'their';
   const out: string[] = [];
-  out.push(`This letter is to certify that **${f.name || '[Name]'}** is currently engaged as ${f.engagement} at Litson PLLC as ${f.role} since ${f.startDate || '[start date]'}, with scheduled working hours from ${f.hours}.`);
+  out.push(`This letter is to certify that **${f.name || '[Name]'}** is currently engaged as ${f.engagement} at Litson PLLC as **${f.role}** since **${f.startDate || '[start date]'}**, with scheduled working hours from ${f.hours}.`);
   out.push('');
-  out.push(`In ${pron} role as ${f.role}, ${who}'s principal duties and responsibilities include, but are not limited to, the following:`);
+  out.push(`In ${pron} role as **${f.role}**, ${who}'s principal duties and responsibilities include, but are not limited to, the following:`);
   out.push('');
   f.duties.split('\n').map(l => l.trim()).filter(Boolean).forEach(d => {
     const i = d.indexOf(' – ') >= 0 ? d.indexOf(' – ') : d.indexOf(' - ');
