@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type UIEvent as ReactUIEvent } from 'react';
+import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
@@ -62,6 +63,21 @@ function fmtDate(iso: string | null | undefined) {
   const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// Two-letter avatar initials from a name (e.g. "Carly Crotty" -> "CC").
+function initialsOf(name: string) {
+  const parts = String(name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '—';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+// Status-report badge colors, keyed by the label from statusLabelOf().
+const REPORT_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
+  'Hired': { bg: '#eef5f1', fg: '#2f7d5b' },
+  'Offer accepted': { bg: '#eef5f1', fg: '#2f7d5b' },
+  'Offer viewed': { bg: '#eef2f7', fg: '#3f5a76' },
+  'Offer sent': { bg: '#eef2f7', fg: '#3f5a76' },
+  'In progress': { bg: '#f7efe1', fg: '#b07d2a' },
+  'Not started': { bg: '#f1ece3', fg: '#8b8478' },
+};
 
 interface TableData { headers: string[]; rows: string[][] }
 function parseTable(body: string | null): TableData {
@@ -71,6 +87,8 @@ function parseTable(body: string | null): TableData {
 
 export default function OnboardingClient() {
   const { showToast } = useToast();
+  const { data: session } = useSession();
+  const [showReport, setShowReport] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [guide, setGuide] = useState('General');
   const [editing, setEditing] = useState<string | null>(null);
@@ -238,6 +256,119 @@ export default function OnboardingClient() {
     const total = t.length + todos.length;
     const done = guideDone + todoDone;
     return { done, total, pct: total ? Math.round(done / total * 100) : 0 };
+  }
+
+  // Human-readable status for the report (mirrors the dashboard card's logic).
+  function statusLabelOf(p: any): string {
+    if (p.status === 'Complete') return 'Hired';
+    const st = stageOf(p);
+    if (st === 'offer_accepted') return 'Offer accepted';
+    if (st === 'offer_viewed') return 'Offer viewed';
+    if (st === 'offer_sent') return 'Offer sent';
+    if (st === 'onboarding') return 'In progress';
+    return progressOf(p).pct > 0 ? 'In progress' : 'Not started';
+  }
+
+  const preparer = (() => {
+    const u: any = session?.user;
+    if (u?.name) return String(u.name);
+    const local = String(u?.email ?? '').split('@')[0];
+    if (!local) return 'HR';
+    return local.split(/[._-]/)[0].replace(/^\w/, c => c.toUpperCase());
+  })();
+
+  // Everything the status report needs, computed from the active onboardees.
+  function buildReport() {
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    const active = people.filter(p => p.status !== 'Complete');
+    const hiredCount = people.filter(p => p.status === 'Complete').length;
+
+    let sumDone = 0, sumTotal = 0;
+    active.forEach(p => { const { done, total } = progressOf(p); sumDone += done; sumTotal += total; });
+    const tasksPct = sumTotal ? Math.round(sumDone / sumTotal * 100) : 0;
+
+    const withStart = active.map(p => ({ p, s: (p.start_date || '').slice(0, 10) })).filter(x => x.s);
+    const upcoming = withStart.filter(x => x.s >= todayStr).sort((a, b) => a.s.localeCompare(b.s));
+    const byDate = [...withStart].sort((a, b) => a.s.localeCompare(b.s));
+    const earliest = upcoming[0] ?? byDate[0];
+    const nextStart = earliest?.s ?? null;
+    const earliestId = earliest?.p.id ?? null;
+
+    const sorted = [...active].sort((a, b) => {
+      const sa = (a.start_date || '').slice(0, 10), sb = (b.start_date || '').slice(0, 10);
+      if (!sa && !sb) return a.name.localeCompare(b.name);
+      if (!sa) return 1; if (!sb) return -1;
+      return sa.localeCompare(sb);
+    });
+
+    const rows = sorted.map(p => {
+      const { done, total } = progressOf(p);
+      const status = statusLabelOf(p);
+      let note = '';
+      if (!p.position || p.guide === 'None') note = 'Role and guide to confirm';
+      else if (p.id === earliestId) note = 'Earliest start — prioritize';
+      else if (stageOf(p) === 'offer_accepted') note = 'Clear to proceed';
+      return {
+        id: p.id, name: p.name, initials: initialsOf(p.name),
+        sub: `${p.position || p.worker_type}${p.guide && p.guide !== 'None' ? ` · ${p.guide} guide` : ''}`,
+        status, done, total, note,
+        start: p.start_date ? `Starts ${fmtDate(p.start_date)}` : 'Start date TBC',
+      };
+    });
+
+    return {
+      asOf: fmtDate(todayStr), preparer,
+      inOnboarding: active.length, hiredCount, tasksPct,
+      nextStart: nextStart ? fmtDate(nextStart) : '—',
+      rows,
+    };
+  }
+
+  function printReport() {
+    const r = buildReport();
+    const win = window.open('', '_blank');
+    if (!win) { showToast('Allow pop-ups to print the report'); return; }
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const stat = (label: string, value: string) =>
+      `<div><div style="font-size:8.5pt;color:#8a8474;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3pt">${esc(label)}</div><div style="font-size:20pt;font-weight:600;color:#1b2a3d">${esc(value)}</div></div>`;
+    const rowHtml = r.rows.map(row => {
+      const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
+      return `<div style="display:flex;align-items:flex-start;gap:11pt;padding:10pt 0;border-top:0.5pt solid #ece5d8">
+        <div style="width:30pt;height:30pt;border-radius:50%;background:#eef2f7;color:#3f5a76;font-size:9.5pt;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(row.initials)}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;color:#1b2a3d">${esc(row.name)}</div>
+          <div style="font-size:9pt;color:#8a8474;margin:1pt 0 4pt">${esc(row.sub)}</div>
+          <div>
+            <span style="font-size:8.5pt;font-weight:600;padding:1.5pt 7pt;border-radius:10pt;background:${c.bg};color:${c.fg}">${esc(row.status)}</span>
+            <span style="font-size:8.5pt;color:#8a8474;margin-left:8pt">${row.done}/${row.total} tasks</span>
+            ${row.note ? `<span style="font-size:8.5pt;color:#b07d2a;margin-left:8pt">${esc(row.note)}</span>` : ''}
+          </div>
+        </div>
+        <div style="font-size:9pt;color:#6a6456;white-space:nowrap;padding-top:1pt">${esc(row.start)}</div>
+      </div>`;
+    }).join('');
+
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Onboarding status report</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  @page{size:letter;margin:0.6in}
+  body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:10.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+</style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4pt">
+    <div style="font-size:17pt;font-weight:700">Onboarding status report</div>
+    <div style="font-size:9pt;color:#8a8474">As of ${esc(r.asOf)}</div>
+  </div>
+  <div style="font-size:9.5pt;color:#8a8474;margin-bottom:14pt">LITSON PLLC · prepared by ${esc(r.preparer)}</div>
+  <div style="display:flex;gap:34pt;padding:12pt 0;border-top:0.5pt solid #ddd4c4;border-bottom:0.5pt solid #ddd4c4;margin-bottom:6pt">
+    ${stat('In onboarding', String(r.inOnboarding))}
+    ${stat('Hired', String(r.hiredCount))}
+    ${stat('Tasks complete', r.tasksPct + '%')}
+    ${stat('Next start date', r.nextStart)}
+  </div>
+  ${rowHtml || '<div style="padding:20pt 0;color:#8a8474;text-align:center">No one is currently onboarding.</div>'}
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`);
+    win.document.close();
   }
   async function addOnboardee() {
     if (!newForm.name.trim()) { showToast('Name required'); return; }
@@ -909,7 +1040,10 @@ export default function OnboardingClient() {
           </div>
         )}
         {view === 'dashboard' && (
-          <button onClick={() => { setShowAdd(true); setNewForm({ ...blankNew, guide: guides[0] ?? 'General' }); }} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add new hire</button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setShowReport(true)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="A shareable status summary you can screenshot or download">📄 Status report</button>
+            <button onClick={() => { setShowAdd(true); setNewForm({ ...blankNew, guide: guides[0] ?? 'General' }); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add new hire</button>
+          </div>
         )}
       </header>
 
@@ -1350,6 +1484,65 @@ export default function OnboardingClient() {
             })()}
           </div>
         </div>
+
+        {/* Onboarding status report modal */}
+        {showReport && (() => {
+          const r = buildReport();
+          return (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-6 overflow-auto" onClick={() => setShowReport(false)}>
+              <div className="bg-white rounded-card w-full max-w-2xl shadow-xl my-4" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-text-secondary">Onboarding status report</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={printReport} className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
+                    <button onClick={() => setShowReport(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+                  </div>
+                </div>
+                {/* Report body — screenshot-friendly */}
+                <div className="px-8 py-7">
+                  <div className="flex items-start justify-between gap-4">
+                    <h2 className="font-spectral text-[22px] font-semibold text-text-primary">Onboarding status report</h2>
+                    <span className="text-xs text-text-muted whitespace-nowrap mt-1">As of {r.asOf}</span>
+                  </div>
+                  <p className="text-[13px] text-text-muted mt-0.5">LITSON PLLC · prepared by {r.preparer}</p>
+
+                  <div className="grid grid-cols-4 gap-4 py-5 my-5 border-y border-border-light">
+                    {([['In onboarding', String(r.inOnboarding)], ['Hired', String(r.hiredCount)], ['Tasks complete', `${r.tasksPct}%`], ['Next start date', r.nextStart]] as [string, string][]).map(([l, v]) => (
+                      <div key={l}>
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1">{l}</div>
+                        <div className="text-2xl font-semibold text-ink-darkest">{v}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border border-border-light rounded-card overflow-hidden">
+                    {r.rows.length ? r.rows.map((row, i) => {
+                      const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
+                      return (
+                        <div key={row.id} className={`flex items-start gap-3 px-4 py-3 ${i > 0 ? 'border-t border-[#f1ece3]' : ''}`}>
+                          <div className="w-9 h-9 rounded-full bg-[#eef2f7] text-[#3f5a76] text-xs font-bold flex items-center justify-center shrink-0">{row.initials}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-text-primary">{row.name}</div>
+                            <div className="text-xs text-text-muted mt-0.5 mb-1.5">{row.sub}</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: c.bg, color: c.fg }}>{row.status}</span>
+                              <span className="text-[11px] text-text-muted">{row.done}/{row.total} tasks</span>
+                              {row.note && <span className="text-[11px] font-medium text-[#b07d2a]">{row.note}</span>}
+                            </div>
+                          </div>
+                          <div className="text-xs text-text-secondary whitespace-nowrap pt-0.5">{row.start}</div>
+                        </div>
+                      );
+                    }) : (
+                      <div className="px-4 py-8 text-center text-sm text-text-muted">No one is currently onboarding.</div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-text-faint mt-3">Tip: screenshot this card, or use Print / PDF for a clean full-page export.</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Add new hire modal */}
         {showAdd && (
