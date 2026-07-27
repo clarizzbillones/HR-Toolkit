@@ -377,42 +377,56 @@ export default function OnboardingClient() {
     if (!win) { showToast('Allow pop-ups to print the report'); return; }
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const stat = (label: string, value: string) =>
-      `<div><div style="font-size:8.5pt;color:#8a8474;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3pt">${esc(label)}</div><div style="font-size:20pt;font-weight:600;color:#1b2a3d">${esc(value)}</div></div>`;
+      `<div style="flex:1;background:#fff;border:0.75pt solid #e6ddcd;border-radius:8pt;padding:9pt 11pt">
+        <div style="font-size:7.5pt;font-weight:700;color:#8a8474;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3pt">${esc(label)}</div>
+        <div style="font-size:18pt;font-weight:600;color:#1b2a3d;line-height:1">${esc(value)}</div>
+      </div>`;
     const rowHtml = r.rows.map(row => {
       const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
-      return `<div style="display:flex;align-items:flex-start;gap:11pt;padding:10pt 0;border-top:0.5pt solid #ece5d8">
-        <div style="width:30pt;height:30pt;border-radius:50%;background:#eef2f7;color:#3f5a76;font-size:9.5pt;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(row.initials)}</div>
-        <div style="flex:1">
-          <div style="font-weight:600;color:#1b2a3d">${esc(row.name)}</div>
-          <div style="font-size:9pt;color:#8a8474;margin:1pt 0 4pt">${esc(row.sub)}</div>
-          <div>
-            <span style="font-size:8.5pt;font-weight:600;padding:1.5pt 7pt;border-radius:10pt;background:${c.bg};color:${c.fg}">${esc(row.status)}</span>
-            <span style="font-size:8.5pt;color:#8a8474;margin-left:8pt">${row.done}/${row.total} tasks</span>
-            ${row.hint ? `<span style="font-size:8.5pt;color:#b07d2a;margin-left:8pt">${esc(row.hint)}</span>` : ''}
+      return `<div style="position:relative;background:#fff;border:0.75pt solid #e6ddcd;border-left:3pt solid ${c.fg};border-radius:8pt;padding:11pt 13pt;margin-bottom:9pt;break-inside:avoid">
+        <div style="display:flex;align-items:flex-start;gap:11pt">
+          <div style="width:30pt;height:30pt;border-radius:50%;background:${c.bg};color:${c.fg};font-size:9.5pt;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(row.initials)}</div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10pt">
+              <div>
+                <div style="font-weight:700;color:#1b2a3d;font-size:11pt">${esc(row.name)}</div>
+                <div style="font-size:9pt;color:#8a8474;margin-top:1pt">${esc(row.sub)}</div>
+              </div>
+              <div style="font-size:8.5pt;color:#6a6456;white-space:nowrap;background:#f7f4ef;border:0.5pt solid #e6ddcd;border-radius:9pt;padding:2pt 8pt">${esc(row.start)}</div>
+            </div>
+            <div style="margin-top:6pt">
+              <span style="font-size:8.5pt;font-weight:600;padding:2pt 8pt;border-radius:10pt;background:${c.bg};color:${c.fg}">${esc(row.status)}</span>
+              <span style="font-size:8.5pt;color:#8a8474;margin-left:8pt">${row.done}/${row.total} tasks</span>
+              ${row.hint ? `<span style="font-size:8.5pt;color:#b07d2a;margin-left:8pt">· ${esc(row.hint)}</span>` : ''}
+            </div>
+            ${row.note ? `<div style="font-size:10.5pt;color:#000;margin-top:7pt;background:#faf8f4;border:0.5pt solid #ece5d8;border-radius:6pt;padding:6pt 9pt"><span style="font-weight:700">Notes:</span> ${esc(row.note)}</div>` : ''}
           </div>
-          ${row.note ? `<div style="font-size:11pt;color:#000;margin-top:5pt"><span style="font-weight:700">Notes:</span> ${esc(row.note)}</div>` : ''}
         </div>
-        <div style="font-size:9pt;color:#6a6456;white-space:nowrap;padding-top:1pt">${esc(row.start)}</div>
       </div>`;
     }).join('');
 
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Onboarding status report</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  @page{size:letter;margin:0.6in}
-  body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:10.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:letter;margin:0.55in}
+  body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:10.5pt;background:#faf8f4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4pt">
-    <div style="font-size:17pt;font-weight:700">Onboarding status report</div>
-    <div style="font-size:9pt;color:#8a8474">As of ${esc(r.asOf)}</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <div style="font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#b08d3e;margin-bottom:3pt">Litson PLLC</div>
+      <div style="font-size:19pt;font-weight:700">Onboarding status report</div>
+      <div style="font-size:9.5pt;color:#8a8474;margin-top:2pt">Prepared by ${esc(r.preparer)}</div>
+    </div>
+    <div style="font-size:8.5pt;color:#6a6456;background:#fff;border:0.5pt solid #e6ddcd;border-radius:9pt;padding:3pt 9pt">As of ${esc(r.asOf)}</div>
   </div>
-  <div style="font-size:9.5pt;color:#8a8474;margin-bottom:14pt">LITSON PLLC · prepared by ${esc(r.preparer)}</div>
-  <div style="display:flex;gap:34pt;padding:12pt 0;border-top:0.5pt solid #ddd4c4;border-bottom:0.5pt solid #ddd4c4;margin-bottom:6pt">
+  <div style="height:2.5pt;border-radius:2pt;margin:9pt 0 14pt;background:linear-gradient(to right,#c9a24a,#e6d3a3 40%,transparent)"></div>
+  <div style="display:flex;gap:9pt;margin-bottom:16pt">
     ${stat('In onboarding', String(r.inOnboarding))}
     ${stat('Hired', String(r.hiredCount))}
     ${stat('Tasks complete', r.tasksPct + '%')}
     ${stat('Next start date', r.nextStart)}
   </div>
+  <div style="font-size:8pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8a8474;margin-bottom:9pt">Onboarding pipeline</div>
   ${rowHtml || '<div style="padding:20pt 0;color:#8a8474;text-align:center">No one is currently onboarding.</div>'}
   <script>window.onload=function(){window.print()}</script>
 </body></html>`);
@@ -1562,70 +1576,86 @@ export default function OnboardingClient() {
                   </div>
                 </div>
                 {/* Report body — screenshot-friendly */}
-                <div className="px-8 py-7">
+                <div className="px-8 py-8 bg-[#faf8f4]">
+                  {/* Letterhead */}
                   <div className="flex items-start justify-between gap-4">
-                    <h2 className="font-spectral text-[22px] font-semibold text-text-primary">Onboarding status report</h2>
-                    <span className="text-xs text-text-muted whitespace-nowrap mt-1">As of {r.asOf}</span>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#b08d3e] mb-1.5">Litson PLLC</div>
+                      <h2 className="font-spectral text-[26px] font-semibold text-text-primary leading-tight">Onboarding status report</h2>
+                      <p className="text-[12.5px] text-text-muted mt-1">Prepared by {r.preparer}</p>
+                    </div>
+                    <span className="text-[11px] text-text-muted whitespace-nowrap mt-1 bg-white border border-border-light px-3 py-1.5 rounded-full">As of {r.asOf}</span>
                   </div>
-                  <p className="text-[13px] text-text-muted mt-0.5">LITSON PLLC · prepared by {r.preparer}</p>
+                  <div className="h-[3px] rounded-full mt-4 mb-6" style={{ background: 'linear-gradient(to right, #c9a24a, #e6d3a3 40%, transparent)' }} />
 
-                  <div className="grid grid-cols-4 gap-4 py-5 my-5 border-y border-border-light">
+                  {/* Headline stats */}
+                  <div className="grid grid-cols-4 gap-3 mb-7">
                     {([['In onboarding', String(r.inOnboarding)], ['Hired', String(r.hiredCount)], ['Tasks complete', `${r.tasksPct}%`], ['Next start date', r.nextStart]] as [string, string][]).map(([l, v]) => (
-                      <div key={l}>
-                        <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1">{l}</div>
-                        <div className="text-2xl font-semibold text-ink-darkest">{v}</div>
+                      <div key={l} className="bg-white border border-border-light rounded-xl px-4 py-3 shadow-sm">
+                        <div className="text-[9.5px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
+                        <div className="text-[22px] font-semibold text-ink-darkest leading-tight">{v}</div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="border border-border-light rounded-card overflow-hidden">
-                    {r.rows.length ? r.rows.map((row, i) => {
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-muted mb-3">Onboarding pipeline</div>
+
+                  {/* One elevated card per person */}
+                  <div className="space-y-3.5">
+                    {r.rows.length ? r.rows.map(row => {
                       const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
                       return (
-                        <div key={row.id} className={`group flex items-start gap-3 px-4 py-3 ${i > 0 ? 'border-t border-[#f1ece3]' : ''}`}>
-                          <div className="w-9 h-9 rounded-full bg-[#eef2f7] text-[#3f5a76] text-xs font-bold flex items-center justify-center shrink-0">{row.initials}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-text-primary">{row.name}</div>
-                            <div className="text-xs text-text-muted mt-0.5 mb-1.5">{row.sub}</div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: c.bg, color: c.fg }}>{row.status}</span>
-                              <span className="text-[11px] text-text-muted">{row.done}/{row.total} tasks</span>
-                              {row.hint && <span className="text-[11px] font-medium text-[#b07d2a]">{row.hint}</span>}
-                            </div>
-                            {editNoteId === row.id ? (
-                              <div className="mt-2">
-                                <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={2} autoFocus
-                                  placeholder="Type a note…"
-                                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm text-black focus:outline-none focus:border-ink resize-y" />
-                                <div className="flex items-center gap-2 mt-1.5">
-                                  <button onClick={() => { patchOnboardee(row.id, { note: noteDraft.trim() }); setEditNoteId(null); showToast('Note saved'); }}
-                                    className="bg-ink text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-ink-dark">Save</button>
-                                  <button onClick={() => setEditNoteId(null)} className="text-xs text-text-muted px-2">Cancel</button>
-                                  {row.note && (
-                                    <button onClick={() => { patchOnboardee(row.id, { note: '' }); setEditNoteId(null); showToast('Note deleted'); }}
-                                      className="ml-auto text-xs font-semibold text-litred-alt px-2 hover:underline">Delete</button>
-                                  )}
+                        <div key={row.id} className="group relative bg-white border border-border-light rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: c.fg }} />
+                          <div className="flex items-start gap-3.5 pl-5 pr-4 py-4">
+                            <div className="w-11 h-11 rounded-full text-[13px] font-bold flex items-center justify-center shrink-0" style={{ background: c.bg, color: c.fg }}>{row.initials}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-[15px] text-text-primary truncate">{row.name}</div>
+                                  <div className="text-xs text-text-muted mt-0.5">{row.sub}</div>
                                 </div>
+                                <span className="text-[11px] font-semibold text-text-secondary whitespace-nowrap bg-[#f7f4ef] border border-border-light px-2.5 py-1 rounded-full shrink-0">{row.start}</span>
                               </div>
-                            ) : row.note ? (
-                              <div className="mt-2 flex items-start gap-2">
-                                <p className="text-[15px] text-black leading-snug flex-1"><span className="font-bold">Notes:</span> {row.note}</p>
-                                <button onClick={() => { setEditNoteId(row.id); setNoteDraft(row.note); }}
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline shrink-0 pt-0.5">Edit</button>
+                              <div className="flex items-center gap-2 flex-wrap mt-2.5">
+                                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: c.bg, color: c.fg }}>{row.status}</span>
+                                <span className="text-[11px] text-text-muted">{row.done}/{row.total} tasks</span>
+                                {row.hint && <span className="text-[11px] font-medium text-[#b07d2a]">· {row.hint}</span>}
                               </div>
-                            ) : (
-                              <button onClick={() => { setEditNoteId(row.id); setNoteDraft(''); }}
-                                className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline">＋ Add note</button>
-                            )}
+                              {editNoteId === row.id ? (
+                                <div className="mt-3">
+                                  <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={2} autoFocus
+                                    placeholder="Type a note…"
+                                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm text-black focus:outline-none focus:border-ink resize-y" />
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    <button onClick={() => { patchOnboardee(row.id, { note: noteDraft.trim() }); setEditNoteId(null); showToast('Note saved'); }}
+                                      className="bg-ink text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-ink-dark">Save</button>
+                                    <button onClick={() => setEditNoteId(null)} className="text-xs text-text-muted px-2">Cancel</button>
+                                    {row.note && (
+                                      <button onClick={() => { patchOnboardee(row.id, { note: '' }); setEditNoteId(null); showToast('Note deleted'); }}
+                                        className="ml-auto text-xs font-semibold text-litred-alt px-2 hover:underline">Delete</button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : row.note ? (
+                                <div className="mt-3 flex items-start gap-2 bg-[#faf8f4] border border-border-light rounded-lg px-3 py-2">
+                                  <p className="text-[14px] text-black leading-snug flex-1"><span className="font-bold">Notes:</span> {row.note}</p>
+                                  <button onClick={() => { setEditNoteId(row.id); setNoteDraft(row.note); }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline shrink-0 pt-0.5">Edit</button>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setEditNoteId(row.id); setNoteDraft(''); }}
+                                  className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline">＋ Add note</button>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-xs text-text-secondary whitespace-nowrap pt-0.5">{row.start}</div>
                         </div>
                       );
                     }) : (
-                      <div className="px-4 py-8 text-center text-sm text-text-muted">No one is currently onboarding.</div>
+                      <div className="bg-white border border-border-light rounded-xl px-4 py-10 text-center text-sm text-text-muted">No one is currently onboarding.</div>
                     )}
                   </div>
-                  <p className="text-[11px] text-text-faint mt-3">Tip: hover a person to add, edit, or delete their note. Screenshot this card, or use Print / PDF for a clean full-page export.</p>
+                  <p className="text-[11px] text-text-faint mt-4">Tip: hover a person to add, edit, or delete their note. Screenshot this card, or use Print / PDF for a clean full-page export.</p>
                 </div>
               </div>
             </div>
