@@ -461,27 +461,63 @@ export default function OnboardingClient() {
     showToast('Excel downloaded');
   }
 
-  // Copy a formatted table to the clipboard for pasting into an email.
+  // Copy the branded, card-style report to the clipboard for pasting into an
+  // email. Uses email-safe table markup so it keeps the report's look.
   async function copyReportForEmail() {
     const r = buildReport();
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const head = ['Name', 'Role / Guide', 'Status', 'Tasks', 'Start date', 'Note'];
-    const trs = r.rows.map(row => `<tr>
-      <td style="border:1px solid #ddd;padding:6px 9px"><b>${esc(row.name)}</b></td>
-      <td style="border:1px solid #ddd;padding:6px 9px;color:#555">${esc(row.sub)}</td>
-      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.status)}</td>
-      <td style="border:1px solid #ddd;padding:6px 9px">${row.done}/${row.total}</td>
-      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.start)}</td>
-      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.note || row.hint)}</td></tr>`).join('');
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#1b2a3d">
-      <div style="font-size:12px;letter-spacing:3px;color:#c9a24a;font-weight:bold">LITSON</div>
-      <h2 style="margin:2px 0 0">Onboarding status report</h2>
-      <p style="color:#666;margin:2px 0 12px">As of ${esc(r.asOf)} · Prepared by ${esc(r.preparer)}</p>
-      <p style="margin:0 0 12px">In onboarding: <b>${r.inOnboarding}</b> &nbsp;·&nbsp; Hired: <b>${r.hiredCount}</b> &nbsp;·&nbsp; Tasks complete: <b>${r.tasksPct}%</b> &nbsp;·&nbsp; Next start: <b>${esc(r.nextStart)}</b></p>
-      <table style="border-collapse:collapse;font-size:13px">
-        <tr style="background:#1b2a3d;color:#fff">${head.map(h => `<th align="left" style="padding:6px 9px;border:1px solid #1b2a3d">${h}</th>`).join('')}</tr>
-        ${trs}
-      </table></div>`;
+    const statCell = (l: string, v: string) =>
+      `<td width="25%" valign="top" bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e6ddcd;border-top:3px solid #c9a24a;padding:9px 11px">
+        <div style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#8a8474">${esc(l)}</div>
+        <div style="font-size:19px;font-weight:bold;color:#1b2a3d;margin-top:2px">${esc(v)}</div></td>`;
+    const cardHtml = r.rows.map(row => {
+      const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
+      return `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:10px"><tr>
+        <td width="4" bgcolor="${c.fg}" style="background:${c.fg};width:4px"></td>
+        <td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e6ddcd;border-left:none;padding:12px 14px">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td width="42" valign="top">
+              <table cellpadding="0" cellspacing="0"><tr><td width="34" height="34" align="center" valign="middle" bgcolor="${c.bg}" style="background:${c.bg};color:${c.fg};font-weight:bold;font-size:12px;border-radius:17px">${esc(row.initials)}</td></tr></table>
+            </td>
+            <td valign="top">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td valign="top"><span style="font-weight:bold;font-size:15px;color:#1b2a3d">${esc(row.name)}</span><br><span style="font-size:12px;color:#8a8474">${esc(row.sub)}</span></td>
+                <td align="right" valign="top"><span style="font-size:11px;color:#6a6456;background:#f7f4ef;border:1px solid #e6ddcd;padding:2px 8px;border-radius:9px;white-space:nowrap">${esc(row.start)}</span></td>
+              </tr></table>
+              <div style="margin-top:7px">
+                <span style="font-size:11px;font-weight:bold;color:${c.fg};background:${c.bg};padding:3px 9px;border-radius:10px">${esc(row.status)}</span>
+                <span style="font-size:11px;color:#8a8474;margin-left:8px">${row.done}/${row.total} tasks</span>
+                ${row.hint ? `<span style="font-size:11px;color:#b07d2a;margin-left:8px">&middot; ${esc(row.hint)}</span>` : ''}
+              </div>
+              ${row.note ? `<div style="margin-top:8px;font-size:13px;color:#000000;background:#faf8f4;border:1px solid #ece5d8;padding:7px 10px;border-radius:6px"><b>Notes:</b> ${esc(row.note)}</div>` : ''}
+            </td>
+          </tr></table>
+        </td>
+      </tr></table>`;
+    }).join('');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;background:#faf8f4;padding:16px;max-width:660px">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:14px"><tr>
+        <td bgcolor="#1b2a3d" style="background:#1b2a3d;border-top:3px solid #c9a24a;padding:16px 18px">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td valign="top">
+              <div style="font-size:16px;font-weight:bold;letter-spacing:5px;color:#c9a24a">LITSON</div>
+              <div style="font-size:8px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+              <div style="font-size:20px;font-weight:bold;color:#ffffff;margin-top:11px">Onboarding status report</div>
+              <div style="font-size:12px;color:#aebccd;margin-top:3px">Prepared by ${esc(r.preparer)}</div>
+            </td>
+            <td align="right" valign="top"><span style="font-size:11px;color:#e7edf3;border:1px solid #3a4a5d;padding:3px 9px;border-radius:9px;white-space:nowrap">As of ${esc(r.asOf)}</span></td>
+          </tr></table>
+        </td>
+      </tr></table>
+      <table width="100%" cellpadding="0" cellspacing="8" style="margin:-8px 0 8px"><tr>
+        ${statCell('In onboarding', String(r.inOnboarding))}
+        ${statCell('Hired', String(r.hiredCount))}
+        ${statCell('Tasks complete', r.tasksPct + '%')}
+        ${statCell('Next start date', r.nextStart)}
+      </tr></table>
+      <div style="font-size:9px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#1b2a3d;margin:6px 0 10px">Onboarding pipeline</div>
+      ${cardHtml}
+    </div>`;
     const text = [
       `Onboarding status report — As of ${r.asOf} · Prepared by ${r.preparer}`,
       `In onboarding: ${r.inOnboarding} · Hired: ${r.hiredCount} · Tasks complete: ${r.tasksPct}% · Next start: ${r.nextStart}`,
