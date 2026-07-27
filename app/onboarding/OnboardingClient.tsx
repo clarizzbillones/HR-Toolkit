@@ -64,6 +64,20 @@ function fmtDate(iso: string | null | undefined) {
   const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// Effective onboarding date: a person's start date, or — for a re-hire with no
+// start date yet — their rehire date. '' when neither is set.
+function effectiveStart(p: any): string {
+  const s = String(p?.start_date ?? '').slice(0, 10);
+  if (s) return s;
+  if (p?.tag === 'Re-hire') return String(p?.rehire_date ?? '').slice(0, 10);
+  return '';
+}
+// Label for the date chip: "Starts …", "Rehired …", or null (TBC / not set).
+function startLabel(p: any): string | null {
+  if (String(p?.start_date ?? '').slice(0, 10)) return `Starts ${fmtDate(p.start_date)}`;
+  if (p?.tag === 'Re-hire' && String(p?.rehire_date ?? '').slice(0, 10)) return `Rehired ${fmtDate(p.rehire_date)}`;
+  return null;
+}
 // Two-letter avatar initials from a name (e.g. "Carly Crotty" -> "CC").
 function initialsOf(name: string) {
   const parts = String(name ?? '').trim().split(/\s+/).filter(Boolean);
@@ -316,7 +330,7 @@ export default function OnboardingClient() {
     active.forEach(p => { const { done, total } = progressOf(p); sumDone += done; sumTotal += total; });
     const tasksPct = sumTotal ? Math.round(sumDone / sumTotal * 100) : 0;
 
-    const withStart = active.map(p => ({ p, s: (p.start_date || '').slice(0, 10) })).filter(x => x.s);
+    const withStart = active.map(p => ({ p, s: effectiveStart(p) })).filter(x => x.s);
     const upcoming = withStart.filter(x => x.s >= todayStr).sort((a, b) => a.s.localeCompare(b.s));
     const byDate = [...withStart].sort((a, b) => a.s.localeCompare(b.s));
     const earliest = upcoming[0] ?? byDate[0];
@@ -324,7 +338,7 @@ export default function OnboardingClient() {
     const earliestId = earliest?.p.id ?? null;
 
     const sorted = [...active].sort((a, b) => {
-      const sa = (a.start_date || '').slice(0, 10), sb = (b.start_date || '').slice(0, 10);
+      const sa = effectiveStart(a), sb = effectiveStart(b);
       if (!sa && !sb) return a.name.localeCompare(b.name);
       if (!sa) return 1; if (!sb) return -1;
       return sa.localeCompare(sb);
@@ -344,7 +358,7 @@ export default function OnboardingClient() {
         id: p.id, name: p.name, initials: initialsOf(p.name),
         sub: `${p.position || p.worker_type}${p.guide && p.guide !== 'None' ? ` · ${p.guide} guide` : ''}`,
         status, done, total, note, hint,
-        start: p.start_date ? `Starts ${fmtDate(p.start_date)}` : 'Start date TBC',
+        start: startLabel(p) ?? 'Start date TBC',
       };
     });
 
@@ -1355,9 +1369,9 @@ export default function OnboardingClient() {
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f1ece3] text-text-muted">Not started</span>
                     ); })()}
                   </div>
-                  {p.start_date ? (
+                  {startLabel(p) ? (
                     <div className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold text-[#2f6b45] bg-[#eef5f1] border border-[#cfe4d8] px-2.5 py-1 rounded-ctrl">
-                      <span aria-hidden>📅</span><span>Starts {fmtDate(p.start_date)}</span>
+                      <span aria-hidden>📅</span><span>{startLabel(p)}</span>
                     </div>
                   ) : (
                     <div className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-text-muted bg-[#f7f4ef] border border-border-light px-2.5 py-1 rounded-ctrl">
