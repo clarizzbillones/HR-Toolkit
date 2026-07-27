@@ -304,10 +304,13 @@ export default function OnboardingClient() {
     const rows = sorted.map(p => {
       const { done, total } = progressOf(p);
       const status = statusLabelOf(p);
-      let note = '';
-      if (!p.position || p.guide === 'None') note = 'Role and guide to confirm';
-      else if (p.id === earliestId) note = 'Earliest start — prioritize';
-      else if (stageOf(p) === 'offer_accepted') note = 'Clear to proceed';
+      // A hand-written note always wins; otherwise fall back to an auto hint.
+      let note = (p.note ?? '').trim();
+      if (!note) {
+        if (!p.position || p.guide === 'None') note = 'Role and guide to confirm';
+        else if (p.id === earliestId) note = 'Earliest start — prioritize';
+        else if (stageOf(p) === 'offer_accepted') note = 'Clear to proceed';
+      }
       return {
         id: p.id, name: p.name, initials: initialsOf(p.name),
         sub: `${p.position || p.worker_type}${p.guide && p.guide !== 'None' ? ` · ${p.guide} guide` : ''}`,
@@ -1415,6 +1418,15 @@ export default function OnboardingClient() {
                         {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
+                  </div>
+
+                  {/* HR note — free text, surfaces on the status report */}
+                  <div className="px-5 py-4 border-b border-border">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Notes <span className="font-semibold text-text-faint normal-case tracking-normal">· shows on the status report</span></label>
+                    <textarea key={person.id} defaultValue={person.note ?? ''} rows={2}
+                      placeholder="e.g. Waiting on signed offer · needs laptop shipped · prioritize"
+                      onBlur={e => { if ((e.target.value ?? '') !== (person.note ?? '')) patchOnboardee(person.id, { note: e.target.value }); }}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
                   </div>
 
                   {/* Plan & To-dos — the user's own tracking list (works for re-hires
