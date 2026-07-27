@@ -438,6 +438,69 @@ export default function OnboardingClient() {
 </body></html>`);
     win.document.close();
   }
+
+  // Report as an Excel file (an HTML table Excel opens natively).
+  function exportReportExcel() {
+    const r = buildReport();
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const head = ['Name', 'Role / Guide', 'Status', 'Tasks', 'Start date', 'Note'];
+    const trs = r.rows.map(row => `<tr><td>${esc(row.name)}</td><td>${esc(row.sub)}</td><td>${esc(row.status)}</td><td>${row.done}/${row.total}</td><td>${esc(row.start)}</td><td>${esc(row.note || row.hint)}</td></tr>`).join('');
+    const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>
+      <table border="1" cellspacing="0" cellpadding="4">
+        <tr><td colspan="6"><b>Onboarding status report</b></td></tr>
+        <tr><td colspan="6">LITSON PLLC · As of ${esc(r.asOf)} · Prepared by ${esc(r.preparer)}</td></tr>
+        <tr><td colspan="6">In onboarding: ${r.inOnboarding} · Hired: ${r.hiredCount} · Tasks complete: ${r.tasksPct}% · Next start: ${esc(r.nextStart)}</td></tr>
+        <tr></tr>
+        <tr>${head.map(h => `<th align="left" bgcolor="#1b2a3d"><font color="#ffffff">${h}</font></th>`).join('')}</tr>
+        ${trs}
+      </table></body></html>`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }));
+    a.download = `onboarding-status-${r.asOf.replace(/[^\w]+/g, '-')}.xls`;
+    a.click();
+    showToast('Excel downloaded');
+  }
+
+  // Copy a formatted table to the clipboard for pasting into an email.
+  async function copyReportForEmail() {
+    const r = buildReport();
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const head = ['Name', 'Role / Guide', 'Status', 'Tasks', 'Start date', 'Note'];
+    const trs = r.rows.map(row => `<tr>
+      <td style="border:1px solid #ddd;padding:6px 9px"><b>${esc(row.name)}</b></td>
+      <td style="border:1px solid #ddd;padding:6px 9px;color:#555">${esc(row.sub)}</td>
+      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.status)}</td>
+      <td style="border:1px solid #ddd;padding:6px 9px">${row.done}/${row.total}</td>
+      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.start)}</td>
+      <td style="border:1px solid #ddd;padding:6px 9px">${esc(row.note || row.hint)}</td></tr>`).join('');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#1b2a3d">
+      <div style="font-size:12px;letter-spacing:3px;color:#c9a24a;font-weight:bold">LITSON</div>
+      <h2 style="margin:2px 0 0">Onboarding status report</h2>
+      <p style="color:#666;margin:2px 0 12px">As of ${esc(r.asOf)} · Prepared by ${esc(r.preparer)}</p>
+      <p style="margin:0 0 12px">In onboarding: <b>${r.inOnboarding}</b> &nbsp;·&nbsp; Hired: <b>${r.hiredCount}</b> &nbsp;·&nbsp; Tasks complete: <b>${r.tasksPct}%</b> &nbsp;·&nbsp; Next start: <b>${esc(r.nextStart)}</b></p>
+      <table style="border-collapse:collapse;font-size:13px">
+        <tr style="background:#1b2a3d;color:#fff">${head.map(h => `<th align="left" style="padding:6px 9px;border:1px solid #1b2a3d">${h}</th>`).join('')}</tr>
+        ${trs}
+      </table></div>`;
+    const text = [
+      `Onboarding status report — As of ${r.asOf} · Prepared by ${r.preparer}`,
+      `In onboarding: ${r.inOnboarding} · Hired: ${r.hiredCount} · Tasks complete: ${r.tasksPct}% · Next start: ${r.nextStart}`,
+      '',
+      ...r.rows.map(row => `• ${row.name} — ${row.sub} | ${row.status} | ${row.done}/${row.total} tasks | ${row.start}${(row.note || row.hint) ? ` | ${row.note || row.hint}` : ''}`),
+    ].join('\n');
+    try {
+      if (navigator.clipboard && typeof window !== 'undefined' && 'ClipboardItem' in window) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        })]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      showToast('Copied — paste into your email');
+    } catch { showToast('Copy failed — try Excel or Print instead'); }
+  }
+
   async function addOnboardee() {
     if (!newForm.name.trim()) { showToast('Name required'); return; }
     const res = await fetch('/api/onboardees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newForm) });
@@ -1577,6 +1640,8 @@ export default function OnboardingClient() {
                 <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-text-secondary">Onboarding status report</span>
                   <div className="flex items-center gap-2">
+                    <button onClick={copyReportForEmail} className="bg-white border border-border-light text-ink text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy for email</button>
+                    <button onClick={exportReportExcel} className="bg-white border border-border-light text-ink text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-canvas">⤓ Excel</button>
                     <button onClick={printReport} className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
                     <button onClick={() => setShowReport(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
                   </div>
