@@ -89,6 +89,8 @@ export default function OnboardingClient() {
   const { showToast } = useToast();
   const { data: session } = useSession();
   const [showReport, setShowReport] = useState(false);
+  const [editNoteId, setEditNoteId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [guide, setGuide] = useState('General');
   const [editing, setEditing] = useState<string | null>(null);
@@ -304,17 +306,17 @@ export default function OnboardingClient() {
     const rows = sorted.map(p => {
       const { done, total } = progressOf(p);
       const status = statusLabelOf(p);
-      // A hand-written note always wins; otherwise fall back to an auto hint.
-      let note = (p.note ?? '').trim();
-      if (!note) {
-        if (!p.position || p.guide === 'None') note = 'Role and guide to confirm';
-        else if (p.id === earliestId) note = 'Earliest start — prioritize';
-        else if (stageOf(p) === 'offer_accepted') note = 'Clear to proceed';
-      }
+      // The hand-written note (shown as "Notes: …"), kept separate from the
+      // small auto hint (earliest start / clear to proceed / role to confirm).
+      const note = (p.note ?? '').trim();
+      let hint = '';
+      if (!p.position || p.guide === 'None') hint = 'Role and guide to confirm';
+      else if (p.id === earliestId) hint = 'Earliest start — prioritize';
+      else if (stageOf(p) === 'offer_accepted') hint = 'Clear to proceed';
       return {
         id: p.id, name: p.name, initials: initialsOf(p.name),
         sub: `${p.position || p.worker_type}${p.guide && p.guide !== 'None' ? ` · ${p.guide} guide` : ''}`,
-        status, done, total, note,
+        status, done, total, note, hint,
         start: p.start_date ? `Starts ${fmtDate(p.start_date)}` : 'Start date TBC',
       };
     });
@@ -344,8 +346,9 @@ export default function OnboardingClient() {
           <div>
             <span style="font-size:8.5pt;font-weight:600;padding:1.5pt 7pt;border-radius:10pt;background:${c.bg};color:${c.fg}">${esc(row.status)}</span>
             <span style="font-size:8.5pt;color:#8a8474;margin-left:8pt">${row.done}/${row.total} tasks</span>
-            ${row.note ? `<span style="font-size:8.5pt;color:#b07d2a;margin-left:8pt">${esc(row.note)}</span>` : ''}
+            ${row.hint ? `<span style="font-size:8.5pt;color:#b07d2a;margin-left:8pt">${esc(row.hint)}</span>` : ''}
           </div>
+          ${row.note ? `<div style="font-size:11pt;color:#000;margin-top:5pt"><span style="font-weight:700">Notes:</span> ${esc(row.note)}</div>` : ''}
         </div>
         <div style="font-size:9pt;color:#6a6456;white-space:nowrap;padding-top:1pt">${esc(row.start)}</div>
       </div>`;
@@ -1539,7 +1542,7 @@ export default function OnboardingClient() {
                     {r.rows.length ? r.rows.map((row, i) => {
                       const c = REPORT_STATUS_COLOR[row.status] ?? REPORT_STATUS_COLOR['Not started'];
                       return (
-                        <div key={row.id} className={`flex items-start gap-3 px-4 py-3 ${i > 0 ? 'border-t border-[#f1ece3]' : ''}`}>
+                        <div key={row.id} className={`group flex items-start gap-3 px-4 py-3 ${i > 0 ? 'border-t border-[#f1ece3]' : ''}`}>
                           <div className="w-9 h-9 rounded-full bg-[#eef2f7] text-[#3f5a76] text-xs font-bold flex items-center justify-center shrink-0">{row.initials}</div>
                           <div className="flex-1 min-w-0">
                             <div className="font-semibold text-text-primary">{row.name}</div>
@@ -1547,8 +1550,33 @@ export default function OnboardingClient() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: c.bg, color: c.fg }}>{row.status}</span>
                               <span className="text-[11px] text-text-muted">{row.done}/{row.total} tasks</span>
-                              {row.note && <span className="text-[11px] font-medium text-[#b07d2a]">{row.note}</span>}
+                              {row.hint && <span className="text-[11px] font-medium text-[#b07d2a]">{row.hint}</span>}
                             </div>
+                            {editNoteId === row.id ? (
+                              <div className="mt-2">
+                                <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={2} autoFocus
+                                  placeholder="Type a note…"
+                                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm text-black focus:outline-none focus:border-ink resize-y" />
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <button onClick={() => { patchOnboardee(row.id, { note: noteDraft.trim() }); setEditNoteId(null); showToast('Note saved'); }}
+                                    className="bg-ink text-white text-xs font-semibold px-3 py-1 rounded-ctrl hover:bg-ink-dark">Save</button>
+                                  <button onClick={() => setEditNoteId(null)} className="text-xs text-text-muted px-2">Cancel</button>
+                                  {row.note && (
+                                    <button onClick={() => { patchOnboardee(row.id, { note: '' }); setEditNoteId(null); showToast('Note deleted'); }}
+                                      className="ml-auto text-xs font-semibold text-litred-alt px-2 hover:underline">Delete</button>
+                                  )}
+                                </div>
+                              </div>
+                            ) : row.note ? (
+                              <div className="mt-2 flex items-start gap-2">
+                                <p className="text-[15px] text-black leading-snug flex-1"><span className="font-bold">Notes:</span> {row.note}</p>
+                                <button onClick={() => { setEditNoteId(row.id); setNoteDraft(row.note); }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline shrink-0 pt-0.5">Edit</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setEditNoteId(row.id); setNoteDraft(''); }}
+                                className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-[#3f6b8a] hover:underline">＋ Add note</button>
+                            )}
                           </div>
                           <div className="text-xs text-text-secondary whitespace-nowrap pt-0.5">{row.start}</div>
                         </div>
@@ -1557,7 +1585,7 @@ export default function OnboardingClient() {
                       <div className="px-4 py-8 text-center text-sm text-text-muted">No one is currently onboarding.</div>
                     )}
                   </div>
-                  <p className="text-[11px] text-text-faint mt-3">Tip: screenshot this card, or use Print / PDF for a clean full-page export.</p>
+                  <p className="text-[11px] text-text-faint mt-3">Tip: hover a person to add, edit, or delete their note. Screenshot this card, or use Print / PDF for a clean full-page export.</p>
                 </div>
               </div>
             </div>
