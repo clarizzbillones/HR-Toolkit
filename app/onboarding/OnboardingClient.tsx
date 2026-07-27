@@ -33,11 +33,12 @@ function linkify(text: string | null) {
   return out;
 }
 
-// New-hire journey: offer sent → viewed → undecided → accepted → onboarding → hired.
+// New-hire journey: undecided (no offer yet) → offer sent → viewed → accepted →
+// onboarding → hired.
 const STAGES: { key: string; label: string; icon: string }[] = [
+  { key: 'undecided', label: 'Undecided', icon: '🤔' },
   { key: 'offer_sent', label: 'Offer sent', icon: '📤' },
   { key: 'offer_viewed', label: 'Viewed', icon: '👀' },
-  { key: 'undecided', label: 'Undecided', icon: '🤔' },
   { key: 'offer_accepted', label: 'Accepted', icon: '✍️' },
   { key: 'onboarding', label: 'Onboarding', icon: '🚀' },
   { key: 'complete', label: 'Hire complete', icon: '✓' },
