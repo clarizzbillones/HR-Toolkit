@@ -377,7 +377,7 @@ export default function OnboardingClient() {
     if (!win) { showToast('Allow pop-ups to print the report'); return; }
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const stat = (label: string, value: string) =>
-      `<div style="flex:1;background:#fff;border:0.75pt solid #e6ddcd;border-radius:8pt;padding:9pt 11pt">
+      `<div style="flex:1;background:#fff;border:0.75pt solid #e6ddcd;border-top:2.5pt solid #c9a24a;border-radius:8pt;padding:9pt 11pt">
         <div style="font-size:7.5pt;font-weight:700;color:#8a8474;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3pt">${esc(label)}</div>
         <div style="font-size:18pt;font-weight:600;color:#1b2a3d;line-height:1">${esc(value)}</div>
       </div>`;
@@ -411,22 +411,28 @@ export default function OnboardingClient() {
   @page{size:letter;margin:0.55in}
   body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:10.5pt;background:#faf8f4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
-    <div>
-      <div style="font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#b08d3e;margin-bottom:3pt">Litson PLLC</div>
-      <div style="font-size:19pt;font-weight:700">Onboarding status report</div>
-      <div style="font-size:9.5pt;color:#8a8474;margin-top:2pt">Prepared by ${esc(r.preparer)}</div>
+  <div style="background:#1b2a3d;border-radius:12pt;padding:16pt 18pt;margin-bottom:16pt;position:relative;overflow:hidden">
+    <div style="position:absolute;top:0;left:0;right:0;height:3pt;background:linear-gradient(to right,#c9a24a,#e6d3a3 55%,#c9a24a)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:16pt;font-weight:700;letter-spacing:0.3em;color:#c9a24a;line-height:1">LITSON</div>
+        <div style="font-size:7pt;font-weight:700;letter-spacing:0.24em;text-transform:uppercase;color:#9fb0c4;margin-top:3pt">PLLC · Human Resources</div>
+        <div style="font-size:19pt;font-weight:700;color:#fff;margin-top:11pt">Onboarding status report</div>
+        <div style="font-size:9.5pt;color:#aebccd;margin-top:3pt">Prepared by ${esc(r.preparer)}</div>
+      </div>
+      <div style="font-size:8.5pt;color:#e7edf3;background:rgba(255,255,255,0.1);border:0.5pt solid rgba(255,255,255,0.25);border-radius:9pt;padding:3pt 9pt">As of ${esc(r.asOf)}</div>
     </div>
-    <div style="font-size:8.5pt;color:#6a6456;background:#fff;border:0.5pt solid #e6ddcd;border-radius:9pt;padding:3pt 9pt">As of ${esc(r.asOf)}</div>
   </div>
-  <div style="height:2.5pt;border-radius:2pt;margin:9pt 0 14pt;background:linear-gradient(to right,#c9a24a,#e6d3a3 40%,transparent)"></div>
   <div style="display:flex;gap:9pt;margin-bottom:16pt">
     ${stat('In onboarding', String(r.inOnboarding))}
     ${stat('Hired', String(r.hiredCount))}
     ${stat('Tasks complete', r.tasksPct + '%')}
     ${stat('Next start date', r.nextStart)}
   </div>
-  <div style="font-size:8pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#8a8474;margin-bottom:9pt">Onboarding pipeline</div>
+  <div style="display:flex;align-items:center;gap:6pt;margin-bottom:9pt">
+    <span style="display:inline-block;width:14pt;height:2.5pt;border-radius:2pt;background:#c9a24a"></span>
+    <span style="font-size:8pt;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#1b2a3d">Onboarding pipeline</span>
+  </div>
   ${rowHtml || '<div style="padding:20pt 0;color:#8a8474;text-align:center">No one is currently onboarding.</div>'}
   <script>window.onload=function(){window.print()}</script>
 </body></html>`);
@@ -1577,28 +1583,34 @@ export default function OnboardingClient() {
                 </div>
                 {/* Report body — screenshot-friendly */}
                 <div className="px-8 py-8 bg-[#faf8f4]">
-                  {/* Letterhead */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#b08d3e] mb-1.5">Litson PLLC</div>
-                      <h2 className="font-spectral text-[26px] font-semibold text-text-primary leading-tight">Onboarding status report</h2>
-                      <p className="text-[12.5px] text-text-muted mt-1">Prepared by {r.preparer}</p>
+                  {/* Litson-branded header banner (navy + gold) */}
+                  <div className="rounded-2xl px-7 py-6 mb-6 relative overflow-hidden" style={{ background: '#1b2a3d' }}>
+                    <div className="absolute inset-x-0 top-0 h-1" style={{ background: 'linear-gradient(to right, #c9a24a, #e6d3a3 55%, #c9a24a)' }} />
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="font-spectral text-[22px] font-bold tracking-[0.32em] text-[#c9a24a] leading-none">LITSON</div>
+                        <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#9fb0c4] mt-1">PLLC · Human Resources</div>
+                        <h2 className="font-spectral text-[25px] font-semibold text-white mt-4 leading-tight">Onboarding status report</h2>
+                        <p className="text-[12px] text-[#aebccd] mt-1">Prepared by {r.preparer}</p>
+                      </div>
+                      <span className="text-[11px] font-medium text-[#e7edf3] whitespace-nowrap border border-white/20 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>As of {r.asOf}</span>
                     </div>
-                    <span className="text-[11px] text-text-muted whitespace-nowrap mt-1 bg-white border border-border-light px-3 py-1.5 rounded-full">As of {r.asOf}</span>
                   </div>
-                  <div className="h-[3px] rounded-full mt-4 mb-6" style={{ background: 'linear-gradient(to right, #c9a24a, #e6d3a3 40%, transparent)' }} />
 
-                  {/* Headline stats */}
+                  {/* Headline stats — gold top accent */}
                   <div className="grid grid-cols-4 gap-3 mb-7">
                     {([['In onboarding', String(r.inOnboarding)], ['Hired', String(r.hiredCount)], ['Tasks complete', `${r.tasksPct}%`], ['Next start date', r.nextStart]] as [string, string][]).map(([l, v]) => (
-                      <div key={l} className="bg-white border border-border-light rounded-xl px-4 py-3 shadow-sm">
-                        <div className="text-[9.5px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
-                        <div className="text-[22px] font-semibold text-ink-darkest leading-tight">{v}</div>
+                      <div key={l} className="bg-white border border-border-light rounded-xl px-4 py-3 shadow-sm" style={{ borderTop: '3px solid #c9a24a' }}>
+                        <div className="text-[9.5px] font-bold uppercase tracking-wider text-[#8a8474] mb-1">{l}</div>
+                        <div className="text-[22px] font-semibold leading-tight" style={{ color: '#1b2a3d' }}>{v}</div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-muted mb-3">Onboarding pipeline</div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-4 h-[3px] rounded-full" style={{ background: '#c9a24a' }} />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: '#1b2a3d' }}>Onboarding pipeline</span>
+                  </div>
 
                   {/* One elevated card per person */}
                   <div className="space-y-3.5">
