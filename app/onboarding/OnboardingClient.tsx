@@ -85,6 +85,30 @@ function parseTable(body: string | null): TableData {
   return { headers: ['Column 1', 'Column 2'], rows: [['', '']] };
 }
 
+// Notes editor with explicit Save / Delete controls (the plain onBlur textarea
+// made it unclear whether anything saved).
+function NoteEditor({ note, onSave }: { note: string; onSave: (v: string) => void }) {
+  const [val, setVal] = useState(note ?? '');
+  useEffect(() => { setVal(note ?? ''); }, [note]);
+  const dirty = (val ?? '') !== (note ?? '');
+  return (
+    <div>
+      <textarea value={val} onChange={e => setVal(e.target.value)} rows={2}
+        placeholder="e.g. Waiting on signed offer · needs laptop shipped · prioritize"
+        className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm text-black focus:outline-none focus:border-ink resize-y" />
+      <div className="flex items-center gap-2 mt-1.5">
+        <button onClick={() => onSave(val.trim())} disabled={!dirty}
+          className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">Save note</button>
+        {(note || val) && (
+          <button onClick={() => { setVal(''); onSave(''); }}
+            className="text-xs font-semibold text-litred-alt border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+        )}
+        {dirty && <span className="text-[11px] text-[#b07d2a]">Unsaved changes</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function OnboardingClient() {
   const { showToast } = useToast();
   const { data: session } = useSession();
@@ -1433,11 +1457,8 @@ export default function OnboardingClient() {
 
                   {/* HR note — free text, surfaces on the status report */}
                   <div className="px-5 py-4 border-b border-border">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">Notes <span className="font-semibold text-text-faint normal-case tracking-normal">· shows on the status report</span></label>
-                    <textarea key={person.id} defaultValue={person.note ?? ''} rows={2}
-                      placeholder="e.g. Waiting on signed offer · needs laptop shipped · prioritize"
-                      onBlur={e => { if ((e.target.value ?? '') !== (person.note ?? '')) patchOnboardee(person.id, { note: e.target.value }); }}
-                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1.5">Notes <span className="font-semibold text-text-faint normal-case tracking-normal">· shows on the status report</span></label>
+                    <NoteEditor key={person.id} note={person.note ?? ''} onSave={v => { patchOnboardee(person.id, { note: v }); showToast(v ? 'Note saved' : 'Note deleted'); }} />
                   </div>
 
                   {/* Plan & To-dos — the user's own tracking list (works for re-hires
