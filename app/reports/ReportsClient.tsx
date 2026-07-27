@@ -1283,6 +1283,7 @@ function CashOutTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
   const [attach, setAttach] = useState<File | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const { me } = useAccess(); const readOnly = !!me?.restricted;
   const CATEGORIES = ['Payroll','Guideline','Distribution','Reimbursement','Travel','Office Supplies','Legal Fees','Software','Marketing','Other'];
 
@@ -1295,15 +1296,42 @@ function CashOutTab() {
 
   useEffect(load, [filterMonth, filterCat]);
 
-  async function add() {
+  function resetForm() {
+    setForm({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
+    setAttach(null); setEditId(null); setShowAdd(false);
+  }
+  function startEdit(r: any) {
+    setForm({
+      date: r.date ? String(r.date).slice(0, 10) : '', payee: r.payee ?? '',
+      category: r.category ?? 'Payroll', amount: r.amount != null ? String(r.amount) : '',
+      status: r.status ?? 'Paid', note: r.note ?? '',
+    });
+    setAttach(null); setEditId(r.id); setShowAdd(true);
+  }
+
+  async function save() {
+    if (editId) {
+      const res = await fetch('/api/reports?tab=cashout', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: Number(form.amount) }) });
+      const { row } = await res.json();
+      if (row) setRows(p => p.map(x => x.id === editId ? { ...x, ...row } : x));
+      resetForm();
+      showToast('Entry updated');
+      return;
+    }
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
     const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
-    setForm({ date: '', payee: '', category: 'Payroll', amount: '', status: 'Paid', note: '' });
-    setAttach(null);
-    setShowAdd(false);
+    resetForm();
     showToast('Entry added');
+  }
+
+  async function remove(r: any) {
+    if (!confirm(`Delete this Cash Out entry for ${r.payee || 'this payee'}?`)) return;
+    await fetch(`/api/reports?tab=cashout&id=${encodeURIComponent(r.id)}`, { method: 'DELETE' });
+    setRows(p => p.filter(x => x.id !== r.id));
+    if (editId === r.id) resetForm();
+    showToast('Entry deleted');
   }
 
   return (
@@ -1316,10 +1344,11 @@ function CashOutTab() {
           <option>All</option>
           {CATEGORIES.map(c => <option key={c}>{c}</option>)}
         </select>
-        {!readOnly && <button onClick={() => setShowAdd(v => !v)} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Entry</button>}
+        {!readOnly && <button onClick={() => { if (showAdd) resetForm(); else { resetForm(); setShowAdd(true); } }} className="ml-auto bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">＋ Add Entry</button>}
       </div>
       {showAdd && (
         <div className="bg-[#fbf7ee] border border-border rounded-card p-5 mb-5 grid grid-cols-3 gap-4">
+          <div className="col-span-3 text-sm font-semibold text-text-primary -mb-1">{editId ? 'Edit Cash Out entry' : 'New Cash Out entry'}</div>
           {([['Date','date'],['Payee','payee'],['Category','category'],['Amount ($)','amount'],['Status','status'],['Note','note']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
@@ -1338,17 +1367,19 @@ function CashOutTab() {
               )}
             </div>
           ))}
-          <div className="col-span-3"><AttachField file={attach} onPick={setAttach} label="Supporting document (optional)" /></div>
+          {editId
+            ? <div className="col-span-3 text-xs text-text-muted">To change the attached document, use the Attach control in the row.</div>
+            : <div className="col-span-3"><AttachField file={attach} onPick={setAttach} label="Supporting document (optional)" /></div>}
           <div className="col-span-3 flex gap-2">
-            <button onClick={add} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add</button>
-            <button onClick={() => { setShowAdd(false); setAttach(null); }} className="text-sm text-text-muted px-3">Cancel</button>
+            <button onClick={save} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editId ? 'Save changes' : 'Add'}</button>
+            <button onClick={resetForm} className="text-sm text-text-muted px-3">Cancel</button>
           </div>
         </div>
       )}
       <div className="bg-white border border-border rounded-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[#f1ece3]"><tr>
-            {['Date','Payee','Category','Amount','Status','Note','Doc'].map(h => <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
+            {[...['Date','Payee','Category','Amount','Status','Note','Doc'], ...(!readOnly ? [''] : [])].map((h, i) => <th key={h || `act${i}`} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-text-secondary">{h}</th>)}
           </tr></thead>
           <tbody>
             {rows.map((r: any) => (
@@ -1363,9 +1394,15 @@ function CashOutTab() {
                 <td className="px-4 py-3 text-text-muted">{r.note ?? '—'}</td>
                 <td className="px-4 py-3"><RowAttach tab="cashout" id={r.id} hasAttachment={!!r.has_attachment} name={r.attachment_name} readOnly={readOnly}
                   onChange={name => setRows(p => p.map(x => x.id === r.id ? { ...x, has_attachment: true, attachment_name: name } : x))} /></td>
+                {!readOnly && (
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <button onClick={() => startEdit(r)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                    <button onClick={() => remove(r)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                  </td>
+                )}
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
+            {!rows.length && <tr><td colSpan={readOnly ? 7 : 8} className="px-4 py-6 text-center text-text-muted">No entries</td></tr>}
           </tbody>
         </table>
       </div>

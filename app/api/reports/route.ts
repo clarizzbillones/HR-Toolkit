@@ -130,6 +130,22 @@ export async function PATCH(req: Request) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ row: { ...row, attachment_data: undefined, has_attachment: !!row.attachment_data } });
   }
+  if (tab === 'cashout') {
+    const { date, payee, category, amount, status, note, method } = body;
+    await sql`
+      UPDATE cashout_ledger SET
+        date = ${date ?? null},
+        payee = ${payee ?? ''},
+        category = ${category ?? null},
+        amount = ${amount ?? 0},
+        status = ${status ?? 'Pending'},
+        note = ${note ?? null},
+        method = ${method ?? 'ACH'}
+      WHERE id = ${id}`;
+    const [row] = await sql`SELECT * FROM cashout_ledger WHERE id = ${id}`;
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ row: { ...row, attachment_data: undefined, has_attachment: !!row.attachment_data } });
+  }
 
   return NextResponse.json({ error: 'Unknown tab' }, { status: 400 });
 }
@@ -142,6 +158,10 @@ export async function DELETE(req: Request) {
 
   if (tab === 'reimbursements') {
     await sql`DELETE FROM reimbursements WHERE id = ${id}`;
+    return NextResponse.json({ ok: true });
+  }
+  if (tab === 'cashout') {
+    await sql`DELETE FROM cashout_ledger WHERE id = ${id}`;
     return NextResponse.json({ ok: true });
   }
 
