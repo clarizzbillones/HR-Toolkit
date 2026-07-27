@@ -33,10 +33,11 @@ function linkify(text: string | null) {
   return out;
 }
 
-// New-hire journey: offer letter sent → viewed → accepted → onboarding → hired.
+// New-hire journey: offer sent → viewed → undecided → accepted → onboarding → hired.
 const STAGES: { key: string; label: string; icon: string }[] = [
   { key: 'offer_sent', label: 'Offer sent', icon: '📤' },
   { key: 'offer_viewed', label: 'Viewed', icon: '👀' },
+  { key: 'undecided', label: 'Undecided', icon: '🤔' },
   { key: 'offer_accepted', label: 'Accepted', icon: '✍️' },
   { key: 'onboarding', label: 'Onboarding', icon: '🚀' },
   { key: 'complete', label: 'Hire complete', icon: '✓' },
@@ -75,6 +76,7 @@ const REPORT_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
   'Offer accepted': { bg: '#eef5f1', fg: '#2f7d5b' },
   'Offer viewed': { bg: '#eef2f7', fg: '#3f5a76' },
   'Offer sent': { bg: '#eef2f7', fg: '#3f5a76' },
+  'Undecided': { bg: '#f6efe1', fg: '#9a7b3e' },
   'In progress': { bg: '#f7efe1', fg: '#b07d2a' },
   'Not started': { bg: '#f1ece3', fg: '#8b8478' },
 };
@@ -289,6 +291,7 @@ export default function OnboardingClient() {
     if (p.status === 'Complete') return 'Hired';
     const st = stageOf(p);
     if (st === 'offer_accepted') return 'Offer accepted';
+    if (st === 'undecided') return 'Undecided';
     if (st === 'offer_viewed') return 'Offer viewed';
     if (st === 'offer_sent') return 'Offer sent';
     if (st === 'onboarding') return 'In progress';
