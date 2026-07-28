@@ -265,7 +265,7 @@ ${bodyHtml}
   ${closingHtml ? closingHtml.replace('display:flex;justify-content:flex-end;margin-top:12pt','display:flex;justify-content:flex-end') : ''}
 </div>
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
-  Litson PLLC<br>54 Music Square East, Suite 300<br>Nashville, TN 37203<br>www.litson.co
+  Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
 <script>
   var imgs=document.images,n=imgs.length,done=0;
@@ -322,7 +322,7 @@ ${bodyHtml}
   <div style="margin-top:10pt">${esc(dec.signer)}</div>
 </div>
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
-  Litson PLLC<br>54 Music Square East, Suite 300<br>Nashville, TN 37203<br>www.litson.co
+  Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
 <script>
   var imgs=document.images,n=imgs.length,done=0;
@@ -385,7 +385,7 @@ ${bodyHtml}
 </div>
 ${ccHtml}
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
-  Litson PLLC<br>6339 Charlotte Pike, Unit C321<br>Nashville, TN 37209<br>www.litson.co
+  Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
 <script>
   var imgs=document.images,n=imgs.length,done=0;
@@ -442,7 +442,7 @@ ${bodyHtml}
   </div>
 </div>
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
-  Litson PLLC<br>6339 Charlotte Pike, Unit C321<br>Nashville, TN 37209<br>www.litson.co
+  Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
 <script>
   var imgs=document.images,n=imgs.length,done=0;
@@ -647,7 +647,7 @@ ${bodyHtml}
               {/* Footer */}
               <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
                 <p className="text-[9px] text-text-muted font-sans tracking-wide">
-                  Litson PLLC &nbsp;&middot;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&middot;&nbsp; Nashville, TN 37209 &nbsp;&middot;&nbsp; www.litson.co
+                  Litson PLLC &nbsp;&middot;&nbsp; 54 Music Square E Ste 300, Nashville, TN 37203 &nbsp;&middot;&nbsp; (615) 985-8205 &nbsp;&middot;&nbsp; www.litson.co
                 </p>
               </div>
             </div>
@@ -760,7 +760,7 @@ ${bodyHtml}
               {/* Footer */}
               <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
                 <p className="text-[9px] text-text-muted font-sans tracking-wide">
-                  Litson PLLC &nbsp;&middot;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&middot;&nbsp; Nashville, TN 37209 &nbsp;&middot;&nbsp; www.litson.co
+                  Litson PLLC &nbsp;&middot;&nbsp; 54 Music Square E Ste 300, Nashville, TN 37203 &nbsp;&middot;&nbsp; (615) 985-8205 &nbsp;&middot;&nbsp; www.litson.co
                 </p>
               </div>
             </div>
@@ -910,7 +910,7 @@ ${bodyHtml}
               {/* Footer */}
               <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
                 <p className="text-[9px] text-text-muted font-sans tracking-wide">
-                  Litson PLLC &nbsp;&middot;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&middot;&nbsp; Nashville, TN 37209 &nbsp;&middot;&nbsp; www.litson.co
+                  Litson PLLC &nbsp;&middot;&nbsp; 54 Music Square E Ste 300, Nashville, TN 37203 &nbsp;&middot;&nbsp; (615) 985-8205 &nbsp;&middot;&nbsp; www.litson.co
                 </p>
               </div>
             </div>
@@ -1068,7 +1068,7 @@ ${bodyHtml}
               {/* Footer */}
               <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
                 <p className="text-[9px] text-text-muted font-sans tracking-wide">
-                  Litson PLLC &nbsp;&middot;&nbsp; 6339 Charlotte Pike, Unit C321 &nbsp;&middot;&nbsp; Nashville, TN 37209 &nbsp;&middot;&nbsp; www.litson.co
+                  Litson PLLC &nbsp;&middot;&nbsp; 54 Music Square E Ste 300, Nashville, TN 37203 &nbsp;&middot;&nbsp; (615) 985-8205 &nbsp;&middot;&nbsp; www.litson.co
                 </p>
               </div>
             </div>
