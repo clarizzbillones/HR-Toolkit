@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
@@ -123,6 +123,39 @@ export default function OffersClient() {
   function setC<K extends keyof CertForm>(k: K, v: CertForm[K]) { setCert(p => ({ ...p, [k]: v })); }
   // The certificate body: the user's edited text, or the live-composed text.
   const certBody = cert.body.trim() ? cert.body : composeCert(cert);
+
+  // Saved certificate templates (per browser).
+  const [certTemplates, setCertTemplates] = useState<Record<string, CertForm>>({});
+  const [certTplName, setCertTplName] = useState('');
+  useEffect(() => {
+    try { const raw = localStorage.getItem('litson_cert_templates'); if (raw) setCertTemplates(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+  function persistCertTemplates(next: Record<string, CertForm>) {
+    setCertTemplates(next);
+    try { localStorage.setItem('litson_cert_templates', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+  function saveCertTemplate() {
+    const suggested = certTplName || (cert.role ? `${cert.role} certificate` : '');
+    const name = (window.prompt('Save this letter as a template named:', suggested) || '').trim();
+    if (!name) return;
+    persistCertTemplates({ ...certTemplates, [name]: { ...cert, body: certBody } });
+    setCertTplName(name);
+    showToast('Template saved');
+  }
+  function loadCertTemplate(name: string) {
+    const t = certTemplates[name];
+    if (!t) { setCertTplName(''); return; }
+    setCert({ ...t });
+    setCertTplName(name);
+    showToast(`Loaded “${name}”`);
+  }
+  function deleteCertTemplate() {
+    if (!certTplName || !certTemplates[certTplName]) return;
+    if (!window.confirm(`Delete the template “${certTplName}”?`)) return;
+    const next = { ...certTemplates }; delete next[certTplName];
+    persistCertTemplates(next); setCertTplName('');
+    showToast('Template deleted');
+  }
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   // Toolbar for the General letter body: wrap the current selection in bold/
@@ -961,6 +994,24 @@ ${bodyHtml}
 
           {/* Form panel */}
           <div className="bg-white border border-border rounded-card p-6 space-y-4 sticky top-0">
+            {/* Saved templates */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Templates</div>
+              <div className="flex items-center gap-1.5">
+                <select value={certTplName} onChange={e => loadCertTemplate(e.target.value)}
+                  className="flex-1 min-w-0 border border-border-light rounded-ctrl px-2.5 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                  <option value="">Saved templates…</option>
+                  {Object.keys(certTemplates).sort((a, b) => a.localeCompare(b)).map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button onClick={saveCertTemplate} title="Save the current letter as a template"
+                  className="shrink-0 text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">💾 Save</button>
+                {certTplName && certTemplates[certTplName] && (
+                  <button onClick={deleteCertTemplate} title="Delete this template"
+                    className="shrink-0 text-sm text-text-muted border border-border-light px-2.5 py-2 rounded-ctrl hover:text-litred-alt hover:bg-[#fdeaea]">🗑</button>
+                )}
+              </div>
+            </div>
+            <div className="border-t border-border-light -mx-6" />
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted">Employee</div>
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Date</label>
@@ -1048,7 +1099,7 @@ ${bodyHtml}
 
           {/* Letter preview panel */}
           <div className="space-y-3">
-            <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
+            <div className="bg-white border border-border rounded-card overflow-y-auto shadow-sm" style={{ maxHeight: '58vh' }}>
               {/* Letterhead */}
               <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
