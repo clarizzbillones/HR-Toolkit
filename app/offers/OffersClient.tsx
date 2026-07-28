@@ -157,6 +157,39 @@ export default function OffersClient() {
     showToast('Template deleted');
   }
 
+  // Saved General-letter templates (per browser).
+  const [genTemplates, setGenTemplates] = useState<Record<string, GenForm>>({});
+  const [genTplName, setGenTplName] = useState('');
+  useEffect(() => {
+    try { const raw = localStorage.getItem('litson_gen_templates'); if (raw) setGenTemplates(JSON.parse(raw)); } catch { /* ignore */ }
+  }, []);
+  function persistGenTemplates(next: Record<string, GenForm>) {
+    setGenTemplates(next);
+    try { localStorage.setItem('litson_gen_templates', JSON.stringify(next)); } catch { /* ignore */ }
+  }
+  function saveGenTemplate() {
+    const suggested = genTplName || (gen.re ? gen.re.slice(0, 40) : '');
+    const name = (window.prompt('Save this letter as a template named:', suggested) || '').trim();
+    if (!name) return;
+    persistGenTemplates({ ...genTemplates, [name]: { ...gen } });
+    setGenTplName(name);
+    showToast('Template saved');
+  }
+  function loadGenTemplate(name: string) {
+    const t = genTemplates[name];
+    if (!t) { setGenTplName(''); return; }
+    setGen({ ...t });
+    setGenTplName(name);
+    showToast(`Loaded “${name}”`);
+  }
+  function deleteGenTemplate() {
+    if (!genTplName || !genTemplates[genTplName]) return;
+    if (!window.confirm(`Delete the template “${genTplName}”?`)) return;
+    const next = { ...genTemplates }; delete next[genTplName];
+    persistGenTemplates(next); setGenTplName('');
+    showToast('Template deleted');
+  }
+
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   // Toolbar for the General letter body: wrap the current selection in bold/
   // italic markers, or prefix the selected line(s) with a bullet.
@@ -844,6 +877,24 @@ ${bodyHtml}
 
           {/* Form panel */}
           <div className="bg-white border border-border rounded-card p-6 space-y-4 sticky top-0">
+            {/* Saved templates */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Templates</div>
+              <div className="flex items-center gap-1.5">
+                <select value={genTplName} onChange={e => loadGenTemplate(e.target.value)}
+                  className="flex-1 min-w-0 border border-border-light rounded-ctrl px-2.5 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                  <option value="">Saved templates…</option>
+                  {Object.keys(genTemplates).sort((a, b) => a.localeCompare(b)).map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button onClick={saveGenTemplate} title="Save the current letter as a template"
+                  className="shrink-0 text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">💾 Save</button>
+                {genTplName && genTemplates[genTplName] && (
+                  <button onClick={deleteGenTemplate} title="Delete this template"
+                    className="shrink-0 text-sm text-text-muted border border-border-light px-2.5 py-2 rounded-ctrl hover:text-litred-alt hover:bg-[#fdeaea]">🗑</button>
+                )}
+              </div>
+            </div>
+            <div className="border-t border-border-light -mx-6" />
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted">Letter Details</div>
 
             <div>
