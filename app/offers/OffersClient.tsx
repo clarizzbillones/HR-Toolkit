@@ -149,6 +149,31 @@ export default function OffersClient() {
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(caret, caret); });
   }
 
+  const certBodyRef = useRef<HTMLTextAreaElement>(null);
+  // Same toolbar for the Certificate wording box. Operates on the shown text
+  // (certBody), materializing the composed default into cert.body on first use.
+  function applyCertFmt(kind: 'bold' | 'italic' | 'bullet') {
+    const ta = certBodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const val = certBody;
+    let next: string, caret: number;
+    if (kind === 'bullet') {
+      const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+      const block = val.slice(lineStart, Math.max(end, start));
+      const bulleted = (block || '').split('\n').map(l => /^\s*[•\-]\s/.test(l) ? l : '• ' + l).join('\n');
+      next = val.slice(0, lineStart) + bulleted + val.slice(Math.max(end, start));
+      caret = lineStart + bulleted.length;
+    } else {
+      const mark = kind === 'bold' ? '**' : '*';
+      const sel = val.slice(start, end) || (kind === 'bold' ? 'bold text' : 'italic text');
+      next = val.slice(0, start) + mark + sel + mark + val.slice(end);
+      caret = start + mark.length + sel.length + mark.length;
+    }
+    setC('body', next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(caret, caret); });
+  }
+
   async function generate() {
     setGenerating(true);
     try {
@@ -1079,7 +1104,15 @@ ${bodyHtml}
                 <label className="text-xs font-bold uppercase tracking-wider text-gold-muted">Letter wording — edit freely</label>
                 <button onClick={() => setC('body', composeCert(cert))} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">↺ Rebuild from fields</button>
               </div>
-              <textarea value={certBody} onChange={e => setC('body', e.target.value)} rows={10}
+              <div className="flex items-center gap-1 mb-1.5">
+                <button type="button" onClick={() => applyCertFmt('bold')} title="Bold selected text (**text**)"
+                  className="px-2.5 py-1 text-sm font-bold rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">B</button>
+                <button type="button" onClick={() => applyCertFmt('italic')} title="Italicize selected text (*text*)"
+                  className="px-2.5 py-1 text-sm italic rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">I</button>
+                <button type="button" onClick={() => applyCertFmt('bullet')} title="Turn the current line(s) into bullets"
+                  className="px-2.5 py-1 text-sm rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">• List</button>
+              </div>
+              <textarea ref={certBodyRef} value={certBody} onChange={e => setC('body', e.target.value)} rows={10}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-[13px] leading-[1.6] focus:outline-none focus:border-ink resize-y"
                 style={{ fontFamily: BODY_FONT }} />
               <p className="text-[11px] text-text-muted mt-1">Edits here appear in the preview and PDF. **bold**, *italic*, and lines starting with • become bullets. Until you type here, the wording updates from the fields above.</p>
