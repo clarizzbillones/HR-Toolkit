@@ -258,6 +258,9 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const fStaff = rows.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
   const fOff = offboarded.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
   const fVen = vendors.filter(r => !search || (r.entity ?? '').toLowerCase().includes(s) || (r.name ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
+  // Split the roster into 1099 contractors vs W-2 employees for the header count.
+  const contractorCount = rows.filter(r => /contractor|1099/i.test(r.worker_type ?? '')).length;
+  const employeeCount = rows.length - contractorCount;
 
   async function handleFile(file: File) {
     setUploading(true);
@@ -447,7 +450,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
             <span className="w-3 h-8 rounded-full" style={{ background: active.accent }} />
             <div>
               <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Staffing &amp; Contacts</h1>
-              <p className="text-sm text-text-muted mt-0.5">{rows.length} employees · {vendors.length} vendors · {offboarded.length} offboarded</p>
+              <p className="text-sm text-text-muted mt-0.5">{employeeCount} employees · {contractorCount} contractors · {vendors.length} vendors · {offboarded.length} offboarded</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2.5">
