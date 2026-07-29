@@ -8,7 +8,7 @@ import EditGate from '@/components/EditGate';
 
 interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string;
-  status_history: string; notes: string; created_at: string; completed_date?: string;
+  status_history: string; notes: string; created_at: string; completed_date?: string; urgent?: boolean;
 }
 
 function pill(status: string) {
@@ -65,6 +65,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
+  const [newUrgent, setNewUrgent] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [showEod, setShowEod] = useState(false);
@@ -98,14 +99,22 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
 
   async function addTask() {
     if (!newTitle.trim()) return;
-    const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle, dueTag: newDue || null }) });
+    const res = await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle, dueTag: newDue || null, urgent: newUrgent }) });
     const { task } = await res.json();
     setTasks(prev => [task, ...prev]);
     pushUndo({ label: `Add task "${task.title}"`, req: { url: `/api/tasks/${task.id}`, method: 'DELETE' } });
     setNewTitle('');
     setNewDue('');
+    setNewUrgent(false);
     setShowAdd(false);
     showToast('Task added');
+  }
+
+  async function toggleUrgent(id: string, urgent: boolean) {
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urgent }) });
+    const { task } = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? task : t));
+    if (selected?.id === id) setSelected(task);
   }
 
   async function updateStatus(id: string, status: string) {
@@ -212,6 +221,11 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           />
           <input type="date" value={newDue} onChange={e => setNewDue(e.target.value)}
             className="border border-border-light rounded-ctrl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-ink bg-white" />
+          <button onClick={() => setNewUrgent(v => !v)}
+            className={clsx('text-sm font-semibold px-4 py-2.5 rounded-ctrl border transition-colors',
+              newUrgent ? 'bg-[#fdeaea] border-[#e6b3aa] text-[#b0412f]' : 'bg-white border-border-light text-text-secondary hover:border-ink')}>
+            {newUrgent ? '🔴 Urgent' : '🚩 Mark urgent'}
+          </button>
           <button onClick={addTask} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl">Add</button>
         </div>
       )}
@@ -245,7 +259,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
         <div className="flex-1 overflow-auto p-8">
           <div className="grid grid-cols-3 gap-4 items-start">
             {COLS.map(col => {
-              const colTasks = tasks.filter(t => t.status === col.key);
+              const colTasks = tasks.filter(t => t.status === col.key).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
               return (
                 <div
                   key={col.key}
@@ -292,7 +306,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                         onClick={() => !hasChecked && setSelected(t)}
                         className={clsx(
                           'group bg-white border rounded-[10px] px-3.5 py-3 shadow-sm hover:shadow-card transition-all border-l-4',
-                          col.cardBorder,
+                          t.urgent ? 'border-l-[#b0412f]' : col.cardBorder,
                           isChecked ? 'ring-2 ring-[#3f6b8a] ring-offset-1' : 'border-[#e6e0d5]',
                           hasChecked ? 'cursor-pointer' : 'cursor-pointer'
                         )}
@@ -316,6 +330,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                             <div className="text-sm text-text-primary font-semibold leading-snug">{t.title}</div>
                             {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                             <div className="flex items-center gap-2 mt-2">
+                              {t.urgent && <span className="text-xs font-bold rounded-full px-2 py-0.5 bg-[#fdeaea] text-[#b0412f]">🔴 Urgent</span>}
                               {(() => { const c = dueDateChip(t.due_tag, today); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                               {notesArr.length > 0 && <span className="text-xs text-text-muted flex items-center gap-1">📝 {notesArr.length}</span>}
                             </div>
@@ -339,7 +354,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
         <div className="flex-1 overflow-auto px-8 py-6 max-w-3xl w-full">
           <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-2.5">Pending</div>
           <div className="bg-white border border-border rounded-card overflow-hidden mb-6">
-            {pending.map(t => {
+            {[...pending].sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)).map(t => {
               const notesArr = JSON.parse(t.notes || '[]');
               const isChecked = checkedIds.has(t.id);
               return (
@@ -356,6 +371,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                     <div className="text-sm text-text-primary font-medium">{t.title}</div>
                     {t.sub && <div className="text-xs text-text-muted mt-0.5">{t.sub}</div>}
                   </div>
+                  {t.urgent && <span className="text-xs font-bold rounded-full px-2 py-0.5 bg-[#fdeaea] text-[#b0412f] self-center">🔴 Urgent</span>}
                   {notesArr.length > 0 && <span className="text-xs text-text-muted self-center">📝 {notesArr.length}</span>}
                   {(() => { const c = dueDateChip(t.due_tag, today); return c ? <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${c.cls}`}>{c.label}</span> : null; })()}
                 </div>
@@ -407,6 +423,14 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
               <button onClick={() => setSelected(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>
             <div className="overflow-auto flex-1 p-6">
+              <div className="mb-5">
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Priority</div>
+                <button onClick={() => toggleUrgent(selected.id, !selected.urgent)}
+                  className={clsx('text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
+                    selected.urgent ? 'bg-[#fdeaea] border-[#e6b3aa] text-[#b0412f]' : 'border-border text-text-secondary hover:bg-canvas')}>
+                  {selected.urgent ? '🔴 Urgent — click to clear' : '🚩 Mark as urgent'}
+                </button>
+              </div>
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Due Date</div>
                 <input type="date" defaultValue={selected.due_tag || ''} onBlur={e => updateDueDate(selected.id, e.target.value)}

@@ -8,8 +8,9 @@ export async function GET(req: Request) {
   const eodDate = url.searchParams.get('eodDate');
   const todayCST = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
 
-  // Ensure column exists (idempotent)
+  // Ensure columns exist (idempotent)
   await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_date TEXT`;
+  await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS urgent BOOLEAN DEFAULT false`;
 
   // Backfill: existing done tasks with no completed_date get today's date
   await sql`UPDATE tasks SET completed_date = ${todayCST} WHERE status = 'done' AND completed_date IS NULL`;
@@ -38,11 +39,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { title, sub, dueTag } = await req.json();
+  const { title, sub, dueTag, urgent } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
+  await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS urgent BOOLEAN DEFAULT false`;
   const id = cuid();
   const now = new Date().toISOString();
-  await sql`INSERT INTO tasks (id,title,sub,due_tag,status,status_history,notes) VALUES (${id},${title.trim()},${sub ?? null},${dueTag ?? null},'todo',${JSON.stringify([{ status: 'todo', timestamp: now }])},'[]')`;
+  await sql`INSERT INTO tasks (id,title,sub,due_tag,urgent,status,status_history,notes) VALUES (${id},${title.trim()},${sub ?? null},${dueTag ?? null},${!!urgent},'todo',${JSON.stringify([{ status: 'todo', timestamp: now }])},'[]')`;
   const [task] = await sql`SELECT * FROM tasks WHERE id = ${id}`;
   return NextResponse.json({ task }, { status: 201 });
 }

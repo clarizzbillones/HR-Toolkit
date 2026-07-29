@@ -3,9 +3,14 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const { status, note, due_tag, title } = await req.json();
+  const { status, note, due_tag, title, urgent } = await req.json();
   const [task] = await sql`SELECT * FROM tasks WHERE id = ${params.id}`;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  if (urgent !== undefined) {
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS urgent BOOLEAN DEFAULT false`;
+    await sql`UPDATE tasks SET urgent = ${!!urgent} WHERE id = ${params.id}`;
+  }
 
   if (title !== undefined && String(title).trim()) await sql`UPDATE tasks SET title = ${String(title).trim()} WHERE id = ${params.id}`;
 
