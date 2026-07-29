@@ -128,7 +128,17 @@ export default function OffersClient() {
   const [certTemplates, setCertTemplates] = useState<Record<string, CertForm>>({});
   const [certTplName, setCertTplName] = useState('');
   useEffect(() => {
-    try { const raw = localStorage.getItem('litson_cert_templates'); if (raw) setCertTemplates(JSON.parse(raw)); } catch { /* ignore */ }
+    try {
+      const raw = localStorage.getItem('litson_cert_templates');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, CertForm>;
+      let changed = false;
+      for (const k of Object.keys(parsed)) {
+        if (parsed[k]?.signerTitle === 'Managing Member') { parsed[k] = { ...parsed[k], signerTitle: 'Founding & Managing Partner' }; changed = true; }
+      }
+      setCertTemplates(parsed);
+      if (changed) localStorage.setItem('litson_cert_templates', JSON.stringify(parsed));
+    } catch { /* ignore */ }
   }, []);
   function persistCertTemplates(next: Record<string, CertForm>) {
     setCertTemplates(next);
@@ -161,7 +171,17 @@ export default function OffersClient() {
   const [genTemplates, setGenTemplates] = useState<Record<string, GenForm>>({});
   const [genTplName, setGenTplName] = useState('');
   useEffect(() => {
-    try { const raw = localStorage.getItem('litson_gen_templates'); if (raw) setGenTemplates(JSON.parse(raw)); } catch { /* ignore */ }
+    try {
+      const raw = localStorage.getItem('litson_gen_templates');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, GenForm>;
+      let changed = false;
+      for (const k of Object.keys(parsed)) {
+        if (parsed[k]?.signerTitle === 'Managing Member') { parsed[k] = { ...parsed[k], signerTitle: 'Founding & Managing Partner' }; changed = true; }
+      }
+      setGenTemplates(parsed);
+      if (changed) localStorage.setItem('litson_gen_templates', JSON.stringify(parsed));
+    } catch { /* ignore */ }
   }, []);
   function persistGenTemplates(next: Record<string, GenForm>) {
     setGenTemplates(next);
