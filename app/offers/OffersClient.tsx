@@ -56,7 +56,7 @@ interface GenForm {
 }
 const GEN_EMPTY: GenForm = {
   date: '', addressee: 'To Whom It May Concern:', re: '', greeting: '',
-  body: '', signer: 'Alex Little', signerTitle: 'Managing Member', cc: '', withSig: true,
+  body: '', signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', cc: '', withSig: true,
 };
 
 // Certificate of Employment — modeled on the firm's sample (Paula Laborne
@@ -79,7 +79,7 @@ const CERT_EMPTY: CertForm = {
   startDate: '', hours: '8:00 AM to 5:30 PM Central Time (CT)',
   duties: CERT_DEFAULT_DUTIES,
   purpose: 'submission to their academic institution and for no other purpose',
-  signer: 'Alex Little', signerTitle: 'Managing Member', body: '',
+  signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', body: '',
 };
 // Compose the certificate body from the fields (bold name + duty titles).
 function composeCert(f: CertForm): string {
@@ -701,7 +701,7 @@ ${bodyHtml}
                 <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
                 <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
                   <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                  Managing Member<br />615.985.8189<br />alex@litson.co
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
               </div>
 
@@ -822,7 +822,7 @@ ${bodyHtml}
                 <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
                 <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
                   <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                  Managing Member<br />615.985.8189<br />alex@litson.co
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
               </div>
 
@@ -974,7 +974,7 @@ ${bodyHtml}
                 <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
                 <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
                   <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                  Managing Member<br />615.985.8189<br />alex@litson.co
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
               </div>
 
@@ -1157,7 +1157,7 @@ ${bodyHtml}
                 <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
                 <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
                   <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                  Managing Member<br />615.985.8189<br />alex@litson.co
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
               </div>
 
