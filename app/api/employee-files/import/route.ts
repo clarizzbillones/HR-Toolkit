@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
+import { reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
 import { staffToProfile } from '@/lib/employeeProfile';
+import { upsertCoachingFile } from '@/lib/employeeFiles';
 
 // One-click pull of an employee's existing records into their Employee File,
 // while the tab stays independent. source = staffing | coaching | reviews.
@@ -46,21 +47,9 @@ export async function POST(req: Request) {
   if (source === 'coaching') {
     let list: any[] = [];
     try { list = await sql`SELECT * FROM coaching_notes WHERE lower(employee) = ${lc(name)} ORDER BY date DESC NULLS LAST` as any[]; } catch { /* no table */ }
-    let added = 0;
-    for (const c of list) {
-      const ref = `coaching:${c.id}`;
-      const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
-      if (exists) continue;
-      const title = `${c.coaching_type || 'Coaching'}${c.signed_at ? ' (signed)' : ''}`;
-      const summary = [c.topic ? `Topic: ${c.topic}` : '', c.notes || ''].filter(Boolean).join('\n\n');
-      // Attach the branded coaching document as a PDF so it can be viewed / printed.
-      const pdfUrl = await coachingPdfDataUrl(c);
-      const attName = `Coaching-${String(c.coaching_type || 'form').replace(/[^\w]+/g, '-')}-${String(c.date ?? '').slice(0, 10) || 'form'}.pdf`;
-      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Coaching', ${title}, ${c.date ?? null}, ${summary}, ${''}, ${c.action_items ?? ''}, ${c.coach_name ?? ''}, ${attName}, ${pdfUrl}, ${ref})`;
-      added++;
-    }
-    return NextResponse.json({ imported: added, message: added ? `Imported ${added} coaching form${added > 1 ? 's' : ''}.` : 'No new coaching forms to import.' });
+    // Refresh every coaching form (attaching / updating the branded PDF).
+    for (const c of list) await upsertCoachingFile(profileId, c);
+    return NextResponse.json({ imported: list.length, message: list.length ? `Synced ${list.length} coaching form${list.length > 1 ? 's' : ''} (with PDF).` : 'No coaching forms to import.' });
   }
 
   if (source === 'reviews') {

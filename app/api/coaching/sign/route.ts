@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sendMailAsApp } from '@/lib/graph';
 import { coachingReceiptHtml, parseSignatories, type Signatory } from '@/lib/coachingDoc';
+import { syncCoachingToEmployeeFile } from '@/lib/employeeFiles';
 
 // Public (no-auth) endpoint used by the e-sign page. Guarded by the random
 // sign token, not a session. Supports multiple signatories, each signing
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       await sql`UPDATE coaching_notes SET signatories = ${JSON.stringify(sigs)} WHERE id = ${row.id}`;
     }
     const [updated] = await sql`SELECT * FROM coaching_notes WHERE id = ${row.id}` as any[];
-    if (allSigned) await sendReceipt(updated, sigs);
+    if (allSigned) { await sendReceipt(updated, sigs); await syncCoachingToEmployeeFile(updated); }
     return NextResponse.json({ ok: true, allSigned });
   }
 
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
   await sql`UPDATE coaching_notes SET status = 'Signed', signed_at = NOW(), signature_name = ${name} WHERE id = ${row.id}`;
   const [updated] = await sql`SELECT * FROM coaching_notes WHERE id = ${row.id}` as any[];
   await sendReceipt(updated, []);
+  await syncCoachingToEmployeeFile(updated);
   return NextResponse.json({ ok: true, allSigned: true });
 }
 
