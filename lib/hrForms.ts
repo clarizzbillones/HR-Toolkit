@@ -15,7 +15,7 @@ Position
 [TITLE]
 Manager
 [MANAGER]
-Date of warning
+Date of occurrence
 [DATE]
 Level of action
 Verbal Warning — Step 1
@@ -60,7 +60,7 @@ Position
 [TITLE]
 Manager
 [MANAGER]
-Date of warning
+Date of occurrence
 [DATE]
 Level of action
 Written Warning — Step 2
@@ -105,7 +105,7 @@ Position
 [TITLE]
 Manager
 [MANAGER]
-Date of warning
+Date of occurrence
 [DATE]
 Level of action
 Final Written Warning — Step 3
@@ -528,13 +528,14 @@ function esc(s: string): string { return String(s ?? '').replace(/&/g, '&amp;').
 export function highlightFills(escaped: string): string {
   return escaped.replace(/\[[^\]]+\]/g, m => `<span style="color:#b0412f;font-weight:600">${m}</span>`);
 }
-// Inline formatting: **bold** and `bold` (used to render values filled into the
-// form), then highlight any remaining [bracketed] blanks.
+// Inline formatting: **bold**, `bold`, *italic* (used to render values filled
+// into the form and manual emphasis), then highlight any remaining [blanks].
 function inlineFmt(escaped: string): string {
-  const bolded = escaped
+  const fmt = escaped
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<strong>$1</strong>');
-  return highlightFills(bolded);
+    .replace(/`([^`]+)`/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return highlightFills(fmt);
 }
 
 // The form rendered as a branded Litson document (navy + gold), for PDF/Word.
@@ -546,6 +547,8 @@ export function hrFormDocHtml(title: string, body: string): string {
     const t = l.trim();
     if (t === '') return '<div style="height:12px"></div>';
     const next = (raw[i + 1] ?? '').trim();
+    // Bulleted list item (line starts with •, -, or *).
+    if (/^[•\-*]\s+/.test(t)) return `<div style="margin:2px 0 2px 1.4em;text-indent:-1em">&bull;&nbsp;${inlineFmt(esc(t.replace(/^[•\-*]\s+/, '')))}</div>`;
     const isHead = (t === t.toUpperCase() && /[A-Z]/.test(t) && t.length < 60) || /^(Step \d|Part |Subject:)/.test(t);
     // A short line immediately followed by a [fill-in] reads as a field label.
     const isLabel = next.startsWith('[') && !t.startsWith('[') && t.length < 60 && !/[.?!]$/.test(t);

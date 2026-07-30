@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { HR_FORMS, HR_FORM_PARTS, hrFormDocHtml } from '@/lib/hrForms';
 import { HANDBOOK_REFS, HANDBOOK_ISSUES, citationText } from '@/lib/handbook';
@@ -41,10 +41,64 @@ export default function HrFormsClient() {
   // HR-only usage guidance for the current base template (never downloaded).
   const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
 
+  // ---- Rich-text toolbar for the form body ----
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  function wrapSelection(before: string, after: string) {
+    const ta = bodyRef.current; if (!ta) return;
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    const sel = body.slice(s, e) || 'text';
+    const next = body.slice(0, s) + before + sel + after + body.slice(e);
+    setBody(next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s + before.length, s + before.length + sel.length); });
+  }
+  function bulletSelection() {
+    const ta = bodyRef.current; if (!ta) return;
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    // Expand to full lines.
+    const ls = body.lastIndexOf('\n', s - 1) + 1;
+    let le = body.indexOf('\n', e); if (le < 0) le = body.length;
+    const block = body.slice(ls, le).split('\n').map(l => l.trim() ? (/^[•\-*]\s/.test(l) ? l : `• ${l}`) : l).join('\n');
+    setBody(body.slice(0, ls) + block + body.slice(le));
+    requestAnimationFrame(() => ta.focus());
+  }
+
   // Handbook citation picker (for discipline forms).
   const [showCite, setShowCite] = useState(false);
   const [citeIssue, setCiteIssue] = useState('Attendance & tardiness');
   const citeMatches = HANDBOOK_REFS.filter(r => r.issues.includes(citeIssue));
+  // ---- Send for e-signature ----
+  type SignRow = { role: string; name: string; email: string };
+  const [showSign, setShowSign] = useState(false);
+  const [signers, setSigners] = useState<SignRow[]>([
+    { role: 'Employee', name: '', email: '' },
+    { role: 'Manager', name: '', email: '' },
+    { role: 'HR', name: '', email: '' },
+  ]);
+  const [signNote, setSignNote] = useState('Please review and sign within 24 hours of receipt.');
+  const [sentInfo, setSentInfo] = useState<{ id: string; url: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const ROLES = ['Employee', 'Manager', 'HR', 'Witness'];
+  function updateSigner(i: number, patch: Partial<SignRow>) { setSigners(p => p.map((r, j) => j === i ? { ...r, ...patch } : r)); }
+  async function sendForSignature() {
+    const valid = signers.filter(s => s.name.trim());
+    if (!valid.length) { showToast('Add at least one signatory name'); return; }
+    setSending(true);
+    try {
+      const res = await fetch('/api/hr-forms/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', title, body_html: hrFormDocHtml(title, body), note: signNote, signatories: valid }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      setSentInfo({ id: d.id, url: d.url });
+      showToast(d.sent ? `Sent to ${d.sent} signatory${d.sent === 1 ? '' : 'ies'}` : 'Created — copy the link to share');
+    } catch { showToast('Could not send'); }
+    finally { setSending(false); }
+  }
+  async function sendReminder() {
+    if (!sentInfo) return;
+    const res = await fetch('/api/hr-forms/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remind', id: sentInfo.id }) });
+    const d = await res.json();
+    showToast(res.ok ? (d.reminded ? `Reminder sent to ${d.reminded}` : 'No pending signers to remind') : (d.error || 'Failed'));
+  }
+
   function insertCitation(text: string) {
     setBody(prev => {
       // Prefer to drop it onto the "Policy or standard involved" placeholder.
@@ -215,7 +269,13 @@ export default function HrFormsClient() {
             )}
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Form text — edit freely</label>
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={20} className={input + ' resize-y text-[12.5px] leading-[1.5] font-mono'} />
+              <div className="flex items-center gap-1 mb-1.5">
+                <button onClick={() => wrapSelection('**', '**')} title="Bold" className="w-7 h-7 rounded-ctrl border border-border-light text-sm font-bold hover:bg-canvas">B</button>
+                <button onClick={() => wrapSelection('*', '*')} title="Italic" className="w-7 h-7 rounded-ctrl border border-border-light text-sm italic hover:bg-canvas">I</button>
+                <button onClick={bulletSelection} title="Bullet list" className="w-7 h-7 rounded-ctrl border border-border-light text-sm hover:bg-canvas">•</button>
+                <span className="text-[10px] text-text-muted ml-1">Select text, then Bold / Italic / Bullet</span>
+              </div>
+              <textarea ref={bodyRef} value={body} onChange={e => setBody(e.target.value)} rows={20} className={input + ' resize-y text-[12.5px] leading-[1.5] font-mono'} />
               <p className="text-[11px] text-text-muted mt-1">Replace every <span className="text-litred-alt font-semibold">[bracketed]</span> field — filled-in values show in <b>bold</b>. HR guidance is separate and never appears in the download.</p>
             </div>
             <button onClick={() => loadTemplate(id)} className="w-full text-sm font-semibold text-text-muted hover:text-text-primary py-2 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border">↺ Reset to original</button>
@@ -231,10 +291,47 @@ export default function HrFormsClient() {
             <div className="bg-white border border-border rounded-card overflow-y-auto shadow-sm p-6" style={{ maxHeight: '64vh' }}>
               <div dangerouslySetInnerHTML={{ __html: hrFormDocHtml(title, body) }} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button onClick={printPdf} className="bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
               <button onClick={downloadWord} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas">⤓ Word</button>
+              <button onClick={() => setShowSign(s => !s)} className="bg-[#2f7d5b] text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-[#276a4d]">✍ Send for signature</button>
             </div>
+
+            {showSign && (
+              <div className="bg-white border border-border rounded-card p-5 space-y-3">
+                <div className="text-xs font-bold uppercase tracking-widest text-gold-muted">Send for e-signature</div>
+                <p className="text-[11px] text-text-muted">Each signatory gets their own emailed link. The <b>Witness</b> signs only if the employee declines. A 24-hour reminder note is included automatically.</p>
+                <div className="space-y-2">
+                  {signers.map((s, i) => (
+                    <div key={i} className="grid grid-cols-[110px_1fr_1fr_28px] gap-2 items-center">
+                      <select value={s.role} onChange={e => updateSigner(i, { role: e.target.value })} className="border border-border-light rounded-ctrl px-2 py-1.5 text-xs bg-white">
+                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <input value={s.name} onChange={e => updateSigner(i, { name: e.target.value })} placeholder="Full name" className="border border-border-light rounded-ctrl px-2 py-1.5 text-xs" />
+                      <input value={s.email} onChange={e => updateSigner(i, { email: e.target.value })} placeholder="email@litson.co" className="border border-border-light rounded-ctrl px-2 py-1.5 text-xs" />
+                      <button onClick={() => setSigners(p => p.filter((_, j) => j !== i))} className="text-litred-alt text-sm" title="Remove">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setSigners(p => [...p, { role: 'Witness', name: '', email: '' }])} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">+ Add signatory / witness</button>
+                <div>
+                  <label className="block text-[11px] font-semibold text-text-secondary mb-1">Note to signatories</label>
+                  <textarea value={signNote} onChange={e => setSignNote(e.target.value)} rows={2} className={input + ' resize-y text-xs'} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={sendForSignature} disabled={sending} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{sending ? 'Sending…' : 'Send'}</button>
+                  {sentInfo && <button onClick={sendReminder} className="bg-white border border-border-light text-ink text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas">🔔 Send reminder</button>}
+                </div>
+                {sentInfo && (
+                  <div className="bg-[#eef5f1] border border-[#cfe4d8] rounded-ctrl p-3 text-xs">
+                    <div className="font-semibold text-[#2f7d5b] mb-1">Sent — signing link:</div>
+                    <a href={sentInfo.url} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] break-all hover:underline">{sentInfo.url}</a>
+                    <div className="text-text-muted mt-1">You&apos;ll be notified when everyone has signed. HR is copied on completion.</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="text-[11px] text-text-faint">Severance & release documents must be reviewed and approved by counsel before first use. Part D letters are transmittal letters only.</p>
           </div>
         </div>
