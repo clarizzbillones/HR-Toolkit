@@ -74,7 +74,8 @@ function fmtStamp(iso: any): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' CT';
 }
-function parseSignatories(raw: any): { name: string; position: string }[] {
+export interface Signatory { name: string; position: string; email?: string; signed_at?: string | null; signature_name?: string | null }
+export function parseSignatories(raw: any): Signatory[] {
   try { const a = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(a) ? a : []; } catch { return []; }
 }
 
@@ -92,15 +93,24 @@ export function coachingDocHtml(row: any): string {
     ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Action items</div>${actions.map(a => `<div style="margin-left:1.4em;text-indent:-1em">&bull;&nbsp;${fmtInline(a.replace(/^[•\-]\s*/, ''))}</div>`).join('')}</div>`
     : '';
   const signers = parseSignatories(row.signatories);
-  const signerRows = signers.map(s => `<tr><td style="padding:6px 10px;border:1px solid #e6ddcd">${esc(s.name)}</td><td style="padding:6px 10px;border:1px solid #e6ddcd;color:#555">${esc(s.position)}</td></tr>`).join('');
+  const sigCell = (s: Signatory) => s.signed_at
+    ? `<span style="color:#2f7d5b;font-weight:700">✓ Signed</span> <span style="color:#33503f">${esc(fmtStamp(s.signed_at))}</span>${s.signature_name && s.signature_name.trim().toLowerCase() !== String(s.name).trim().toLowerCase() ? ` <span style="color:#777">(${esc(s.signature_name)})</span>` : ''}`
+    : `<span style="color:#b07d2a">Pending signature</span>`;
+  const signerRows = signers.map(s => `<tr>
+      <td style="padding:6px 10px;border:1px solid #e6ddcd">${esc(s.name)}</td>
+      <td style="padding:6px 10px;border:1px solid #e6ddcd;color:#555">${esc(s.position)}</td>
+      <td style="padding:6px 10px;border:1px solid #e6ddcd;font-size:12px">${sigCell(s)}</td>
+    </tr>`).join('');
   const meta = (l: string, v: string) => `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
 
-  const signedBadge = row.signed_at
-    ? `<div style="margin-top:18px;background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:12px 14px">
-         <div style="font-weight:700;color:#2f7d5b">✓ Electronically signed</div>
-         <div style="font-size:13px;color:#33503f;margin-top:2px">Signed by <b>${esc(row.signature_name)}</b> on ${esc(fmtStamp(row.signed_at))}</div>
-       </div>`
-    : '';
+  const signedCount = signers.filter(s => s.signed_at).length;
+  const statusBadge = signers.length
+    ? (signedCount >= signers.length
+        ? `<div style="margin-top:16px;background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:10px 14px;font-weight:700;color:#2f7d5b">✓ Fully signed by all ${signers.length} signator${signers.length === 1 ? 'y' : 'ies'}</div>`
+        : `<div style="margin-top:16px;background:#f7efe1;border:1px solid #ecd9b6;border-radius:8px;padding:10px 14px;font-weight:700;color:#b07d2a">Awaiting signatures — ${signedCount} of ${signers.length} signed</div>`)
+    : (row.signed_at
+        ? `<div style="margin-top:16px;background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:10px 14px"><div style="font-weight:700;color:#2f7d5b">✓ Electronically signed</div><div style="font-size:13px;color:#33503f">Signed by <b>${esc(row.signature_name)}</b> on ${esc(fmtStamp(row.signed_at))}</div></div>`
+        : '');
 
   return `<div style="font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;max-width:680px">
     <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px;margin-bottom:16px">
@@ -118,8 +128,8 @@ export function coachingDocHtml(row: any): string {
     ${row.topic ? `<div style="font-weight:700;margin-bottom:8px">${esc(row.topic)}</div>` : ''}
     <div style="font-size:14px;line-height:1.6">${bodyLines}</div>
     ${actionsHtml}
-    ${signerRows ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:5px">Signatories</div><table style="border-collapse:collapse;font-size:13px"><tr style="background:#faf7f0"><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Name</th><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Position</th></tr>${signerRows}</table></div>` : ''}
-    ${signedBadge}
+    ${signerRows ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:5px">Signatures</div><table style="border-collapse:collapse;font-size:13px;width:100%"><tr style="background:#faf7f0"><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Name</th><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Position</th><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Signature</th></tr>${signerRows}</table></div>` : ''}
+    ${statusBadge}
     <div style="margin-top:14px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Signature confirms the conversation occurred and the employee received a copy. It does not indicate agreement.</div>
   </div>`;
 }

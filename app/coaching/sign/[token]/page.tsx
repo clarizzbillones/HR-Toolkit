@@ -1,33 +1,40 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { coachingDocHtml } from '@/lib/coachingDoc';
+import { coachingDocHtml, parseSignatories, type Signatory } from '@/lib/coachingDoc';
 
 export default function CoachingSignPage({ params }: { params: { token: string } }) {
   const { token } = params;
   const [row, setRow] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [signing, setSigning] = useState<string | null>(null); // signatory name being signed
   const [name, setName] = useState('');
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    fetch(`/api/coaching/sign?token=${encodeURIComponent(token)}`)
+  function load() {
+    return fetch(`/api/coaching/sign?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else { setRow(d.row); if (d.row?.signed_at) setDone(true); } })
+      .then(d => { if (d.error) setError(d.error); else setRow(d.row); })
       .catch(() => setError('Could not load this form.'))
       .finally(() => setLoading(false));
-  }, [token]);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [token]);
 
-  async function sign() {
-    if (!name.trim() || !ack) return;
+  const signers: Signatory[] = row ? parseSignatories(row.signatories) : [];
+  const allSigned = signers.length > 0 ? signers.every(s => s.signed_at) : !!row?.signed_at;
+
+  async function submit() {
+    if (!name.trim() || !ack || !signing) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/coaching/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, signature_name: name.trim() }) });
+      const res = await fetch('/api/coaching/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, signatory: signing, signature_name: name.trim() }) });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Could not submit.'); return; }
-      setDone(true);
+      setSigning(null); setName(''); setAck(false);
+      setMsg(d.allSigned ? 'All signatures complete — thank you.' : 'Your signature is recorded.');
+      await load();
     } catch { setError('Could not submit.'); }
     finally { setBusy(false); }
   }
@@ -48,26 +55,47 @@ export default function CoachingSignPage({ params }: { params: { token: string }
               <div dangerouslySetInnerHTML={{ __html: coachingDocHtml(row) }} />
             </div>
 
-            {done ? (
+            {msg && <div style={{ background: '#eef5f1', border: '1px solid #cfe4d8', borderRadius: 12, padding: 14, marginTop: 16, color: '#2f7d5b', fontWeight: 600 }}>{msg}</div>}
+
+            {allSigned ? (
               <div style={{ background: '#eef5f1', border: '1px solid #cfe4d8', borderRadius: 12, padding: 20, marginTop: 16, textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, color: '#2f7d5b', fontSize: 16 }}>✓ Thank you — your form is signed.</div>
-                <div style={{ color: '#33503f', fontSize: 13, marginTop: 4 }}>A signed copy has been emailed to you, your coach, and HR. You can close this page.</div>
+                <div style={{ fontWeight: 700, color: '#2f7d5b', fontSize: 16 }}>✓ This form is fully signed.</div>
+                <div style={{ color: '#33503f', fontSize: 13, marginTop: 4 }}>Signed copies have been emailed to all signatories and HR. You can close this page.</div>
               </div>
             ) : (
               <div style={{ background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 20, marginTop: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#8a8474', marginBottom: 10 }}>Electronic signature</div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Type your full legal name</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name"
-                  style={{ width: '100%', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, boxSizing: 'border-box' }} />
-                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontSize: 13, color: '#444', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} style={{ marginTop: 3 }} />
-                  <span>I acknowledge that I have reviewed this coaching form. Typing my name serves as my electronic signature and is dated at the time of submission.</span>
-                </label>
-                {error && <p style={{ color: '#b0412f', fontSize: 13, marginTop: 10 }}>{error}</p>}
-                <button onClick={sign} disabled={!name.trim() || !ack || busy}
-                  style={{ marginTop: 14, background: (!name.trim() || !ack || busy) ? '#9aa4b0' : '#1b2a3d', color: '#fff', border: 'none', fontWeight: 700, padding: '11px 22px', borderRadius: 8, cursor: (!name.trim() || !ack || busy) ? 'default' : 'pointer' }}>
-                  {busy ? 'Submitting…' : 'Sign & submit'}
-                </button>
+                <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#8a8474', marginBottom: 12 }}>Signatures</div>
+                {signers.length === 0 && <p style={{ fontSize: 13, color: '#666' }}>No signatories listed on this form.</p>}
+                {signers.map((s, i) => (
+                  <div key={i} style={{ borderTop: i ? '1px solid #f1ece3' : 'none', padding: '10px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#1b2a3d' }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: '#8a8474' }}>{s.position}</div>
+                      </div>
+                      {s.signed_at
+                        ? <span style={{ color: '#2f7d5b', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>✓ Signed</span>
+                        : signing === s.name
+                          ? null
+                          : <button onClick={() => { setSigning(s.name); setName(s.name); setAck(false); setError(''); }} style={{ background: '#1b2a3d', color: '#fff', border: 'none', fontWeight: 700, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>Sign as {s.name.split(' ')[0]}</button>}
+                    </div>
+                    {signing === s.name && !s.signed_at && (
+                      <div style={{ marginTop: 10, background: '#faf8f4', borderRadius: 8, padding: 12 }}>
+                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#444', marginBottom: 4 }}>Type your full legal name</label>
+                        <input value={name} onChange={e => setName(e.target.value)} style={{ width: '100%', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, boxSizing: 'border-box' }} />
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13, color: '#444', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} style={{ marginTop: 3 }} />
+                          <span>I acknowledge I have reviewed this coaching form. Typing my name is my electronic signature, dated at submission.</span>
+                        </label>
+                        {error && <p style={{ color: '#b0412f', fontSize: 13, marginTop: 8 }}>{error}</p>}
+                        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                          <button onClick={submit} disabled={!name.trim() || !ack || busy} style={{ background: (!name.trim() || !ack || busy) ? '#9aa4b0' : '#1b2a3d', color: '#fff', border: 'none', fontWeight: 700, padding: '10px 20px', borderRadius: 8, cursor: (!name.trim() || !ack || busy) ? 'default' : 'pointer' }}>{busy ? 'Submitting…' : 'Sign & submit'}</button>
+                          <button onClick={() => { setSigning(null); setError(''); }} style={{ background: 'none', border: 'none', color: '#8a8474', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </>

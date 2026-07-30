@@ -5,7 +5,7 @@ import { useAccess } from '@/components/AccessProvider';
 import { COACHING_TYPES, coachingDraft, coachingDocHtml } from '@/lib/coachingDoc';
 
 interface Staff { name: string; position: string; email: string }
-interface Signatory { name: string; position: string }
+interface Signatory { name: string; position: string; email?: string; signed_at?: string | null; signature_name?: string | null }
 interface Row {
   id: string; employee: string; employee_email: string | null; coach_name: string; coach_position: string;
   coach_email: string | null; coaching_type: string; date: string | null; topic: string; notes: string;
@@ -76,7 +76,7 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
   }
   function addSignatory() { setForm(p => ({ ...p, signatories: [...p.signatories, { name: '', position: '' }] })); }
   function setSignatory(i: number, name: string) {
-    setForm(p => ({ ...p, signatories: p.signatories.map((s, j) => j === i ? { name, position: posOf(name) || s.position } : s) }));
+    setForm(p => ({ ...p, signatories: p.signatories.map((s, j) => j === i ? { ...s, name, position: posOf(name) || s.position, email: emailOf(name) || (s as any).email } : s) }));
   }
   function removeSignatory(i: number) { setForm(p => ({ ...p, signatories: p.signatories.filter((_, j) => j !== i) })); }
 
@@ -115,7 +115,7 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
     const res = await fetch('/api/coaching', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: saved.id, action: 'send' }) });
     const d = await res.json();
     if (d.row) setRows(p => p.map(x => x.id === saved.id ? d.row : x));
-    if (d.emailed) showToast('Sent to the employee to sign');
+    if (d.emailed) showToast(`Sent to ${d.recipients > 1 ? `${d.recipients} signatories` : 'the signatory'} to sign`);
     else {
       // Fall back to a copyable link if email isn't configured / no address on file.
       try { await navigator.clipboard.writeText(d.signUrl); } catch { /* ignore */ }
@@ -134,13 +134,18 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
 
   function printDoc(r: Row) {
     const win = window.open('', '_blank'); if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Coaching — ${r.employee}</title></head><body style="margin:24px">${coachingDocHtml(r)}<script>window.onload=function(){window.print()}</script></body></html>`);
+    // print-color-adjust keeps the navy/gold branding in the printed PDF.
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Coaching — ${r.employee}</title>
+<style>@page{size:letter;margin:0.55in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:20px}</style>
+</head><body>${coachingDocHtml(r)}<script>window.onload=function(){window.print()}</script></body></html>`);
     win.document.close();
   }
   function downloadWord(r: Row) {
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>${coachingDocHtml(r)}</body></html>`;
+    // Full HTML doc with the same branded body so Word keeps colors/formatting.
+    const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+<style>@page{margin:0.6in}body{background:#faf8f4;padding:16px}</style></head><body>${coachingDocHtml(r)}</body></html>`;
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([html], { type: 'application/msword' }));
+    a.href = URL.createObjectURL(new Blob(['﻿' + html], { type: 'application/msword' }));
     a.download = `coaching-${(r.employee || 'form').replace(/\s+/g, '-')}.doc`;
     a.click();
   }

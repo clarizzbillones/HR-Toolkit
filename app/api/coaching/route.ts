@@ -2,7 +2,9 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql, cuid } from '@/lib/db';
 import { sendMailAsApp } from '@/lib/graph';
-import { coachingEmailHtml } from '@/lib/coachingDoc';
+import { coachingEmailHtml, parseSignatories, type Signatory } from '@/lib/coachingDoc';
+
+const lc = (s: any) => String(s ?? '').trim().toLowerCase();
 
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
 const HR_CC = process.env.COACHING_HR_CC ?? 'clarizz@litson.co';
@@ -54,27 +56,42 @@ export async function PATCH(req: Request) {
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  // "send": lock a timestamp, mint a signing token, email the signer + copies.
+  // "send": build the signatory list (employee always included), resolve each
+  // email, lock a timestamp + token, and email ALL signatories to sign.
   if (b.action === 'send') {
     const [cur] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
     if (!cur) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const sigs: Signatory[] = parseSignatories(cur.signatories).filter(s => (s.name ?? '').trim());
+    if (cur.employee && !sigs.some(s => lc(s.name) === lc(cur.employee))) {
+      sigs.unshift({ name: cur.employee, position: 'Employee' });
+    }
+    for (const s of sigs) {
+      if (!s.email) {
+        if (lc(s.name) === lc(cur.employee) && cur.employee_email) s.email = cur.employee_email;
+        else if (lc(s.name) === lc(cur.coach_name) && cur.coach_email) s.email = cur.coach_email;
+        else { try { const [st] = await sql`SELECT email FROM staff_directory WHERE lower(name) = ${lc(s.name)} LIMIT 1` as any[]; if (st?.email) s.email = st.email; } catch { /* ignore */ } }
+      }
+    }
     const token = cur.sign_token || cuid() + cuid();
-    await sql`UPDATE coaching_notes SET status = 'Sent', submitted_at = NOW(), sign_token = ${token} WHERE id = ${b.id}`;
+    await sql`UPDATE coaching_notes SET status = 'Sent', submitted_at = NOW(), sign_token = ${token}, signatories = ${JSON.stringify(sigs)} WHERE id = ${b.id}`;
     const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
     const signUrl = `${baseUrl(req)}/coaching/sign/${token}`;
+
+    const emails = Array.from(new Set([...sigs.map(s => s.email), cur.employee_email].filter(Boolean))) as string[];
     let emailed = false, emailError: string | null = null;
-    if (row.employee_email) {
+    if (emails.length) {
       try {
         const html = coachingEmailHtml(row, signUrl);
-        const cc = [row.coach_email, HR_CC].filter(Boolean).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i) as string[];
-        const res: any = await sendMailAsApp(SENDER, row.employee_email, `Coaching form to review & sign — ${row.employee}`, html, cc);
+        const cc = Array.from(new Set([...emails.slice(1), HR_CC].filter(Boolean))) as string[];
+        const res: any = await sendMailAsApp(SENDER, emails[0], `Coaching form to review & sign — ${row.employee}`, html, cc);
         emailed = !res?.error;
         if (res?.error) emailError = String(res.error).slice(0, 140);
       } catch (e) { emailError = String(e).slice(0, 140); }
     } else {
-      emailError = 'No employee email on file — copy the link and send it manually.';
+      emailError = 'No signatory emails on file — copy the link and send it manually.';
     }
-    return NextResponse.json({ row: { ...row, sign_token: true }, signUrl, emailed, emailError });
+    return NextResponse.json({ row: { ...row, sign_token: true }, signUrl, emailed, emailError, recipients: emails.length });
   }
 
   // Regular edit (draft).
