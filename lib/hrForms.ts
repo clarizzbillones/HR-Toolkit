@@ -561,8 +561,55 @@ Sincerely,
 [TITLE], Litson PLLC
 [PHONE] · [EMAIL]`,
   },
+  {
+    id: "lb0489", part: "Part G — State & Government Forms",
+    title: "LB-0489 — TN Separation Notice",
+    body: `STATE OF TENNESSEE
+DEPARTMENT OF LABOR AND WORKFORCE DEVELOPMENT
+DIVISION OF EMPLOYMENT SECURITY
+SEPARATION NOTICE
+
+Employer must give the separated employee a completed copy within 24 hours of separation (Rule 0800-09-01-.02). Not required for employees of less than a week or recalled within seven days.
+
+1. Employee's Name:  [FIRST]  [MIDDLE INITIAL]  [LAST]
+2. Social Security Number:  [SSN]
+3. Last Employed — From:  [START mm/dd/yyyy]   To:  [END mm/dd/yyyy]
+   Occupation:  [OCCUPATION]
+4. Where was work performed?  [WORK LOCATION]
+
+5. Reason for Separation:  [Lack of Work / Discharge / Quit]
+   If lack of work, layoff is:  [Permanent / Temporary]
+   If temporary, Recall Date:  [RECALL DATE mm/dd/yyyy]
+   If temporary, vacation pay — Week Ending:  [WEEK ENDING mm/dd/yyyy]   Amount:  $[VACATION AMOUNT]
+   (If layoff is indefinite, vacation pay should not be reported.)
+
+6. Employee received:  [Wages in Lieu of Notice / Severance Pay / None]
+   In the amount of  $[AMOUNT]  for the period from  [FROM mm/dd/yyyy]  to  [TO mm/dd/yyyy]
+
+If other than lack of work, explain the circumstances of this separation:
+[EXPLANATION]
+
+Employer's Name:  Litson PLLC
+Address:  54 Music Square E Ste 300, Nashville, TN 37203
+Employer's Telephone Number:  (615) 985-8205
+Employer's Email Address:  [EMPLOYER EMAIL]
+Employer's Account Number (from LB-0851 / LB-0456):  [ACCOUNT NUMBER]
+
+I certify that the above worker has been separated from work and the information furnished hereon is true and correct. This report has been handed to or mailed to the worker.
+
+Signature of Official or Representative: ______________________________
+Title of Person Signing:  [TITLE]
+Date Completed and Released to Employee:  [DATE mm/dd/yyyy]
+
+—— NOTICE TO EMPLOYEE ——
+Unemployment Insurance (UI) benefits are available to workers who are unemployed and meet state UI eligibility requirements. You may file a UI claim in the first week that employment stops or work hours are reduced.
+File by phone: (844) 224-5818   ·   File online: www.jobs4tn.gov   ·   Questions: 1-844-224-5818 or lwd.support@tn.gov
+To process your claim you will need: (1) your full legal name; (2) your Social Security Number; and (3) your authorization to work (if not a US citizen or resident).
+
+LB-0489 (Rev. 08-2020) RDA 0063`,
+  },
 ];
-export const HR_FORM_PARTS: string[] = ["Part A \u2014 Performance & Discipline", "Part B \u2014 Pre-Termination", "Part C \u2014 Severance", "Part D \u2014 Severance Transmittal Letters", "Part E \u2014 Health Coverage Notices"];
+export const HR_FORM_PARTS: string[] = ["Part A \u2014 Performance & Discipline", "Part B \u2014 Pre-Termination", "Part C \u2014 Severance", "Part D \u2014 Severance Transmittal Letters", "Part E \u2014 Health Coverage Notices", "Part G \u2014 State & Government Forms"];
 
 // Escape + highlight [fill-in] fields, used by the preview and the print/Word output.
 function esc(s: string): string { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }

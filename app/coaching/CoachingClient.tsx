@@ -5,7 +5,7 @@ import { useAccess } from '@/components/AccessProvider';
 import { COACHING_TYPES, coachingDraft, coachingDocHtml } from '@/lib/coachingDoc';
 
 interface Staff { name: string; position: string; email: string }
-interface Signatory { name: string; position: string; email?: string; signed_at?: string | null; signature_name?: string | null }
+interface Signatory { name: string; position: string; role?: string; email?: string; signed_at?: string | null; signature_name?: string | null }
 interface Row {
   id: string; employee: string; employee_email: string | null; coach_name: string; coach_position: string;
   coach_email: string | null; coaching_type: string; date: string | null; topic: string; notes: string;
@@ -74,7 +74,7 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
     // Refresh the standard draft only if the coach hasn't edited it away.
     setForm(p => ({ ...p, coaching_type: type, notes: (!p.notes.trim() || COACHING_TYPES.some(t => p.notes === coachingDraft(t))) ? coachingDraft(type) : p.notes }));
   }
-  function addSignatory() { setForm(p => ({ ...p, signatories: [...p.signatories, { name: '', position: '' }] })); }
+  function addSignatory() { setForm(p => ({ ...p, signatories: [...p.signatories, { name: '', position: '', role: 'Reviewer' }] })); }
   function setSignatory(i: number, name: string) {
     setForm(p => ({ ...p, signatories: p.signatories.map((s, j) => j === i ? { ...s, name, position: posOf(name) || s.position, email: emailOf(name) || (s as any).email } : s) }));
   }
@@ -238,6 +238,9 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
                       <select value={s.name} onChange={e => setSignatory(i, e.target.value)} className={input + ' bg-white flex-1'}>
                         <option value="">Select name…</option>
                         {names.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <select value={s.role ?? 'Reviewer'} onChange={e => setForm(p => ({ ...p, signatories: p.signatories.map((x, j) => j === i ? { ...x, role: e.target.value } : x) }))} className={input + ' bg-white w-28 shrink-0'}>
+                        {['Reviewer', 'Reviewee'].map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                       <input value={s.position} onChange={e => setForm(p => ({ ...p, signatories: p.signatories.map((x, j) => j === i ? { ...x, position: e.target.value } : x) }))} placeholder="Position" className={input + ' flex-1'} />
                       <button onClick={() => removeSignatory(i)} className="text-text-muted hover:text-litred-alt text-sm px-1">✕</button>

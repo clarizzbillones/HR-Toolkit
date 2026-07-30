@@ -64,7 +64,7 @@ export async function PATCH(req: Request) {
 
     const sigs: Signatory[] = parseSignatories(cur.signatories).filter(s => (s.name ?? '').trim());
     if (cur.employee && !sigs.some(s => lc(s.name) === lc(cur.employee))) {
-      sigs.unshift({ name: cur.employee, position: 'Employee' });
+      sigs.unshift({ name: cur.employee, position: 'Employee', role: 'Reviewee' });
     }
     for (const s of sigs) {
       if (!s.email) {
