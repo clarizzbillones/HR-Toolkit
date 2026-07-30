@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
+import { ageAt, tenure } from '@/lib/offboarding';
 
 // Tier reference from the firm's Severance Calculation Worksheet (C1).
 const TIERS: Record<string, { label: string; baseWeeks: number; perYear: number; cap: number }> = {
@@ -12,10 +13,11 @@ const TIERS: Record<string, { label: string; baseWeeks: number; perYear: number;
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 
 const DEFAULTS = {
-  name: '', position: '', hireDate: '', sepDate: '', age: '',
-  annualSalary: '', tier: '1', years: '', riskEnhancement: false,
+  name: '', position: '', hireDate: '', sepDate: '', age: '', dob: '',
+  annualSalary: '', tier: '1', serviceYears: '', serviceMonths: '', riskEnhancement: false,
   cobraMonths: '', transitionStipend: '', notes: '',
 };
+interface Emp { name: string; position: string; dob: string; start_date: string; salary: string }
 
 const inputCls = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 function Field({ label, value, onChange, type = 'text', ph, col = 1, prefix }: { label: string; value: string; onChange: (v: string) => void; type?: string; ph?: string; col?: number; prefix?: string }) {
@@ -34,10 +36,46 @@ export default function SeveranceCalc() {
   const { showToast } = useToast();
   const [f, setF] = useState({ ...DEFAULTS });
   const set = (k: keyof typeof DEFAULTS, v: any) => setF(p => ({ ...p, [k]: v }));
+  const [employees, setEmployees] = useState<Emp[]>([]);
+
+  useEffect(() => { fetch('/api/staff/basic').then(r => r.json()).then(d => setEmployees(d.employees ?? [])).catch(() => {}); }, []);
+
+  // Pick an employee: fill position + hire date, remember DOB, and compute age
+  // (as of the separation date, else today) and years of service automatically.
+  const onlyNum = (s: any) => String(s ?? '').replace(/[^0-9.]/g, '');
+  function pickEmployee(name: string) {
+    const emp = employees.find(e => e.name.toLowerCase() === name.trim().toLowerCase());
+    setF(p => {
+      const dob = emp?.dob ?? p.dob;
+      const hireDate = emp?.start_date ?? p.hireDate;
+      const age = ageAt(dob, p.sepDate);
+      const t = tenure(hireDate, p.sepDate);
+      const salary = emp?.salary ? onlyNum(emp.salary) : p.annualSalary;
+      return {
+        ...p, name,
+        position: emp?.position || p.position,
+        dob, hireDate,
+        annualSalary: salary,
+        age: age != null ? String(age) : p.age,
+        serviceYears: t ? String(t.years) : p.serviceYears,
+        serviceMonths: t ? String(t.months) : p.serviceMonths,
+      };
+    });
+  }
+  // Keep age + length of service in step if the separation/hire date changes.
+  useEffect(() => {
+    setF(p => {
+      const next = { ...p };
+      if (p.dob) { const a = ageAt(p.dob, p.sepDate); if (a != null) next.age = String(a); }
+      if (p.hireDate) { const t = tenure(p.hireDate, p.sepDate); if (t) { next.serviceYears = String(t.years); next.serviceMonths = String(t.months); } }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.sepDate, f.hireDate, f.dob]);
 
   const t = TIERS[f.tier] ?? TIERS['1'];
   const annual = parseFloat(f.annualSalary) || 0;
-  const years = parseFloat(f.years) || 0;
+  const years = (parseFloat(f.serviceYears) || 0) + (parseFloat(f.serviceMonths) || 0) / 12;
   const weeklyRate = annual / 52;
   const serviceWeeks = years * t.perYear;
   const subtotalWeeks = t.baseWeeks + serviceWeeks;
@@ -82,7 +120,7 @@ export default function SeveranceCalc() {
   <div style="font-weight:700;font-size:14.5px;margin:8px 0 4px">Inputs</div>
   ${line('Annual base salary (base only)', money(annual))}
   ${line('Tier', t.label)}
-  ${line('Years of service', `${years} yr`)}
+  ${line('Length of service', `${f.serviceYears || 0} yr ${f.serviceMonths || 0} mo  (${years.toFixed(2)} yrs)`)}
   <div style="font-weight:700;font-size:14.5px;margin:14px 0 4px">Calculation</div>
   ${rows.map(r => line(r[0], r[1])).join('')}
   <div style="display:flex;justify-content:space-between;gap:16px;margin-top:12px;background:#1b2a3d;color:#fff;border-radius:8px;padding:12px 16px"><span style="font-weight:700">TOTAL SEVERANCE</span><span style="font-weight:700;font-size:18px;color:#e9cf94">${money(total)}</span></div>
@@ -101,21 +139,40 @@ export default function SeveranceCalc() {
       {/* Inputs */}
       <div className="bg-white border border-border rounded-card p-6 grid grid-cols-2 gap-4">
         <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gold-muted">Employee</div>
-        <Field label="Employee name" value={f.name} onChange={v => set('name', v)} col={2} />
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Employee name</label>
+          <input list="sev-emp" value={f.name} onChange={e => pickEmployee(e.target.value)} placeholder="Pick or type a name" className={inputCls} />
+          <datalist id="sev-emp">{employees.map(e => <option key={e.name} value={e.name} />)}</datalist>
+        </div>
         <Field label="Position" value={f.position} onChange={v => set('position', v)} />
-        <Field label="Age" value={f.age} onChange={v => set('age', v)} ph="if 40+, OWBPA applies" />
+        <div>
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Age {f.dob && <span className="text-[10px] text-[#2f7d5b] font-normal">· auto from DOB</span>}</label>
+          <input value={f.age} onChange={e => set('age', e.target.value)} placeholder="if 40+, OWBPA applies" className={inputCls} />
+        </div>
         <Field label="Hire date" value={f.hireDate} onChange={v => set('hireDate', v)} type="date" />
         <Field label="Separation date" value={f.sepDate} onChange={v => set('sepDate', v)} type="date" />
 
         <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gold-muted pt-2">Severance inputs</div>
-        <Field label="Annual base salary (exclude bonus/OT/commission)" value={f.annualSalary} onChange={v => set('annualSalary', v)} type="number" prefix="$" col={2} />
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Annual base salary <span className="text-[10px] text-text-muted font-normal">· exclude bonus/OT/commission{f.annualSalary && employees.some(e => e.name.toLowerCase() === f.name.toLowerCase() && e.salary) ? ' · auto-filled, editable' : ''}</span></label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">$</span>
+            <input type="number" value={f.annualSalary} onChange={e => set('annualSalary', e.target.value)} className={inputCls + ' pl-7'} />
+          </div>
+        </div>
         <div>
           <label className="block text-xs font-semibold text-text-secondary mb-1">Tier</label>
           <select value={f.tier} onChange={e => set('tier', e.target.value)} className={inputCls + ' bg-white'}>
             {Object.entries(TIERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
-        <Field label="Years of service (nearest half year)" value={f.years} onChange={v => set('years', v)} type="number" />
+        <div>
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Length of service (at the firm){f.hireDate && <span className="text-[10px] text-[#2f7d5b] font-normal"> · auto</span>}</label>
+          <div className="flex gap-2">
+            <div className="relative flex-1"><input type="number" value={f.serviceYears} onChange={e => set('serviceYears', e.target.value)} placeholder="0" className={inputCls + ' pr-9'} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-text-muted">yrs</span></div>
+            <div className="relative flex-1"><input type="number" value={f.serviceMonths} onChange={e => set('serviceMonths', e.target.value)} placeholder="0" className={inputCls + ' pr-9'} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-text-muted">mos</span></div>
+          </div>
+        </div>
         <div className="col-span-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={f.riskEnhancement} onChange={e => set('riskEnhancement', e.target.checked)} className="w-4 h-4 accent-[#c9a24a]" />
