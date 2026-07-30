@@ -2,35 +2,54 @@
 // document body (used in the PDF, the e-sign page, and the emails), and the two
 // email templates. Kept framework-free so it works server- and client-side.
 
-export const COACHING_TYPES = ['Weekly', '30-day check-in', '60-day check-in', '90-day check-in'] as const;
+export const COACHING_TYPES = ['Quick check-in', 'Weekly', '30-day check-in', '60-day check-in', '90-day check-in'] as const;
 
 // The standard coaching draft the coach starts from (fully editable).
+// Supports **bold**, *italic*, and lines starting with • as bullets.
 export function coachingDraft(type: string): string {
   const common = [
-    'Discussion Summary:',
+    '**Discussion Summary:**',
     '• ',
     '',
-    'Strengths & Wins:',
+    '**Strengths & Wins:**',
     '• ',
     '',
-    'Areas for Growth:',
+    '**Areas for Growth:**',
     '• ',
     '',
-    'Goals & Expectations:',
+    '**Goals & Expectations:**',
+    '• ',
+  ];
+  const quick = [
+    '**Touch-base notes:**',
+    '• ',
+    '',
+    '**Next steps:**',
     '• ',
   ];
   const head: Record<string, string> = {
+    'Quick check-in': 'This quick check-in captures a brief touch-base on how things are going, any blockers, and next steps.',
     'Weekly': 'This weekly coaching session reviews progress, wins, blockers, and goals for the week ahead.',
     '30-day check-in': 'This 30-day check-in reviews onboarding progress, role clarity, early wins, and the support needed to succeed.',
     '60-day check-in': 'This 60-day check-in reviews performance against expectations, skill development, and goals for the next period.',
     '90-day check-in': 'This 90-day review evaluates overall performance since hire, core competencies, and a forward development plan.',
   };
-  return [head[type] ?? head['Weekly'], '', ...common].join('\n');
+  const body = type === 'Quick check-in' ? quick : common;
+  return [head[type] ?? head['Weekly'], '', ...body].join('\n');
 }
 
 function esc(s: any): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// Lightweight inline markdown: **bold**, *italic* (run after escaping).
+function inlineMd(escaped: string): string {
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/(^|[^a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g, '$1<em>$2</em>');
+}
+function fmtInline(raw: string): string { return inlineMd(esc(raw)); }
 export function fmtLong(iso: any): string {
   if (!iso) return '';
   const d = new Date(String(iso).length <= 10 ? String(iso).slice(0, 10) + 'T12:00:00' : iso);
@@ -50,13 +69,13 @@ export function coachingDocHtml(row: any): string {
   const bodyLines = String(row.notes ?? '').split('\n').map((l: string) => {
     const t = l.trim();
     if (t === '') return '<div style="height:8px"></div>';
-    if (/^[•\-]\s*/.test(t)) return `<div style="margin-left:1.4em;text-indent:-1em">&bull;&nbsp;${esc(t.replace(/^[•\-]\s*/, ''))}</div>`;
-    if (/:$/.test(t)) return `<div style="font-weight:700;margin-top:6px">${esc(t)}</div>`;
-    return `<div>${esc(l)}</div>`;
+    if (/^[•\-]\s*/.test(t)) return `<div style="margin-left:1.4em;text-indent:-1em">&bull;&nbsp;${fmtInline(t.replace(/^[•\-]\s*/, ''))}</div>`;
+    if (/:\s*$/.test(t) && !/[*_]/.test(t)) return `<div style="font-weight:700;margin-top:6px">${esc(t)}</div>`;
+    return `<div>${fmtInline(l)}</div>`;
   }).join('');
   const actions = String(row.action_items ?? '').split('\n').map((l: string) => l.trim()).filter(Boolean);
   const actionsHtml = actions.length
-    ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Action items</div>${actions.map(a => `<div style="margin-left:1.4em;text-indent:-1em">&bull;&nbsp;${esc(a)}</div>`).join('')}</div>`
+    ? `<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Action items</div>${actions.map(a => `<div style="margin-left:1.4em;text-indent:-1em">&bull;&nbsp;${fmtInline(a.replace(/^[•\-]\s*/, ''))}</div>`).join('')}</div>`
     : '';
   const signers = parseSignatories(row.signatories);
   const signerRows = signers.map(s => `<tr><td style="padding:6px 10px;border:1px solid #e6ddcd">${esc(s.name)}</td><td style="padding:6px 10px;border:1px solid #e6ddcd;color:#555">${esc(s.position)}</td></tr>`).join('');
@@ -90,24 +109,43 @@ export function coachingDocHtml(row: any): string {
   </div>`;
 }
 
-// Email to the employee: the form + a button to review and sign.
-export function coachingEmailHtml(row: any, signUrl: string): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1b2a3d;max-width:680px">
-    <p>Hi ${esc((row.employee || '').split(' ')[0] || 'there')},</p>
-    <p>${esc(row.coach_name || 'Your coach')} has shared a <b>${esc(row.coaching_type || 'coaching')}</b> form with you. Please review it and sign electronically using the button below.</p>
-    <p style="margin:18px 0"><a href="${esc(signUrl)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Review &amp; sign the form</a></p>
-    <p style="font-size:12px;color:#666">Or paste this link into your browser:<br>${esc(signUrl)}</p>
-    <hr style="border:none;border-top:1px solid #e6ddcd;margin:18px 0">
-    ${coachingDocHtml(row)}
+// Small Litson banner + a light meta line — used at the top of both emails.
+// The emails intentionally do NOT include the coaching content; it is only
+// shown securely on the signing page / in the toolkit.
+function emailShell(inner: string): string {
+  return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1b2a3d;max-width:560px">
+    <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+    </div>
+    ${inner}
   </div>`;
 }
+function metaLine(row: any): string {
+  const parts = [row.coaching_type || 'Coaching', row.date ? fmtLong(row.date) : '', row.coach_name ? `From ${row.coach_name}` : ''].filter(Boolean);
+  return `<p style="font-size:13px;color:#666;margin:4px 0 0">${esc(parts.join(' &middot; '))}</p>`;
+}
 
-// Receipt after signing, sent to employee + coach + HR.
+// Email to the employee: a brief notice + a button to review and sign.
+// The coaching content is NOT included — it is shown on the signing page.
+export function coachingEmailHtml(row: any, signUrl: string): string {
+  return emailShell(`
+    <p>Hi ${esc((row.employee || '').split(' ')[0] || 'there')},</p>
+    <p>${esc(row.coach_name || 'Your coach')} has shared a <b>${esc(row.coaching_type || 'coaching')}</b> form with you to review and sign.</p>
+    ${metaLine(row)}
+    <p style="margin:18px 0"><a href="${esc(signUrl)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Review &amp; sign the form</a></p>
+    <p style="font-size:12px;color:#666">Or paste this link into your browser:<br>${esc(signUrl)}</p>
+    <p style="font-size:11px;color:#999;margin-top:16px">For privacy, the coaching details are shown securely on the signing page, not in this email.</p>
+  `);
+}
+
+// Receipt after signing, sent to employee + coach + HR. Confirmation only —
+// the full form lives in the HR Toolkit (Coaching tab).
 export function coachingReceiptHtml(row: any): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1b2a3d;max-width:680px">
-    <p>The following coaching form for <b>${esc(row.employee)}</b> has been <b>signed</b> and is on file.</p>
-    <p style="font-size:13px;color:#33503f">Signed by ${esc(row.signature_name)} on ${esc(fmtStamp(row.signed_at))}.</p>
-    <hr style="border:none;border-top:1px solid #e6ddcd;margin:16px 0">
-    ${coachingDocHtml(row)}
-  </div>`;
+  return emailShell(`
+    <p>The coaching form for <b>${esc(row.employee)}</b> has been <b>signed</b> and is on file.</p>
+    <p style="font-size:13px;color:#33503f;margin:4px 0 0">Signed by ${esc(row.signature_name)} on ${esc(fmtStamp(row.signed_at))}.</p>
+    ${metaLine(row)}
+    <p style="font-size:12px;color:#888;margin-top:16px">The full form is available in the HR Toolkit &rsaquo; Coaching, where it can be downloaded as PDF or Word.</p>
+  `);
 }

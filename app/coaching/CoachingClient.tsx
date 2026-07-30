@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { COACHING_TYPES, coachingDraft, coachingDocHtml } from '@/lib/coachingDoc';
@@ -44,7 +44,28 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
   const employees = Array.from(new Set(rows.map(r => r.employee).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const visible = filter === 'All' ? rows : rows.filter(r => r.employee === filter);
 
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   function set(k: keyof typeof EMPTY, v: any) { setForm(p => ({ ...p, [k]: v })); }
+  // Bold / italic / bullet toolbar for the coaching notes.
+  function applyNoteFmt(kind: 'bold' | 'italic' | 'bullet') {
+    const ta = notesRef.current; if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd, val = form.notes;
+    let next: string, caret: number;
+    if (kind === 'bullet') {
+      const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+      const block = val.slice(lineStart, Math.max(end, start));
+      const bulleted = (block || '').split('\n').map(l => /^\s*[•\-]\s/.test(l) ? l : '• ' + l).join('\n');
+      next = val.slice(0, lineStart) + bulleted + val.slice(Math.max(end, start));
+      caret = lineStart + bulleted.length;
+    } else {
+      const mark = kind === 'bold' ? '**' : '*';
+      const sel = val.slice(start, end) || (kind === 'bold' ? 'bold text' : 'italic text');
+      next = val.slice(0, start) + mark + sel + mark + val.slice(end);
+      caret = start + mark.length + sel.length + mark.length;
+    }
+    set('notes', next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(caret, caret); });
+  }
   function resetForm() { setForm({ ...EMPTY, notes: coachingDraft('Weekly') }); setEditId(null); setShowForm(false); }
 
   function pickEmployee(name: string) { setForm(p => ({ ...p, employee: name, employee_email: emailOf(name) })); }
@@ -187,7 +208,13 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Coaching notes <span className="text-text-muted font-normal">(standard draft — edit freely)</span></label>
-                <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={10} className={input + ' resize-y font-mono text-[13px]'} />
+                <div className="flex items-center gap-1 mb-1.5">
+                  <button type="button" onClick={() => applyNoteFmt('bold')} title="Bold (**text**)" className="px-2.5 py-1 text-sm font-bold rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary">B</button>
+                  <button type="button" onClick={() => applyNoteFmt('italic')} title="Italic (*text*)" className="px-2.5 py-1 text-sm italic rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary">I</button>
+                  <button type="button" onClick={() => applyNoteFmt('bullet')} title="Bullet the line(s)" className="px-2.5 py-1 text-sm rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary">• List</button>
+                </div>
+                <textarea ref={notesRef} value={form.notes} onChange={e => set('notes', e.target.value)} rows={10} className={input + ' resize-y text-[13px]'} />
+                <p className="text-[11px] text-text-muted mt-1"><code>**bold**</code>, <code>*italic*</code>, and lines starting with • become bullets in the document.</p>
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Action items <span className="text-text-muted font-normal">(one per line)</span></label>
