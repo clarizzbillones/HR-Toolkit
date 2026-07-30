@@ -61,6 +61,12 @@ export default function OffboardingClient() {
     fetch(`/api/offboarding/exit?offboardingId=${selId}`).then(r => r.json()).then(d => setExitRec(d.row ?? null)).catch(() => setExitRec(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selId]);
+  async function deleteExit() {
+    if (!exitRec?.id) { setExitRec(null); return; }
+    if (!confirm('Delete this exit interview' + (exitRec.status === 'Completed' ? ' and its responses' : '') + '?')) return;
+    await fetch(`/api/offboarding/exit?id=${exitRec.id}`, { method: 'DELETE' });
+    setExitRec(null); showToast('Exit interview deleted');
+  }
   async function sendExit(resend = false) {
     if (!selected) return;
     setExitBusy(true);
@@ -271,7 +277,10 @@ export default function OffboardingClient() {
               <div className="bg-white border border-border rounded-card p-5">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-gold-muted">Exit interview</label>
-                  {exitRec && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${exitRec.status === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{exitRec.status === 'Completed' ? 'Completed' : 'Sent — awaiting response'}</span>}
+                  <div className="flex items-center gap-2">
+                    {exitRec && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${exitRec.status === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{exitRec.status === 'Completed' ? 'Completed' : 'Sent — awaiting response'}</span>}
+                    {exitRec && !readOnly && <button onClick={deleteExit} className="text-[11px] font-semibold text-litred-alt border border-border-light px-2 py-0.5 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
+                  </div>
                 </div>
                 {!exitRec ? (
                   <div className="space-y-2">

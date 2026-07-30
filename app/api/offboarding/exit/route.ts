@@ -89,3 +89,15 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
+
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  await ensure();
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  // Also remove the PDF filed under the employee, so a re-test starts clean.
+  try { await sql`DELETE FROM employee_files WHERE source_ref = ${`exit:${id}`}`; } catch { /* table may not exist */ }
+  await sql`DELETE FROM exit_interviews WHERE id = ${id}`;
+  return NextResponse.json({ ok: true });
+}
