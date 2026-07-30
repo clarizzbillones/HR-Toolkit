@@ -6,10 +6,14 @@ import Lb0489Fill from './Lb0489Fill';
 
 interface SavedForm { title: string; body: string; baseId: string }
 
+// Drop the "A1 — " / "B1 — " style code prefix from a template title
+// (keeps form numbers like "LB-0489 — …").
+const cleanTitle = (t: string) => t.replace(/^[A-Z]\d+\s*[—-]\s*/, '');
+
 export default function HrFormsClient() {
   const { showToast } = useToast();
   const [id, setId] = useState(HR_FORMS[0].id);
-  const [title, setTitle] = useState(HR_FORMS[0].title);
+  const [title, setTitle] = useState(cleanTitle(HR_FORMS[0].title));
   const [body, setBody] = useState(HR_FORMS[0].body);
   const [saved, setSaved] = useState<Record<string, SavedForm>>({});
   const [savedName, setSavedName] = useState('');
@@ -36,7 +40,7 @@ export default function HrFormsClient() {
   function loadTemplate(fid: string) {
     const f = HR_FORMS.find(x => x.id === fid);
     if (!f) return;
-    setId(f.id); setTitle(f.title); setBody(f.body); setSavedName('');
+    setId(f.id); setTitle(cleanTitle(f.title)); setBody(f.body); setSavedName('');
   }
   function loadSaved(name: string) {
     const sv = saved[name]; if (!sv) { setSavedName(''); return; }
@@ -89,7 +93,7 @@ export default function HrFormsClient() {
               <select value={id} onChange={e => loadTemplate(e.target.value)} className={input + ' bg-white max-w-md'}>
                 {HR_FORM_PARTS.map(part => (
                   <optgroup key={part} label={part}>
-                    {HR_FORMS.filter(x => x.part === part).map(x => <option key={x.id} value={x.id}>{x.title}</option>)}
+                    {HR_FORMS.filter(x => x.part === part).map(x => <option key={x.id} value={x.id}>{cleanTitle(x.title)}</option>)}
                   </optgroup>
                 ))}
               </select>
@@ -106,7 +110,7 @@ export default function HrFormsClient() {
               <select value={savedName ? '' : id} onChange={e => loadTemplate(e.target.value)} className={input + ' bg-white'}>
                 {HR_FORM_PARTS.map(part => (
                   <optgroup key={part} label={part}>
-                    {HR_FORMS.filter(f => f.part === part).map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                    {HR_FORMS.filter(f => f.part === part).map(f => <option key={f.id} value={f.id}>{cleanTitle(f.title)}</option>)}
                   </optgroup>
                 ))}
               </select>
