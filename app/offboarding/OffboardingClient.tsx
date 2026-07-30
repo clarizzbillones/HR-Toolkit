@@ -2,14 +2,18 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
-import { OFFBOARDING_CHECKLIST, OFFBOARDING_ITEM_COUNT, SEPARATION_TYPES, checkedCount, offboardingStatus } from '@/lib/offboarding';
+import {
+  OFFBOARDING_CHECKLIST, OFFBOARDING_ITEMS, SEPARATION_TYPES,
+  activeProgress, offboardingStatus, isItemExcluded, ageAt, tenureLabel, defaultExcluded,
+} from '@/lib/offboarding';
 
 interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
   separation_date: string | null; separation_type: string | null; prepared_by: string | null;
-  checklist: Record<string, boolean>; notes: string | null;
+  checklist: Record<string, boolean>; excluded: Record<string, boolean>; offer_severance: boolean;
+  dob: string | null; hire_date: string | null; notes: string | null;
 }
-interface Emp { name: string; position: string | null }
+interface Emp { name: string; position: string | null; dob: string | null; start_date: string | null }
 
 const STATUS_PILL: Record<string, string> = {
   'Complete': 'bg-[#eef5f1] text-[#2f7d5b]', 'In progress': 'bg-[#f7efe1] text-[#b07d2a]', 'Not started': 'bg-[#f1ece3] text-[#8b8478]',
@@ -29,7 +33,8 @@ export default function OffboardingClient() {
   const [loading, setLoading] = useState(true);
   const [selId, setSelId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '' });
+  const emptyForm = { name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '', dob: '', hire_date: '', offer_severance: false };
+  const [form, setForm] = useState({ ...emptyForm });
 
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
@@ -50,12 +55,10 @@ export default function OffboardingClient() {
     const res = await fetch('/api/offboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
     const d = await res.json();
     if (!res.ok) { showToast(d.error || 'Failed'); return; }
-    setRows(p => [d.row, ...p]); setShowAdd(false);
-    setForm({ name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '' });
+    setRows(p => [d.row, ...p]); setShowAdd(false); setForm({ ...emptyForm });
     setSelId(d.row.id); showToast('Offboarding started');
   }
 
-  // Debounced-ish patch: update local immediately, persist in background.
   async function patch(id: string, changes: Partial<Rec>) {
     setRows(p => p.map(r => r.id === id ? { ...r, ...changes } as Rec : r));
     try {
@@ -66,8 +69,20 @@ export default function OffboardingClient() {
   }
   function toggleItem(rec: Rec, itemId: string) {
     if (readOnly) return;
-    const checklist = { ...rec.checklist, [itemId]: !rec.checklist[itemId] };
-    patch(rec.id, { checklist });
+    patch(rec.id, { checklist: { ...rec.checklist, [itemId]: !rec.checklist[itemId] } });
+  }
+  function toggleExclude(rec: Rec, itemId: string) {
+    if (readOnly) return;
+    const excluded = { ...rec.excluded };
+    if (excluded[itemId]) delete excluded[itemId]; else excluded[itemId] = true;
+    patch(rec.id, { excluded });
+  }
+  function applyAgeSuggestion(rec: Rec) {
+    const sugg = defaultExcluded(rec.dob, rec.separation_date);
+    const excluded = { ...rec.excluded };
+    for (const it of OFFBOARDING_ITEMS) if (it.age40) { if (sugg[it.id]) excluded[it.id] = true; else delete excluded[it.id]; }
+    patch(rec.id, { excluded });
+    showToast('Applied age suggestion');
   }
   async function remove(rec: Rec) {
     if (!confirm(`Delete offboarding for ${rec.name}?`)) return;
@@ -77,18 +92,21 @@ export default function OffboardingClient() {
 
   function pickEmployee(name: string) {
     const emp = employees.find(e => e.name === name);
-    setForm(f => ({ ...f, name, position: emp?.position ?? f.position }));
+    setForm(f => ({ ...f, name, position: emp?.position ?? f.position, dob: emp?.dob ?? f.dob, hire_date: emp?.start_date ?? f.hire_date }));
   }
 
   function printDoc(rec: Rec) {
     const win = window.open('', '_blank'); if (!win) return;
-    const done = checkedCount(rec.checklist);
+    const { done, total } = activeProgress(rec);
     const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
-    const sections = OFFBOARDING_CHECKLIST.map(s => `
-      <div style="margin-top:16px">
+    const sections = OFFBOARDING_CHECKLIST.map(s => {
+      const items = s.items.filter(it => !isItemExcluded(rec, s, it));
+      if (!items.length) return '';
+      return `<div style="margin-top:16px">
         <div style="font-size:12px;font-weight:700;color:#1b2a3d">${esc(s.heading)} <span style="font-weight:400;color:#8a8474">· ${esc(s.chapter)}</span></div>
-        ${s.items.map(it => `<div style="display:flex;gap:8px;margin-top:5px;font-size:13px;line-height:1.45"><span style="color:${rec.checklist[it.id] ? '#2f7d5b' : '#b9b1a2'};font-weight:700">${rec.checklist[it.id] ? '☑' : '☐'}</span><span>${esc(it.label)}</span></div>`).join('')}
-      </div>`).join('');
+        ${items.map(it => `<div style="display:flex;gap:8px;margin-top:5px;font-size:13px;line-height:1.45"><span style="color:${rec.checklist[it.id] ? '#2f7d5b' : '#b9b1a2'};font-weight:700">${rec.checklist[it.id] ? '☑' : '☐'}</span><span>${esc(it.label)}${it.hint ? ` <span style="color:#8a8474;font-size:11px">(${esc(it.hint)})</span>` : ''}</span></div>`).join('')}
+      </div>`;
+    }).join('');
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offboarding — ${esc(rec.name)}</title>
 <style>@page{size:letter;margin:0.55in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:24px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d}</style></head><body>
 <div style="max-width:720px;margin:0 auto">
@@ -101,10 +119,10 @@ export default function OffboardingClient() {
     ${meta('Employee', rec.name)}${meta('Position', rec.position || '')}${meta('Manager', rec.manager || '')}
     ${meta('Separation date', fmtDate(rec.separation_date))}${meta('Type', rec.separation_type || '')}${meta('Prepared by', rec.prepared_by || '')}
   </div>
-  <div style="margin-top:10px;font-size:13px;color:#8a8474">${done} of ${OFFBOARDING_ITEM_COUNT} complete</div>
+  <div style="margin-top:10px;font-size:13px;color:#8a8474">${done} of ${total} steps complete${rec.offer_severance ? '' : ' · severance section not applicable'}</div>
   ${sections}
   ${rec.notes ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474">Notes</div><div style="font-size:13px;white-space:pre-wrap;margin-top:4px">${esc(rec.notes)}</div></div>` : ''}
-  <div style="margin-top:20px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Built from the LITSON PLLC HR Compliance &amp; Risk Management Manual. Severance &amp; release steps require counsel review before use.</div>
+  <div style="margin-top:20px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Built from the LITSON PLLC HR Compliance &amp; Risk Management Manual. Severance &amp; release steps require a lawyer's review before use.</div>
 </div>
 <script>window.onload=function(){window.print()}</script></body></html>`);
     win.document.close();
@@ -113,9 +131,11 @@ export default function OffboardingClient() {
   // ---- Detail view ----
   if (selected) {
     const rec = selected;
-    const done = checkedCount(rec.checklist);
-    const pct = Math.round((done / OFFBOARDING_ITEM_COUNT) * 100);
-    const status = offboardingStatus(rec.checklist);
+    const { done, total } = activeProgress(rec);
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const status = offboardingStatus(rec);
+    const age = ageAt(rec.dob, rec.separation_date);
+    const tenureStr = tenureLabel(rec.hire_date, rec.separation_date);
     const field = (label: string, key: keyof Rec, type = 'text') => (
       <div>
         <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">{label}</label>
@@ -149,10 +169,31 @@ export default function OffboardingClient() {
                 {field('Separation date', 'separation_date', 'date')}
                 {field('Type of separation', 'separation_type', 'select')}
                 {field('Prepared by', 'prepared_by')}
+                {field('Date of birth', 'dob', 'date')}
+                {field('Hire date', 'hire_date', 'date')}
+                <div className="flex items-end">
+                  <label className={`flex items-center gap-2 text-sm ${readOnly ? '' : 'cursor-pointer'}`}>
+                    <input type="checkbox" disabled={readOnly} checked={rec.offer_severance} onChange={e => patch(rec.id, { offer_severance: e.target.checked })} className="w-4 h-4 accent-[#c9a24a]" />
+                    <span className="font-semibold text-text-secondary">Offering severance</span>
+                  </label>
+                </div>
               </div>
+
+              {/* Applicability box */}
+              {(age != null || tenureStr) && (
+                <div className="mt-5 bg-[#fbf7ee] border border-[#ecd9b6] rounded-ctrl px-4 py-3 text-sm">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1">What applies to {rec.name.split(' ')[0]}</div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-text-secondary">
+                    {age != null && <span><span className="text-text-muted">Age at separation:</span> <b>{age}</b> {age < 40 ? '— under 40, so the age-40 disclosure steps are pre-marked N/A' : '— 40 or older, so the age-40 disclosure steps apply'}</span>}
+                    {tenureStr && <span><span className="text-text-muted">Length of service:</span> <b>{tenureStr}</b></span>}
+                  </div>
+                  {!readOnly && rec.dob && <button onClick={() => applyAgeSuggestion(rec)} className="mt-2 text-[11px] font-semibold text-[#3f6b8a] hover:underline">↺ Re-apply age suggestion</button>}
+                </div>
+              )}
+
               <div className="mt-5">
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-semibold text-text-secondary">{done} of {OFFBOARDING_ITEM_COUNT} steps complete</span>
+                  <span className="font-semibold text-text-secondary">{done} of {total} applicable steps complete</span>
                   <span className="text-text-muted">{pct}%</span>
                 </div>
                 <div className="h-2.5 rounded-full bg-[#eee7da] overflow-hidden">
@@ -164,25 +205,40 @@ export default function OffboardingClient() {
             {/* Checklist */}
             <div className="space-y-5">
               {OFFBOARDING_CHECKLIST.map(sec => {
-                const secDone = sec.items.filter(it => rec.checklist[it.id]).length;
+                const sectionOff = !!sec.severance && !rec.offer_severance;
+                const activeItems = sec.items.filter(it => !isItemExcluded(rec, sec, it));
+                const secDone = activeItems.filter(it => rec.checklist[it.id]).length;
                 return (
-                  <div key={sec.key} className="bg-white border border-border rounded-card p-5">
+                  <div key={sec.key} className={`bg-white border border-border rounded-card p-5 ${sectionOff ? 'opacity-70' : ''}`}>
                     <div className="flex items-baseline gap-2 mb-3">
                       <h3 className="font-spectral text-[16px] font-semibold text-text-primary">{sec.heading}</h3>
                       <span className="text-[11px] text-text-muted">{sec.chapter}</span>
-                      <span className="ml-auto text-[11px] font-semibold text-text-muted">{secDone}/{sec.items.length}</span>
+                      {sec.severance && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]">only if severance</span>}
+                      <span className="ml-auto text-[11px] font-semibold text-text-muted">{sectionOff ? 'N/A' : `${secDone}/${activeItems.length}`}</span>
                     </div>
-                    <div className="space-y-2">
-                      {sec.items.map(it => {
-                        const on = !!rec.checklist[it.id];
-                        return (
-                          <label key={it.id} className={`flex items-start gap-3 text-sm rounded-ctrl px-2 py-1.5 -mx-2 ${readOnly ? '' : 'cursor-pointer hover:bg-canvas'}`}>
-                            <input type="checkbox" checked={on} disabled={readOnly} onChange={() => toggleItem(rec, it.id)} className="mt-0.5 w-4 h-4 accent-[#2f7d5b] shrink-0" />
-                            <span className={on ? 'text-text-muted line-through' : 'text-text-secondary'}>{it.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                    {sectionOff ? (
+                      <div className="text-sm text-text-muted">Not offering severance — this section is skipped. Turn on <b>Offering severance</b> above to include it.</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {sec.items.map(it => {
+                          const excluded = !!rec.excluded[it.id];
+                          const on = !!rec.checklist[it.id];
+                          return (
+                            <div key={it.id} className={`flex items-start gap-3 text-sm rounded-ctrl px-2 py-1.5 -mx-2 group ${excluded ? 'opacity-55' : ''}`}>
+                              <input type="checkbox" checked={on && !excluded} disabled={readOnly || excluded} onChange={() => toggleItem(rec, it.id)} className="mt-0.5 w-4 h-4 accent-[#2f7d5b] shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className={excluded ? 'text-text-muted line-through' : on ? 'text-text-muted line-through' : 'text-text-secondary'}>{it.label}</span>
+                                {it.hint && <span className="text-[11px] text-text-muted"> ({it.hint})</span>}
+                                {it.age40 && <span className="ml-1 text-[10px] font-semibold px-1 py-0.5 rounded bg-[#eef2f7] text-[#3f5a76] align-middle">age 40+</span>}
+                              </div>
+                              {!readOnly && (
+                                <button onClick={() => toggleExclude(rec, it.id)} title={excluded ? 'Mark as applicable' : 'Not applicable'} className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${excluded ? 'border-[#cfe4d8] text-[#2f7d5b] hover:bg-[#eef5f1]' : 'border-border-light text-text-muted hover:bg-canvas opacity-0 group-hover:opacity-100'}`}>{excluded ? 'Applies' : 'N/A'}</button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -205,7 +261,7 @@ export default function OffboardingClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Offboarding</h1>
-          <p className="text-sm text-text-muted mt-0.5">{rows.length} separation{rows.length === 1 ? '' : 's'} · checklist from the HR Compliance Manual</p>
+          <p className="text-sm text-text-muted mt-0.5">{rows.length} separation{rows.length === 1 ? '' : 's'} · plain-language checklist from the HR Compliance Manual</p>
         </div>
         {!readOnly && <button onClick={() => setShowAdd(true)} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Start offboarding</button>}
       </header>
@@ -218,9 +274,9 @@ export default function OffboardingClient() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {rows.map(r => {
-              const done = checkedCount(r.checklist);
-              const pct = Math.round((done / OFFBOARDING_ITEM_COUNT) * 100);
-              const status = offboardingStatus(r.checklist);
+              const { done, total } = activeProgress(r);
+              const pct = total ? Math.round((done / total) * 100) : 0;
+              const status = offboardingStatus(r);
               return (
                 <button key={r.id} onClick={() => setSelId(r.id)} className="bg-white border border-border rounded-card p-5 text-left shadow-sm hover:shadow-md hover:border-border-light transition-all">
                   <div className="flex items-start justify-between gap-2">
@@ -236,7 +292,7 @@ export default function OffboardingClient() {
                   </div>
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-[11px] mb-1">
-                      <span className="text-text-muted">{done}/{OFFBOARDING_ITEM_COUNT} steps</span>
+                      <span className="text-text-muted">{done}/{total} steps</span>
                       <span className="text-text-muted">{pct}%</span>
                     </div>
                     <div className="h-2 rounded-full bg-[#eee7da] overflow-hidden">
@@ -280,6 +336,24 @@ export default function OffboardingClient() {
                 <select value={form.separation_type} onChange={e => setForm(f => ({ ...f, separation_type: e.target.value }))} className={input + ' bg-white'}>
                   {SEPARATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Date of birth</label>
+                <input type="date" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Hire date</label>
+                <input type="date" value={form.hire_date} onChange={e => setForm(f => ({ ...f, hire_date: e.target.value }))} className={input} />
+              </div>
+              {form.dob && form.separation_date && (
+                <div className="col-span-2 text-[11px] text-text-muted -mt-1">Age at separation: <b>{ageAt(form.dob, form.separation_date)}</b>{ageAt(form.dob, form.separation_date)! < 40 ? ' — age-40 steps will be pre-marked N/A' : ' — age-40 steps will apply'}</div>
+              )}
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.offer_severance} onChange={e => setForm(f => ({ ...f, offer_severance: e.target.checked }))} className="w-4 h-4 accent-[#c9a24a]" />
+                  <span className="font-semibold text-text-secondary">Offering severance</span>
+                  <span className="text-text-muted text-xs">— leave off to hide the severance section</span>
+                </label>
               </div>
               <div className="col-span-2">
                 <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Prepared by</label>

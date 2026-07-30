@@ -1,73 +1,177 @@
 // Canonical separation / offboarding checklist, built from the LITSON PLLC HR
-// Compliance & Risk Management Manual. Shared by the Offboarding tracker (tiles)
-// and kept in step with the HR Forms "Separation / Offboarding Checklist" template.
+// Compliance & Risk Management Manual — written in plain HR language. Shared by
+// the Offboarding tracker (tiles) and the HR Forms printable template.
 
-export interface ChecklistItem { id: string; label: string }
-export interface ChecklistSection { key: string; heading: string; chapter: string; items: ChecklistItem[] }
-
-const S = (key: string, heading: string, chapter: string, labels: string[]): ChecklistSection => ({
-  key, heading, chapter, items: labels.map((label, i) => ({ id: `${key}-${i + 1}`, label })),
-});
+export interface ChecklistItem {
+  id: string;
+  label: string;          // plain-language action
+  hint?: string;          // short reference (form #, statute, chapter) — small print
+  age40?: boolean;        // only relevant when the employee is 40 or older
+}
+export interface ChecklistSection {
+  key: string;
+  heading: string;
+  chapter: string;
+  items: ChecklistItem[];
+  severance?: boolean;    // whole section only applies when severance is offered
+}
 
 export const OFFBOARDING_CHECKLIST: ChecklistSection[] = [
-  S('before', 'Before the separation', 'Chapters 9–11', [
-    'Correct separation type classified (determines documentation, benefits, severance eligibility and reporting).',
-    'Pre-Termination Risk Assessment (Form B1) completed and reviewed by at least two people (manager + Human Resources).',
-    'Stated reason documented contemporaneously in the personnel file, predating any termination discussion.',
-    'Internal reason matches what will appear on the LB-0489 and any unemployment response.',
-    'Comparable conduct handled consistently (documented and treated the same as prior cases).',
-    'Counsel review completed where required: a reduction affecting two or more employees, severance above the standard formula, or heightened risk.',
-    "Timing reviewed — avoid separating right after a complaint, accommodation request, leave, or workers' compensation claim.",
-    'If resignation: obtained in writing.',
-    'Employees age 40 and older: enhanced OWBPA review process applied (Chapter 11).',
-  ]),
-  S('finalpay', 'Final pay & required forms', 'Chapters 4, 13', [
-    'LB-0489 Separation Notice completed in advance and provided within 24 hours of separation (reason consistent with the file).',
-    'Separation letter prepared; stated reason matches the LB-0489 and personnel file.',
-    'Final wages scheduled — next regular payday or 21 days after separation, whichever is later (Tenn. Code Ann. § 50-2-103(g)).',
-    'Unlimited PTO: confirm no balance payout is owed at separation.',
-    'Child support / garnishment issuing agency notified promptly, where applicable.',
-  ]),
-  S('severance', 'Severance (if applicable)', 'Chapters 11–12', [
-    'Severance paid as a lump sum (preserves unemployment eligibility; § 50-7-303(a)(12)).',
-    'Severance release meets the seven requirements (Chapter 11).',
-    'OWBPA disclosures for employees age 40 and older (consideration and revocation periods; Group Disclosure Chart D3 for group programs).',
-    'Counsel approved the release before use.',
-  ]),
-  S('benefits', 'Benefits upon separation', 'Chapter 14', [
-    'Health-coverage notice provided — No Continuation (E1) or COBRA Available (E2).',
-    'Certificate of Prior Coverage (E3) issued where applicable.',
-    'Retirement / benefits vesting reviewed (ERISA § 510 — not separating to prevent vesting).',
-  ]),
-  S('meeting', 'The separation meeting', 'Chapter 15', [
-    'LB-0489 handed to the employee at the meeting.',
-    'Separation letter provided.',
-    'Return of firm property collected: laptop/computer, phone, keys, access/building cards, credit cards, documents, files.',
-    'Accounts and access deactivated: email, internal systems, building access, remote access.',
-    'Final pay and benefits transition explained.',
-  ]),
-  S('files', 'Offboarding & files', 'Chapters 16–17', [
-    'Exit interview offered / conducted (16.2).',
-    'Unemployment-response owner assigned; stated reason matches every document.',
-    'Official personnel file assembled; no separate manager notes retained outside the file.',
-    'Medical / accommodation records kept in the separate confidential file (not the personnel file).',
-  ]),
+  {
+    key: 'before', heading: 'Before the separation', chapter: 'Chapters 9–11',
+    items: [
+      { id: 'before-1', label: 'Decide the type of separation (resignation, termination for performance, misconduct, layoff, or mutual).', hint: 'This sets which forms, benefits, and pay rules apply.' },
+      { id: 'before-2', label: 'Fill out the Pre-Termination Risk Review (Form B1) and have at least two people review it — the manager and HR.' },
+      { id: 'before-3', label: 'Write the real reason for the separation in the personnel file, dated — before you talk to the employee about it.' },
+      { id: 'before-4', label: 'Use the same reason everywhere: the file, the LB-0489 form, and any unemployment claim answer.' },
+      { id: 'before-5', label: "Check you've handled similar situations the same way before (and that it's written down)." },
+      { id: 'before-6', label: "Have a lawyer review first if you're letting go 2 or more people at once, paying more severance than usual, or the situation feels risky." },
+      { id: 'before-7', label: 'Check the timing — avoid separating right after the employee filed a complaint, asked for an accommodation, took leave, or filed a workers’ comp claim.' },
+      { id: 'before-8', label: 'If the employee is resigning, get it in writing.' },
+      { id: 'before-9', label: 'If the employee is 40 or older and getting severance, use the extra age-related review steps (more time to sign, right to cancel).', hint: 'OWBPA — Chapter 11.', age40: true },
+    ],
+  },
+  {
+    key: 'finalpay', heading: 'Final pay & required forms', chapter: 'Chapters 4, 13',
+    items: [
+      { id: 'finalpay-1', label: 'Fill out the LB-0489 Separation Notice ahead of time and give it to the employee within 24 hours of their last day.' },
+      { id: 'finalpay-2', label: 'Write the separation letter — the reason must match the LB-0489 and the file.' },
+      { id: 'finalpay-3', label: 'Schedule the final paycheck — by the next regular payday or 21 days after the last day, whichever is later.', hint: 'Tenn. Code Ann. § 50-2-103(g).' },
+      { id: 'finalpay-4', label: 'With unlimited PTO, confirm there’s no leftover PTO to pay out.' },
+      { id: 'finalpay-5', label: 'If wages were being garnished (child support, etc.), notify that agency promptly.' },
+    ],
+  },
+  {
+    key: 'severance', heading: 'Severance', chapter: 'Chapters 11–12', severance: true,
+    items: [
+      { id: 'severance-1', label: 'Pay severance as a single lump sum — this protects the employee’s unemployment eligibility.', hint: '§ 50-7-303(a)(12).' },
+      { id: 'severance-2', label: 'Make sure the severance agreement includes all seven required parts.', hint: 'Chapter 11.' },
+      { id: 'severance-3', label: 'For employees 40 or older, include the age-related disclosures and give them the full time to consider and to cancel.', hint: 'OWBPA; Group Disclosure Chart D3 for group layoffs.', age40: true },
+      { id: 'severance-4', label: 'Have a lawyer approve the agreement before the employee signs.' },
+    ],
+  },
+  {
+    key: 'benefits', heading: 'Benefits', chapter: 'Chapter 14',
+    items: [
+      { id: 'benefits-1', label: "Give the right health-coverage notice — 'No Continuation' (E1) or 'COBRA Available' (E2)." },
+      { id: 'benefits-2', label: 'Give a Certificate of Prior Coverage (E3) if it applies.' },
+      { id: 'benefits-3', label: 'Check retirement and benefits vesting — never separate someone just to stop their benefits from vesting.', hint: 'ERISA § 510.' },
+    ],
+  },
+  {
+    key: 'meeting', heading: 'The separation meeting', chapter: 'Chapter 15',
+    items: [
+      { id: 'meeting-1', label: 'Hand the LB-0489 to the employee during the meeting.' },
+      { id: 'meeting-2', label: 'Give them the separation letter.' },
+      { id: 'meeting-3', label: 'Collect firm property: laptop, phone, keys, access/building cards, credit cards, documents, and files.' },
+      { id: 'meeting-4', label: 'Turn off all access: email, internal systems, building access, and remote login.' },
+      { id: 'meeting-5', label: 'Explain their final pay and what happens to their benefits.' },
+    ],
+  },
+  {
+    key: 'files', heading: 'Wrap-up & files', chapter: 'Chapters 16–17',
+    items: [
+      { id: 'files-1', label: 'Offer (or hold) an exit interview.' },
+      { id: 'files-2', label: 'Assign someone to handle any unemployment claim — the reason must match every document.' },
+      { id: 'files-3', label: "Put together the official personnel file — don't keep separate manager notes on the side." },
+      { id: 'files-4', label: 'Keep any medical or accommodation records in the separate confidential file, not the personnel file.' },
+    ],
+  },
 ];
 
 export const OFFBOARDING_ITEMS = OFFBOARDING_CHECKLIST.flatMap(s => s.items);
-export const OFFBOARDING_ITEM_COUNT = OFFBOARDING_ITEMS.length;
 
 export const SEPARATION_TYPES = [
   'Voluntary resignation', 'Performance termination', 'Misconduct termination',
   'Immediate termination', 'Layoff / reduction', 'Mutual separation',
 ];
 
-export function checkedCount(checklist: Record<string, boolean> | null | undefined): number {
-  if (!checklist) return 0;
-  return OFFBOARDING_ITEMS.reduce((n, it) => n + (checklist[it.id] ? 1 : 0), 0);
+// ---- Applicability helpers (age + tenure) ----
+
+function toDate(s: any): Date | null {
+  if (!s) return null;
+  const d = new Date(String(s).slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? null : d;
 }
-export function offboardingStatus(checklist: Record<string, boolean> | null | undefined): 'Complete' | 'In progress' | 'Not started' {
-  const n = checkedCount(checklist);
-  if (n >= OFFBOARDING_ITEM_COUNT) return 'Complete';
-  return n > 0 ? 'In progress' : 'Not started';
+// Age on a given date (defaults to today) — used for the age-40 rules.
+export function ageAt(dob: any, onDate?: any): number | null {
+  const b = toDate(dob); if (!b) return null;
+  const d = toDate(onDate) ?? new Date();
+  let age = d.getFullYear() - b.getFullYear();
+  const m = d.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && d.getDate() < b.getDate())) age--;
+  return age;
+}
+export function tenure(hireDate: any, sepDate?: any): { years: number; months: number } | null {
+  const h = toDate(hireDate); if (!h) return null;
+  const d = toDate(sepDate) ?? new Date();
+  let months = (d.getFullYear() - h.getFullYear()) * 12 + (d.getMonth() - h.getMonth());
+  if (d.getDate() < h.getDate()) months--;
+  if (months < 0) months = 0;
+  return { years: Math.floor(months / 12), months: months % 12 };
+}
+export function tenureLabel(hireDate: any, sepDate?: any): string {
+  const t = tenure(hireDate, sepDate); if (!t) return '';
+  const parts = [];
+  if (t.years) parts.push(`${t.years} yr${t.years === 1 ? '' : 's'}`);
+  parts.push(`${t.months} mo`);
+  return parts.join(' ');
+}
+
+// Age-related steps to pre-mark N/A when the employee is under 40 at separation.
+export function defaultExcluded(dob: any, separationDate?: any): Record<string, boolean> {
+  const ex: Record<string, boolean> = {};
+  const age = ageAt(dob, separationDate);
+  if (age != null && age < 40) for (const it of OFFBOARDING_ITEMS) if (it.age40) ex[it.id] = true;
+  return ex;
+}
+
+// ---- Progress / status (respecting exclusions + severance toggle) ----
+
+export interface OffboardingLike {
+  checklist?: Record<string, boolean> | null;
+  excluded?: Record<string, boolean> | null;
+  offer_severance?: boolean | null;
+}
+export function isItemExcluded(rec: OffboardingLike, section: ChecklistSection, item: ChecklistItem): boolean {
+  if (rec.excluded && rec.excluded[item.id]) return true;
+  if (section.severance && !rec.offer_severance) return true;
+  return false;
+}
+export function activeProgress(rec: OffboardingLike): { done: number; total: number } {
+  let done = 0, total = 0;
+  for (const s of OFFBOARDING_CHECKLIST) for (const it of s.items) {
+    if (isItemExcluded(rec, s, it)) continue;
+    total++;
+    if (rec.checklist && rec.checklist[it.id]) done++;
+  }
+  return { done, total };
+}
+export function offboardingStatus(rec: OffboardingLike): 'Complete' | 'In progress' | 'Not started' {
+  const { done, total } = activeProgress(rec);
+  if (total > 0 && done >= total) return 'Complete';
+  return done > 0 ? 'In progress' : 'Not started';
+}
+
+// Plain-language printable body for the HR Forms template (kept in step).
+export function offboardingTemplateBody(): string {
+  const lines: string[] = [
+    'SEPARATION / OFFBOARDING CHECKLIST',
+    'Built from the LITSON PLLC HR Compliance & Risk Management Manual — in plain language.',
+    '',
+    'Employee:  [NAME]',
+    'Position:  [TITLE]',
+    'Manager:  [MANAGER]',
+    'Separation date:  [DATE]',
+    'Type of separation:  [Voluntary resignation / Performance termination / Misconduct termination / Immediate termination / Layoff-reduction / Mutual separation]',
+    'Prepared by:  [PREPARED BY]',
+    '',
+  ];
+  for (const s of OFFBOARDING_CHECKLIST) {
+    lines.push(`${s.heading.toUpperCase()} — ${s.chapter}${s.severance ? ' (only if offering severance)' : ''}`);
+    for (const it of s.items) lines.push(`☐  ${it.label}${it.hint ? `  (${it.hint})` : ''}`);
+    lines.push('');
+  }
+  lines.push('Notes:', '[NOTES]', '', 'Completed by:  [PREPARED BY]        Date:  [COMPLETED DATE]');
+  return lines.join('\n');
 }
