@@ -12,6 +12,20 @@ export default function HrFormsClient() {
   const [body, setBody] = useState(HR_FORMS[0].body);
   const [saved, setSaved] = useState<Record<string, SavedForm>>({});
   const [savedName, setSavedName] = useState('');
+  const [fills, setFills] = useState<Record<string, string>>({});
+
+  // Detect the [bracketed] fill-in fields still present in the form text.
+  const fields = Array.from(new Set(body.match(/\[[^\]]+\]/g) ?? []));
+  function applyFills() {
+    let next = body, n = 0;
+    for (const token of fields) {
+      const v = (fills[token] ?? '').trim();
+      if (v) { next = next.split(token).join(v); n++; }
+    }
+    if (!n) { showToast('Type into a field first'); return; }
+    setBody(next); setFills({});
+    showToast(`Filled ${n} field${n > 1 ? 's' : ''}`);
+  }
 
   useEffect(() => {
     try { const raw = localStorage.getItem('litson_hr_forms'); if (raw) setSaved(JSON.parse(raw)); } catch { /* ignore */ }
@@ -99,6 +113,28 @@ export default function HrFormsClient() {
               <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
               <input value={title} onChange={e => setTitle(e.target.value)} className={input} />
             </div>
+            {fields.length > 0 && (
+              <div className="border border-border-light rounded-ctrl p-3 bg-[#fbf7ee]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gold-muted">Fill-in fields ({fields.length})</span>
+                  <button onClick={applyFills} className="text-[11px] font-semibold text-white bg-ink px-2.5 py-1 rounded-ctrl hover:bg-ink-dark">Apply to form</button>
+                </div>
+                <div className="space-y-2 max-h-64 overflow-auto">
+                  {fields.map(token => {
+                    const long = token.length > 32;
+                    return (
+                      <div key={token}>
+                        <label className="block text-[11px] font-semibold text-litred-alt mb-0.5 truncate" title={token}>{token}</label>
+                        {long
+                          ? <textarea value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} rows={2} placeholder="Replace with your text…" className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-[12px] focus:outline-none focus:border-ink resize-y" />
+                          : <input value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} placeholder="Value…" className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-text-muted mt-1.5">Type values, then Apply — they replace the [brackets] in the form. Save or download when done.</p>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Form text — edit freely</label>
               <textarea value={body} onChange={e => setBody(e.target.value)} rows={20} className={input + ' resize-y text-[12.5px] leading-[1.5] font-mono'} />
