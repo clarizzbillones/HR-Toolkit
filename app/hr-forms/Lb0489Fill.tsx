@@ -97,15 +97,27 @@ export default function Lb0489Fill() {
     });
   }
 
-  // Pre-render Alex's typed signature on first load; offer a saved signature.
+  // Pre-render Alex's typed signature on first load; load saved signatures from
+  // the toolkit (shared across devices) plus this browser's last one.
   const [savedSig, setSavedSig] = useState('');
+  const [serverSigs, setServerSigs] = useState<{ name: string; image: string }[]>([]);
   useEffect(() => {
     try { const s = localStorage.getItem('litson_lb0489_sig'); if (s) setSavedSig(s); } catch { /* ignore */ }
+    fetch('/api/signatures').then(r => r.json()).then(d => setServerSigs(d.signatures ?? [])).catch(() => {});
     setF(p => p.signatureImage ? p : { ...p, signatureImage: typedToImage(p.signerName) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   function setTypedName(v: string) { setF(p => ({ ...p, signerName: v, signatureImage: typedToImage(v) })); }
-  function saveSig() { if (!f.signatureImage) return; try { localStorage.setItem('litson_lb0489_sig', f.signatureImage); setSavedSig(f.signatureImage); showToast('Signature saved'); } catch { /* ignore */ } }
+  async function saveSig() {
+    if (!f.signatureImage) return;
+    try { localStorage.setItem('litson_lb0489_sig', f.signatureImage); setSavedSig(f.signatureImage); } catch { /* ignore */ }
+    try {
+      const res = await fetch('/api/signatures', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: f.signerName.trim() || 'Signature', image: f.signatureImage }) });
+      const d = await res.json();
+      if (d.signatures) setServerSigs(d.signatures);
+      showToast(`Saved ${f.signerName || 'signature'} to the toolkit`);
+    } catch { showToast('Saved on this device'); }
+  }
 
   // The government PDF expects mm/dd/yyyy; the date pickers give ISO — convert.
   function toMdy(iso: string) {
@@ -160,8 +172,9 @@ export default function Lb0489Fill() {
         <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gold-muted pt-2">Item 6 — Pay after separation</div>
         <Radio label="Employee received" value={f.received} onChange={v => set('received', v)} options={['None', 'Wages in Lieu of Notice', 'Severance Pay']} />
         {f.received !== 'None' && <Field label="Amount ($)" value={f.item6Amount} onChange={v => set('item6Amount', v)} />}
-        {f.received !== 'None' && <Field label="Period from" value={f.item6From} onChange={v => set('item6From', v)} type="date" />}
-        {f.received !== 'None' && <Field label="Period to" value={f.item6To} onChange={v => set('item6To', v)} type="date" col={2} />}
+        {f.received !== 'None' && <div className="col-span-2 text-[11px] text-text-muted -mt-1">These dates are the period the pay <b>covers</b> — not the employment dates. Employment dates go in “Last employed — From / To” above.</div>}
+        {f.received !== 'None' && <Field label="Pay covers — from" value={f.item6From} onChange={v => set('item6From', v)} type="date" />}
+        {f.received !== 'None' && <Field label="Pay covers — to" value={f.item6To} onChange={v => set('item6To', v)} type="date" col={2} />}
 
         <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gold-muted pt-2">Employer</div>
         <Field label="Employer name" value={f.employerName} onChange={v => set('employerName', v)} />
@@ -178,7 +191,10 @@ export default function Lb0489Fill() {
             {(['type', 'draw'] as const).map(m => (
               <button key={m} type="button" onClick={() => setSigMode(m)} className={`text-xs font-semibold px-3 py-1.5 rounded-ctrl border ${sigMode === m ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:border-ink'}`}>{m === 'type' ? 'Type name' : 'Draw'}</button>
             ))}
-            {savedSig && <button type="button" onClick={() => set('signatureImage', savedSig)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Use saved signature</button>}
+            {serverSigs.map(s => (
+              <button key={s.name} type="button" onClick={() => setF(p => ({ ...p, signatureImage: s.image, signerName: s.name }))} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Use {s.name}</button>
+            ))}
+            {savedSig && !serverSigs.length && <button type="button" onClick={() => set('signatureImage', savedSig)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Use saved signature</button>}
             {f.signatureImage && <button type="button" onClick={saveSig} className="text-xs font-semibold text-[#2f7d5b] hover:underline">💾 Save this signature</button>}
             {f.signatureImage && <button type="button" onClick={() => set('signatureImage', '')} className="text-xs text-litred-alt">Clear</button>}
           </div>
@@ -198,7 +214,7 @@ export default function Lb0489Fill() {
         </button>
         <button onClick={() => setF({ ...DEFAULTS })} className="text-sm font-semibold text-text-muted hover:text-text-primary px-3 py-2.5">Reset</button>
       </div>
-      <p className="text-[11px] text-text-faint mt-2">The signature above is stamped onto the official PDF. The downloaded PDF stays fillable so you can adjust before printing.</p>
+      <p className="text-[11px] text-text-faint mt-2">The signature above is stamped onto the official PDF. The downloaded copy is finalized (flattened) so it can’t be edited outside the toolkit — make changes here and re-download.</p>
     </div>
   );
 }

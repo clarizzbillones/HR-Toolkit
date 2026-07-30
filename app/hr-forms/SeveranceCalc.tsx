@@ -16,6 +16,7 @@ const DEFAULTS = {
   name: '', position: '', hireDate: '', sepDate: '', age: '', dob: '',
   annualSalary: '', tier: '1', serviceYears: '', serviceMonths: '', riskEnhancement: false,
   cobraMonths: '', transitionStipend: '', notes: '',
+  preparerName: '', preparerDate: '', approverName: '', approverEmail: '',
 };
 interface Emp { name: string; position: string; dob: string; start_date: string; salary: string }
 
@@ -37,6 +38,9 @@ export default function SeveranceCalc() {
   const [f, setF] = useState({ ...DEFAULTS });
   const set = (k: keyof typeof DEFAULTS, v: any) => setF(p => ({ ...p, [k]: v }));
   const [employees, setEmployees] = useState<Emp[]>([]);
+  const [showApproval, setShowApproval] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentInfo, setSentInfo] = useState<{ id: string; url: string } | null>(null);
 
   useEffect(() => { fetch('/api/staff/basic').then(r => r.json()).then(d => setEmployees(d.employees ?? [])).catch(() => {}); }, []);
 
@@ -96,19 +100,22 @@ export default function SeveranceCalc() {
     ['Rounded up to whole weeks', `${finalWeeks} wk`],
     ['Risk enhancement', f.riskEnhancement ? '× 1.5 (authorized)' : 'None'],
   ];
+  const nonCash = [
+    f.cobraMonths ? `COBRA premium subsidy: ${f.cobraMonths} month(s)` : '',
+    f.transitionStipend ? `Career transition stipend: ${money(parseFloat(f.transitionStipend) || 0)}` : '',
+  ].filter(Boolean);
 
-  function printWorksheet() {
-    const win = window.open('', '_blank'); if (!win) return;
+  // The branded worksheet as HTML — reused by print and the approval email/page.
+  function buildWorksheetHtml(opts: { forApproval?: boolean } = {}): string {
     const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
-    const line = (l: string, v: string, strong = false) => `<div style="display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #efe8db"><span>${esc(l)}</span><span style="font-weight:${strong ? 700 : 600};color:#1b2a3d">${esc(v)}</span></div>`;
-    const nonCash = [
-      f.cobraMonths ? `COBRA premium subsidy: ${esc(f.cobraMonths)} month(s)` : '',
-      f.transitionStipend ? `Career transition stipend: ${money(parseFloat(f.transitionStipend) || 0)}` : '',
-    ].filter(Boolean);
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Severance Worksheet — ${esc(f.name)}</title>
-<style>@page{size:letter;margin:0.55in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:24px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:13.5px;line-height:1.55}</style></head><body>
-<div style="max-width:680px;margin:0 auto">
+    const line = (l: string, v: string) => `<div style="display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #efe8db"><span>${esc(l)}</span><span style="font-weight:600;color:#1b2a3d">${esc(v)}</span></div>`;
+    const sigBlock = opts.forApproval
+      ? `<div style="margin-top:18px"><b>Prepared by:</b> ${esc(f.preparerName) || '—'}${f.preparerDate ? ` &middot; ${esc(f.preparerDate)}` : ''}</div>
+         <div style="margin-top:6px;color:#8a8474">Approval is captured electronically below.</div>`
+      : `<div style="margin-top:18px">Prepared by ${esc(f.preparerName) ? `<b>${esc(f.preparerName)}</b>` : '______________________________'}   Date __________</div>
+         <div style="margin-top:12px">Approved by ______________________________   Date __________</div>`;
+    return `<div style="max-width:680px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;font-size:13.5px;line-height:1.55">
   <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px;margin-bottom:16px">
     <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
     <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
@@ -126,12 +133,44 @@ export default function SeveranceCalc() {
   <div style="display:flex;justify-content:space-between;gap:16px;margin-top:12px;background:#1b2a3d;color:#fff;border-radius:8px;padding:12px 16px"><span style="font-weight:700">TOTAL SEVERANCE</span><span style="font-weight:700;font-size:18px;color:#e9cf94">${money(total)}</span></div>
   ${nonCash.length ? `<div style="font-weight:700;font-size:14.5px;margin:16px 0 4px">Non-cash components</div>${nonCash.map(n => `<div style="padding:3px 0">• ${esc(n)}</div>`).join('')}` : ''}
   ${f.notes ? `<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a8474">Notes / justification</div><div style="white-space:pre-wrap">${esc(f.notes)}</div></div>` : ''}
-  <div style="margin-top:18px">Prepared by ______________________________   Date __________</div>
-  <div style="margin-top:12px">Approved by ______________________________   Date __________</div>
+  ${sigBlock}
   <div style="margin-top:16px;padding-top:8px;border-top:1px solid #e6ddcd;font-size:10px;font-style:italic;color:#8a8474">Payment structure: lump sum. Under Tenn. Code Ann. § 50-7-303(a)(12), severance paid as salary continuation may disqualify the employee from unemployment benefits for the covered weeks; lump sum generally does not. Any deviation from the formula requires written justification and second approval.</div>
-</div>
-<script>window.onload=function(){window.print()}</script></body></html>`);
+</div>`;
+  }
+
+  function printWorksheet() {
+    const win = window.open('', '_blank'); if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Severance Worksheet — ${f.name}</title>
+<style>@page{size:letter;margin:0.55in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:24px}</style></head><body>${buildWorksheetHtml()}<script>window.onload=function(){window.print()}</script></body></html>`);
     win.document.close();
+  }
+
+  // Send the worksheet to an approver by email; they approve on the sign page.
+  async function sendForApproval() {
+    if (!f.approverName.trim()) { showToast('Add the approver’s name'); return; }
+    setSending(true);
+    try {
+      const signatories = [{ role: 'Approver', name: f.approverName.trim(), email: f.approverEmail.trim() }];
+      const pdfPayload = {
+        employee: f.name, position: f.position, hireDate: f.hireDate, sepDate: f.sepDate, age: f.age,
+        annualSalary: money(annual), tier: t.label, serviceLabel: `${f.serviceYears || 0} yr ${f.serviceMonths || 0} mo`,
+        rows, total: money(total), nonCash, notes: f.notes, preparerName: f.preparerName, preparerDate: f.preparerDate,
+      };
+      const res = await fetch('/api/hr-forms/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', title: `Severance Worksheet — ${f.name || 'employee'}`, body_html: buildWorksheetHtml({ forApproval: true }), note: `Please review and approve this severance calculation${f.preparerName ? `, prepared by ${f.preparerName}` : ''}.`, signatories,
+          attach_to_file: true, employee_name: f.name, category: 'Severance', pdf_payload: pdfPayload }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      setSentInfo({ id: d.id, url: d.url });
+      showToast(f.approverEmail ? 'Sent to the approver' : 'Created — copy the link to share');
+    } catch { showToast('Could not send'); }
+    finally { setSending(false); }
+  }
+  async function remindApprover() {
+    if (!sentInfo) return;
+    const res = await fetch('/api/hr-forms/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remind', id: sentInfo.id }) });
+    const d = await res.json();
+    showToast(res.ok ? (d.reminded ? 'Reminder sent' : 'Already approved / nothing pending') : (d.error || 'Failed'));
   }
 
   return (
@@ -208,7 +247,28 @@ export default function SeveranceCalc() {
         </div>
         {capped && <p className="text-[11px] text-[#b07d2a] mt-2">Tier cap applied — subtotal exceeded {t.cap} weeks.</p>}
         <button onClick={printWorksheet} className="mt-4 w-full bg-ink text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-ink-dark">⤓ Download worksheet (PDF)</button>
+        <button onClick={() => setShowApproval(s => !s)} className="mt-2 w-full bg-[#2f7d5b] text-white text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-[#276a4d]">✍ Send for approval</button>
         <button onClick={() => setF({ ...DEFAULTS })} className="mt-2 w-full text-sm font-semibold text-text-muted hover:text-text-primary py-2">Reset</button>
+
+        {showApproval && (
+          <div className="mt-3 border-t border-border-light pt-3 space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted">Prepared by (you)</div>
+            <input value={f.preparerName} onChange={e => set('preparerName', e.target.value)} placeholder="Your name" className={inputCls} />
+            <input type="date" value={f.preparerDate} onChange={e => set('preparerDate', e.target.value)} className={inputCls} />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted pt-1">Send to approver</div>
+            <input value={f.approverName} onChange={e => set('approverName', e.target.value)} placeholder="Approver name" className={inputCls} />
+            <input value={f.approverEmail} onChange={e => set('approverEmail', e.target.value)} placeholder="approver@litson.co" className={inputCls} />
+            <button onClick={sendForApproval} disabled={sending} className="w-full bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{sending ? 'Sending…' : 'Send for approval'}</button>
+            {sentInfo && (
+              <div className="bg-[#eef5f1] border border-[#cfe4d8] rounded-ctrl p-2.5 text-[11px]">
+                <div className="font-semibold text-[#2f7d5b] mb-1">Sent — approval link:</div>
+                <a href={sentInfo.url} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] break-all hover:underline">{sentInfo.url}</a>
+                <button onClick={remindApprover} className="mt-2 block text-[#3f6b8a] font-semibold hover:underline">🔔 Send reminder</button>
+                <div className="text-text-muted mt-1">Once approved, the signed worksheet is filed as a PDF under the employee.</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

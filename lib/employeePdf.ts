@@ -97,6 +97,26 @@ class Doc {
     this.para(v || '-', { size: 11.5, font: this.bold });
     this.y -= 4;
   }
+  // A label at the left with a right-aligned value, plus a hairline rule.
+  rowLV(label: string, value: string) {
+    this.need(18);
+    this.page.drawText(clean(label), { x: MARGIN, y: this.y, size: 11, font: this.reg, color: INK });
+    const v = clean(value);
+    const vw = this.bold.widthOfTextAtSize(v, 11);
+    this.page.drawText(v, { x: PAGE_W - MARGIN - vw, y: this.y, size: 11, font: this.bold, color: INK });
+    this.y -= 6;
+    this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_W - MARGIN, y: this.y }, thickness: 0.5, color: RULE });
+    this.y -= 11;
+  }
+  totalBox(value: string) {
+    this.need(38); this.y -= 4;
+    const h = 26, top = this.y;
+    this.page.drawRectangle({ x: MARGIN, y: top - h + 4, width: CONTENT_W, height: h, color: NAVY });
+    this.page.drawText('TOTAL SEVERANCE', { x: MARGIN + 12, y: top - h + 13, size: 11, font: this.bold, color: rgb(1, 1, 1) });
+    const v = clean(value); const vw = this.bold.widthOfTextAtSize(v, 15);
+    this.page.drawText(v, { x: PAGE_W - MARGIN - 12 - vw, y: top - h + 11, size: 15, font: this.bold, color: GOLD });
+    this.y = top - h - 8;
+  }
   async bytes() { return this.pdf.save(); }
 }
 
@@ -145,6 +165,35 @@ export async function coachingPdfDataUrl(row: any): Promise<string> {
   }
   d.gap(10);
   d.para('Signature confirms the conversation occurred and the employee received a copy. It does not indicate agreement.', { font: d.ital, size: 9.5, color: MUTED });
+  return dataUrl(await d.bytes());
+}
+
+// A branded PDF of the severance worksheet, stamped approved. `approver` carries
+// the e-approval details captured on the sign page.
+export async function severancePdfDataUrl(p: any, approver?: { name?: string; signature_name?: string | null; signed_at?: string | null }): Promise<string> {
+  const d = await Doc.create('Severance Calculation Worksheet (C1)', '');
+  d.label('Employee', String(p.employee ?? ''));
+  d.label('Position', String(p.position ?? ''));
+  d.label('Hire date', String(p.hireDate ?? '')); d.label('Separation date', String(p.sepDate ?? '')); d.label('Age', String(p.age ?? ''));
+  d.rule();
+  d.para('Inputs', { font: (d as any).bold, size: 13 }); d.gap(2);
+  d.rowLV('Annual base salary (base only)', String(p.annualSalary ?? ''));
+  d.rowLV('Tier', String(p.tier ?? ''));
+  d.rowLV('Length of service', String(p.serviceLabel ?? ''));
+  d.gap(6);
+  d.para('Calculation', { font: (d as any).bold, size: 13 }); d.gap(2);
+  for (const r of (Array.isArray(p.rows) ? p.rows : [])) d.rowLV(String(r[0]), String(r[1]));
+  d.totalBox(String(p.total ?? ''));
+  const nonCash = Array.isArray(p.nonCash) ? p.nonCash : [];
+  if (nonCash.length) { d.gap(6); d.para('Non-cash components', { font: (d as any).bold, size: 12 }); for (const n of nonCash) d.para(String(n), { indent: 14, bullet: true }); }
+  if (p.notes) { d.gap(8); d.para('NOTES / JUSTIFICATION', { font: (d as any).bold, size: 8, color: rgb(0.42, 0.4, 0.36) }); d.para(String(p.notes)); }
+  d.gap(12);
+  d.para(`Prepared by: ${p.preparerName || '—'}${p.preparerDate ? '  ·  ' + p.preparerDate : ''}`, { font: (d as any).bold, size: 11 });
+  const appName = approver?.signature_name || approver?.name || '';
+  const when = approver?.signed_at ? new Date(approver.signed_at).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' CT' : '';
+  d.gap(2);
+  d.para(`Approved by: ${appName || '—'}`, { font: (d as any).bold, size: 11, color: rgb(0.18, 0.49, 0.36) });
+  if (when) d.para(`Electronically approved ${when}`, { size: 9.5, color: rgb(0.42, 0.4, 0.36) });
   return dataUrl(await d.bytes());
 }
 

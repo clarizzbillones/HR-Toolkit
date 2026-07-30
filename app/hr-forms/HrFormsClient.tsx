@@ -58,11 +58,13 @@ export default function HrFormsClient() {
   function pickName(token: string, value: string) {
     setFills(prev => {
       const next: Record<string, string> = { ...prev, [token]: value };
+      // Only the primary (full/employee) name field drives the other fills.
+      const isFirst = /first\s*name/i.test(token);
       const emp = staff.find(e => String(e.name).toLowerCase() === value.trim().toLowerCase());
-      if (emp) for (const tok of fields) {
-        if (/\b(title|position)\b/i.test(tok)) next[tok] = emp.position || next[tok] || '';
-        else if (/address/i.test(tok)) next[tok] = emp.address || next[tok] || '';
-        else if (/first\s*name/i.test(tok)) next[tok] = String(emp.name).split(/\s+/)[0] || next[tok] || '';
+      if (!isFirst) for (const tok of fields) {
+        if (/\b(title|position)\b/i.test(tok)) { if (emp?.position) next[tok] = emp.position; }
+        else if (/address/i.test(tok)) { if (emp?.address) next[tok] = emp.address; }
+        else if (/first\s*name/i.test(tok)) next[tok] = value.trim().split(/\s+/)[0] || next[tok] || '';
       }
       return next;
     });

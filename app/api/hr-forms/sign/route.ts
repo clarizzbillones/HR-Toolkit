@@ -26,6 +26,34 @@ async function ensure() {
     signatories TEXT, sign_token TEXT UNIQUE, status TEXT DEFAULT 'Sent',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE hr_form_signatures ADD COLUMN IF NOT EXISTS attach_to_file BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE hr_form_signatures ADD COLUMN IF NOT EXISTS employee_name TEXT`;
+  await sql`ALTER TABLE hr_form_signatures ADD COLUMN IF NOT EXISTS category TEXT`;
+  await sql`ALTER TABLE hr_form_signatures ADD COLUMN IF NOT EXISTS pdf_payload TEXT`;
+}
+
+// On full approval, build a branded PDF and file it under the employee.
+async function attachIfNeeded(row: any) {
+  if (!row.attach_to_file) return;
+  try {
+    const { severancePdfDataUrl } = await import('@/lib/employeePdf');
+    const { attachPdfToEmployeeFile } = await import('@/lib/employeeFiles');
+    const payload = typeof row.pdf_payload === 'string' ? JSON.parse(row.pdf_payload) : row.pdf_payload;
+    const sigs = parseSigs(row.signatories);
+    const approver = sigs.find(s => /approver/i.test(s.role) && s.signed_at) ?? sigs.find(s => s.signed_at);
+    const dataUrl = await severancePdfDataUrl(payload, approver);
+    await attachPdfToEmployeeFile({
+      name: row.employee_name || payload?.employee || '',
+      category: row.category || 'Severance',
+      title: `${row.title || 'Severance Worksheet'} (approved)`,
+      docDate: payload?.sepDate || null,
+      attName: `${String(row.title || 'Severance-Worksheet').replace(/[^\w]+/g, '-')}.pdf`,
+      dataUrl,
+      sourceRef: `hrsign:${row.id}`,
+      summary: `Approved by ${approver?.signature_name || approver?.name || 'approver'}.`,
+      author: payload?.preparerName || '',
+    });
+  } catch { /* best-effort */ }
 }
 function publicRow(row: any) {
   // Strip emails from what the public sign page sees.
@@ -105,6 +133,7 @@ export async function POST(req: Request) {
         const emails = [...parseSigs(updated.signatories).map(s => s.email), HR_CC].filter(Boolean).filter((v, ix, a) => a.indexOf(v) === ix) as string[];
         if (emails.length) await sendMailAsApp(SENDER, emails[0], `Signed — ${updated.title}`, `<p>The form <b>${esc(updated.title)}</b> has been signed by all required signatories and is on file in the HR Toolkit.</p>`, emails.slice(1));
       } catch { /* best-effort */ }
+      await attachIfNeeded(updated);
     }
     return NextResponse.json({ ok: true, allSigned: done });
   }
@@ -122,8 +151,9 @@ export async function POST(req: Request) {
     const id = cuid();
     const token = cuid() + cuid();
     const note = String(b.note ?? '').trim() || 'Please review and sign within 24 hours of receipt.';
-    await sql`INSERT INTO hr_form_signatures (id, title, body_html, note, signatories, sign_token, status)
-      VALUES (${id}, ${title}, ${b.body_html ?? ''}, ${note}, ${JSON.stringify(signatories)}, ${token}, 'Sent')`;
+    await sql`INSERT INTO hr_form_signatures (id, title, body_html, note, signatories, sign_token, status, attach_to_file, employee_name, category, pdf_payload)
+      VALUES (${id}, ${title}, ${b.body_html ?? ''}, ${note}, ${JSON.stringify(signatories)}, ${token}, 'Sent',
+        ${!!b.attach_to_file}, ${b.employee_name ?? null}, ${b.category ?? null}, ${b.pdf_payload ? JSON.stringify(b.pdf_payload) : null})`;
     const [row] = await sql`SELECT * FROM hr_form_signatures WHERE id = ${id}` as any[];
     await emailSigners(req, row, false, false);
     const url = `${origin(req)}/hr-forms/sign/${token}`;

@@ -60,6 +60,23 @@ export async function upsertCoachingFile(profileId: string, c: any): Promise<boo
   return true;
 }
 
+// Attach an arbitrary PDF (data URL) to an employee's file, keyed by source_ref
+// so re-attaching updates rather than duplicates. Creates the profile if needed.
+export async function attachPdfToEmployeeFile(opts: { name: string; category: string; title: string; docDate?: string | null; attName: string; dataUrl: string; sourceRef: string; summary?: string; author?: string }): Promise<void> {
+  try {
+    await ensureFiles();
+    const profile = await findOrCreateProfileByName(opts.name);
+    if (!profile) return;
+    const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profile.id} AND source_ref = ${opts.sourceRef} LIMIT 1` as any[];
+    if (exists) {
+      await sql`UPDATE employee_files SET title = ${opts.title}, doc_date = ${opts.docDate ?? null}, summary = ${opts.summary ?? ''}, author = ${opts.author ?? ''}, attachment_name = ${opts.attName}, attachment_data = ${opts.dataUrl} WHERE id = ${exists.id}`;
+    } else {
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+        VALUES (${cuid()}, ${profile.id}, ${opts.category}, ${opts.title}, ${opts.docDate ?? null}, ${opts.summary ?? ''}, ${''}, ${''}, ${opts.author ?? ''}, ${opts.attName}, ${opts.dataUrl}, ${opts.sourceRef})`;
+    }
+  } catch { /* best-effort */ }
+}
+
 // Best-effort: when a coaching form is signed, make sure the signed PDF is on
 // file for that employee (creating the profile if needed).
 export async function syncCoachingToEmployeeFile(c: any): Promise<void> {

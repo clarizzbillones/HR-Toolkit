@@ -80,6 +80,8 @@ export async function POST(req: Request) {
   }
 
   try { form.updateFieldAppearances(); } catch { /* ignore */ }
+  // Flatten so the downloaded copy is final and not editable outside the toolkit.
+  try { form.flatten(); } catch { /* some viewers/fields may not flatten */ }
   const out = await doc.save();
   const name = String(b.name ?? 'form').replace(/[^\w]+/g, '-');
   return new NextResponse(Buffer.from(out), {
