@@ -26,10 +26,20 @@ export default function HrFormsClient() {
 
   // Detect the [bracketed] fill-in fields still present in the form text.
   const fields = Array.from(new Set(body.match(/\[[^\]]+\]/g) ?? []));
+  // A token is a date field if it mentions "date" (singular) or an mm/dd/yyyy hint.
+  const isDateToken = (t: string) => (/\bdate\b/i.test(t) && !/\bdates\b/i.test(t)) || /mm\/dd\/yyyy/i.test(t);
+  // Render an ISO date value as a friendly long date; pass anything else through.
+  function fmtMaybeDate(v: string) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      const d = new Date(v + 'T12:00:00');
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return v;
+  }
   function applyFills() {
     let next = body, n = 0;
     for (const token of fields) {
-      const v = (fills[token] ?? '').trim();
+      const v = fmtMaybeDate((fills[token] ?? '').trim());
       // Wrap the filled-in value so it renders bold in the preview / download.
       if (v) { next = next.split(token).join(`**${v}**`); n++; }
     }
@@ -253,13 +263,17 @@ export default function HrFormsClient() {
                 </div>
                 <div className="space-y-2 max-h-64 overflow-auto">
                   {fields.map(token => {
-                    const long = token.length > 32;
+                    const isDate = isDateToken(token);
+                    const long = !isDate && token.length > 32;
+                    const ctrl = 'w-full border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink';
                     return (
                       <div key={token}>
                         <label className="block text-[11px] font-semibold text-litred-alt mb-0.5 truncate" title={token}>{token}</label>
-                        {long
-                          ? <textarea value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} rows={2} placeholder="Replace with your text…" className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-[12px] focus:outline-none focus:border-ink resize-y" />
-                          : <input value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} placeholder="Value…" className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />}
+                        {isDate
+                          ? <input type="date" value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} className={ctrl} />
+                          : long
+                          ? <textarea value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} rows={2} placeholder="Replace with your text…" className={ctrl + ' text-[12px] resize-y'} />
+                          : <input value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} placeholder="Value…" className={ctrl} />}
                       </div>
                     );
                   })}

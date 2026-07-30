@@ -2,19 +2,32 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
+import { readFile } from 'fs/promises';
+import path from 'path';
+
+// Load the official template from the filesystem first (reliable on Vercel),
+// falling back to an HTTP fetch of the public asset.
+async function loadTemplate(req: Request): Promise<Buffer> {
+  for (const p of [path.join(process.cwd(), 'public', 'forms', 'lb0489.pdf'), path.join(process.cwd(), 'public/forms/lb0489.pdf')]) {
+    try { return await readFile(p); } catch { /* try next */ }
+  }
+  const origin = process.env.NEXTAUTH_URL || new URL(req.url).origin;
+  const res = await fetch(`${origin}/forms/lb0489.pdf`);
+  if (!res.ok) throw new Error(`fetch ${res.status}`);
+  const ct = res.headers.get('content-type') || '';
+  if (!/pdf|octet-stream/i.test(ct)) throw new Error(`unexpected content-type ${ct}`);
+  return Buffer.from(await res.arrayBuffer());
+}
 
 // Fill the OFFICIAL Tennessee LB-0489 PDF (kept at /public/forms/lb0489.pdf)
 // with the submitted values, preserving the exact government layout.
 export async function POST(req: Request) {
   const b = await req.json();
-  const origin = process.env.NEXTAUTH_URL || new URL(req.url).origin;
-  let bytes: ArrayBuffer;
+  let bytes: Buffer;
   try {
-    const res = await fetch(`${origin}/forms/lb0489.pdf`);
-    if (!res.ok) throw new Error(String(res.status));
-    bytes = await res.arrayBuffer();
-  } catch {
-    return NextResponse.json({ error: 'Could not load the LB-0489 template.' }, { status: 500 });
+    bytes = await loadTemplate(req);
+  } catch (e) {
+    return NextResponse.json({ error: `Could not load the LB-0489 template (${String(e).slice(0, 80)}).` }, { status: 500 });
   }
 
   const doc = await PDFDocument.load(bytes);
@@ -50,6 +63,21 @@ export async function POST(req: Request) {
   if (b.layoff === 'Temporary') setRadio('RadioButton5', 'Temporary');
   if (b.received === 'Wages in Lieu of Notice') setRadio('RadioButton6', 'Wages in Lieu of Notice');
   if (b.received === 'Severance Pay') setRadio('RadioButton7', 'Severance Pay');
+
+  // Stamp a signature image (drawn or typed) onto the signature line, page 2.
+  if (typeof b.signatureImage === 'string' && b.signatureImage.startsWith('data:image')) {
+    try {
+      const b64 = b.signatureImage.split(',')[1] ?? '';
+      const png = await doc.embedPng(Buffer.from(b64, 'base64'));
+      const page = doc.getPages()[1]; // the signature field sits on the 2nd page
+      if (page) {
+        const maxW = 190;
+        const w = Math.min(maxW, png.width);
+        const h = Math.min((png.height / png.width) * w, 38);
+        page.drawImage(png, { x: 50, y: 137, width: w, height: h });
+      }
+    } catch { /* skip signature if it can't be embedded */ }
+  }
 
   try { form.updateFieldAppearances(); } catch { /* ignore */ }
   const out = await doc.save();
