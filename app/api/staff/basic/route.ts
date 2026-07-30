@@ -9,6 +9,10 @@ import { sql } from '@/lib/db';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Make sure the address columns exist so the selects below don't fail.
+  for (const tbl of ['staff_directory', 'employee_profiles']) {
+    try { await sql.unsafe(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS address TEXT`); } catch { /* no table */ }
+  }
   const byName = new Map<string, any>();
   const add = (r: any) => {
     const nm = String(r.name ?? '').trim(); if (!nm) return;
@@ -24,7 +28,7 @@ export async function GET() {
       email: cur.email || r.email || '',
     });
   };
-  try { (await sql`SELECT name, position, dob, start_date, email FROM staff_directory` as any[]).forEach(add); } catch { /* no table */ }
+  try { (await sql`SELECT name, position, dob, start_date, email, address FROM staff_directory` as any[]).forEach(add); } catch { /* no table */ }
   try { (await sql`SELECT name, position, dob, start_date, salary, address, email FROM employee_profiles` as any[]).forEach(add); } catch { /* no table */ }
   const employees = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   return NextResponse.json({ employees });
