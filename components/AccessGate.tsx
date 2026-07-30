@@ -14,7 +14,8 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
   const restricted = !!me?.restricted;
   const sec = sectionForPath(pathname);
   // HR-admin-only sections are blocked for anyone who isn't an HR admin.
-  const hrBlocked = HR_ADMIN_SECTIONS.includes(sec) && !me?.isHrAdmin;
+  // The owner/access-admin always qualifies (never lock the owner out).
+  const hrBlocked = HR_ADMIN_SECTIONS.includes(sec) && !(me?.isHrAdmin || me?.isAdmin);
   const denied = hrBlocked || (restricted && !me!.sections.includes(sec));
   const target = restricted ? me!.sections[0] : (hrBlocked ? '/' : undefined);
 

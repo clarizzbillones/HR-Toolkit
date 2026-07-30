@@ -66,7 +66,8 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   }, []);
   const { me } = useAccess();
   const restricted = !!me?.restricted;
-  const hrAdmin = !!me?.isHrAdmin;
+  // The owner/access-admin always counts as an HR admin (never lock the owner out).
+  const hrAdmin = !!(me?.isHrAdmin || me?.isAdmin);
   const orderedItems = (order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems)
     // Hide restricted-user sections, and hide HR-admin-only sections from anyone
     // who isn't an HR admin (even full-access users).

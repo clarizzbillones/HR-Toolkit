@@ -3,11 +3,12 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { isHrAdmin } from '@/lib/access';
+import { isHrAdmin, isAccessAdmin } from '@/lib/access';
 
 async function requireHrAdmin() {
   const session = await getServerSession(authOptions);
-  return isHrAdmin(session?.user?.email, (session?.user as any)?.role);
+  const email = session?.user?.email; const role = (session?.user as any)?.role;
+  return isHrAdmin(email, role) || isAccessAdmin(email, role);
 }
 const FORBIDDEN = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
