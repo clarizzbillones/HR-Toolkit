@@ -1,0 +1,298 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useToast } from '@/components/Toast';
+import { useAccess } from '@/components/AccessProvider';
+import { OFFBOARDING_CHECKLIST, OFFBOARDING_ITEM_COUNT, SEPARATION_TYPES, checkedCount, offboardingStatus } from '@/lib/offboarding';
+
+interface Rec {
+  id: string; name: string; position: string | null; manager: string | null;
+  separation_date: string | null; separation_type: string | null; prepared_by: string | null;
+  checklist: Record<string, boolean>; notes: string | null;
+}
+interface Emp { name: string; position: string | null }
+
+const STATUS_PILL: Record<string, string> = {
+  'Complete': 'bg-[#eef5f1] text-[#2f7d5b]', 'In progress': 'bg-[#f7efe1] text-[#b07d2a]', 'Not started': 'bg-[#f1ece3] text-[#8b8478]',
+};
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return '';
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+export default function OffboardingClient() {
+  const { showToast } = useToast();
+  const { me } = useAccess(); const readOnly = !!me?.restricted;
+  const [rows, setRows] = useState<Rec[]>([]);
+  const [employees, setEmployees] = useState<Emp[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '' });
+
+  const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
+
+  useEffect(() => { void load(); }, []);
+  async function load() {
+    setLoading(true);
+    try {
+      const d = await fetch('/api/offboarding').then(r => r.json());
+      setRows(d.rows ?? []); setEmployees(d.employees ?? []);
+    } catch { showToast('Could not load'); }
+    finally { setLoading(false); }
+  }
+
+  const selected = rows.find(r => r.id === selId) ?? null;
+
+  async function addRecord() {
+    if (!form.name.trim()) { showToast('Pick or type an employee'); return; }
+    const res = await fetch('/api/offboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Failed'); return; }
+    setRows(p => [d.row, ...p]); setShowAdd(false);
+    setForm({ name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '' });
+    setSelId(d.row.id); showToast('Offboarding started');
+  }
+
+  // Debounced-ish patch: update local immediately, persist in background.
+  async function patch(id: string, changes: Partial<Rec>) {
+    setRows(p => p.map(r => r.id === id ? { ...r, ...changes } as Rec : r));
+    try {
+      const res = await fetch('/api/offboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...changes }) });
+      const d = await res.json();
+      if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
+    } catch { showToast('Save failed'); }
+  }
+  function toggleItem(rec: Rec, itemId: string) {
+    if (readOnly) return;
+    const checklist = { ...rec.checklist, [itemId]: !rec.checklist[itemId] };
+    patch(rec.id, { checklist });
+  }
+  async function remove(rec: Rec) {
+    if (!confirm(`Delete offboarding for ${rec.name}?`)) return;
+    await fetch(`/api/offboarding?id=${rec.id}`, { method: 'DELETE' });
+    setRows(p => p.filter(r => r.id !== rec.id)); setSelId(null); showToast('Deleted');
+  }
+
+  function pickEmployee(name: string) {
+    const emp = employees.find(e => e.name === name);
+    setForm(f => ({ ...f, name, position: emp?.position ?? f.position }));
+  }
+
+  function printDoc(rec: Rec) {
+    const win = window.open('', '_blank'); if (!win) return;
+    const done = checkedCount(rec.checklist);
+    const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
+    const sections = OFFBOARDING_CHECKLIST.map(s => `
+      <div style="margin-top:16px">
+        <div style="font-size:12px;font-weight:700;color:#1b2a3d">${esc(s.heading)} <span style="font-weight:400;color:#8a8474">· ${esc(s.chapter)}</span></div>
+        ${s.items.map(it => `<div style="display:flex;gap:8px;margin-top:5px;font-size:13px;line-height:1.45"><span style="color:${rec.checklist[it.id] ? '#2f7d5b' : '#b9b1a2'};font-weight:700">${rec.checklist[it.id] ? '☑' : '☐'}</span><span>${esc(it.label)}</span></div>`).join('')}
+      </div>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offboarding — ${esc(rec.name)}</title>
+<style>@page{size:letter;margin:0.55in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:24px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d}</style></head><body>
+<div style="max-width:720px;margin:0 auto">
+  <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px">
+    <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
+    <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+    <div style="font-size:19px;font-weight:700;color:#fff;margin-top:9px">Separation / Offboarding Checklist</div>
+  </div>
+  <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
+    ${meta('Employee', rec.name)}${meta('Position', rec.position || '')}${meta('Manager', rec.manager || '')}
+    ${meta('Separation date', fmtDate(rec.separation_date))}${meta('Type', rec.separation_type || '')}${meta('Prepared by', rec.prepared_by || '')}
+  </div>
+  <div style="margin-top:10px;font-size:13px;color:#8a8474">${done} of ${OFFBOARDING_ITEM_COUNT} complete</div>
+  ${sections}
+  ${rec.notes ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474">Notes</div><div style="font-size:13px;white-space:pre-wrap;margin-top:4px">${esc(rec.notes)}</div></div>` : ''}
+  <div style="margin-top:20px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Built from the LITSON PLLC HR Compliance &amp; Risk Management Manual. Severance &amp; release steps require counsel review before use.</div>
+</div>
+<script>window.onload=function(){window.print()}</script></body></html>`);
+    win.document.close();
+  }
+
+  // ---- Detail view ----
+  if (selected) {
+    const rec = selected;
+    const done = checkedCount(rec.checklist);
+    const pct = Math.round((done / OFFBOARDING_ITEM_COUNT) * 100);
+    const status = offboardingStatus(rec.checklist);
+    const field = (label: string, key: keyof Rec, type = 'text') => (
+      <div>
+        <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">{label}</label>
+        {type === 'select'
+          ? <select disabled={readOnly} value={(rec[key] as string) ?? ''} onChange={e => patch(rec.id, { [key]: e.target.value } as any)} className={input + ' bg-white'}>
+              {SEPARATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          : <input disabled={readOnly} type={type} value={(rec[key] as string) ?? ''} onChange={e => patch(rec.id, { [key]: e.target.value } as any)} className={input} />}
+      </div>
+    );
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <header className="px-8 py-4 bg-white border-b border-border flex-shrink-0 flex items-center gap-3">
+          <button onClick={() => setSelId(null)} className="text-sm font-semibold text-text-secondary hover:text-ink">← All offboarding</button>
+          <span className="text-text-faint">/</span>
+          <span className="text-sm font-semibold text-text-primary">{rec.name}</span>
+          <span className={`ml-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_PILL[status]}`}>{status}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => printDoc(rec)} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
+            {!readOnly && <button onClick={() => remove(rec)} className="text-sm font-semibold text-litred-alt border border-border-light px-3 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
+          </div>
+        </header>
+        <div className="flex-1 overflow-auto p-8">
+          <div className="max-w-3xl space-y-6">
+            {/* Header card */}
+            <div className="bg-white border border-border rounded-card p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {field('Employee', 'name')}
+                {field('Position', 'position')}
+                {field('Manager', 'manager')}
+                {field('Separation date', 'separation_date', 'date')}
+                {field('Type of separation', 'separation_type', 'select')}
+                {field('Prepared by', 'prepared_by')}
+              </div>
+              <div className="mt-5">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-semibold text-text-secondary">{done} of {OFFBOARDING_ITEM_COUNT} steps complete</span>
+                  <span className="text-text-muted">{pct}%</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-[#eee7da] overflow-hidden">
+                  <div className="h-full rounded-full bg-[#c9a24a] transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <div className="space-y-5">
+              {OFFBOARDING_CHECKLIST.map(sec => {
+                const secDone = sec.items.filter(it => rec.checklist[it.id]).length;
+                return (
+                  <div key={sec.key} className="bg-white border border-border rounded-card p-5">
+                    <div className="flex items-baseline gap-2 mb-3">
+                      <h3 className="font-spectral text-[16px] font-semibold text-text-primary">{sec.heading}</h3>
+                      <span className="text-[11px] text-text-muted">{sec.chapter}</span>
+                      <span className="ml-auto text-[11px] font-semibold text-text-muted">{secDone}/{sec.items.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {sec.items.map(it => {
+                        const on = !!rec.checklist[it.id];
+                        return (
+                          <label key={it.id} className={`flex items-start gap-3 text-sm rounded-ctrl px-2 py-1.5 -mx-2 ${readOnly ? '' : 'cursor-pointer hover:bg-canvas'}`}>
+                            <input type="checkbox" checked={on} disabled={readOnly} onChange={() => toggleItem(rec, it.id)} className="mt-0.5 w-4 h-4 accent-[#2f7d5b] shrink-0" />
+                            <span className={on ? 'text-text-muted line-through' : 'text-text-secondary'}>{it.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Notes */}
+              <div className="bg-white border border-border rounded-card p-5">
+                <label className="block text-xs font-bold uppercase tracking-widest text-gold-muted mb-2">Notes</label>
+                <textarea disabled={readOnly} value={rec.notes ?? ''} onChange={e => patch(rec.id, { notes: e.target.value })} rows={4} className={input + ' resize-y'} placeholder="Anything to note about this separation…" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Tiles view ----
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
+        <div>
+          <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Offboarding</h1>
+          <p className="text-sm text-text-muted mt-0.5">{rows.length} separation{rows.length === 1 ? '' : 's'} · checklist from the HR Compliance Manual</p>
+        </div>
+        {!readOnly && <button onClick={() => setShowAdd(true)} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Start offboarding</button>}
+      </header>
+
+      <div className="flex-1 overflow-auto p-8">
+        {loading ? (
+          <div className="text-sm text-text-muted">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">No offboarding in progress.{!readOnly && ' Click “Start offboarding” to open a checklist for a departing employee.'}</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {rows.map(r => {
+              const done = checkedCount(r.checklist);
+              const pct = Math.round((done / OFFBOARDING_ITEM_COUNT) * 100);
+              const status = offboardingStatus(r.checklist);
+              return (
+                <button key={r.id} onClick={() => setSelId(r.id)} className="bg-white border border-border rounded-card p-5 text-left shadow-sm hover:shadow-md hover:border-border-light transition-all">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-text-primary truncate">{r.name}</div>
+                      {r.position && <div className="text-xs text-text-muted truncate">{r.position}</div>}
+                    </div>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_PILL[status]}`}>{status}</span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-3 text-xs text-text-muted">
+                    {r.separation_date && <span>Sep. {fmtDate(r.separation_date)}</span>}
+                    {r.separation_type && <span className="truncate">· {r.separation_type}</span>}
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="text-text-muted">{done}/{OFFBOARDING_ITEM_COUNT} steps</span>
+                      <span className="text-text-muted">{pct}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[#eee7da] overflow-hidden">
+                      <div className="h-full rounded-full bg-[#c9a24a]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showAdd && !readOnly && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
+          <div className="bg-white rounded-card w-full max-w-lg shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-spectral text-[18px] font-semibold">Start offboarding</h2>
+              <button onClick={() => setShowAdd(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="p-6 grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Employee *</label>
+                <input list="offb-emp" value={form.name} onChange={e => pickEmployee(e.target.value)} placeholder="Pick or type a name" className={input} />
+                <datalist id="offb-emp">{employees.map(e => <option key={e.name} value={e.name} />)}</datalist>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Position</label>
+                <input value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Manager</label>
+                <input value={form.manager} onChange={e => setForm(f => ({ ...f, manager: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Separation date</label>
+                <input type="date" value={form.separation_date} onChange={e => setForm(f => ({ ...f, separation_date: e.target.value }))} className={input} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Type of separation</label>
+                <select value={form.separation_type} onChange={e => setForm(f => ({ ...f, separation_type: e.target.value }))} className={input + ' bg-white'}>
+                  {SEPARATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Prepared by</label>
+                <input value={form.prepared_by} onChange={e => setForm(f => ({ ...f, prepared_by: e.target.value }))} placeholder="Catie / Clarizz" className={input} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <button onClick={() => setShowAdd(false)} className="text-sm text-text-muted px-3">Cancel</button>
+              <button onClick={addRecord} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Start checklist</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
