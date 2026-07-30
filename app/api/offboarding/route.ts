@@ -32,7 +32,7 @@ export async function GET() {
   await ensure();
   const rows = await sql`SELECT * FROM offboarding ORDER BY separation_date DESC NULLS LAST, created_at DESC` as any[];
   let employees: any[] = [];
-  try { employees = await sql`SELECT name, position, dob, start_date FROM staff_directory ORDER BY name ASC` as any[]; } catch { /* no table */ }
+  try { employees = await sql`SELECT name, position, dob, start_date, email FROM staff_directory ORDER BY name ASC` as any[]; } catch { /* no table */ }
   return NextResponse.json({ rows: rows.map(parse), employees });
 }
 

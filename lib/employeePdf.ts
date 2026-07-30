@@ -197,6 +197,19 @@ export async function severancePdfDataUrl(p: any, approver?: { name?: string; si
   return dataUrl(await d.bytes());
 }
 
+// A branded PDF of a completed exit interview (question / answer pairs).
+export async function exitInterviewPdfDataUrl(name: string, qa: { q: string; a: string }[]): Promise<string> {
+  const d = await Doc.create('Exit Interview', '');
+  d.label('Employee', name);
+  d.rule();
+  for (const item of qa) {
+    d.para(item.q, { font: (d as any).bold, size: 11.5 });
+    d.para(item.a || '—', { color: rgb(0.28, 0.3, 0.34) });
+    d.gap(6);
+  }
+  return dataUrl(await d.bytes());
+}
+
 // A branded PDF of a performance-review summary (dates + history).
 export async function reviewSummaryPdfDataUrl(name: string, lines: string[]): Promise<string> {
   const d = await Doc.create('Performance Review Summary', '');

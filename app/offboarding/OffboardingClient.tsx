@@ -6,6 +6,7 @@ import {
   OFFBOARDING_CHECKLIST, OFFBOARDING_ITEMS, SEPARATION_TYPES,
   activeProgress, offboardingStatus, isItemExcluded, ageAt, tenureLabel, defaultExcluded,
 } from '@/lib/offboarding';
+import { EXIT_QUESTIONS as EXIT_Q } from '@/lib/exitInterview';
 
 interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
@@ -13,7 +14,7 @@ interface Rec {
   checklist: Record<string, boolean>; excluded: Record<string, boolean>; offer_severance: boolean;
   dob: string | null; hire_date: string | null; notes: string | null;
 }
-interface Emp { name: string; position: string | null; dob: string | null; start_date: string | null }
+interface Emp { name: string; position: string | null; dob: string | null; start_date: string | null; email?: string | null }
 
 const STATUS_PILL: Record<string, string> = {
   'Complete': 'bg-[#eef5f1] text-[#2f7d5b]', 'In progress': 'bg-[#f7efe1] text-[#b07d2a]', 'Not started': 'bg-[#f1ece3] text-[#8b8478]',
@@ -49,6 +50,29 @@ export default function OffboardingClient() {
   }
 
   const selected = rows.find(r => r.id === selId) ?? null;
+
+  // ---- Exit interview ----
+  const [exitRec, setExitRec] = useState<any>(null);
+  const [exitEmail, setExitEmail] = useState('');
+  const [exitBusy, setExitBusy] = useState(false);
+  useEffect(() => {
+    if (!selId || !selected) { setExitRec(null); return; }
+    setExitEmail(employees.find(e => e.name === selected.name)?.email ?? '');
+    fetch(`/api/offboarding/exit?offboardingId=${selId}`).then(r => r.json()).then(d => setExitRec(d.row ?? null)).catch(() => setExitRec(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selId]);
+  async function sendExit(resend = false) {
+    if (!selected) return;
+    setExitBusy(true);
+    try {
+      const res = await fetch('/api/offboarding/exit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', offboarding_id: selected.id, employee_name: selected.name, employee_email: exitEmail.trim() }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      setExitRec({ id: d.id, status: 'Sent', token: d.url.split('/').pop(), employee_email: exitEmail.trim() });
+      showToast(d.emailed ? (resend ? 'Exit interview re-sent' : 'Exit interview sent') : 'Created — copy the link');
+    } catch { showToast('Could not send'); }
+    finally { setExitBusy(false); }
+  }
 
   async function addRecord() {
     if (!form.name.trim()) { showToast('Pick or type an employee'); return; }
@@ -242,6 +266,38 @@ export default function OffboardingClient() {
                   </div>
                 );
               })}
+
+              {/* Exit interview */}
+              <div className="bg-white border border-border rounded-card p-5">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-gold-muted">Exit interview</label>
+                  {exitRec && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${exitRec.status === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{exitRec.status === 'Completed' ? 'Completed' : 'Sent — awaiting response'}</span>}
+                </div>
+                {!exitRec ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-text-muted">Email the departing employee a short, confidential exit interview. Their responses come back here and file to their Employee File.</p>
+                    {!readOnly && (
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <input value={exitEmail} onChange={e => setExitEmail(e.target.value)} placeholder="employee@email.com" className={input + ' max-w-xs'} />
+                        <button onClick={() => sendExit()} disabled={exitBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{exitBusy ? 'Sending…' : '✉ Send exit interview'}</button>
+                      </div>
+                    )}
+                  </div>
+                ) : exitRec.status === 'Completed' ? (
+                  <div className="space-y-2">
+                    {(exitRec.answers ? Object.keys(exitRec.answers) : []).length === 0 && <p className="text-sm text-text-muted">Completed. Responses are filed in the Employee File.</p>}
+                    {EXIT_Q.map(q => exitRec.answers?.[q.id] != null && exitRec.answers?.[q.id] !== '' ? (
+                      <div key={q.id} className="text-sm"><span className="font-semibold text-text-primary">{q.label}</span><div className="text-text-secondary">{q.type === 'rating' ? `${exitRec.answers[q.id]} / 5` : String(exitRec.answers[q.id])}</div></div>
+                    ) : null)}
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <p className="text-text-muted">Sent{exitRec.employee_email ? ` to ${exitRec.employee_email}` : ''} — awaiting the employee’s response.</p>
+                    {exitRec.token && <a href={`/offboarding/exit/${exitRec.token}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] hover:underline break-all">Open the form link</a>}
+                    {!readOnly && <div><button onClick={() => sendExit(true)} disabled={exitBusy} className="text-[#3f6b8a] font-semibold hover:underline">🔔 Resend</button></div>}
+                  </div>
+                )}
+              </div>
 
               {/* Notes */}
               <div className="bg-white border border-border rounded-card p-5">
