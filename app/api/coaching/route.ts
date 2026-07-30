@@ -63,8 +63,13 @@ export async function PATCH(req: Request) {
     if (!cur) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const sigs: Signatory[] = parseSignatories(cur.signatories).filter(s => (s.name ?? '').trim());
+    // Always ensure both the employee (Reviewee) and the coach (Reviewer) can
+    // sign, even if the signatory rows were left blank.
     if (cur.employee && !sigs.some(s => lc(s.name) === lc(cur.employee))) {
-      sigs.unshift({ name: cur.employee, position: 'Employee', role: 'Reviewee' });
+      sigs.unshift({ name: cur.employee, position: 'Employee', role: 'Reviewee', email: cur.employee_email || undefined });
+    }
+    if (cur.coach_name && !sigs.some(s => lc(s.name) === lc(cur.coach_name))) {
+      sigs.push({ name: cur.coach_name, position: cur.coach_position || '', role: 'Reviewer', email: cur.coach_email || undefined });
     }
     for (const s of sigs) {
       if (!s.email) {
