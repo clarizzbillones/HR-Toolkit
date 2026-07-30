@@ -61,19 +61,23 @@ export function sectionForPath(pathname: string): string {
 
 // Owners/admins who may manage access control. Role 'admin' always qualifies;
 // otherwise the email must be in ACCESS_ADMINS (comma-separated env var).
+export function accessAdminList(): string[] {
+  return (process.env.ACCESS_ADMINS ?? 'clarizz@litson.co,catie@litson.co,admin@litson.co')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+}
 export function isAccessAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
   if (role === 'admin') return true;
-  const owners = (process.env.ACCESS_ADMINS ?? 'clarizz@litson.co,admin@litson.co')
-    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  return !!email && owners.includes(email.toLowerCase());
+  return !!email && accessAdminList().includes(email.toLowerCase());
 }
 
 // HR admins — the only people who may see Employee Files. Role 'admin'
 // qualifies; otherwise the email must be in HR_ADMINS (comma-separated env
 // var). Defaults to Clarizz + Catie; override HR_ADMINS in the environment.
+export function hrAdminList(): string[] {
+  return (process.env.HR_ADMINS ?? 'clarizz@litson.co,catie@litson.co,admin@litson.co')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+}
 export function isHrAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
   if (role === 'admin') return true;
-  const owners = (process.env.HR_ADMINS ?? 'clarizz@litson.co,catie@litson.co,admin@litson.co')
-    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  return !!email && owners.includes(email.toLowerCase());
+  return !!email && hrAdminList().includes(email.toLowerCase());
 }

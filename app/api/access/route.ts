@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
-import { isAccessAdmin, SECTIONS, REPORT_TABS } from '@/lib/access';
+import { isAccessAdmin, accessAdminList, hrAdminList, SECTIONS, REPORT_TABS } from '@/lib/access';
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS access_grants (
@@ -34,7 +34,9 @@ export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await ensureTable();
   const rows = await sql`SELECT * FROM access_grants ORDER BY name ASC, email ASC` as any[];
-  return NextResponse.json({ grants: rows.map(parseRow) });
+  // Full-access admins (manage access + see every tab, incl. Employee Files).
+  const admins = Array.from(new Set([...accessAdminList(), ...hrAdminList()])).sort();
+  return NextResponse.json({ grants: rows.map(parseRow), admins });
 }
 
 export async function POST(req: Request) {

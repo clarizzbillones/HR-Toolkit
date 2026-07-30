@@ -8,6 +8,7 @@ const blank = { email: '', name: '', sections: [] as string[], reportTabs: [] as
 export default function AccessClient() {
   const { showToast } = useToast();
   const [grants, setGrants] = useState<AccessGrant[]>([]);
+  const [admins, setAdmins] = useState<string[]>([]);
   const [forbidden, setForbidden] = useState(false);
   const [editing, setEditing] = useState<typeof blank | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,6 +38,7 @@ export default function AccessClient() {
     if (res.status === 403) { setForbidden(true); return; }
     const d = await res.json();
     setGrants(d.grants ?? []);
+    setAdmins(d.admins ?? []);
   }
   useEffect(() => { load(); }, []);
 
@@ -86,6 +88,21 @@ export default function AccessClient() {
       </header>
 
       <div className="flex-1 overflow-auto px-8 py-6 space-y-6">
+        {/* Full-access admins */}
+        <div className="bg-white border border-border rounded-card p-5 max-w-3xl">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gold-muted">Full-access admins</span>
+            <span className="text-[11px] text-text-muted">· manage access, see every tab (incl. Employee Files)</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {admins.length === 0 ? <span className="text-sm text-text-muted">—</span> : admins.map(a => (
+              <span key={a} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe4d8] px-3 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />{a}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-text-muted mt-2">Set via the ACCESS_ADMINS / HR_ADMINS environment variables. Everyone here has full access and cannot be restricted.</p>
+        </div>
         {editing && (
           <div className="bg-[#fbf7ee] border border-border rounded-card p-5 max-w-3xl">
             <div className="grid grid-cols-2 gap-4 mb-4">
