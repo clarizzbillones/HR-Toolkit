@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
+import { coachingDocHtml } from '@/lib/coachingDoc';
+
+const htmlDataUrl = (html: string) => `data:text/html;base64,${Buffer.from(html, 'utf8').toString('base64')}`;
 
 // One-click pull of an employee's existing records into their Employee File,
 // while the tab stays independent. source = staffing | coaching | reviews.
@@ -48,8 +51,11 @@ export async function POST(req: Request) {
       if (exists) continue;
       const title = `${c.coaching_type || 'Coaching'}${c.signed_at ? ' (signed)' : ''}`;
       const summary = [c.topic ? `Topic: ${c.topic}` : '', c.notes || ''].filter(Boolean).join('\n\n');
-      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Coaching', ${title}, ${c.date ?? null}, ${summary}, ${''}, ${c.action_items ?? ''}, ${c.coach_name ?? ''}, ${ref})`;
+      // Attach the branded coaching document so it can be viewed / printed to PDF.
+      const docHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Coaching — ${name}</title><style>*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:20px;background:#faf8f4}</style></head><body>${coachingDocHtml(c)}</body></html>`;
+      const attName = `Coaching-${String(c.coaching_type || 'form').replace(/[^\w]+/g, '-')}-${String(c.date ?? '').slice(0, 10) || 'form'}.html`;
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+        VALUES (${cuid()}, ${profileId}, 'Coaching', ${title}, ${c.date ?? null}, ${summary}, ${''}, ${c.action_items ?? ''}, ${c.coach_name ?? ''}, ${attName}, ${htmlDataUrl(docHtml)}, ${ref})`;
       added++;
     }
     return NextResponse.json({ imported: added, message: added ? `Imported ${added} coaching form${added > 1 ? 's' : ''}.` : 'No new coaching forms to import.' });
@@ -72,11 +78,27 @@ export async function POST(req: Request) {
     const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
     if (exists) {
       await sql`UPDATE employee_files SET summary = ${summary}, doc_date = ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null} WHERE id = ${exists.id}`;
-      return NextResponse.json({ imported: 1, message: 'Updated the performance-review summary.' });
+    } else {
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, source_ref)
+        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null}, ${summary}, ${''}, ${''}, ${''}, ${ref})`;
     }
-    await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, source_ref)
-      VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null}, ${summary}, ${''}, ${''}, ${''}, ${ref})`;
-    return NextResponse.json({ imported: 1, message: 'Imported the performance-review summary.' });
+
+    // Attach the actual uploaded review documents (PDFs) as separate entries.
+    let rdocs: any[] = [];
+    try { rdocs = await sql`SELECT which, name, data FROM review_docs WHERE employee_id = ${emp.id}` as any[]; } catch { /* no table */ }
+    let attached = 0;
+    for (const rd of rdocs) {
+      if (!rd.data) continue;
+      const dref = `reviews-doc:${emp.id}:${rd.which}`;
+      const [ex] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${dref} LIMIT 1` as any[];
+      if (ex) continue;
+      const label = rd.which === '6mo' ? '6-month review document' : rd.which === '1yr' ? '1-year review document' : `Review document (${rd.which})`;
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${label}, ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null}, ${''}, ${''}, ${''}, ${''}, ${rd.name ?? 'review.pdf'}, ${rd.data}, ${dref})`;
+      attached++;
+    }
+    const msg = attached ? `Imported the review summary + ${attached} document${attached > 1 ? 's' : ''}.` : (exists ? 'Updated the performance-review summary.' : 'Imported the performance-review summary.');
+    return NextResponse.json({ imported: 1 + attached, message: msg });
   }
 
   return NextResponse.json({ error: 'Unknown source' }, { status: 400 });
