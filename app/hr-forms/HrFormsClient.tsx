@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import { HR_FORMS, HR_FORM_PARTS, hrFormDocHtml } from '@/lib/hrForms';
+import { HANDBOOK_REFS, HANDBOOK_ISSUES, citationText } from '@/lib/handbook';
 import Lb0489Fill from './Lb0489Fill';
 import SeveranceCalc from './SeveranceCalc';
 
@@ -39,6 +40,20 @@ export default function HrFormsClient() {
 
   // HR-only usage guidance for the current base template (never downloaded).
   const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
+
+  // Handbook citation picker (for discipline forms).
+  const [showCite, setShowCite] = useState(false);
+  const [citeIssue, setCiteIssue] = useState('Attendance & tardiness');
+  const citeMatches = HANDBOOK_REFS.filter(r => r.issues.includes(citeIssue));
+  function insertCitation(text: string) {
+    setBody(prev => {
+      // Prefer to drop it onto the "Policy or standard involved" placeholder.
+      const token = (prev.match(/\[Cite the handbook[^\]]*\]/) || [])[0];
+      if (token) return prev.split(token).join(`**${text}**`);
+      return prev.replace(/\s*$/, '') + `\n\n${text}`;
+    });
+    showToast('Citation added to the form');
+  }
 
   useEffect(() => {
     try { const raw = localStorage.getItem('litson_hr_forms'); if (raw) setSaved(JSON.parse(raw)); } catch { /* ignore */ }
@@ -147,6 +162,35 @@ export default function HrFormsClient() {
               <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
               <input value={title} onChange={e => setTitle(e.target.value)} className={input} />
             </div>
+
+            {/* Handbook citation picker */}
+            <div className="border border-[#cbd8e6] rounded-ctrl bg-[#eef2f7]">
+              <button onClick={() => setShowCite(s => !s)} className="w-full flex items-center justify-between px-3 py-2 text-left">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#33506e]">📖 Cite from Handbook</span>
+                <span className="text-[#33506e] text-sm">{showCite ? '▾' : '▸'}</span>
+              </button>
+              {showCite && (
+                <div className="px-3 pb-3 space-y-2">
+                  <p className="text-[11px] text-[#33506e]">Pick the issue, then insert the exact policy + standard into the form.</p>
+                  <select value={citeIssue} onChange={e => setCiteIssue(e.target.value)} className={input + ' bg-white'}>
+                    {HANDBOOK_ISSUES.map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                  <div className="space-y-1.5 max-h-72 overflow-auto">
+                    {citeMatches.map(r => (
+                      <div key={r.id} className="bg-white border border-border-light rounded-ctrl p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] font-semibold text-text-primary">{r.section} — {r.title}</span>
+                          <button onClick={() => insertCitation(citationText(r))} className="shrink-0 text-[10px] font-semibold text-white bg-ink px-2 py-0.5 rounded-ctrl hover:bg-ink-dark">Insert</button>
+                        </div>
+                        <p className="text-[11px] text-text-muted mt-1 leading-snug">{r.standard}</p>
+                      </div>
+                    ))}
+                    {!citeMatches.length && <p className="text-[11px] text-text-muted">No section for this issue.</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {fields.length > 0 && (
               <div className="border border-border-light rounded-ctrl p-3 bg-[#fbf7ee]">
                 <div className="flex items-center justify-between mb-2">
