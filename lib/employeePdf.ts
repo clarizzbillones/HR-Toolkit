@@ -1,0 +1,159 @@
+// Server-side branded PDF generation for Employee File attachments (Litson navy
+// + gold). Uses pdf-lib so it works on Vercel without a headless browser.
+// Produces a data:application/pdf URL that can be stored and streamed back.
+
+import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
+import { parseSignatories, fmtLong } from './coachingDoc';
+
+const NAVY = rgb(0.106, 0.165, 0.239);
+const GOLD = rgb(0.788, 0.635, 0.290);
+const INK = rgb(0.106, 0.165, 0.239);
+const MUTED = rgb(0.42, 0.4, 0.36);
+const RULE = rgb(0.9, 0.86, 0.8);
+
+const PAGE_W = 612, PAGE_H = 792, MARGIN = 54;
+const CONTENT_W = PAGE_W - MARGIN * 2;
+
+// Strip the light inline markdown we use in notes so it reads cleanly in a PDF.
+function stripMd(s: string): string {
+  return String(s ?? '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/(^|[^a-zA-Z0-9])_(.+?)_(?![a-zA-Z0-9])/g, '$1$2');
+}
+function clean(s: any): string {
+  // pdf-lib's standard fonts are WinAnsi — replace the few unicode chars we use.
+  return String(s ?? '')
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-').replace(/[••]/g, '-')
+    .replace(/[→]/g, '->').replace(/[^\x00-\xff]/g, '');
+}
+
+// Wrap a single logical line to fit CONTENT_W (minus an optional indent).
+function wrap(text: string, font: PDFFont, size: number, maxW: number): string[] {
+  const words = clean(text).split(/\s+/);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(test, size) > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+// A tiny top-down text cursor with automatic page breaks and a repeating header band.
+class Doc {
+  pdf!: PDFDocument; page!: PDFPage; y = 0;
+  reg!: PDFFont; bold!: PDFFont; ital!: PDFFont;
+  title = ''; subtitle = '';
+  static async create(title: string, subtitle: string) {
+    const d = new Doc();
+    d.pdf = await PDFDocument.create();
+    d.reg = await d.pdf.embedFont(StandardFonts.TimesRoman);
+    d.bold = await d.pdf.embedFont(StandardFonts.TimesRomanBold);
+    d.ital = await d.pdf.embedFont(StandardFonts.TimesRomanItalic);
+    d.title = title; d.subtitle = subtitle;
+    d.newPage();
+    return d;
+  }
+  newPage() {
+    this.page = this.pdf.addPage([PAGE_W, PAGE_H]);
+    // Navy header band with a gold top stripe.
+    const bandH = 74;
+    this.page.drawRectangle({ x: 0, y: PAGE_H - bandH, width: PAGE_W, height: bandH, color: NAVY });
+    this.page.drawRectangle({ x: 0, y: PAGE_H - 3, width: PAGE_W, height: 3, color: GOLD });
+    this.page.drawText('LITSON', { x: MARGIN, y: PAGE_H - 30, size: 15, font: this.bold, color: GOLD });
+    this.page.drawText('PLLC  .  HUMAN RESOURCES', { x: MARGIN, y: PAGE_H - 42, size: 7, font: this.bold, color: rgb(0.62, 0.69, 0.77) });
+    this.page.drawText(clean(this.title), { x: MARGIN, y: PAGE_H - 62, size: 15, font: this.bold, color: rgb(1, 1, 1) });
+    this.y = PAGE_H - bandH - 26;
+  }
+  need(h: number) { if (this.y - h < MARGIN) this.newPage(); }
+  gap(h: number) { this.y -= h; }
+  rule() {
+    this.need(12); this.y -= 6;
+    this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE_W - MARGIN, y: this.y }, thickness: 1, color: RULE });
+    this.y -= 10;
+  }
+  // A wrapped paragraph. opts: font, size, color, indent, bullet, leading.
+  para(text: string, opts: { font?: PDFFont; size?: number; color?: any; indent?: number; bullet?: boolean; leading?: number } = {}) {
+    const font = opts.font ?? this.reg, size = opts.size ?? 11, color = opts.color ?? INK;
+    const indent = opts.indent ?? 0, leading = opts.leading ?? size * 1.4;
+    const lead = opts.bullet ? '-  ' : '';
+    const lines = wrap(lead + text, font, size, CONTENT_W - indent);
+    for (let i = 0; i < lines.length; i++) {
+      this.need(leading);
+      const x = MARGIN + indent + (i > 0 && opts.bullet ? font.widthOfTextAtSize('-  ', size) : 0);
+      this.page.drawText(lines[i], { x, y: this.y, size, font, color });
+      this.y -= leading;
+    }
+  }
+  label(l: string, v: string) {
+    this.need(26);
+    this.page.drawText(clean(l).toUpperCase(), { x: MARGIN, y: this.y, size: 7.5, font: this.bold, color: MUTED });
+    this.y -= 11;
+    this.para(v || '-', { size: 11.5, font: this.bold });
+    this.y -= 4;
+  }
+  async bytes() { return this.pdf.save(); }
+}
+
+function renderNotes(d: Doc, notes: string) {
+  for (const raw of String(notes ?? '').split('\n')) {
+    const t = raw.trim();
+    if (t === '') { d.gap(6); continue; }
+    const stripped = stripMd(t);
+    const isBullet = /^[•\-]\s*/.test(t);
+    const isHeading = /:\s*$/.test(t) && !isBullet;
+    if (isBullet) d.para(stripped.replace(/^[•\-]\s*/, ''), { indent: 14, bullet: true });
+    else if (isHeading) { d.gap(3); d.para(stripped, { font: d.bold, size: 12 }); }
+    else d.para(stripped);
+  }
+}
+
+const dataUrl = (bytes: Uint8Array) => `data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`;
+
+// A branded PDF of a coaching form (mirrors the on-screen document).
+export async function coachingPdfDataUrl(row: any): Promise<string> {
+  const d = await Doc.create(`Coaching Form - ${row.coaching_type || 'Weekly'}`, '');
+  d.label('Employee', String(row.employee ?? ''));
+  const two = (a: [string, string], b: [string, string]) => { d.label(a[0], a[1]); d.label(b[0], b[1]); };
+  two(['Coaching date', fmtLong(row.date)], ['Submitted by', String(row.coach_name ?? '')]);
+  if (row.coach_position) d.label('Position', String(row.coach_position));
+  d.rule();
+  if (row.topic) { d.para(String(row.topic), { font: d.bold, size: 12 }); d.gap(6); }
+  renderNotes(d, row.notes ?? '');
+
+  const actions = String(row.action_items ?? '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (actions.length) {
+    d.gap(10); d.para('ACTION ITEMS', { font: d.bold, size: 8, color: MUTED });
+    for (const a of actions) d.para(a.replace(/^[•\-]\s*/, ''), { indent: 14, bullet: true });
+  }
+
+  const signers = parseSignatories(row.signatories);
+  if (signers.length) {
+    d.gap(12); d.para('SIGNATURES', { font: d.bold, size: 8, color: MUTED }); d.gap(2);
+    for (const s of signers) {
+      const status = s.signed_at ? `Signed${s.signature_name ? ' by ' + s.signature_name : ''}` : 'Pending signature';
+      const role = s.role ? ` (${s.role})` : '';
+      d.para(`${s.name}${role} - ${s.position || ''}`, { font: d.bold, size: 11 });
+      d.para(status, { size: 10.5, color: s.signed_at ? rgb(0.18, 0.49, 0.36) : rgb(0.69, 0.49, 0.16), indent: 6 });
+      d.gap(4);
+    }
+  }
+  d.gap(10);
+  d.para('Signature confirms the conversation occurred and the employee received a copy. It does not indicate agreement.', { font: d.ital, size: 9.5, color: MUTED });
+  return dataUrl(await d.bytes());
+}
+
+// A branded PDF of a performance-review summary (dates + history).
+export async function reviewSummaryPdfDataUrl(name: string, lines: string[]): Promise<string> {
+  const d = await Doc.create('Performance Review Summary', '');
+  d.label('Employee', name);
+  d.rule();
+  if (!lines.length) d.para('No review dates on file yet.', { color: MUTED });
+  for (const l of lines) d.para(l, { bullet: true, indent: 14 });
+  return dataUrl(await d.bytes());
+}

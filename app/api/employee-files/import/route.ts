@@ -3,9 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { coachingDocHtml } from '@/lib/coachingDoc';
-
-const htmlDataUrl = (html: string) => `data:text/html;base64,${Buffer.from(html, 'utf8').toString('base64')}`;
+import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
 
 // One-click pull of an employee's existing records into their Employee File,
 // while the tab stays independent. source = staffing | coaching | reviews.
@@ -51,11 +49,11 @@ export async function POST(req: Request) {
       if (exists) continue;
       const title = `${c.coaching_type || 'Coaching'}${c.signed_at ? ' (signed)' : ''}`;
       const summary = [c.topic ? `Topic: ${c.topic}` : '', c.notes || ''].filter(Boolean).join('\n\n');
-      // Attach the branded coaching document so it can be viewed / printed to PDF.
-      const docHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Coaching — ${name}</title><style>*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:20px;background:#faf8f4}</style></head><body>${coachingDocHtml(c)}</body></html>`;
-      const attName = `Coaching-${String(c.coaching_type || 'form').replace(/[^\w]+/g, '-')}-${String(c.date ?? '').slice(0, 10) || 'form'}.html`;
+      // Attach the branded coaching document as a PDF so it can be viewed / printed.
+      const pdfUrl = await coachingPdfDataUrl(c);
+      const attName = `Coaching-${String(c.coaching_type || 'form').replace(/[^\w]+/g, '-')}-${String(c.date ?? '').slice(0, 10) || 'form'}.pdf`;
       await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Coaching', ${title}, ${c.date ?? null}, ${summary}, ${''}, ${c.action_items ?? ''}, ${c.coach_name ?? ''}, ${attName}, ${htmlDataUrl(docHtml)}, ${ref})`;
+        VALUES (${cuid()}, ${profileId}, 'Coaching', ${title}, ${c.date ?? null}, ${summary}, ${''}, ${c.action_items ?? ''}, ${c.coach_name ?? ''}, ${attName}, ${pdfUrl}, ${ref})`;
       added++;
     }
     return NextResponse.json({ imported: added, message: added ? `Imported ${added} coaching form${added > 1 ? 's' : ''}.` : 'No new coaching forms to import.' });
@@ -75,12 +73,16 @@ export async function POST(req: Request) {
     for (const h of history) if (h?.date) lines.push(`Reviewed ${String(h.date).slice(0, 10)}${h.notes ? ` — ${h.notes}` : ''}`);
     const summary = lines.length ? lines.join('\n') : 'No review dates on file yet.';
     const ref = `reviews:${emp.id}`;
+    const summaryDate = emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null;
+    // Attach a branded PDF of the review summary alongside the text.
+    const summaryPdf = await reviewSummaryPdfDataUrl(name, lines);
+    const summaryAtt = `Review-summary-${String(name).replace(/[^\w]+/g, '-')}.pdf`;
     const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
     if (exists) {
-      await sql`UPDATE employee_files SET summary = ${summary}, doc_date = ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null} WHERE id = ${exists.id}`;
+      await sql`UPDATE employee_files SET summary = ${summary}, doc_date = ${summaryDate}, attachment_name = ${summaryAtt}, attachment_data = ${summaryPdf} WHERE id = ${exists.id}`;
     } else {
-      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null}, ${summary}, ${''}, ${''}, ${''}, ${ref})`;
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${summaryDate}, ${summary}, ${''}, ${''}, ${''}, ${summaryAtt}, ${summaryPdf}, ${ref})`;
     }
 
     // Attach the actual uploaded review documents (PDFs) as separate entries.

@@ -45,6 +45,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [docFile, setDocFile] = useState<File | null>(null);
   const [showDocForm, setShowDocForm] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
 
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const s = search.toLowerCase();
@@ -124,6 +125,27 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     if (selected) bumpCount(selected.id, -1);
   }
   function bumpCount(id: string, delta: number) { setProfiles(p => p.map(x => x.id === id ? { ...x, doc_count: (x.doc_count ?? 0) + delta } : x)); }
+
+  // Read the attached document with AI and pre-fill title / date / summary.
+  async function autoRead() {
+    if (!docFile) { showToast('Choose a file first'); return; }
+    setParsing(true);
+    try {
+      const fd = new FormData(); fd.append('file', docFile);
+      const res = await fetch('/api/employee-files/parse', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not read the document'); return; }
+      const f = d.fields ?? {};
+      setDocForm(p => ({
+        ...p,
+        title: f.title || p.title,
+        doc_date: f.date || p.doc_date,
+        summary: f.summary || p.summary,
+      }));
+      showToast('Read the document — review the fields');
+    } catch { showToast('Could not read the document'); }
+    finally { setParsing(false); }
+  }
 
   async function pullFrom(source: 'staffing' | 'coaching' | 'reviews') {
     if (!selected) return;
@@ -246,7 +268,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-text-secondary mb-1">Attachment</label>
-                    <input type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} className="text-xs" />
+                    <div className="flex items-center gap-2">
+                      <input type="file" onChange={e => setDocFile(e.target.files?.[0] ?? null)} className="text-xs" />
+                      {docFile && <button type="button" onClick={autoRead} disabled={parsing} className="shrink-0 text-[11px] font-semibold text-white bg-[#1b2a3d] px-2.5 py-1 rounded-ctrl hover:bg-[#243750] disabled:opacity-50">{parsing ? 'Reading…' : '✨ Auto-read'}</button>}
+                    </div>
+                    <p className="text-[10px] text-text-muted mt-1">PDF, DOCX or image — Auto-read fills in the title, date & summary for you.</p>
                   </div>
                   <div className="col-span-2 flex gap-2">
                     <button onClick={saveDoc} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editDocId ? 'Save' : 'Add entry'}</button>
