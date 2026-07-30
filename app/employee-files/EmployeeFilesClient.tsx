@@ -113,6 +113,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   }
   function bumpCount(id: string, delta: number) { setProfiles(p => p.map(x => x.id === id ? { ...x, doc_count: (x.doc_count ?? 0) + delta } : x)); }
 
+  async function pullFrom(source: 'staffing' | 'coaching' | 'reviews') {
+    if (!selected) return;
+    const res = await fetch('/api/employee-files/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selected.id, source }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Import failed'); return; }
+    await openProfile(selected);
+    showToast(d.message || 'Imported');
+  }
+
   // ---- Detail view ----
   if (selected) {
     return (
@@ -177,9 +186,17 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
             {/* Documents */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Documents & timeline</h2>
-                {!readOnly && <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add entry</button>}
+                {!readOnly && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] text-text-muted">Pull:</span>
+                    <button onClick={() => pullFrom('staffing')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Staffing details</button>
+                    <button onClick={() => pullFrom('coaching')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Coaching</button>
+                    <button onClick={() => pullFrom('reviews')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Reviews</button>
+                    <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark ml-1">+ Add entry</button>
+                  </div>
+                )}
               </div>
 
               {showDocForm && !readOnly && (

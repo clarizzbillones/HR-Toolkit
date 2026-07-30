@@ -1,6 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
+import { isHrAdmin } from '@/lib/access';
+
+async function requireHrAdmin() {
+  const session = await getServerSession(authOptions);
+  return isHrAdmin(session?.user?.email, (session?.user as any)?.role);
+}
+const FORBIDDEN = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
 // Documents attached to an employee profile: performance-review summaries,
 // coaching entries, and dated remarks/timeline items (with what-we-did and
@@ -8,6 +17,7 @@ import { sql, cuid } from '@/lib/db';
 const stripDoc = (d: any) => ({ ...d, attachment_data: undefined, has_attachment: !!d.attachment_data });
 
 export async function GET(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   // Stream a document's attached file.
   const id = new URL(req.url).searchParams.get('file');
   if (!id) return NextResponse.json({ error: 'Missing file id' }, { status: 400 });
@@ -28,6 +38,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   const b = await req.json();
   if (!b.profile_id) return NextResponse.json({ error: 'Missing profile_id' }, { status: 400 });
   const attData = typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:') ? b.attachment_data : null;
@@ -40,6 +51,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   // Only replace the attachment when a new data URL is supplied.
@@ -59,6 +71,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   await sql`DELETE FROM employee_files WHERE id = ${id}`;

@@ -41,10 +41,15 @@ export interface AccessGrant {
 // The caller's effective access, as returned by /api/access/me.
 export interface MyAccess {
   isAdmin: boolean;       // may manage access control
+  isHrAdmin: boolean;     // may see HR-admin-only sections (Employee Files)
   restricted: boolean;    // false = full access (not in the grant list)
   sections: string[];     // allowed sections (only meaningful when restricted)
   reportTabs: string[];   // allowed report tabs (only meaningful when restricted)
 }
+
+// Sections locked to HR admins only — hidden from everyone else, including
+// otherwise-full-access users, regardless of any access grant.
+export const HR_ADMIN_SECTIONS = ['/employee-files'];
 
 // Which route section a pathname belongs to (e.g. /reports/x -> /reports).
 export function sectionForPath(pathname: string): string {
@@ -58,6 +63,16 @@ export function sectionForPath(pathname: string): string {
 export function isAccessAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
   if (role === 'admin') return true;
   const owners = (process.env.ACCESS_ADMINS ?? 'clarizz@litson.co,admin@litson.co')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return !!email && owners.includes(email.toLowerCase());
+}
+
+// HR admins — the only people who may see Employee Files. Role 'admin'
+// qualifies; otherwise the email must be in HR_ADMINS (comma-separated env
+// var). Defaults to Clarizz + Catie; override HR_ADMINS in the environment.
+export function isHrAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
+  if (role === 'admin') return true;
+  const owners = (process.env.HR_ADMINS ?? 'clarizz@litson.co,catie@litson.co,admin@litson.co')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   return !!email && owners.includes(email.toLowerCase());
 }

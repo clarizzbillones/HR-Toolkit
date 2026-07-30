@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAccess } from './AccessProvider';
-import { sectionForPath } from '@/lib/access';
+import { sectionForPath, HR_ADMIN_SECTIONS } from '@/lib/access';
 
 // Wraps the main content. For a restricted viewer, blocks pages they weren't
 // granted and sends them to their first allowed section.
@@ -13,8 +13,10 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
 
   const restricted = !!me?.restricted;
   const sec = sectionForPath(pathname);
-  const denied = restricted && !me!.sections.includes(sec);
-  const target = restricted ? me!.sections[0] : undefined;
+  // HR-admin-only sections are blocked for anyone who isn't an HR admin.
+  const hrBlocked = HR_ADMIN_SECTIONS.includes(sec) && !me?.isHrAdmin;
+  const denied = hrBlocked || (restricted && !me!.sections.includes(sec));
+  const target = restricted ? me!.sections[0] : (hrBlocked ? '/' : undefined);
 
   useEffect(() => {
     if (denied && target && sec !== target) router.replace(target);

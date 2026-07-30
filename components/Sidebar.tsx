@@ -5,6 +5,7 @@ import { useSession, signOut, signIn } from 'next-auth/react';
 import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useAccess } from './AccessProvider';
+import { HR_ADMIN_SECTIONS } from '@/lib/access';
 
 const navItems = [
   { href: '/',          label: 'Dashboard' },
@@ -64,8 +65,11 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   }, []);
   const { me } = useAccess();
   const restricted = !!me?.restricted;
+  const hrAdmin = !!me?.isHrAdmin;
   const orderedItems = (order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems)
-    .filter(i => !restricted || (me!.sections.includes(i.href)));
+    // Hide restricted-user sections, and hide HR-admin-only sections from anyone
+    // who isn't an HR admin (even full-access users).
+    .filter(i => (!restricted || me!.sections.includes(i.href)) && (!HR_ADMIN_SECTIONS.includes(i.href) || hrAdmin));
   function onDrop(targetHref: string) {
     if (!dragHref || dragHref === targetHref) { setDragHref(null); return; }
     const next = [...order];

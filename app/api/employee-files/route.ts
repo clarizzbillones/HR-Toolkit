@@ -1,6 +1,16 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
+import { isHrAdmin } from '@/lib/access';
+
+// Employee Files is HR-admin-only; enforce it on every request.
+async function requireHrAdmin() {
+  const session = await getServerSession(authOptions);
+  return isHrAdmin(session?.user?.email, (session?.user as any)?.role);
+}
+const FORBIDDEN = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
 // Standalone "Employee Files" module — independent of Staffing / Coaching /
 // Reviews. Each profile has a photo + details; each has a list of documents
@@ -21,6 +31,7 @@ async function ensure() {
 const stripDoc = (d: any) => ({ ...d, attachment_data: undefined, has_attachment: !!d.attachment_data });
 
 export async function GET(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
   const id = new URL(req.url).searchParams.get('id');
   if (id) {
@@ -38,6 +49,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
   const b = await req.json();
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
@@ -49,6 +61,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
@@ -62,6 +75,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
