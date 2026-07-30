@@ -51,21 +51,40 @@ export default function HrFormsClient() {
   // HR-only usage guidance for the current base template (never downloaded).
   const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
 
+  // The person who prepares / sends these letters (return contact + signature).
+  const SENDER = { name: 'Clarizz Ann Alon', title: 'Human Resources', phone: '615-380-6550', email: 'clarizz@litson.co' };
+
   // Employee roster for the name dropdowns (auto-fills position + address).
   const [staff, setStaff] = useState<any[]>([]);
   useEffect(() => { fetch('/api/staff/basic').then(r => r.json()).then(d => setStaff(d.employees ?? [])).catch(() => {}); }, []);
-  const isNameToken = (t: string) => /\bname\b/i.test(t);
+  // In letters the employee is [EMPLOYEE NAME]/[FULL NAME] and [NAME] is the
+  // sender; in warnings [NAME] is the employee. Detect which we're in.
+  const hasEmpName = fields.some(t => /employee name|full name/i.test(t));
+  const isLetterLike = hasEmpName || fields.some(t => /your name/i.test(t));
+  const isNameToken = (t: string) => /employee name|full name/i.test(t) || (/^\[name\]$/i.test(t) && !hasEmpName);
+
+  // Fill the sender / return-contact fields with Clarizz's details.
+  function fillSenderInto(next: Record<string, string>) {
+    for (const t of fields) {
+      if (/^\[your name\]$/i.test(t)) next[t] = SENDER.name;
+      else if (/^\[name\]$/i.test(t) && hasEmpName) next[t] = SENDER.name;
+      else if (/\bphone\b/i.test(t)) next[t] = SENDER.phone;
+      else if (/email\s*\/\s*address/i.test(t)) next[t] = SENDER.email;
+      else if (/\bemail\b/i.test(t)) next[t] = SENDER.email;
+      else if (/^\[title\]$/i.test(t) && isLetterLike) next[t] = SENDER.title;
+    }
+  }
   function pickName(token: string, value: string) {
     setFills(prev => {
       const next: Record<string, string> = { ...prev, [token]: value };
-      // Only the primary (full/employee) name field drives the other fills.
-      const isFirst = /first\s*name/i.test(token);
       const emp = staff.find(e => String(e.name).toLowerCase() === value.trim().toLowerCase());
-      if (!isFirst) for (const tok of fields) {
-        if (/\b(title|position)\b/i.test(tok)) { if (emp?.position) next[tok] = emp.position; }
-        else if (/address/i.test(tok)) { if (emp?.address) next[tok] = emp.address; }
+      for (const tok of fields) {
+        if (/address/i.test(tok)) { if (emp?.address) next[tok] = emp.address; }
         else if (/first\s*name/i.test(tok)) next[tok] = value.trim().split(/\s+/)[0] || next[tok] || '';
+        else if (/\b(title|position)\b/i.test(tok) && !isLetterLike) { if (emp?.position) next[tok] = emp.position; }
       }
+      // Sender fields (phone/email/signature) → Clarizz, as the letter's sender.
+      fillSenderInto(next);
       return next;
     });
   }
@@ -276,9 +295,12 @@ export default function HrFormsClient() {
 
             {fields.length > 0 && (
               <div className="border border-border-light rounded-ctrl p-3 bg-[#fbf7ee]">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-gold-muted">Fill-in fields ({fields.length})</span>
-                  <button onClick={applyFills} className="text-[11px] font-semibold text-white bg-ink px-2.5 py-1 rounded-ctrl hover:bg-ink-dark">Apply to form</button>
+                  <div className="flex items-center gap-1.5">
+                    {isLetterLike && <button onClick={() => { setFills(prev => { const n = { ...prev }; fillSenderInto(n); return n; }); showToast('Filled sender — Clarizz'); }} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline" title="Clarizz Ann Alon as the letter's sender / return contact">Sender: Clarizz</button>}
+                    <button onClick={applyFills} className="text-[11px] font-semibold text-white bg-ink px-2.5 py-1 rounded-ctrl hover:bg-ink-dark">Apply to form</button>
+                  </div>
                 </div>
                 <div className="space-y-2 max-h-64 overflow-auto">
                   {fields.map(token => {
