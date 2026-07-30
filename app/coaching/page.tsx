@@ -12,14 +12,14 @@ export default async function CoachingPage() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   const rows = await sql`SELECT * FROM coaching_notes ORDER BY date DESC NULLS LAST, created_at DESC`;
-  let names: string[] = [];
+  let staff: { name: string; position: string; email: string }[] = [];
   try {
-    const staff = await sql`SELECT name FROM staff_directory ORDER BY name ASC`;
-    names = (staff as any[]).map(s => s.name).filter(Boolean);
+    const s = await sql`SELECT name, position, email FROM staff_directory ORDER BY name ASC`;
+    staff = (s as any[]).map(r => ({ name: r.name ?? '', position: r.position ?? '', email: r.email ?? '' })).filter(r => r.name);
   } catch { /* table may not exist yet */ }
   return (
     <ModuleLayout pendingTaskCount={n ?? 0}>
-      <CoachingClient initialRows={rows as any[]} names={names} />
+      <CoachingClient initialRows={(rows as any[]).map(r => ({ ...r, sign_token: r.sign_token ? true : null }))} staff={staff} />
     </ModuleLayout>
   );
 }

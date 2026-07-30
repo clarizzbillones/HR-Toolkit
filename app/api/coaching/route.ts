@@ -1,35 +1,50 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql, cuid } from '@/lib/db';
+import { sendMailAsApp } from '@/lib/graph';
+import { coachingEmailHtml } from '@/lib/coachingDoc';
 
-// Coaching / 1-on-1 notes per employee: a session date, topic, notes, action
-// items, an optional follow-up date, and an open/done status.
+const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
+const HR_CC = process.env.COACHING_HR_CC ?? 'clarizz@litson.co';
+
+// Coaching / 1-on-1 forms per employee: type (weekly/30/60/90), an editable
+// coaching draft, action items, signatories, and an e-sign workflow
+// (Draft -> Sent -> Signed) with emailed copies to the employee, coach and HR.
 async function ensure() {
   await sql`CREATE TABLE IF NOT EXISTS coaching_notes (
-    id TEXT PRIMARY KEY,
-    employee TEXT,
-    date TEXT,
-    topic TEXT,
-    notes TEXT,
-    action_items TEXT,
-    follow_up_date TEXT,
-    status TEXT DEFAULT 'Open',
+    id TEXT PRIMARY KEY, employee TEXT, date TEXT, topic TEXT, notes TEXT,
+    action_items TEXT, follow_up_date TEXT, status TEXT DEFAULT 'Draft',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  for (const c of [
+    'coach_name TEXT', 'coach_position TEXT', 'coach_email TEXT', 'coaching_type TEXT',
+    'signatories TEXT', 'submitted_at TIMESTAMPTZ', 'sign_token TEXT',
+    'signed_at TIMESTAMPTZ', 'signature_name TEXT', 'employee_email TEXT',
+  ]) {
+    await sql.unsafe(`ALTER TABLE coaching_notes ADD COLUMN IF NOT EXISTS ${c}`);
+  }
+}
+
+function baseUrl(req: Request) {
+  return process.env.NEXTAUTH_URL || new URL(req.url).origin;
 }
 
 export async function GET() {
   await ensure();
   const rows = await sql`SELECT * FROM coaching_notes ORDER BY date DESC NULLS LAST, created_at DESC`;
-  return NextResponse.json({ rows });
+  // Never leak the raw sign token to the dashboard payload.
+  return NextResponse.json({ rows: (rows as any[]).map(r => ({ ...r, sign_token: r.sign_token ? true : null })) });
 }
 
 export async function POST(req: Request) {
   await ensure();
   const b = await req.json();
   const id = cuid();
-  await sql`INSERT INTO coaching_notes (id, employee, date, topic, notes, action_items, follow_up_date, status)
-    VALUES (${id}, ${b.employee ?? ''}, ${b.date ?? null}, ${b.topic ?? ''}, ${b.notes ?? ''}, ${b.action_items ?? ''}, ${b.follow_up_date ?? null}, ${b.status ?? 'Open'})`;
+  await sql`INSERT INTO coaching_notes
+    (id, employee, employee_email, coach_name, coach_position, coach_email, coaching_type, date, topic, notes, action_items, signatories, follow_up_date, status)
+    VALUES (${id}, ${b.employee ?? ''}, ${b.employee_email ?? null}, ${b.coach_name ?? ''}, ${b.coach_position ?? ''}, ${b.coach_email ?? null},
+      ${b.coaching_type ?? 'Weekly'}, ${b.date ?? null}, ${b.topic ?? ''}, ${b.notes ?? ''}, ${b.action_items ?? ''},
+      ${JSON.stringify(b.signatories ?? [])}, ${b.follow_up_date ?? null}, ${b.status ?? 'Draft'})`;
   const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${id}`;
   return NextResponse.json({ row }, { status: 201 });
 }
@@ -38,19 +53,42 @@ export async function PATCH(req: Request) {
   await ensure();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  // "send": lock a timestamp, mint a signing token, email the signer + copies.
+  if (b.action === 'send') {
+    const [cur] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
+    if (!cur) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const token = cur.sign_token || cuid() + cuid();
+    await sql`UPDATE coaching_notes SET status = 'Sent', submitted_at = NOW(), sign_token = ${token} WHERE id = ${b.id}`;
+    const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
+    const signUrl = `${baseUrl(req)}/coaching/sign/${token}`;
+    let emailed = false, emailError: string | null = null;
+    if (row.employee_email) {
+      try {
+        const html = coachingEmailHtml(row, signUrl);
+        const cc = [row.coach_email, HR_CC].filter(Boolean).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i) as string[];
+        const res: any = await sendMailAsApp(SENDER, row.employee_email, `Coaching form to review & sign — ${row.employee}`, html, cc);
+        emailed = !res?.error;
+        if (res?.error) emailError = String(res.error).slice(0, 140);
+      } catch (e) { emailError = String(e).slice(0, 140); }
+    } else {
+      emailError = 'No employee email on file — copy the link and send it manually.';
+    }
+    return NextResponse.json({ row: { ...row, sign_token: true }, signUrl, emailed, emailError });
+  }
+
+  // Regular edit (draft).
   await sql`
     UPDATE coaching_notes SET
-      employee = ${b.employee ?? ''},
-      date = ${b.date ?? null},
-      topic = ${b.topic ?? ''},
-      notes = ${b.notes ?? ''},
-      action_items = ${b.action_items ?? ''},
-      follow_up_date = ${b.follow_up_date ?? null},
-      status = ${b.status ?? 'Open'}
+      employee = ${b.employee ?? ''}, employee_email = ${b.employee_email ?? null},
+      coach_name = ${b.coach_name ?? ''}, coach_position = ${b.coach_position ?? ''}, coach_email = ${b.coach_email ?? null},
+      coaching_type = ${b.coaching_type ?? 'Weekly'}, date = ${b.date ?? null}, topic = ${b.topic ?? ''},
+      notes = ${b.notes ?? ''}, action_items = ${b.action_items ?? ''}, signatories = ${JSON.stringify(b.signatories ?? [])},
+      follow_up_date = ${b.follow_up_date ?? null}, status = ${b.status ?? 'Draft'}
     WHERE id = ${b.id}`;
-  const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}`;
+  const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ row });
+  return NextResponse.json({ row: { ...row, sign_token: row.sign_token ? true : null } });
 }
 
 export async function DELETE(req: Request) {
