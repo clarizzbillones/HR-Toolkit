@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
+import { EXTRA_COLS, staffToProfile } from '@/lib/employeeProfile';
 
 // Employee Files is HR-admin-only; enforce it on every request.
 async function requireHrAdmin() {
@@ -20,6 +21,7 @@ async function ensure() {
     id TEXT PRIMARY KEY, name TEXT NOT NULL, photo TEXT, position TEXT, department TEXT,
     email TEXT, phone TEXT, start_date TEXT, details TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  for (const c of EXTRA_COLS) await sql.unsafe(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS ${c} TEXT`);
   await sql`CREATE TABLE IF NOT EXISTS employee_files (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, category TEXT, title TEXT, doc_date TEXT,
     summary TEXT, what_we_did TEXT, next_steps TEXT, author TEXT,
@@ -55,15 +57,14 @@ export async function POST(req: Request) {
   // Create one profile per Staffing employee that doesn't have a file yet.
   if (b.action === 'sync-staffing') {
     let staff: any[] = [];
-    try { staff = await sql`SELECT name, position, email, personal_phone, dialpad, start_date FROM staff_directory ORDER BY name ASC` as any[]; } catch { /* no table */ }
+    try { staff = await sql`SELECT * FROM staff_directory ORDER BY name ASC` as any[]; } catch { /* no table */ }
     let created = 0;
     for (const s of staff) {
       const nm = String(s.name ?? '').trim();
       if (!nm) continue;
       const [exists] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${nm.toLowerCase()} LIMIT 1` as any[];
       if (exists) continue;
-      await sql`INSERT INTO employee_profiles (id, name, position, email, phone, start_date)
-        VALUES (${cuid()}, ${nm}, ${s.position ?? null}, ${s.email ?? null}, ${s.personal_phone ?? s.dialpad ?? null}, ${s.start_date ?? null})`;
+      await sql`INSERT INTO employee_profiles ${sql({ id: cuid(), name: nm, ...staffToProfile(s) })}`;
       created++;
     }
     const profiles = await sql`
@@ -74,8 +75,12 @@ export async function POST(req: Request) {
 
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
-  await sql`INSERT INTO employee_profiles (id, name, photo, position, department, email, phone, start_date, details)
-    VALUES (${id}, ${b.name.trim()}, ${b.photo ?? null}, ${b.position ?? null}, ${b.department ?? null}, ${b.email ?? null}, ${b.phone ?? null}, ${b.start_date ?? null}, ${b.details ?? null})`;
+  const row: Record<string, any> = {
+    id, name: b.name.trim(), photo: b.photo ?? null, position: b.position ?? null, department: b.department ?? null,
+    email: b.email ?? null, phone: b.phone ?? null, start_date: b.start_date ?? null, details: b.details ?? null,
+  };
+  for (const c of EXTRA_COLS) row[c] = b[c] ?? null;
+  await sql`INSERT INTO employee_profiles ${sql(row)}`;
   const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${id}`;
   return NextResponse.json({ profile }, { status: 201 });
 }
@@ -85,10 +90,12 @@ export async function PATCH(req: Request) {
   await ensure();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-  await sql`UPDATE employee_profiles SET
-    name = ${b.name ?? ''}, photo = ${b.photo ?? null}, position = ${b.position ?? null}, department = ${b.department ?? null},
-    email = ${b.email ?? null}, phone = ${b.phone ?? null}, start_date = ${b.start_date ?? null}, details = ${b.details ?? null}
-    WHERE id = ${b.id}`;
+  const updates: Record<string, any> = {
+    name: b.name ?? '', photo: b.photo ?? null, position: b.position ?? null, department: b.department ?? null,
+    email: b.email ?? null, phone: b.phone ?? null, start_date: b.start_date ?? null, details: b.details ?? null,
+  };
+  for (const c of EXTRA_COLS) updates[c] = b[c] ?? null;
+  await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${b.id}`;
   const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
   if (!profile) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ profile });

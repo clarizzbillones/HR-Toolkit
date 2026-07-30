@@ -6,7 +6,17 @@ import { useAccess } from '@/components/AccessProvider';
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
   email: string | null; phone: string | null; start_date: string | null; details: string | null; doc_count?: number;
+  address?: string | null; salary?: string | null; dob?: string | null;
+  favorite_color?: string | null; favorite_treat?: string | null; ktn?: string | null;
+  marriott?: string | null; delta?: string | null; southwest?: string | null; american?: string | null;
+  weight?: string | null; worker_type?: string | null;
 }
+// Extra profile fields, grouped for the edit form + read-only display.
+const EXTRA_GROUPS: { heading: string; fields: [string, keyof Profile][] }[] = [
+  { heading: 'Personal', fields: [['Address', 'address'], ['Date of birth', 'dob'], ['Salary', 'salary'], ['Worker type', 'worker_type'], ['Favorite color', 'favorite_color'], ['Favorite treat', 'favorite_treat'], ['Shirt / weight', 'weight']] },
+  { heading: 'Travel', fields: [['Known Traveler # (KTN)', 'ktn'], ['Marriott #', 'marriott'], ['Delta #', 'delta'], ['Southwest #', 'southwest'], ['American #', 'american']] },
+];
+const EXTRA_KEYS: (keyof Profile)[] = EXTRA_GROUPS.flatMap(g => g.fields.map(f => f[1]));
 interface Doc {
   id: string; profile_id: string; category: string; title: string; doc_date: string | null;
   summary: string; what_we_did: string; next_steps: string; author: string; has_attachment?: boolean; attachment_name?: string | null;
@@ -191,6 +201,19 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Details</label>
                         <textarea value={selected.details ?? ''} onChange={e => setSelected(p => p ? { ...p, details: e.target.value } : p)} rows={3} className={input + ' resize-y'} />
                       </div>
+                      {EXTRA_GROUPS.map(g => (
+                        <div key={g.heading} className="col-span-2">
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-1.5 mt-1">{g.heading}</div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {g.fields.map(([l, k]) => (
+                              <div key={k}>
+                                <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">{l}</label>
+                                <input type={k === 'dob' ? 'date' : 'text'} value={(selected[k] as string) ?? ''} onChange={e => setSelected(p => p ? { ...p, [k]: e.target.value } : p)} className={input} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                       <div className="col-span-2 flex gap-2">
                         <button onClick={saveProfile} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Save</button>
                         <button onClick={() => openProfile(selected)} className="text-sm text-text-muted px-3">Cancel</button>
@@ -206,6 +229,24 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         {selected.start_date && <div><span className="text-text-muted">Start date:</span> {fmtDate(selected.start_date)}</div>}
                       </div>
                       {selected.details && <p className="text-sm text-text-secondary mt-3 whitespace-pre-wrap">{selected.details}</p>}
+                      {EXTRA_GROUPS.some(g => g.fields.some(([, k]) => selected[k])) && (
+                        <div className="mt-4 space-y-3">
+                          {EXTRA_GROUPS.map(g => {
+                            const shown = g.fields.filter(([, k]) => selected[k]);
+                            if (!shown.length) return null;
+                            return (
+                              <div key={g.heading}>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-1">{g.heading}</div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                                  {shown.map(([l, k]) => (
+                                    <div key={k}><span className="text-text-muted">{l}:</span> {k === 'dob' ? fmtDate(selected[k] as string) : String(selected[k])}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {!readOnly && (
                         <div className="flex gap-2 mt-4">
                           <button onClick={() => setEditingProfile(true)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">Edit profile</button>

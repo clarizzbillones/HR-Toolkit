@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
+import { staffToProfile } from '@/lib/employeeProfile';
 
 // One-click pull of an employee's existing records into their Employee File,
 // while the tab stays independent. source = staffing | coaching | reviews.
@@ -29,12 +30,15 @@ export async function POST(req: Request) {
     let row: any;
     try { [row] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${lc(name)} LIMIT 1` as any[]; } catch { /* no table */ }
     if (!row) return NextResponse.json({ error: `No Staffing record found for “${name}”.` }, { status: 404 });
-    await sql`UPDATE employee_profiles SET
-      position = COALESCE(NULLIF(${row.position ?? ''}, ''), position),
-      email = COALESCE(NULLIF(${row.email ?? ''}, ''), email),
-      phone = COALESCE(NULLIF(${row.personal_phone ?? row.dialpad ?? ''}, ''), phone),
-      start_date = COALESCE(NULLIF(${row.start_date ?? ''}, ''), start_date)
-      WHERE id = ${profileId}`;
+    // Fill any blank profile field from Staffing (existing values are kept).
+    const src = staffToProfile(row);
+    const updates: Record<string, any> = {};
+    for (const [k, v] of Object.entries(src)) {
+      const staffVal = v == null ? '' : String(v).trim();
+      const cur = profile[k] == null ? '' : String(profile[k]).trim();
+      if (staffVal && !cur) updates[k] = staffVal;
+    }
+    if (Object.keys(updates).length) await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${profileId}`;
     const [updated] = await sql`SELECT * FROM employee_profiles WHERE id = ${profileId}`;
     return NextResponse.json({ profile: updated, imported: 1, message: 'Pulled details from Staffing.' });
   }
@@ -74,32 +78,48 @@ export async function POST(req: Request) {
     const summary = lines.length ? lines.join('\n') : 'No review dates on file yet.';
     const ref = `reviews:${emp.id}`;
     const summaryDate = emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null;
-    // Attach a branded PDF of the review summary alongside the text.
-    const summaryPdf = await reviewSummaryPdfDataUrl(name, lines);
-    const summaryAtt = `Review-summary-${String(name).replace(/[^\w]+/g, '-')}.pdf`;
-    const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
-    if (exists) {
-      await sql`UPDATE employee_files SET summary = ${summary}, doc_date = ${summaryDate}, attachment_name = ${summaryAtt}, attachment_data = ${summaryPdf} WHERE id = ${exists.id}`;
-    } else {
-      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${summaryDate}, ${summary}, ${''}, ${''}, ${''}, ${summaryAtt}, ${summaryPdf}, ${ref})`;
-    }
 
-    // Attach the actual uploaded review documents (PDFs) as separate entries.
+    // Uploaded review documents (PDFs). The primary one is folded into the
+    // single summary entry so the dates and the signed PDF live together.
     let rdocs: any[] = [];
     try { rdocs = await sql`SELECT which, name, data FROM review_docs WHERE employee_id = ${emp.id}` as any[]; } catch { /* no table */ }
+    rdocs = rdocs.filter(rd => rd.data);
+    const primary = rdocs.find(r => r.which === '1yr') ?? rdocs.find(r => r.which === '6mo') ?? rdocs[0] ?? null;
+
+    // Combined entry attachment: the real signed review PDF if we have one,
+    // otherwise a branded PDF generated from the summary.
+    const summaryAtt = primary ? (primary.name ?? 'review.pdf') : `Review-summary-${String(name).replace(/[^\w]+/g, '-')}.pdf`;
+    const summaryData = primary ? primary.data : await reviewSummaryPdfDataUrl(name, lines);
+
+    const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
+    if (exists) {
+      await sql`UPDATE employee_files SET summary = ${summary}, doc_date = ${summaryDate}, attachment_name = ${summaryAtt}, attachment_data = ${summaryData} WHERE id = ${exists.id}`;
+    } else {
+      await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${'Performance review summary'}, ${summaryDate}, ${summary}, ${''}, ${''}, ${''}, ${summaryAtt}, ${summaryData}, ${ref})`;
+    }
+
+    // Remove any previously-imported standalone entry for the primary document
+    // (older imports created a separate row) so the two collapse into one.
+    if (primary) {
+      await sql`DELETE FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${`reviews-doc:${emp.id}:${primary.which}`}`;
+    }
+
+    // Any additional review documents beyond the primary stay as their own entries.
     let attached = 0;
     for (const rd of rdocs) {
-      if (!rd.data) continue;
+      if (primary && rd.which === primary.which) continue;
       const dref = `reviews-doc:${emp.id}:${rd.which}`;
       const [ex] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${dref} LIMIT 1` as any[];
       if (ex) continue;
       const label = rd.which === '6mo' ? '6-month review document' : rd.which === '1yr' ? '1-year review document' : `Review document (${rd.which})`;
       await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${label}, ${emp.last_review_date ?? emp.review_1yr_date ?? emp.review_6mo_date ?? null}, ${''}, ${''}, ${''}, ${''}, ${rd.name ?? 'review.pdf'}, ${rd.data}, ${dref})`;
+        VALUES (${cuid()}, ${profileId}, 'Performance Review', ${label}, ${summaryDate}, ${''}, ${''}, ${''}, ${''}, ${rd.name ?? 'review.pdf'}, ${rd.data}, ${dref})`;
       attached++;
     }
-    const msg = attached ? `Imported the review summary + ${attached} document${attached > 1 ? 's' : ''}.` : (exists ? 'Updated the performance-review summary.' : 'Imported the performance-review summary.');
+    const msg = attached
+      ? `Imported the review summary (with signed PDF) + ${attached} more document${attached > 1 ? 's' : ''}.`
+      : (exists ? 'Updated the review summary — dates and signed PDF combined into one entry.' : 'Imported the review summary with the signed PDF attached.');
     return NextResponse.json({ imported: 1 + attached, message: msg });
   }
 
