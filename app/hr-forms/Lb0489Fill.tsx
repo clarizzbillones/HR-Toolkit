@@ -13,6 +13,16 @@ const DEFAULTS = {
 
 const inputCls = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
+// Normalize a stored date (ISO or mm/dd/yyyy) to yyyy-mm-dd for a date input.
+function toISO(s: string): string {
+  if (!s) return '';
+  const str = String(s).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+  const m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(str);
+  if (m) { let y = +m[3]; if (y < 100) y += y < 30 ? 2000 : 1900; return `${y}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`; }
+  return '';
+}
+
 // Render a typed name as a cursive signature image (PNG data URL).
 function typedToImage(text: string): string {
   const c = document.createElement('canvas'); c.width = 440; c.height = 90;
@@ -75,6 +85,18 @@ export default function Lb0489Fill() {
   const [sigMode, setSigMode] = useState<'type' | 'draw'>('type');
   const set = (k: keyof typeof DEFAULTS, v: string) => setF(p => ({ ...p, [k]: v }));
 
+  // Roster for the name dropdown. Picking a name prefills occupation + start
+  // date from Staffing / Employee Files — but never the SSN.
+  const [employees, setEmployees] = useState<any[]>([]);
+  useEffect(() => { fetch('/api/staff/basic').then(r => r.json()).then(d => setEmployees(d.employees ?? [])).catch(() => {}); }, []);
+  function pickEmployee(name: string) {
+    setF(p => {
+      const emp = employees.find(e => String(e.name).toLowerCase() === name.trim().toLowerCase());
+      if (!emp) return { ...p, name };
+      return { ...p, name, occupation: emp.position || p.occupation, empFrom: toISO(emp.start_date) || p.empFrom };
+    });
+  }
+
   // Pre-render Alex's typed signature on first load; offer a saved signature.
   const [savedSig, setSavedSig] = useState('');
   useEffect(() => {
@@ -116,7 +138,11 @@ export default function Lb0489Fill() {
       </div>
       <div className="bg-white border border-border rounded-card p-6 grid grid-cols-2 gap-4">
         <div className="col-span-2 text-xs font-bold uppercase tracking-wider text-gold-muted">Employee</div>
-        <Field label="Employee name" value={f.name} onChange={v => set('name', v)} ph="First Middle Last" col={2} />
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Employee name</label>
+          <input list="lb-emp" value={f.name} onChange={e => pickEmployee(e.target.value)} placeholder="Pick or type a name" className={inputCls} />
+          <datalist id="lb-emp">{employees.map(e => <option key={e.name} value={e.name} />)}</datalist>
+        </div>
         <Field label="Social Security Number" value={f.ssn} onChange={v => set('ssn', v)} />
         <Field label="Occupation" value={f.occupation} onChange={v => set('occupation', v)} />
         <Field label="Last employed — From" value={f.empFrom} onChange={v => set('empFrom', v)} type="date" />
