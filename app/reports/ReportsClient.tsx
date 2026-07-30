@@ -210,11 +210,12 @@ function TripsReportTab() {
       const json = utils.sheet_to_json<Record<string, any>>(wb.Sheets[sheet], { defval: '' });
       const rows = mapTripRows(json);
       if (!rows.length) { showToast('No trip rows found in file'); setImporting(false); return; }
-      const replace = trips.length > 0 && confirm(`Replace all ${trips.length} existing trips with the ${rows.length} rows from this file?\n\nOK = replace · Cancel = add to existing`);
-      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, replace }) });
+      // Always append — importing the current month should add to existing
+      // trips, never replace them.
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, replace: false }) });
       const d = await res.json();
       setTrips(d.trips ?? []);
-      showToast(`Imported ${d.inserted ?? rows.length} trips`);
+      showToast(`Added ${d.inserted ?? rows.length} trips`);
     } catch { showToast('Failed to read file'); }
     setImporting(false);
   }
