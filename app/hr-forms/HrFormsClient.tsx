@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import { HR_FORMS, HR_FORM_PARTS, hrFormDocHtml } from '@/lib/hrForms';
 import Lb0489Fill from './Lb0489Fill';
+import SeveranceCalc from './SeveranceCalc';
+
+// Forms with their own interactive builder instead of the plain text template.
+const SPECIAL = new Set(['lb0489', 'c1']);
 
 interface SavedForm { title: string; body: string; baseId: string }
 
@@ -25,12 +29,16 @@ export default function HrFormsClient() {
     let next = body, n = 0;
     for (const token of fields) {
       const v = (fills[token] ?? '').trim();
-      if (v) { next = next.split(token).join(v); n++; }
+      // Wrap the filled-in value so it renders bold in the preview / download.
+      if (v) { next = next.split(token).join(`**${v}**`); n++; }
     }
     if (!n) { showToast('Type into a field first'); return; }
     setBody(next); setFills({});
     showToast(`Filled ${n} field${n > 1 ? 's' : ''}`);
   }
+
+  // HR-only usage guidance for the current base template (never downloaded).
+  const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
 
   useEffect(() => {
     try { const raw = localStorage.getItem('litson_hr_forms'); if (raw) setSaved(JSON.parse(raw)); } catch { /* ignore */ }
@@ -86,7 +94,7 @@ export default function HrFormsClient() {
       </header>
 
       <div className="flex-1 overflow-auto p-8">
-        {id === 'lb0489' && (
+        {SPECIAL.has(id) && (
           <div className="max-w-4xl space-y-4">
             <div className="bg-white border border-border rounded-card p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Template</div>
@@ -98,10 +106,15 @@ export default function HrFormsClient() {
                 ))}
               </select>
             </div>
-            <Lb0489Fill />
+            {guidance && (
+              <div className="bg-[#eef2f7] border border-[#cbd8e6] rounded-card p-4 text-sm text-[#33506e]">
+                <b>HR guidance (not printed):</b> {guidance}
+              </div>
+            )}
+            {id === 'lb0489' ? <Lb0489Fill /> : <SeveranceCalc />}
           </div>
         )}
-        {id !== 'lb0489' && (
+        {!SPECIAL.has(id) && (
         <div className="grid grid-cols-[340px_1fr] gap-6 max-w-6xl items-start">
           {/* Form panel */}
           <div className="bg-white border border-border rounded-card p-5 space-y-4 sticky top-0">
@@ -159,13 +172,18 @@ export default function HrFormsClient() {
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Form text — edit freely</label>
               <textarea value={body} onChange={e => setBody(e.target.value)} rows={20} className={input + ' resize-y text-[12.5px] leading-[1.5] font-mono'} />
-              <p className="text-[11px] text-text-muted mt-1">Replace every <span className="text-litred-alt font-semibold">[bracketed]</span> field and delete instruction notes before use.</p>
+              <p className="text-[11px] text-text-muted mt-1">Replace every <span className="text-litred-alt font-semibold">[bracketed]</span> field — filled-in values show in <b>bold</b>. HR guidance is separate and never appears in the download.</p>
             </div>
             <button onClick={() => loadTemplate(id)} className="w-full text-sm font-semibold text-text-muted hover:text-text-primary py-2 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border">↺ Reset to original</button>
           </div>
 
           {/* Preview + actions */}
           <div className="space-y-3">
+            {guidance && (
+              <div className="bg-[#eef2f7] border border-[#cbd8e6] rounded-card px-4 py-3 text-sm text-[#33506e]">
+                <b>HR guidance (not printed):</b> {guidance}
+              </div>
+            )}
             <div className="bg-white border border-border rounded-card overflow-y-auto shadow-sm p-6" style={{ maxHeight: '64vh' }}>
               <div dangerouslySetInnerHTML={{ __html: hrFormDocHtml(title, body) }} />
             </div>
