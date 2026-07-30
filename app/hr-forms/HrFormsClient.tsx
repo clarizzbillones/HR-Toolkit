@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import { HR_FORMS, HR_FORM_PARTS, hrFormDocHtml } from '@/lib/hrForms';
+import Lb0489Fill from './Lb0489Fill';
 
 interface SavedForm { title: string; body: string; baseId: string }
 
@@ -81,6 +82,22 @@ export default function HrFormsClient() {
       </header>
 
       <div className="flex-1 overflow-auto p-8">
+        {id === 'lb0489' && (
+          <div className="max-w-4xl space-y-4">
+            <div className="bg-white border border-border rounded-card p-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Template</div>
+              <select value={id} onChange={e => loadTemplate(e.target.value)} className={input + ' bg-white max-w-md'}>
+                {HR_FORM_PARTS.map(part => (
+                  <optgroup key={part} label={part}>
+                    {HR_FORMS.filter(x => x.part === part).map(x => <option key={x.id} value={x.id}>{x.title}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <Lb0489Fill />
+          </div>
+        )}
+        {id !== 'lb0489' && (
         <div className="grid grid-cols-[340px_1fr] gap-6 max-w-6xl items-start">
           {/* Form panel */}
           <div className="bg-white border border-border rounded-card p-5 space-y-4 sticky top-0">
@@ -155,6 +172,7 @@ export default function HrFormsClient() {
             <p className="text-[11px] text-text-faint">Severance & release documents must be reviewed and approved by counsel before first use. Part D letters are transmittal letters only.</p>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
