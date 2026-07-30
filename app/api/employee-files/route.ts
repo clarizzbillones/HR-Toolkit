@@ -51,6 +51,27 @@ export async function POST(req: Request) {
   if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
   const b = await req.json();
+
+  // Create one profile per Staffing employee that doesn't have a file yet.
+  if (b.action === 'sync-staffing') {
+    let staff: any[] = [];
+    try { staff = await sql`SELECT name, position, email, personal_phone, dialpad, start_date FROM staff_directory ORDER BY name ASC` as any[]; } catch { /* no table */ }
+    let created = 0;
+    for (const s of staff) {
+      const nm = String(s.name ?? '').trim();
+      if (!nm) continue;
+      const [exists] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${nm.toLowerCase()} LIMIT 1` as any[];
+      if (exists) continue;
+      await sql`INSERT INTO employee_profiles (id, name, position, email, phone, start_date)
+        VALUES (${cuid()}, ${nm}, ${s.position ?? null}, ${s.email ?? null}, ${s.personal_phone ?? s.dialpad ?? null}, ${s.start_date ?? null})`;
+      created++;
+    }
+    const profiles = await sql`
+      SELECT p.*, (SELECT COUNT(*)::int FROM employee_files f WHERE f.profile_id = p.id) AS doc_count
+      FROM employee_profiles p ORDER BY p.name ASC`;
+    return NextResponse.json({ profiles, created });
+  }
+
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
   await sql`INSERT INTO employee_profiles (id, name, photo, position, department, email, phone, start_date, details)

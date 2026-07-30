@@ -57,6 +57,18 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setDocs(d.docs ?? []);
   }
 
+  const [syncing, setSyncing] = useState(false);
+  async function syncStaffing() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-staffing' }) });
+      const d = await res.json();
+      if (d.profiles) setProfiles(d.profiles);
+      showToast(d.created ? `Added ${d.created} employee${d.created === 1 ? '' : 's'} from Staffing` : 'Already up to date with Staffing');
+    } catch { showToast('Sync failed'); }
+    finally { setSyncing(false); }
+  }
+
   async function addEmployee() {
     if (!empForm.name.trim()) { showToast('Name required'); return; }
     const res = await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(empForm) });
@@ -288,13 +300,14 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         </div>
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+          {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
 
       <div className="flex-1 overflow-auto p-8">
         {filtered.length === 0 ? (
-          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">No employees yet.{!readOnly && ' Click “Add employee” to create the first profile.'}</div>
+          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">No employees yet.{!readOnly && ' Click “⇪ Sync from Staffing” to create a tile for everyone, or “Add employee” for one.'}</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map(p => (
