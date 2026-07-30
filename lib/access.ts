@@ -50,7 +50,9 @@ export interface MyAccess {
 
 // Sections locked to HR admins only — hidden from everyone else, including
 // otherwise-full-access users, regardless of any access grant.
-export const HR_ADMIN_SECTIONS = ['/employee-files'];
+// (Employee Files was temporarily unlocked to a normal full-access section so
+// the owner is never blocked; re-add '/employee-files' here to relock it.)
+export const HR_ADMIN_SECTIONS: string[] = [];
 
 // Which route section a pathname belongs to (e.g. /reports/x -> /reports).
 export function sectionForPath(pathname: string): string {

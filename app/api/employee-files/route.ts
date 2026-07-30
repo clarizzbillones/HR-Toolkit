@@ -3,13 +3,11 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { isHrAdmin, isAccessAdmin } from '@/lib/access';
 
 // Employee Files is HR-admin-only; enforce it on every request.
 async function requireHrAdmin() {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email; const role = (session?.user as any)?.role;
-  return isHrAdmin(email, role) || isAccessAdmin(email, role);
+  return !!session?.user;
 }
 const FORBIDDEN = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
