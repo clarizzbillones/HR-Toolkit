@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   const contractors = await sql`SELECT * FROM contractor_payments ORDER BY due_date ASC`;
   const overtime = await sql`SELECT * FROM overtime ORDER BY created_at DESC`;
   const employees = await sql`SELECT * FROM employees WHERE birthday IS NOT NULL ORDER BY birthday ASC`;
-  const reviews = await sql`SELECT id, name, role, dept, hire_date, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
+  const reviews = await sql`SELECT id, name, role, dept, hire_date, last_review_date, review_history, next_review_override, review_status_override, review_6mo_date, review_6mo_status, review_1yr_date, review_1yr_status FROM employees ORDER BY name ASC`;
   const cashout = await sql`SELECT * FROM cashout_ledger ORDER BY date ASC`;
   let reimbursements: any[] = [];
   try { reimbursements = await sql`SELECT * FROM reimbursements ORDER BY payout_date ASC`; } catch { /* table may not exist */ }

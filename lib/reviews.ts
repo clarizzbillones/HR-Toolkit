@@ -150,6 +150,7 @@ export function parseHistory(raw: any): ReviewHistoryEntry[] {
 export interface ReviewEmployee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
   last_review_date?: string | null; review_history?: any;
+  next_review_override?: string | null; review_status_override?: string | null;
   review_6mo_date?: string | null; review_6mo_status?: string | null;
   review_1yr_date?: string | null; review_1yr_status?: string | null;
 }
@@ -158,19 +159,31 @@ export interface ReviewRow {
   type: string; date: string | null; status: string;
 }
 
-// Effective review date (legacy shape) — now derives the single next review.
-export function reviewDateStr(e: ReviewEmployee, _kind?: '6mo' | '1yr'): string | null {
-  return nextReviewDate(e.hire_date ?? null, e.last_review_date ?? null);
+// Effective last review — the logged date, or the latest review-history entry.
+// Mirrors the Performance Reviews dashboard's lastOf().
+export function lastReviewOf(e: ReviewEmployee): string | null {
+  if (e.last_review_date && String(e.last_review_date).trim()) return String(e.last_review_date).slice(0, 10);
+  const h = parseHistory(e.review_history);
+  return h.length ? h.map(x => x.date).sort().slice(-1)[0] : null;
 }
 
-// One row per employee: their next Performance Review.
+// Effective review date (legacy shape) — now derives the single next review.
+export function reviewDateStr(e: ReviewEmployee, _kind?: '6mo' | '1yr'): string | null {
+  return nextReviewDate(e.hire_date ?? null, lastReviewOf(e));
+}
+
+// One row per employee: their next Performance Review. Uses the SAME inputs as
+// the Performance Reviews dashboard — last review from history, the manual
+// next-date override, and the manual status override — so the two always agree.
 export function reviewRows(employees: ReviewEmployee[], today?: string): ReviewRow[] {
   const t = today ?? new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const rows: ReviewRow[] = [];
   for (const e of employees ?? []) {
-    const c = computeReview(e.hire_date ?? null, e.last_review_date ?? null, t);
+    const c = computeReview(e.hire_date ?? null, lastReviewOf(e), t, e.next_review_override ?? null);
     if (!c.next) continue;
-    rows.push({ id: e.id, name: e.name, role: e.role, dept: e.dept, type: 'Performance Review', date: c.next, status: c.status ?? 'Scheduled' });
+    const ov = e.review_status_override;
+    const status = ov && (REVIEW_STATUSES as string[]).includes(ov) ? ov : (c.status ?? 'Scheduled');
+    rows.push({ id: e.id, name: e.name, role: e.role, dept: e.dept, type: 'Performance Review', date: c.next, status });
   }
   return rows;
 }
