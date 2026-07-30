@@ -69,6 +69,43 @@ export const OFFBOARDING_CHECKLIST: ChecklistSection[] = [
     ],
   },
   {
+    key: 'property', heading: 'Firm property & equipment', chapter: 'Offboarding Guide',
+    items: [
+      { id: 'property-1', label: 'Arrange key and access return before the employee’s last day.' },
+      { id: 'property-2', label: 'Collect laptop, monitor, and phone.' },
+      { id: 'property-3', label: 'Collect office key and garage FOB.' },
+      { id: 'property-4', label: 'Collect any remaining business cards.' },
+      { id: 'property-5', label: 'Verizon (if applicable): verify device return (phone/hotspot) and have the Verizon business admin deactivate or transfer the number.' },
+    ],
+  },
+  {
+    key: 'systems', heading: 'System access & accounts (IT)', chapter: 'Offboarding Guide',
+    items: [
+      { id: 'systems-1', label: 'Microsoft 365 / Outlook: transfer file ownership, set forwarding & auto-reply, convert to a shared mailbox, then block sign-in and remove the license.' },
+      { id: 'systems-2', label: 'Dropbox Business: transfer files to a team member, remove from shared folders, then delete the member.' },
+      { id: 'systems-3', label: 'Dashlane: remove the user from the Admin Console.' },
+      { id: 'systems-4', label: 'SimTheory: remove access and deactivate login credentials.' },
+      { id: 'systems-5', label: 'Clio (if applicable): transfer ownership of matters/documents, then deactivate the account.' },
+      { id: 'systems-6', label: 'Dialpad: deactivate or delete the account.' },
+      { id: 'systems-7', label: 'Zoom: deactivate or delete the account.' },
+      { id: 'systems-8', label: 'Logikcull: remove or deactivate user access.' },
+      { id: 'systems-9', label: 'CourtDrive: have a paralegal remove access.' },
+      { id: 'systems-10', label: 'Westlaw & StateNet: contact the platform admins to remove access; HR confirms corrected pricing / subscription after removal.' },
+      { id: 'systems-11', label: 'Confirm the former employee can no longer sign in to any firm system (final access audit).' },
+    ],
+  },
+  {
+    key: 'payroll', heading: 'Final pay & benefits (Gusto)', chapter: 'Offboarding Guide',
+    items: [
+      { id: 'payroll-1', label: 'Gusto: dismiss the employee (People → Work → Dismiss); enter the last working day and mark voluntary or involuntary.' },
+      { id: 'payroll-2', label: 'Process final pay (pending hours, reimbursements, bonuses) and severance if applicable, per state pay laws — before dismissal.' },
+      { id: 'payroll-3', label: 'Add the employee’s personal email for W-2 access.' },
+      { id: 'payroll-4', label: 'Complete the Gusto Offboarding tab: final pay, benefits updates, and account deactivation.' },
+      { id: 'payroll-5', label: 'Insurance (Guardian & BCBST): coverage runs through month-end — no manual termination needed; confirm Gusto sent the State Continuation email (3–5 business days).' },
+      { id: 'payroll-6', label: 'Save the Gusto State Continuation email confirmation in the employee’s offboarding folder.' },
+    ],
+  },
+  {
     key: 'files', heading: 'Wrap-up & files', chapter: 'Chapters 16–17',
     items: [
       { id: 'files-1', label: 'Offer (or hold) an exit interview.' },
