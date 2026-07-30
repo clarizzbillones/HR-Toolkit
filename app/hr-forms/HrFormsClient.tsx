@@ -40,8 +40,8 @@ export default function HrFormsClient() {
     let next = body, n = 0;
     for (const token of fields) {
       const v = fmtMaybeDate((fills[token] ?? '').trim());
-      // Wrap the filled-in value so it renders bold in the preview / download.
-      if (v) { next = next.split(token).join(`**${v}**`); n++; }
+      // Values fill in as normal weight; the field label stays bold.
+      if (v) { next = next.split(token).join(v); n++; }
     }
     if (!n) { showToast('Type into a field first'); return; }
     setBody(next); setFills({});
@@ -113,7 +113,7 @@ export default function HrFormsClient() {
     setBody(prev => {
       // Prefer to drop it onto the "Policy or standard involved" placeholder.
       const token = (prev.match(/\[Cite the handbook[^\]]*\]/) || [])[0];
-      if (token) return prev.split(token).join(`**${text}**`);
+      if (token) return prev.split(token).join(text);
       return prev.replace(/\s*$/, '') + `\n\n${text}`;
     });
     showToast('Citation added to the form');

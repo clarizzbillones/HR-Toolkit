@@ -9,16 +9,11 @@ export const HR_FORMS: HrForm[] = [
   {
     id: "a2", part: "Part A — Performance & Discipline", title: "A2 — Verbal Warning (Documented)",
     guidance: "First formal step. The warning is delivered verbally; this form documents that it occurred. Provide a copy to the employee and file the original. If the employee declines to sign, write “Employee declined to sign” on the signature line, add the date, and have a witness sign. A refusal to sign does not invalidate the warning.",
-    body: `Employee name
-[NAME]
-Position
-[TITLE]
-Manager
-[MANAGER]
-Date of occurrence
-[DATE]
-Level of action
-Verbal Warning — Step 1
+    body: `Employee name: [NAME]
+Position: [TITLE]
+Manager: [MANAGER]
+Date of occurrence: [DATE]
+Level of action: Verbal Warning — Step 1
 
 1. Issue
 [Describe the specific conduct or performance issue. Include dates, examples, and the number of occurrences. State facts only — do not characterize motive or attitude.]
@@ -54,18 +49,12 @@ Witness to refusal (print and sign) ______________________________   Date ______
   {
     id: "a3", part: "Part A — Performance & Discipline", title: "A3 — Written Warning",
     guidance: "Second formal step. Use the same structure as A2, escalated. Copy to the personnel file and to HR.",
-    body: `Employee name
-[NAME]
-Position
-[TITLE]
-Manager
-[MANAGER]
-Date of occurrence
-[DATE]
-Level of action
-Written Warning — Step 2
-Prior action on this issue
-[Date of verbal warning]
+    body: `Employee name: [NAME]
+Position: [TITLE]
+Manager: [MANAGER]
+Date of occurrence: [DATE]
+Level of action: Written Warning — Step 2
+Prior action on this issue: [Date of verbal warning]
 
 1. Issue and prior notice
 [Describe the continuing issue. State that the employee received a verbal warning on (date) and that the conduct has continued. Include specific dates and examples since that warning.]
@@ -99,18 +88,12 @@ HR representative ______________________________   Date __________`,
   {
     id: "a4", part: "Part A — Performance & Discipline", title: "A4 — Final Written Warning",
     guidance: "Final step before termination. HR review is required before issuing. If the employee is 40 or older, or if any protected activity has occurred in the prior twelve months, complete the Pre-Termination Risk Assessment (B1) before issuing.",
-    body: `Employee name
-[NAME]
-Position
-[TITLE]
-Manager
-[MANAGER]
-Date of occurrence
-[DATE]
-Level of action
-Final Written Warning — Step 3
-Prior actions
-Verbal [DATE] · Written [DATE]
+    body: `Employee name: [NAME]
+Position: [TITLE]
+Manager: [MANAGER]
+Date of occurrence: [DATE]
+Level of action: Final Written Warning — Step 3
+Prior actions: Verbal [DATE] · Written [DATE]
 
 1. Issue and full history
 [Summarize the complete history: what the issue is, when it was first raised, each prior warning with dates, and what has occurred since the written warning.]
@@ -135,18 +118,12 @@ HR representative ______________________________   Date __________`,
   {
     id: "a5", part: "Part A — Performance & Discipline", title: "A5 — Performance Improvement Plan",
     guidance: "Use where the issue is capability or sustained performance rather than a discrete rule violation. A PIP is a genuine improvement effort — it should not be used as documentation cover for a decision already made.",
-    body: `Employee name
-[NAME]
-Position
-[TITLE]
-Manager
-[MANAGER]
-Plan start date
-[DATE]
-Plan end date
-[DATE — typically 30, 60, or 90 days]
-Review points
-[DATES of scheduled check-ins]
+    body: `Employee name: [NAME]
+Position: [TITLE]
+Manager: [MANAGER]
+Plan start date: [DATE]
+Plan end date: [DATE — typically 30, 60, or 90 days]
+Review points: [DATES of scheduled check-ins]
 
 Performance areas requiring improvement
 
@@ -193,20 +170,13 @@ HR representative ______________________________   Date __________`,
   {
     id: "b1", part: "Part B — Pre-Termination", title: "B1 — Pre-Termination Risk Assessment",
     guidance: "Required before every involuntary separation. Must be reviewed by at least two people. Age and protected-characteristic information is collected solely for this risk review and is retained separately from the personnel file.",
-    body: `Employee name
-[NAME]
-Position and tier
-[TITLE] / Tier [1-4]
-Hire date
-[DATE]
-Length of service
-[YEARS / MONTHS]
-Age
-[AGE] — if 40 or older, counsel review required
-Proposed separation date
-[DATE]
-Stated reason
-[Specific reason, in the words that will appear on the LB-0489 and any unemployment response]
+    body: `Employee name: [NAME]
+Position and tier: [TITLE] / Tier [1-4]
+Hire date: [DATE]
+Length of service: [YEARS / MONTHS]
+Age: [AGE] — if 40 or older, counsel review required
+Proposed separation date: [DATE]
+Stated reason: [Specific reason, in the words that will appear on the LB-0489 and any unemployment response]
 
 Risk checks — all must be completed
 
@@ -451,16 +421,11 @@ To Whom It May Concern:
 
 This letter confirms that [FULL NAME] was enrolled in group health coverage sponsored by Litson PLLC through BlueCross BlueShield of Tennessee.
 
-Coverage effective date
-[START DATE]
-Coverage end date
-[END DATE]
-Reason coverage ended
-Separation from employment
-Covered dependents
-[NAMES, or "None"]
-Group / policy number
-[NUMBER]
+Coverage effective date: [START DATE]
+Coverage end date: [END DATE]
+Reason coverage ended: Separation from employment
+Covered dependents: [NAMES, or "None"]
+Group / policy number: [NUMBER]
 
 This letter is provided to assist with enrollment in other coverage. Please contact me with any questions.
 
@@ -546,11 +511,19 @@ export function hrFormDocHtml(title: string, body: string): string {
   const lines = raw.map((l, i) => {
     const t = l.trim();
     if (t === '') return '<div style="height:12px"></div>';
-    const next = (raw[i + 1] ?? '').trim();
     // Bulleted list item (line starts with •, -, or *).
     if (/^[•\-*]\s+/.test(t)) return `<div style="margin:2px 0 2px 1.4em;text-indent:-1em">&bull;&nbsp;${inlineFmt(esc(t.replace(/^[•\-*]\s+/, '')))}</div>`;
-    const isHead = (t === t.toUpperCase() && /[A-Z]/.test(t) && t.length < 60) || /^(Step \d|Part |Subject:)/.test(t);
-    // A short line immediately followed by a [fill-in] reads as a field label.
+    const isHead = (t === t.toUpperCase() && /[A-Z]/.test(t) && t.length < 60) || /^(Step \d|Part )/.test(t);
+    // Inline "Label: value" — bold the label, keep the value in normal weight.
+    const fm = /^([A-Za-z0-9][^:]{0,42}):(?:\s(.*))?$/.exec(t);
+    if (fm && !isHead) {
+      const val = (fm[2] ?? '').trim();
+      return `<div style="margin-top:5px"><strong>${esc(fm[1])}:</strong>${val ? ' ' + inlineFmt(esc(val)) : ''}</div>`;
+    }
+    // Numbered section sub-heading (e.g. "1. Issue", "6. Consequence…").
+    if (/^\d+\.\s+\S/.test(t) && t.length < 60) return `<div style="font-weight:700;margin-top:10px">${inlineFmt(esc(l))}</div>`;
+    const next = (raw[i + 1] ?? '').trim();
+    // A short line immediately followed by a [fill-in] reads as a section label.
     const isLabel = next.startsWith('[') && !t.startsWith('[') && t.length < 60 && !/[.?!]$/.test(t);
     const inner = inlineFmt(esc(l));
     if (isHead) return `<div style="font-weight:700;font-size:14.5px;margin-top:14px;color:#1b2a3d">${inner}</div>`;
