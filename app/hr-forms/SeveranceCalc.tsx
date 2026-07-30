@@ -145,8 +145,9 @@ export default function SeveranceCalc() {
           <datalist id="sev-emp">{employees.map(e => <option key={e.name} value={e.name} />)}</datalist>
         </div>
         <Field label="Position" value={f.position} onChange={v => set('position', v)} />
+        <Field label="Date of birth" value={f.dob} onChange={v => set('dob', v)} type="date" />
         <div>
-          <label className="block text-xs font-semibold text-text-secondary mb-1">Age {f.dob && <span className="text-[10px] text-[#2f7d5b] font-normal">· auto from DOB</span>}</label>
+          <label className="block text-xs font-semibold text-text-secondary mb-1">Age {f.dob ? <span className="text-[10px] text-[#2f7d5b] font-normal">· auto from DOB</span> : <span className="text-[10px] text-text-muted font-normal">· enter DOB or type</span>}</label>
           <input value={f.age} onChange={e => set('age', e.target.value)} placeholder="if 40+, OWBPA applies" className={inputCls} />
         </div>
         <Field label="Hire date" value={f.hireDate} onChange={v => set('hireDate', v)} type="date" />

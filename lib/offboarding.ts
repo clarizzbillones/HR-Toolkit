@@ -90,7 +90,15 @@ export const SEPARATION_TYPES = [
 
 function toDate(s: any): Date | null {
   if (!s) return null;
-  const d = new Date(String(s).slice(0, 10) + 'T12:00:00');
+  const str = String(s).trim();
+  // ISO: yyyy-mm-dd
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(str);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], 12);
+  // US: mm/dd/yyyy or m/d/yy (also accepts - or . separators)
+  m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(str);
+  if (m) { let y = +m[3]; if (y < 100) y += y < 30 ? 2000 : 1900; return new Date(y, +m[1] - 1, +m[2], 12); }
+  // Fallback: let the engine try (handles "May 15, 1990" etc.)
+  const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
 }
 // Age on a given date (defaults to today) — used for the age-40 rules.

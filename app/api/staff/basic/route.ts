@@ -13,17 +13,19 @@ export async function GET() {
   const add = (r: any) => {
     const nm = String(r.name ?? '').trim(); if (!nm) return;
     const key = nm.toLowerCase();
-    const cur = byName.get(key) ?? { name: nm, position: '', dob: '', start_date: '', salary: '' };
+    const cur = byName.get(key) ?? { name: nm, position: '', dob: '', start_date: '', salary: '', address: '', email: '' };
     byName.set(key, {
       name: nm,
       position: cur.position || r.position || '',
       dob: cur.dob || r.dob || '',
       start_date: cur.start_date || r.start_date || '',
       salary: cur.salary || r.salary || '',
+      address: cur.address || r.address || '',
+      email: cur.email || r.email || '',
     });
   };
-  try { (await sql`SELECT name, position, dob, start_date FROM staff_directory` as any[]).forEach(add); } catch { /* no table */ }
-  try { (await sql`SELECT name, position, dob, start_date, salary FROM employee_profiles` as any[]).forEach(add); } catch { /* no table */ }
+  try { (await sql`SELECT name, position, dob, start_date, email FROM staff_directory` as any[]).forEach(add); } catch { /* no table */ }
+  try { (await sql`SELECT name, position, dob, start_date, salary, address, email FROM employee_profiles` as any[]).forEach(add); } catch { /* no table */ }
   const employees = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
   return NextResponse.json({ employees });
 }

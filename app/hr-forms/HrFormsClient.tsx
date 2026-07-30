@@ -51,6 +51,23 @@ export default function HrFormsClient() {
   // HR-only usage guidance for the current base template (never downloaded).
   const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
 
+  // Employee roster for the name dropdowns (auto-fills position + address).
+  const [staff, setStaff] = useState<any[]>([]);
+  useEffect(() => { fetch('/api/staff/basic').then(r => r.json()).then(d => setStaff(d.employees ?? [])).catch(() => {}); }, []);
+  const isNameToken = (t: string) => /\bname\b/i.test(t);
+  function pickName(token: string, value: string) {
+    setFills(prev => {
+      const next: Record<string, string> = { ...prev, [token]: value };
+      const emp = staff.find(e => String(e.name).toLowerCase() === value.trim().toLowerCase());
+      if (emp) for (const tok of fields) {
+        if (/\b(title|position)\b/i.test(tok)) next[tok] = emp.position || next[tok] || '';
+        else if (/address/i.test(tok)) next[tok] = emp.address || next[tok] || '';
+        else if (/first\s*name/i.test(tok)) next[tok] = String(emp.name).split(/\s+/)[0] || next[tok] || '';
+      }
+      return next;
+    });
+  }
+
   // ---- Rich-text toolbar for the form body ----
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   function wrapSelection(before: string, after: string) {
@@ -269,7 +286,9 @@ export default function HrFormsClient() {
                     return (
                       <div key={token}>
                         <label className="block text-[11px] font-semibold text-litred-alt mb-0.5 truncate" title={token}>{token}</label>
-                        {isDate
+                        {isNameToken(token)
+                          ? <input list="hrf-emp" value={fills[token] ?? ''} onChange={e => pickName(token, e.target.value)} placeholder="Pick or type a name" className={ctrl} />
+                          : isDate
                           ? <input type="date" value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} className={ctrl} />
                           : long
                           ? <textarea value={fills[token] ?? ''} onChange={e => setFills(p => ({ ...p, [token]: e.target.value }))} rows={2} placeholder="Replace with your text…" className={ctrl + ' text-[12px] resize-y'} />
@@ -277,6 +296,7 @@ export default function HrFormsClient() {
                       </div>
                     );
                   })}
+                  <datalist id="hrf-emp">{staff.map(e => <option key={e.name} value={e.name} />)}</datalist>
                 </div>
                 <p className="text-[10px] text-text-muted mt-1.5">Type values, then Apply — they replace the [brackets] in the form. Save or download when done.</p>
               </div>
