@@ -562,6 +562,66 @@ Sincerely,
 [PHONE] · [EMAIL]`,
   },
   {
+    id: "offboarding", part: "Part H — Checklists",
+    title: "Separation / Offboarding Checklist",
+    body: `SEPARATION / OFFBOARDING CHECKLIST
+Built from the LITSON PLLC HR Compliance & Risk Management Manual.
+
+Employee:  [NAME]
+Position:  [TITLE]
+Manager:  [MANAGER]
+Separation date:  [DATE]
+Type of separation:  [Voluntary resignation / Performance termination / Misconduct termination / Immediate termination / Layoff-reduction / Mutual separation]
+Prepared by:  [PREPARED BY]
+
+BEFORE THE SEPARATION — Chapters 9-11
+☐  Correct separation type classified (determines documentation, benefits, severance eligibility and reporting).
+☐  Pre-Termination Risk Assessment (Form B1) completed and reviewed by at least two people (manager + Human Resources).
+☐  Stated reason documented contemporaneously in the personnel file, predating any termination discussion.
+☐  Internal reason matches what will appear on the LB-0489 and any unemployment response.
+☐  Comparable conduct handled consistently (documented and treated the same as prior cases).
+☐  Counsel review completed where required: a reduction affecting two or more employees, severance above the standard formula, or heightened risk.
+☐  Timing reviewed — avoid separating right after a complaint, accommodation request, leave, or workers' compensation claim.
+☐  If resignation: obtained in writing.
+☐  Employees age 40 and older: enhanced OWBPA review process applied (Chapter 11).
+
+FINAL PAY & REQUIRED FORMS — Chapters 4, 13
+☐  LB-0489 Separation Notice completed in advance and provided within 24 hours of separation (reason consistent with the file).
+☐  Separation letter prepared; stated reason matches the LB-0489 and personnel file.
+☐  Final wages scheduled — next regular payday or 21 days after separation, whichever is later (Tenn. Code Ann. § 50-2-103(g)).
+☐  Unlimited PTO: confirm no balance payout is owed at separation.
+☐  Child support / garnishment issuing agency notified promptly, where applicable.
+
+SEVERANCE — Chapters 11-12 (if applicable)
+☐  Severance paid as a lump sum (preserves unemployment eligibility; § 50-7-303(a)(12)).
+☐  Severance release meets the seven requirements (Chapter 11).
+☐  OWBPA disclosures for employees age 40 and older (consideration and revocation periods; Group Disclosure Chart D3 for group programs).
+☐  Counsel approved the release before use.
+
+BENEFITS UPON SEPARATION — Chapter 14
+☐  Health-coverage notice provided — No Continuation (E1) or COBRA Available (E2).
+☐  Certificate of Prior Coverage (E3) issued where applicable.
+☐  Retirement / benefits vesting reviewed (ERISA § 510 — not separating to prevent vesting).
+
+THE SEPARATION MEETING — Chapter 15
+☐  LB-0489 handed to the employee at the meeting.
+☐  Separation letter provided.
+☐  Return of firm property collected: laptop/computer, phone, keys, access/building cards, credit cards, documents, files.
+☐  Accounts and access deactivated: email, internal systems, building access, remote access.
+☐  Final pay and benefits transition explained.
+
+OFFBOARDING & FILES — Chapters 16-17
+☐  Exit interview offered / conducted (16.2).
+☐  Unemployment-response owner assigned; stated reason matches every document.
+☐  Official personnel file assembled; no separate manager notes retained outside the file.
+☐  Medical / accommodation records kept in the separate confidential file (not the personnel file).
+
+Notes:
+[NOTES]
+
+Completed by:  [PREPARED BY]        Date:  [COMPLETED DATE]`,
+  },
+  {
     id: "lb0489", part: "Part G — State & Government Forms",
     title: "LB-0489 — TN Separation Notice",
     body: `STATE OF TENNESSEE
@@ -609,7 +669,7 @@ To process your claim you will need: (1) your full legal name; (2) your Social S
 LB-0489 (Rev. 08-2020) RDA 0063`,
   },
 ];
-export const HR_FORM_PARTS: string[] = ["Part A \u2014 Performance & Discipline", "Part B \u2014 Pre-Termination", "Part C \u2014 Severance", "Part D \u2014 Severance Transmittal Letters", "Part E \u2014 Health Coverage Notices", "Part G \u2014 State & Government Forms"];
+export const HR_FORM_PARTS: string[] = ["Part A \u2014 Performance & Discipline", "Part B \u2014 Pre-Termination", "Part C \u2014 Severance", "Part D \u2014 Severance Transmittal Letters", "Part E \u2014 Health Coverage Notices", "Part G \u2014 State & Government Forms", "Part H \u2014 Checklists"];
 
 // Escape + highlight [fill-in] fields, used by the preview and the print/Word output.
 function esc(s: string): string { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
