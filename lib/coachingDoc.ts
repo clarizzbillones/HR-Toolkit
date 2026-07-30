@@ -2,7 +2,20 @@
 // document body (used in the PDF, the e-sign page, and the emails), and the two
 // email templates. Kept framework-free so it works server- and client-side.
 
-export const COACHING_TYPES = ['Quick check-in', 'Weekly', '30-day check-in', '60-day check-in', '90-day check-in'] as const;
+export const COACHING_TYPES = ['Quick check-in', 'Weekly', '30-day check-in', '60-day check-in', '90-day check-in', 'Performance conversation'] as const;
+
+// The firm's corrective / performance coaching template (kept alongside the
+// check-in drafts). Uses the exact section headings and guidance prompts.
+const PERFORMANCE_DRAFT = [
+  '**What was discussed**',
+  '[State the specific issue with dates and examples. Describe behavior, not personality. Example: "On 6/12 the intake file for Client A was submitted without the signed engagement letter. This is the second occurrence this quarter."]',
+  '',
+  '**Expectation going forward**',
+  '[State the standard clearly. Example: "All intake files must include a signed engagement letter before submission, without exception."]',
+  '',
+  '**Support offered**',
+  '[Training, resources, adjusted workload, or "none requested."]',
+].join('\n');
 
 // The standard coaching draft the coach starts from (fully editable).
 // Supports **bold**, *italic*, and lines starting with • as bullets.
@@ -34,6 +47,7 @@ export function coachingDraft(type: string): string {
     '60-day check-in': 'This 60-day check-in reviews performance against expectations, skill development, and goals for the next period.',
     '90-day check-in': 'This 90-day review evaluates overall performance since hire, core competencies, and a forward development plan.',
   };
+  if (type === 'Performance conversation') return PERFORMANCE_DRAFT;
   const body = type === 'Quick check-in' ? quick : common;
   return [head[type] ?? head['Weekly'], '', ...body].join('\n');
 }
@@ -106,6 +120,7 @@ export function coachingDocHtml(row: any): string {
     ${actionsHtml}
     ${signerRows ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:5px">Signatories</div><table style="border-collapse:collapse;font-size:13px"><tr style="background:#faf7f0"><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Name</th><th align="left" style="padding:6px 10px;border:1px solid #e6ddcd">Position</th></tr>${signerRows}</table></div>` : ''}
     ${signedBadge}
+    <div style="margin-top:14px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Signature confirms the conversation occurred and the employee received a copy. It does not indicate agreement.</div>
   </div>`;
 }
 
