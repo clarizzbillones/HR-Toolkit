@@ -17,6 +17,7 @@ const navItems = [
   { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/coaching',  label: 'Coaching' },
   { href: '/staffing',  label: 'Staffing' },
+  { href: '/employee-files', label: 'Employee Files' },
   { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
