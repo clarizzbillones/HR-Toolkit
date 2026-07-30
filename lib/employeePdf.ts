@@ -198,9 +198,11 @@ export async function severancePdfDataUrl(p: any, approver?: { name?: string; si
 }
 
 // A branded PDF of a completed exit interview (question / answer pairs).
-export async function exitInterviewPdfDataUrl(name: string, qa: { q: string; a: string }[]): Promise<string> {
+export async function exitInterviewPdfDataUrl(name: string, qa: { q: string; a: string }[], dates?: { sent?: string; completed?: string }): Promise<string> {
   const d = await Doc.create('Exit Interview', '');
   d.label('Employee', name);
+  if (dates?.sent) d.label('Sent', dates.sent);
+  if (dates?.completed) d.label('Completed', dates.completed);
   d.rule();
   for (const item of qa) {
     d.para(item.q, { font: (d as any).bold, size: 11.5 });

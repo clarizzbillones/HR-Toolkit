@@ -17,6 +17,48 @@ async function ensure() {
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS hire_date TEXT`;
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS offer_severance BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS excluded TEXT`;
+  await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
+}
+const lc = (s: any) => String(s ?? '').trim().toLowerCase();
+async function ensureOffboardedStaff() {
+  await sql`CREATE TABLE IF NOT EXISTS offboarded_staff (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, position TEXT, dialpad TEXT, personal_phone TEXT, email TEXT,
+    start_date TEXT, dob TEXT, favorite_color TEXT, favorite_treat TEXT, note TEXT, ktn TEXT, marriott TEXT,
+    delta TEXT, offboarded TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  for (const c of ['southwest', 'worker_type', 'american']) await sql.unsafe(`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+}
+const gid = (p: string) => `${p}${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+
+// Move the employee to (or back from) Staffing's Offboarded tab, and flag their
+// Employee File so the tile shows under Offboarded there too.
+async function setOffboarded(name: string, on: boolean, date: string | null) {
+  const key = lc(name);
+  try {
+    await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
+    await sql`UPDATE employee_profiles SET offboarded = ${on}, offboarded_date = ${on ? date : null} WHERE lower(name) = ${key}`;
+  } catch { /* no table */ }
+  try {
+    await ensureOffboardedStaff();
+    if (on) {
+      const [r] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
+      if (r) {
+        const [ex] = await sql`SELECT id FROM offboarded_staff WHERE lower(name) = ${key} LIMIT 1` as any[];
+        if (!ex) await sql`INSERT INTO offboarded_staff (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,offboarded)
+          VALUES (${gid('of')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null},${date ?? ''})`;
+        await sql`DELETE FROM staff_directory WHERE lower(name) = ${key}`;
+      }
+    } else {
+      const [r] = await sql`SELECT * FROM offboarded_staff WHERE lower(name) = ${key} LIMIT 1` as any[];
+      if (r) {
+        const [ex] = await sql`SELECT id FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
+        if (!ex) await sql`INSERT INTO staff_directory (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american)
+          VALUES (${gid('st')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null})`;
+        await sql`DELETE FROM offboarded_staff WHERE lower(name) = ${key}`;
+      }
+    }
+  } catch { /* best-effort */ }
 }
 function parseMap(v: any): Record<string, boolean> {
   try { const c = typeof v === 'string' ? JSON.parse(v) : v; if (c && typeof c === 'object') return c; } catch { /* ignore */ }
@@ -41,6 +83,19 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await ensure();
   const b = await req.json();
+
+  // Move an employee to (or back from) the Offboarded list.
+  if (b.action === 'mark-offboarded') {
+    if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    const on = b.offboarded !== false;
+    const [rec] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+    if (!rec) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    await sql`UPDATE offboarding SET offboarded = ${on} WHERE id = ${b.id}`;
+    await setOffboarded(rec.name, on, rec.separation_date ?? null);
+    const [row] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+    return NextResponse.json({ row: parse(row) });
+  }
+
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
   // Pre-mark the age-40 steps N/A when the employee is under 40 at separation.

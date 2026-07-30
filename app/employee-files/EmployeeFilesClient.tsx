@@ -5,7 +5,7 @@ import { useAccess } from '@/components/AccessProvider';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
-  email: string | null; phone: string | null; start_date: string | null; details: string | null; doc_count?: number;
+  email: string | null; phone: string | null; start_date: string | null; details: string | null; doc_count?: number; offboarded?: boolean;
   address?: string | null; salary?: string | null; dob?: string | null;
   favorite_color?: string | null; favorite_treat?: string | null; ktn?: string | null;
   marriott?: string | null; delta?: string | null; southwest?: string | null; american?: string | null;
@@ -57,9 +57,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [editDocId, setEditDocId] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
 
+  const [tab, setTab] = useState<'active' | 'offboarded'>('active');
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const s = search.toLowerCase();
-  const filtered = profiles.filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s));
+  const offCount = profiles.filter(p => p.offboarded).length;
+  const filtered = profiles
+    .filter(p => (tab === 'offboarded' ? p.offboarded : !p.offboarded))
+    .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s));
 
   async function openProfile(p: Profile) {
     setSelected(p); setEditingProfile(false); setShowDocForm(false); setEditDocId(null);
@@ -372,9 +376,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         </div>
       </header>
 
+      <div className="px-8 pt-4 bg-white border-b border-border flex-shrink-0 flex gap-1">
+        {([['active', `Active (${profiles.length - offCount})`], ['offboarded', `Offboarded (${offCount})`]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 ${tab === k ? 'border-gold text-text-primary' : 'border-transparent text-text-muted hover:text-text-secondary'}`}>{l}</button>
+        ))}
+      </div>
+
       <div className="flex-1 overflow-auto p-8">
         {filtered.length === 0 ? (
-          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">No employees yet.{!readOnly && ' Click “⇪ Sync from Staffing” to create a tile for everyone, or “Add employee” for one.'}</div>
+          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">{tab === 'offboarded' ? 'No offboarded employees yet. Complete an offboarding and click “Move to Offboarded”.' : <>No employees yet.{!readOnly && ' Click “⇪ Sync from Staffing” to create a tile for everyone, or “Add employee” for one.'}</>}</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map(p => (

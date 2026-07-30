@@ -27,6 +27,8 @@ async function ensureTable() {
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS worker_type TEXT`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS american TEXT`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS extra TEXT`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
 }
 
 function rid() { return `st${Date.now()}${Math.random().toString(36).slice(2, 7)}`; }

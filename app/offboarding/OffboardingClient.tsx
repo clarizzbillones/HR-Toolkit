@@ -12,7 +12,7 @@ interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
   separation_date: string | null; separation_type: string | null; prepared_by: string | null;
   checklist: Record<string, boolean>; excluded: Record<string, boolean>; offer_severance: boolean;
-  dob: string | null; hire_date: string | null; notes: string | null;
+  dob: string | null; hire_date: string | null; notes: string | null; offboarded?: boolean;
 }
 interface Emp { name: string; position: string | null; dob: string | null; start_date: string | null; email?: string | null }
 
@@ -114,15 +114,30 @@ export default function OffboardingClient() {
     patch(rec.id, { excluded });
     showToast('Applied age suggestion');
   }
+  async function markOffboarded(rec: Rec, on: boolean) {
+    const res = await fetch('/api/offboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark-offboarded', id: rec.id, offboarded: on }) });
+    const d = await res.json();
+    if (d.row) setRows(p => p.map(r => r.id === rec.id ? d.row : r));
+    showToast(on ? `${rec.name} moved to Offboarded` : 'Restored to active');
+  }
   async function remove(rec: Rec) {
     if (!confirm(`Delete offboarding for ${rec.name}?`)) return;
     await fetch(`/api/offboarding?id=${rec.id}`, { method: 'DELETE' });
     setRows(p => p.filter(r => r.id !== rec.id)); setSelId(null); showToast('Deleted');
   }
 
+  // Normalize any stored date (ISO or mm/dd/yyyy) to yyyy-mm-dd for date inputs.
+  function toISO(s: any): string {
+    if (!s) return '';
+    const str = String(s).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+    const m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(str);
+    if (m) { let y = +m[3]; if (y < 100) y += y < 30 ? 2000 : 1900; return `${y}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`; }
+    return '';
+  }
   function pickEmployee(name: string) {
     const emp = employees.find(e => e.name === name);
-    setForm(f => ({ ...f, name, position: emp?.position ?? f.position, dob: emp?.dob ?? f.dob, hire_date: emp?.start_date ?? f.hire_date }));
+    setForm(f => ({ ...f, name, position: emp?.position ?? f.position, dob: toISO(emp?.dob) || f.dob, hire_date: toISO(emp?.start_date) || f.hire_date }));
   }
 
   function printDoc(rec: Rec) {
@@ -184,6 +199,10 @@ export default function OffboardingClient() {
           <span className="text-sm font-semibold text-text-primary">{rec.name}</span>
           <span className={`ml-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_PILL[status]}`}>{status}</span>
           <div className="ml-auto flex items-center gap-2">
+            {rec.offboarded && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#eceff3] text-[#4a5a6d]">Offboarded</span>}
+            {!readOnly && (rec.offboarded
+              ? <button onClick={() => markOffboarded(rec, false)} className="text-sm font-semibold text-text-secondary border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">↩ Restore to active</button>
+              : <button onClick={() => markOffboarded(rec, true)} className="bg-[#4a5a6d] text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-[#3c4a5a]" title="Mark offboarded and move to the Offboarded lists in Staffing & Employee Files">✓ Move to Offboarded</button>)}
             <button onClick={() => printDoc(rec)} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
             {!readOnly && <button onClick={() => remove(rec)} className="text-sm font-semibold text-litred-alt border border-border-light px-3 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
           </div>

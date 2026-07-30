@@ -22,6 +22,8 @@ async function ensure() {
     email TEXT, phone TEXT, start_date TEXT, details TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   for (const c of EXTRA_COLS) await sql.unsafe(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS employee_files (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, category TEXT, title TEXT, doc_date TEXT,
     summary TEXT, what_we_did TEXT, next_steps TEXT, author TEXT,
