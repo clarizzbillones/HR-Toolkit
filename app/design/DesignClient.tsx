@@ -240,14 +240,18 @@ export default function DesignClient({ employees }: { employees: { name: string 
       c.fillStyle = '#ffffff';
       c.font = `400 88px 'Anton', Impact, sans-serif`;
       c.fillText('WORK ANNIVERSARY', SIZE / 2, topY + 360);
+      // "of"
+      c.fillStyle = 'rgba(255,255,255,0.45)';
+      c.font = '400 30px Georgia, serif';
+      c.fillText('of', SIZE / 2, topY + 418);
       // Name
       c.fillStyle = '#c9a24a';
       c.font = `600 58px Georgia, serif`;
-      c.fillText(name || 'NAME', SIZE / 2, topY + 470);
+      c.fillText(name || 'NAME', SIZE / 2, topY + 478);
       // Greeting
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `24px Georgia, serif`;
-      wrapText(c, greeting, SIZE / 2, 820, 38, topY + 535);
+      wrapText(c, greeting, SIZE / 2, 820, 38, topY + 545);
     }
 
     if (eventType === 'birthday') {
