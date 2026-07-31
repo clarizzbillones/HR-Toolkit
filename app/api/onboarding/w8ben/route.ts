@@ -57,6 +57,8 @@ async function fillW8ben(d: any): Promise<Uint8Array> {
   } else if (d.printName) {
     page.drawText(String(d.printName), { x: 130, y: 74, size: 13, font: await doc.embedFont(StandardFonts.HelveticaOblique), color: ink });
   }
+  // Part III certification checkbox — "I certify that I have the capacity to sign".
+  if (d.capacity) put('X', 111, 99, 9);
   put(mmdd(d.signDate), 470, 74, 9);
   put(d.printName, 130, 44);
   // Flatten is a no-op (flat PDF), but the drawn text is permanent / non-editable.
@@ -125,14 +127,12 @@ export async function POST(req: Request) {
     await sql`INSERT INTO w8ben_requests (id, onboardee_id, contractor_name, contractor_email, token, status)
       VALUES (${id}, ${b.onboardee_id ?? null}, ${name}, ${email || null}, ${token}, 'Sent')`;
     const url = `${origin(req)}/onboarding/w8ben/${token}`;
-    let blankB64 = '';
-    try { blankB64 = (await templateBytes()).toString('base64'); } catch { /* ignore */ }
     let mail: any = { ok: false, error: email ? '' : 'No recipient email' };
     if (email) {
       try {
         mail = await sendMailAsApp(SENDER, email, 'Litson PLLC — Please complete Form W-8BEN',
-          `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px"><div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px"><div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div><div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div></div><p>Hi ${esc(name.split(' ')[0])},</p><p>As part of your onboarding as an international contractor, please complete IRS <b>Form W-8BEN</b> (Certificate of Foreign Status). A blank copy is attached for reference.</p><p style="margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Fill out &amp; submit the W-8BEN</a></p><p style="font-size:12px;color:#666">Fill it in online and submit — a finalized, non-editable PDF is sent to us and to you automatically. Or paste this link:<br>${esc(url)}</p></div>`,
-          HR_CC, blankB64 ? [{ name: 'Form-W-8BEN-blank.pdf', contentBytes: blankB64, contentType: 'application/pdf' }] : undefined);
+          `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px"><div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px"><div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div><div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div></div><p>Hi ${esc(name.split(' ')[0])},</p><p>As part of your onboarding as an international contractor, please complete IRS <b>Form W-8BEN</b> (Certificate of Foreign Status).</p><p style="margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Fill out &amp; submit the W-8BEN</a></p><p style="font-size:12px;color:#666">Fill it in online and submit — a finalized, non-editable PDF is sent to us and to you automatically. Or paste this link:<br>${esc(url)}</p></div>`,
+          HR_CC);
       } catch (e) { mail = { ok: false, error: String(e).slice(0, 200) }; }
     }
     return NextResponse.json({ ok: true, id, url, token, emailed: !!(email && mail.ok), mail });

@@ -41,6 +41,7 @@ export default function W8benPage({ params }: { params: { token: string } }) {
 
   async function submit() {
     for (const f of W8BEN_FIELDS) if (f.req && !String(data[f.id] ?? '').trim()) { setError(`Please complete: ${f.label}`); return; }
+    if (!data.capacity) { setError('Please check the certification box to sign.'); return; }
     const signatureImage = sigMode === 'draw' ? drawn : '';
     setBusy(true); setError('');
     try {
@@ -95,6 +96,10 @@ export default function W8benPage({ params }: { params: { token: string } }) {
               {sigMode === 'type'
                 ? <input value={data.printName ?? ''} onChange={e => set('printName', e.target.value)} placeholder="Type your full legal name" style={{ ...inp, fontFamily: 'Georgia, serif', fontStyle: 'italic' }} />
                 : <SignPad onImage={setDrawn} />}
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontSize: 13, color: '#1b2a3d', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!data.capacity} onChange={e => set('capacity', e.target.checked)} style={{ marginTop: 3 }} />
+                <span>I certify that I have the capacity to sign for the person identified on line 1 of this form. *</span>
+              </label>
               <p style={{ fontSize: 11, color: '#8a8474', marginTop: 6 }}>Under penalties of perjury, this is your electronic signature certifying the information is true, correct, and complete.</p>
             </div>
             {error && <p style={{ color: '#b0412f', fontSize: 13 }}>{error}</p>}
