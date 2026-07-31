@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
+import { ALEX_SIGNATURE } from '@/lib/signature';
 
 const DEFAULTS = {
   name: '', ssn: '', empFrom: '', empTo: '', occupation: '', location: '',
@@ -104,7 +105,8 @@ export default function Lb0489Fill() {
   useEffect(() => {
     try { const s = localStorage.getItem('litson_lb0489_sig'); if (s) setSavedSig(s); } catch { /* ignore */ }
     fetch('/api/signatures').then(r => r.json()).then(d => setServerSigs(d.signatures ?? [])).catch(() => {});
-    setF(p => p.signatureImage ? p : { ...p, signatureImage: typedToImage(p.signerName) });
+    // Default to Alex's actual signature (the one used on the offer letters).
+    setF(p => p.signatureImage ? p : { ...p, signatureImage: ALEX_SIGNATURE });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   function setTypedName(v: string) { setF(p => ({ ...p, signerName: v, signatureImage: typedToImage(v) })); }
@@ -191,6 +193,7 @@ export default function Lb0489Fill() {
             {(['type', 'draw'] as const).map(m => (
               <button key={m} type="button" onClick={() => setSigMode(m)} className={`text-xs font-semibold px-3 py-1.5 rounded-ctrl border ${sigMode === m ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:border-ink'}`}>{m === 'type' ? 'Type name' : 'Draw'}</button>
             ))}
+            <button type="button" onClick={() => setF(p => ({ ...p, signatureImage: ALEX_SIGNATURE, signerName: 'Alex Little' }))} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Use Alex’s signature</button>
             {serverSigs.map(s => (
               <button key={s.name} type="button" onClick={() => setF(p => ({ ...p, signatureImage: s.image, signerName: s.name }))} className="text-xs font-semibold text-[#3f6b8a] hover:underline">Use {s.name}</button>
             ))}
