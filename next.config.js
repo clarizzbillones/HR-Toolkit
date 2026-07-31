@@ -5,6 +5,7 @@ const nextConfig = {
   // function so the fill route can read it from disk on Vercel.
   outputFileTracingIncludes: {
     '/api/hr-forms/lb0489': ['./public/forms/lb0489.pdf'],
+    '/api/onboarding/w8ben': ['./public/forms/w8ben.pdf'],
   },
   images: {
     remotePatterns: [],

@@ -146,6 +146,30 @@ export default function OnboardingClient() {
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
+  // W-8BEN (international contractor tax form) status for the selected person.
+  const [w8Rec, setW8Rec] = useState<any>(null);
+  const [w8Busy, setW8Busy] = useState(false);
+  useEffect(() => {
+    if (!selected) { setW8Rec(null); return; }
+    fetch(`/api/onboarding/w8ben?onboardeeId=${selected}`).then(r => r.json()).then(d => setW8Rec(d.row ?? null)).catch(() => setW8Rec(null));
+  }, [selected]);
+  async function sendW8ben(p: any) {
+    setW8Busy(true);
+    try {
+      const res = await fetch('/api/onboarding/w8ben', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', onboardee_id: p.id, contractor_name: p.name, contractor_email: p.email }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      setW8Rec({ id: d.id, contractor_name: p.name, contractor_email: p.email, status: 'Sent' });
+      showToast(d.emailed ? `W-8BEN sent to ${p.email}` : 'Created — no email on file');
+    } catch { showToast('Could not send'); }
+    finally { setW8Busy(false); }
+  }
+  async function deleteW8ben() {
+    if (!w8Rec?.id) { setW8Rec(null); return; }
+    if (!confirm('Delete this W-8BEN request?')) return;
+    await fetch(`/api/onboarding/w8ben?id=${w8Rec.id}`, { method: 'DELETE' });
+    setW8Rec(null); showToast('W-8BEN request deleted');
+  }
   const [showAdd, setShowAdd] = useState(false);
   const blankNew = { name: '', email: '', position: '', worker_type: 'Employee', guide: 'General', tag: 'New hire', start_date: '', onboarding_date: '', dob: '', phone: '' };
   const [newForm, setNewForm] = useState({ ...blankNew });
@@ -1621,6 +1645,33 @@ export default function OnboardingClient() {
                       <button onClick={() => addTodo(person, newTodo)} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">Add</button>
                     </div>
                   </div>
+
+                  {person.worker_type === 'Contractor' && (
+                    <div className="px-5 py-4 border-b border-border bg-[#fbf7ee]">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gold-muted">International contractor — Form W-8BEN</div>
+                        {w8Rec && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${w8Rec.status === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{w8Rec.status === 'Completed' ? 'Completed' : 'Sent — awaiting'}</span>}
+                      </div>
+                      {!w8Rec ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[12px] text-text-muted flex-1 min-w-[180px]">Email {person.name.split(' ')[0]} the official W-8BEN to complete. They fill it online and a finalized, non-editable PDF is sent back to you and to them.</p>
+                          <button onClick={() => sendW8ben(person)} disabled={w8Busy || !person.email} title={person.email ? '' : 'Add an email to this hire first'} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{w8Busy ? 'Sending…' : '✉ Send W-8BEN'}</button>
+                        </div>
+                      ) : w8Rec.status === 'Completed' ? (
+                        <div className="flex items-center gap-3 flex-wrap text-sm">
+                          <span className="text-[#2f7d5b] font-semibold">✓ Completed & filed</span>
+                          <a href={`/api/onboarding/w8ben?download=${w8Rec.id}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] font-semibold hover:underline">⤓ Download W-8BEN PDF</a>
+                          <button onClick={deleteW8ben} className="text-[11px] text-litred-alt hover:underline ml-auto">Delete</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 flex-wrap text-sm">
+                          <span className="text-text-muted">Sent{w8Rec.contractor_email ? ` to ${w8Rec.contractor_email}` : ''} — awaiting their submission.</span>
+                          <button onClick={() => sendW8ben(person)} disabled={w8Busy} className="text-[#3f6b8a] font-semibold hover:underline">🔔 Resend</button>
+                          <button onClick={deleteW8ben} className="text-[11px] text-litred-alt hover:underline ml-auto">Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="p-4 space-y-1">
                     <div className="flex items-center justify-between px-2 mb-1">
