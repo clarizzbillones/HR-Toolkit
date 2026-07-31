@@ -59,8 +59,8 @@ async function fillW8ben(d: any): Promise<Uint8Array> {
   }
   // Part III certification checkbox — "I certify that I have the capacity to sign".
   if (d.capacity) put('X', 111, 99, 9);
-  put(mmdd(d.signDate), 470, 74, 9);
-  put(d.printName, 130, 44);
+  put(mmdd(d.signDate), 470, 76, 9);
+  put(d.printName, 130, 51);
   // Flatten is a no-op (flat PDF), but the drawn text is permanent / non-editable.
   return doc.save();
 }
