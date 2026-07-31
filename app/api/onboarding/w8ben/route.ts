@@ -107,11 +107,20 @@ export async function POST(req: Request) {
     await sql`UPDATE w8ben_requests SET data = ${JSON.stringify(data)}, pdf_data = ${`data:application/pdf;base64,${b64}`}, status = 'Completed', submitted_at = NOW() WHERE id = ${row.id}`;
     const fname = `W-8BEN-${String(row.contractor_name || 'form').replace(/[^\w]+/g, '-')}.pdf`;
     try {
-      const to = row.contractor_email && row.contractor_email !== HR_CC ? HR_CC : HR_CC;
       const cc = row.contractor_email ? [row.contractor_email] : [];
-      await sendMailAsApp(SENDER, to, `Completed W-8BEN — ${row.contractor_name}`,
-        `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px"><p><b>${esc(row.contractor_name)}</b> has completed and submitted their Form W-8BEN. The finalized PDF is attached (non-editable).</p></div>`,
+      await sendMailAsApp(SENDER, HR_CC, `Completed W-8BEN — ${row.contractor_name}`,
+        `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px"><p><b>${esc(row.contractor_name)}</b> has completed and submitted their Form W-8BEN. The finalized PDF is attached (non-editable) and filed in their Employee File.</p></div>`,
         cc, [{ name: fname, contentBytes: b64, contentType: 'application/pdf' }]);
+    } catch { /* best-effort */ }
+    // File the completed form under the contractor's Employee File.
+    try {
+      const { attachPdfToEmployeeFile } = await import('@/lib/employeeFiles');
+      await attachPdfToEmployeeFile({
+        name: row.contractor_name, category: 'Other', title: 'Form W-8BEN (completed)',
+        docDate: new Date().toISOString().slice(0, 10), attName: fname,
+        dataUrl: `data:application/pdf;base64,${b64}`, sourceRef: `w8ben:${row.id}`,
+        summary: 'Completed IRS Form W-8BEN — Certificate of Foreign Status.',
+      });
     } catch { /* best-effort */ }
     return NextResponse.json({ ok: true });
   }
@@ -147,6 +156,7 @@ export async function DELETE(req: Request) {
   await ensure();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  try { await sql`DELETE FROM employee_files WHERE source_ref = ${`w8ben:${id}`}`; } catch { /* table may not exist */ }
   await sql`DELETE FROM w8ben_requests WHERE id = ${id}`;
   return NextResponse.json({ ok: true });
 }
