@@ -149,18 +149,22 @@ export default function OnboardingClient() {
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
+  const [w8Email, setW8Email] = useState('');   // editable recipient (prefilled from the hire; change it to test)
   useEffect(() => {
     if (!selected) { setW8Rec(null); return; }
+    setW8Email(people.find((x: any) => x.id === selected)?.email ?? '');
     fetch(`/api/onboarding/w8ben?onboardeeId=${selected}`).then(r => r.json()).then(d => setW8Rec(d.row ?? null)).catch(() => setW8Rec(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
   async function sendW8ben(p: any) {
+    const to = (w8Email || p.email || '').trim();
     setW8Busy(true);
     try {
-      const res = await fetch('/api/onboarding/w8ben', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', onboardee_id: p.id, contractor_name: p.name, contractor_email: p.email }) });
+      const res = await fetch('/api/onboarding/w8ben', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', onboardee_id: p.id, contractor_name: p.name, contractor_email: to }) });
       const d = await res.json();
       if (!res.ok) { showToast(d.error || 'Could not send'); return; }
-      setW8Rec({ id: d.id, contractor_name: p.name, contractor_email: p.email, status: 'Sent' });
-      showToast(d.emailed ? `W-8BEN sent to ${p.email}` : 'Created — no email on file');
+      setW8Rec({ id: d.id, contractor_name: p.name, contractor_email: to, status: 'Sent' });
+      showToast(d.emailed ? `W-8BEN sent to ${to}` : 'Created — add an email to send');
     } catch { showToast('Could not send'); }
     finally { setW8Busy(false); }
   }
@@ -1653,9 +1657,13 @@ export default function OnboardingClient() {
                         {w8Rec && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${w8Rec.status === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{w8Rec.status === 'Completed' ? 'Completed' : 'Sent — awaiting'}</span>}
                       </div>
                       {!w8Rec ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[12px] text-text-muted flex-1 min-w-[180px]">Email {person.name.split(' ')[0]} the official W-8BEN to complete. They fill it online and a finalized, non-editable PDF is sent back to you and to them.</p>
-                          <button onClick={() => sendW8ben(person)} disabled={w8Busy || !person.email} title={person.email ? '' : 'Add an email to this hire first'} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{w8Busy ? 'Sending…' : '✉ Send W-8BEN'}</button>
+                        <div className="space-y-2">
+                          <p className="text-[12px] text-text-muted">Email the official W-8BEN to complete. They fill it online and a finalized, non-editable PDF is sent back to you and to them.</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <input value={w8Email} onChange={e => setW8Email(e.target.value)} placeholder="recipient@email.com" className="flex-1 min-w-[200px] border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                            <button onClick={() => sendW8ben(person)} disabled={w8Busy || !w8Email.trim()} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{w8Busy ? 'Sending…' : '✉ Send W-8BEN'}</button>
+                          </div>
+                          <p className="text-[10px] text-text-faint">Testing? Put your own email here to preview what the contractor receives.</p>
                         </div>
                       ) : w8Rec.status === 'Completed' ? (
                         <div className="flex items-center gap-3 flex-wrap text-sm">
