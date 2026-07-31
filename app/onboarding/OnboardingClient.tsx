@@ -163,8 +163,9 @@ export default function OnboardingClient() {
       const res = await fetch('/api/onboarding/w8ben', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', onboardee_id: p.id, contractor_name: p.name, contractor_email: to }) });
       const d = await res.json();
       if (!res.ok) { showToast(d.error || 'Could not send'); return; }
-      setW8Rec({ id: d.id, contractor_name: p.name, contractor_email: to, status: 'Sent' });
-      showToast(d.emailed ? `W-8BEN sent to ${to}` : 'Created — add an email to send');
+      setW8Rec({ id: d.id, contractor_name: p.name, contractor_email: to, status: 'Sent', token: d.token });
+      if (d.emailed) showToast(`W-8BEN emailed to ${to}`);
+      else showToast(`Link created — email didn't send${d.mail?.error ? ` (${d.mail.error})` : ''}. Use the “Open the form link” below to test.`);
     } catch { showToast('Could not send'); }
     finally { setW8Busy(false); }
   }
@@ -1672,10 +1673,13 @@ export default function OnboardingClient() {
                           <button onClick={deleteW8ben} className="text-[11px] text-litred-alt hover:underline ml-auto">Delete</button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 flex-wrap text-sm">
-                          <span className="text-text-muted">Sent{w8Rec.contractor_email ? ` to ${w8Rec.contractor_email}` : ''} — awaiting their submission.</span>
-                          <button onClick={() => sendW8ben(person)} disabled={w8Busy} className="text-[#3f6b8a] font-semibold hover:underline">🔔 Resend</button>
-                          <button onClick={deleteW8ben} className="text-[11px] text-litred-alt hover:underline ml-auto">Delete</button>
+                        <div className="text-sm space-y-1.5">
+                          <div className="text-text-muted">Sent{w8Rec.contractor_email ? ` to ${w8Rec.contractor_email}` : ''} — awaiting their submission.</div>
+                          {w8Rec.token && <a href={`/onboarding/w8ben/${w8Rec.token}`} target="_blank" rel="noopener noreferrer" className="text-[#3f6b8a] font-semibold hover:underline break-all">↗ Open the form link (to preview / test)</a>}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <button onClick={() => sendW8ben(person)} disabled={w8Busy} className="text-[#3f6b8a] font-semibold hover:underline">🔔 Resend</button>
+                            <button onClick={deleteW8ben} className="text-[11px] text-litred-alt hover:underline ml-auto">Delete</button>
+                          </div>
                         </div>
                       )}
                     </div>
