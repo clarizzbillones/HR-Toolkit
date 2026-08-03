@@ -16,6 +16,15 @@ async function ensureTable() {
   for (const c of ['guide', 'day', 'assignee', 'location', 'url', 'owner'])
     await sql`ALTER TABLE onboarding_items ADD COLUMN IF NOT EXISTS ${sql(c)} text`;
   await sql`UPDATE onboarding_items SET guide = 'General' WHERE guide IS NULL`;
+  // One-time repair: an earlier POST handler coerced 'blockhidden'/'blocklabel'
+  // items to 'section' (they weren't in the allowed-kind list). Reclassify any
+  // stray section rows whose `day` is a block key back to their real kind so
+  // Remove-section / rename-header state is honored instead of showing as junk
+  // empty sections.
+  await sql`UPDATE onboarding_items SET kind = 'blockhidden'
+    WHERE kind = 'section' AND day IN ('tools','sop','schedule','tables') AND title = day`;
+  await sql`UPDATE onboarding_items SET kind = 'blocklabel'
+    WHERE kind = 'section' AND day IN ('tools','sop','schedule','tables') AND (title IS DISTINCT FROM day)`;
 }
 
 // ---------- GENERAL new-hire guide ----------
@@ -400,7 +409,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ items });
   }
   const guide = (body.guide ?? 'General').toString();
-  const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task'].includes(body.kind) ? body.kind : 'section';
+  const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task', 'blocklabel', 'blockhidden'].includes(body.kind) ? body.kind : 'section';
   const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${guide} AND kind = ${kind}`;
   const id = cuid();
   await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, sort_order)
