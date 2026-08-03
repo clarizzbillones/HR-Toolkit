@@ -957,20 +957,33 @@ export default function OnboardingClient() {
   function saveTable(id: string, d: TableData) { patch(id, { body: JSON.stringify(d) }); }
 
   // Reusable editable list (Tools or SOP Links)
-  // Custom, per-guide label for a block header (Tools / SOP Links / Schedule).
+  // Custom, per-guide label for a block header (Tools / SOP Links). Typed into a
+  // local draft and persisted once on blur so it doesn't spawn items per key.
   const blockLabel = (g: string, bk: string, fallback: string) =>
     items.find(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk)?.title || fallback;
+  const [hdrDraft, setHdrDraft] = useState<Record<string, string>>({});
   async function saveBlockLabel(g: string, bk: string, text: string) {
-    const ex = items.find(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk);
-    if (ex) patch(ex.id, { title: text });
-    else await add('blocklabel' as Item['kind'], { title: text, day: bk }, g);
+    const matches = items.filter(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk);
+    if (matches.length) {
+      patch(matches[0].id, { title: text });
+      for (const extra of matches.slice(1)) remove(extra.id); // clean up any earlier dupes
+    } else {
+      await add('blocklabel' as Item['kind'], { title: text, day: bk }, g);
+    }
   }
 
-  const LinkBlock = ({ kind, title, color, list, placeholder, addGuide }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string; addGuide?: string }) => (
+  const LinkBlock = ({ kind, title, color, list, placeholder, addGuide }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string; addGuide?: string }) => {
+    const g = addGuide ?? guide;
+    const hk = `${g}:${kind}`;
+    return (
     <div>
       <div className="flex items-center gap-2 mb-2">
         <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
-        <input value={blockLabel(addGuide ?? guide, kind, title)} onChange={e => saveBlockLabel(addGuide ?? guide, kind, e.target.value)} title="Click to rename this header"
+        <input
+          value={hdrDraft[hk] ?? blockLabel(g, kind, title)}
+          onChange={e => setHdrDraft(d => ({ ...d, [hk]: e.target.value }))}
+          onBlur={() => { const v = hdrDraft[hk]; if (v != null) { const t = v.trim() || title; saveBlockLabel(g, kind, t); setHdrDraft(d => { const n = { ...d }; delete n[hk]; return n; }); } }}
+          title="Click to rename this header"
           className="text-sm font-bold uppercase tracking-wider bg-transparent rounded px-1 -mx-1 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#c9a24a] w-56" style={{ color }} />
         {list.length > 0 && (
           <button onClick={() => copyLinksToGuide(kind, list)}
@@ -990,7 +1003,8 @@ export default function OnboardingClient() {
         <button onClick={() => add(kind, { title: placeholder }, addGuide)} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add</button>
       </div>
     </div>
-  );
+    );
+  };
 
   // Inner HTML for a guide body, from an explicit item list + name. Reused by
   // the on-screen combined view, the PDF export, and the combine-panel preview.
