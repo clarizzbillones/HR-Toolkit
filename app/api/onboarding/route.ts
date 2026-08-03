@@ -161,24 +161,46 @@ const C_TASKS: [string, string][] = [
 
 // ---------- BENEFITS PACKAGE guide (Attorneys only, for now) ----------
 const B_SECTIONS: [number, string, string][] = [
-  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. Benefits are viewed and managed through the Ease / Gusto employee portal.\n\nPrepared for: [EMPLOYEE NAME] · Position: Attorney\nStart date: [START DATE] · Benefits effective date: [EFFECTIVE DATE]`],
-  [1, 'Medical Insurance', `Provider: **Blue Cross Blue Shield**\n• Option 1 — BlueCross SG Silver 147P (Blue Network P)\n• Option 2 — BlueCross SG Gold 117P (Blue Network P)\nMember services: (800) 565-9140\nID cards: Physical cards are mailed within 10–14 business days of the coverage effective date; if they don't arrive, contact member services. Electronic ID cards are also available.`],
-  [2, 'Dental Insurance', `Provider: **Guardian**\nPlan: Guardian 1500 with Child Ortho (UCR)\nMember services: (800) 541-7846`],
-  [3, 'Vision Insurance', `Provider: **Guardian (VSP)**\nPlan: Guardian 10/20/150, 12/12\nMember services: (800) 877-7195`],
-  [4, 'Life Insurance', `Provider: **PRINCIPAL** · Total face amount: $1,500,000 · Cost to employee: None — fully firm-paid.\n\nHow the death benefit is divided: This is an employer-owned policy. The firm pays the full premium and is a named partial beneficiary. The $1,500,000 face amount is split 50/50 (see the table below). You designate the beneficiary for your 50% share; the firm's 50% share is fixed by the policy structure and is not redirectable.\n\nEnrollment: Optional and not automatic. Coverage costs you nothing (no payroll deduction), but you must elect coverage and designate a beneficiary during benefits enrollment. If you do not elect, you will not be enrolled and no benefit is payable.`],
-  [5, '401(k) Retirement Plan', `Provider: **Guideline**\nEligibility: after one year of continuous full-time employment.\nEmployer match: up to 6% of salary.\nMember services: (888) 344-5188`],
-  [6, 'Paid Time Off', `Litson PLLC offers **Unlimited Paid Time Off** for full-time employees — designed for flexibility while maintaining accountability and performance.\n\nKey principles:\n• Unlimited PTO does not eliminate job responsibilities, deadlines, or performance expectations.\n• The benefit is based on trust and may be reviewed or restricted if abused or misused.\n\nEmployee responsibilities:\n• Meet all deadlines, deliverables, and client obligations.\n• If work is due during PTO, complete it in advance or secure coverage with a proper handoff.\n• Coordinate coverage independently.\n• Keep the Firm's availability calendar current (out-of-office).\n\nPTO protocol:\n• Submit the PTO form: https://litson-apps.zapier.app/\n• Add to the shared availability calendar as: NAME – PTO\n• Coordinate coverage in advance and address deadlines before taking time off.\nBoth the form and the calendar entry are required; the form does not update the calendar automatically.`],
-  [7, 'Bonus Structure — Attorneys', `Bonuses are calculated and paid **twice annually, in July and December**. All bonuses are contingent on the firm's overall performance and are not a fixed entitlement.\n\nCalculation: based on average monthly adjusted hours over the six-month period, expressed as a percentage of salary (see the tier table below).\n\nWhat counts as hours: total billable and adjusted hours. Adjusted hours include approved nonbillable legal work (micro-firm work, contingency matters, and other designated adjusted time). Administrative work is not included.\n\nFirst bonus period: the standard second-half period runs July–December. For attorneys joining mid-period, the first bonus is measured from the start date through December, based on months actually worked.\n\nOrigination bonuses: attorneys are also eligible for origination bonuses, calculated and paid separately under a separate program (not reflected in the tiers above).`],
+  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. Benefits are viewed and managed through the Ease / Gusto employee portal.\n\nPrepared for: [EMPLOYEE NAME]\nPosition: Attorney\nStart date: [START DATE]\n\nEach benefit is summarized in the tables below. Enrollment and beneficiary elections are made during benefits enrollment.`],
+  [6, 'Paid Time Off — Unlimited', `Litson PLLC offers **Unlimited Paid Time Off** for full-time employees — designed for flexibility while maintaining accountability and performance.\n\nKey principles:\n• Unlimited PTO does not eliminate job responsibilities, deadlines, or performance expectations.\n• The benefit is based on trust and may be reviewed or restricted if abused or misused.\n\nEmployee responsibilities:\n• Meet all deadlines, deliverables, and client obligations.\n• If work is due during PTO, complete it in advance or secure coverage with a proper handoff.\n• Coordinate coverage independently.\n• Keep the Firm's availability calendar current (out-of-office).\n\nPTO protocol:\n• Submit the PTO form: https://litson-apps.zapier.app/\n• Add to the shared availability calendar as: NAME – PTO\n• Coordinate coverage in advance and address deadlines before taking time off.\nBoth the form and the calendar entry are required; the form does not update the calendar automatically.`],
+  [7, 'Bonus Structure — Attorneys', `Bonuses are calculated and paid **twice annually, in July and December**. All bonuses are contingent on the firm's overall performance and are not a fixed entitlement.\n\nCalculation: based on average monthly adjusted hours over the six-month period, expressed as a percentage of salary (see the Bonus Tiers table).\n\nWhat counts as hours: total billable and adjusted hours. Adjusted hours include approved nonbillable legal work (micro-firm work, contingency matters, and other designated adjusted time). Administrative work is not included.\n\nFirst bonus period: the standard second-half period runs July–December. For attorneys joining mid-period, the first bonus is measured from the start date through December, based on months actually worked.\n\nOrigination bonuses: attorneys are also eligible for origination bonuses, calculated and paid separately under a separate program (not reflected in the tiers).`],
 ];
 const B_LINKS = ['Employee benefits portal (Ease / Gusto)', 'PTO form — Litson Employee Forms'];
 const B_TABLES: { title: string; headers: string[]; rows: string[][] }[] = [
-  { title: 'Medical — Plan Options', headers: ['Option', 'Plan', 'Network'], rows: [
-    ['Option 1', 'BlueCross SG Silver 147P', 'Blue Network P'],
-    ['Option 2', 'BlueCross SG Gold 117P', 'Blue Network P'],
+  { title: 'Medical Insurance', headers: ['Detail', 'Information'], rows: [
+    ['Provider', 'Blue Cross Blue Shield'],
+    ['Plan — Option 1', 'BlueCross SG Silver 147P · Blue Network P'],
+    ['Plan — Option 2', 'BlueCross SG Gold 117P · Blue Network P'],
+    ['Member services', '(800) 565-9140'],
+    ['ID cards', 'Mailed within 10–14 business days of the effective date; electronic cards also available'],
+  ] },
+  { title: 'Dental Insurance', headers: ['Detail', 'Information'], rows: [
+    ['Provider', 'Guardian'],
+    ['Plan', 'Guardian 1500 with Child Ortho (UCR)'],
+    ['Member services', '(800) 541-7846'],
+  ] },
+  { title: 'Vision Insurance', headers: ['Detail', 'Information'], rows: [
+    ['Provider', 'Guardian (VSP)'],
+    ['Plan', 'Guardian 10/20/150, 12/12'],
+    ['Member services', '(800) 877-7195'],
+  ] },
+  { title: 'Life Insurance', headers: ['Detail', 'Information'], rows: [
+    ['Provider', 'PRINCIPAL'],
+    ['Total face amount', '$1,500,000'],
+    ['Cost to employee', 'None — fully firm-paid (no payroll deduction)'],
+    ['Enrollment', 'Optional & NOT automatic — you must elect coverage and designate a beneficiary'],
+    ['Structure', 'Employer-owned policy; firm pays the full premium and is a named partial beneficiary (see split)'],
+    ['Member services', 'Ask HR'],
   ] },
   { title: 'Life Insurance — Death Benefit Split', headers: ['Payable to', 'Amount', 'Share'], rows: [
     ['Your designated beneficiary', '$750,000', '50%'],
-    ['Litson PLLC', '$750,000', '50%'],
+    ['Litson PLLC (fixed by policy)', '$750,000', '50%'],
+  ] },
+  { title: '401(k) Retirement Plan', headers: ['Detail', 'Information'], rows: [
+    ['Provider', 'Guideline'],
+    ['Eligibility', 'After 1 year of continuous full-time employment'],
+    ['Employer match', 'Up to 6% of salary'],
+    ['Member services', '(888) 344-5188'],
   ] },
   { title: 'Attorney Bonus Tiers (avg hours / month → % of salary)', headers: ['Average hours / month', 'Tier', 'Bonus'], rows: [
     ['Under 130', '—', '0%'],
@@ -214,11 +236,18 @@ async function seedAll() {
   await seedGuide('Benefits Package', B_SECTIONS, [], [], B_LINKS, B_TASKS, B_TABLES);
 }
 
-// Add the Benefits Package guide once, without disturbing existing guides.
+// Add / refresh the Benefits Package guide without disturbing other guides.
+// Bump BENEFITS_V to re-seed just this guide from the definitions above.
+const BENEFITS_V = 2;
 async function ensureBenefitsGuide() {
+  const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'benefits_guide_v' LIMIT 1` as any[];
+  const cur = meta.length ? parseInt(meta[0].body ?? '0') : 0;
   const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = 'Benefits Package'`;
-  if (n > 0) return;
+  if (n > 0 && cur >= BENEFITS_V) return;
+  await sql`DELETE FROM onboarding_items WHERE guide = 'Benefits Package'`;
   await seedGuide('Benefits Package', B_SECTIONS, [], [], B_LINKS, B_TASKS, B_TABLES);
+  if (meta.length) await sql`UPDATE onboarding_items SET body = ${String(BENEFITS_V)} WHERE kind = 'meta' AND title = 'benefits_guide_v'`;
+  else await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'benefits_guide_v', ${String(BENEFITS_V)})`;
 }
 
 async function migrate() {
