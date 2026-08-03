@@ -871,13 +871,18 @@ export default function OnboardingClient() {
   const personName = hire.trim() || (isComposed ? guide : '');
   const greeting = personName ? `Hi ${personName},` : 'Welcome aboard,';
 
-  const SectionCard = (s: Item) => (
-    <div key={s.id}
-      draggable={editing !== s.id}
-      onDragStart={() => setDragId(s.id)}
-      onDragOver={e => e.preventDefault()}
-      onDrop={() => reorderSection(s.id)}
-      onDragEnd={() => setDragId(null)}
+  const SectionCard = (s: Item) => {
+    // Only attach drag handlers when NOT editing — a draggable card blocks
+    // typing / text selection in the section's textarea while you edit it.
+    const dragProps = editing === s.id ? {} : {
+      draggable: true,
+      onDragStart: () => setDragId(s.id),
+      onDragOver: (e: any) => e.preventDefault(),
+      onDrop: () => reorderSection(s.id),
+      onDragEnd: () => setDragId(null),
+    };
+    return (
+    <div key={s.id} {...dragProps}
       className={`bg-white border border-border rounded-card overflow-hidden ${dragId === s.id ? 'opacity-40' : ''}`}>
       {editing === s.id ? (
         <div className="p-5 space-y-3">
@@ -930,7 +935,8 @@ export default function OnboardingClient() {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const cell = "px-3 py-2 text-sm border-t border-[#f1ece3]";
   // Clear click-to-edit affordance: shows a hover tint + text cursor so cells
