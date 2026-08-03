@@ -237,6 +237,20 @@ export default function OffersClient() {
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(caret, caret); });
   }
 
+  // Toolbar for the generated offer-letter draft — wrap the selection in
+  // **bold** / *italic* so you can emphasize the salary, rate, dates, etc.
+  const offerRef = useRef<HTMLTextAreaElement>(null);
+  function applyOfferFmt(kind: 'bold' | 'italic') {
+    const ta = offerRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const mark = kind === 'bold' ? '**' : '*';
+    const sel = draft.slice(start, end) || (kind === 'bold' ? 'bold text' : 'italic text');
+    const next = draft.slice(0, start) + mark + sel + mark + draft.slice(end);
+    setDraft(next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + mark.length, start + mark.length + sel.length); });
+  }
+
   const certBodyRef = useRef<HTMLTextAreaElement>(null);
   // Same toolbar for the Certificate wording box. Operates on the shown text
   // (certBody), materializing the composed default into cert.body on first use.
@@ -313,6 +327,12 @@ export default function OffersClient() {
       }
       return out;
     }
+    // Honor manual **bold** / *italic* markers typed or added via the toolbar.
+    function inlineMd(escaped: string) {
+      return escaped
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, '$1<em>$2</em>');
+    }
 
     const draftClean = draft.replace(/\n{3,}/g, '\n\n');
     const linesArr = draftClean.split('\n');
@@ -343,7 +363,7 @@ export default function OffersClient() {
       } else if (l.trim() === '') {
         bodyHtml += `<div style="height:6pt"></div>`;
       } else {
-        bodyHtml += `<div style="text-align:justify;margin-bottom:0">${boldize(esc(l))}</div>`;
+        bodyHtml += `<div style="text-align:justify;margin-bottom:0">${inlineMd(boldize(esc(l)))}</div>`;
       }
     }
 
@@ -747,8 +767,16 @@ ${bodyHtml}
 
               {/* Body */}
               {draft ? (
-                <div className="px-8 pt-6 pb-2">
+                <div className="px-8 pt-4 pb-2">
+                  <div className="flex items-center gap-1 mb-1.5 print:hidden">
+                    <button type="button" onClick={() => applyOfferFmt('bold')} title="Bold selected text (**text**)"
+                      className="px-2.5 py-1 text-sm font-bold rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary">B</button>
+                    <button type="button" onClick={() => applyOfferFmt('italic')} title="Italicize selected text (*text*)"
+                      className="px-2.5 py-1 text-sm italic rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary">I</button>
+                    <span className="text-[10px] text-text-muted ml-1">Select a word (e.g. the rate) then B / I</span>
+                  </div>
                   <textarea
+                    ref={offerRef}
                     value={draft}
                     onChange={e => setDraft(e.target.value)}
                     className="w-full text-[13px] leading-[1.6] text-text-primary resize-none focus:outline-none border-none bg-transparent"
