@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
-  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task';
+  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel';
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
 }
@@ -309,6 +309,17 @@ export default function OnboardingClient() {
     if (Array.isArray(newItems)) setItems(newItems);
     setGuide(name);
     showToast(`Duplicated “${guide}” → “${name}” (independent copy)`);
+  }
+  async function renameGuide() {
+    const name = prompt(`Rename the “${guide}” guide (tab) to:`, guide)?.trim();
+    if (!name || name === guide) return;
+    if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename-guide', from: guide, to: name }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Rename failed'); return; }
+    if (Array.isArray(d.items)) setItems(d.items);
+    setGuide(name);
+    showToast(`Renamed to “${name}”`);
   }
   const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
@@ -946,11 +957,21 @@ export default function OnboardingClient() {
   function saveTable(id: string, d: TableData) { patch(id, { body: JSON.stringify(d) }); }
 
   // Reusable editable list (Tools or SOP Links)
+  // Custom, per-guide label for a block header (Tools / SOP Links / Schedule).
+  const blockLabel = (g: string, bk: string, fallback: string) =>
+    items.find(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk)?.title || fallback;
+  async function saveBlockLabel(g: string, bk: string, text: string) {
+    const ex = items.find(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk);
+    if (ex) patch(ex.id, { title: text });
+    else await add('blocklabel' as Item['kind'], { title: text, day: bk }, g);
+  }
+
   const LinkBlock = ({ kind, title, color, list, placeholder, addGuide }: { kind: 'tool' | 'sop'; title: string; color: string; list: Item[]; placeholder: string; addGuide?: string }) => (
     <div>
       <div className="flex items-center gap-2 mb-2">
         <span className="w-2.5 h-6 rounded-full" style={{ background: color }} />
-        <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{title}</h2>
+        <input value={blockLabel(addGuide ?? guide, kind, title)} onChange={e => saveBlockLabel(addGuide ?? guide, kind, e.target.value)} title="Click to rename this header"
+          className="text-sm font-bold uppercase tracking-wider bg-transparent rounded px-1 -mx-1 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#c9a24a] w-56" style={{ color }} />
         {list.length > 0 && (
           <button onClick={() => copyLinksToGuide(kind, list)}
             className="ml-auto text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
@@ -1276,6 +1297,7 @@ export default function OnboardingClient() {
             {guide !== 'General' && (
               <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
             )}
+            <button onClick={renameGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
             <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
             {guide !== 'General' && (
               <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>

@@ -348,6 +348,17 @@ export async function POST(req: Request) {
     const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
     return NextResponse.json({ items });
   }
+  // Rename a guide — move all its items to the new name.
+  if (body.action === 'rename-guide') {
+    const from = (body.from ?? '').toString();
+    const to = (body.to ?? '').toString().trim();
+    if (!from || !to || from === to) return NextResponse.json({ error: 'Bad from/to' }, { status: 400 });
+    const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = ${to} AND kind <> 'meta'`;
+    if (n > 0) return NextResponse.json({ error: `A guide named "${to}" already exists` }, { status: 409 });
+    await sql`UPDATE onboarding_items SET guide = ${to} WHERE guide = ${from}`;
+    const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
+    return NextResponse.json({ items });
+  }
   // Duplicate every item from one guide into another (append; source untouched)
   if (body.action === 'duplicate') {
     const from = (body.from ?? '').toString();
