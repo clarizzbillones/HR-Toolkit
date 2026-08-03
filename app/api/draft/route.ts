@@ -25,6 +25,7 @@ export async function POST(req: Request) {
         cadence,
         rateBasis: params.rateBasis === 'hourly' ? 'hourly' : 'monthly',
         payBasis: ['monthly', 'weekly', 'biweekly'].includes(params.payBasis) ? params.payBasis : 'monthly',
+        compBasis: ['annual', 'monthly', 'hourly'].includes(params.compBasis) ? params.compBasis : 'annual',
         salutationTitle: params.salutationTitle ?? '',
       });
       return NextResponse.json({ text });

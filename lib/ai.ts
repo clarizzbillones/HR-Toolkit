@@ -16,7 +16,16 @@ export interface OfferParams {
   cadence: string;
   rateBasis?: 'monthly' | 'hourly';
   payBasis?: 'monthly' | 'weekly' | 'biweekly';
+  compBasis?: 'annual' | 'monthly' | 'hourly';  // W-2 employee: how the pay is quoted
   salutationTitle?: string;
+}
+
+// W-2 compensation sentence based on how the pay is quoted.
+export function employeeCompPhrase(compBasis: string | undefined, sal: string, cadence: string): string {
+  const paid = (cadence || 'semi-monthly').toLowerCase();
+  if (compBasis === 'hourly') return `set your compensation at an hourly rate of $${sal}, paid ${paid}`;
+  if (compBasis === 'monthly') return `set your monthly base compensation at $${sal}, paid ${paid}`;
+  return `set your annual base compensation at $${sal}, paid ${paid}`;
 }
 
 // Compensation phrase for a 1099 contractor. Compensation is hourly or monthly;
@@ -101,7 +110,7 @@ Dear ${salutation},
 
 We are pleased to extend an offer for you to join ${p.firm} PLLC as ${article} ${p.role}. This letter is to confirm the details of our employment offer in writing.
 
-Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. Your benefits will include health, dental, and life insurance, to which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have completed one year of employment. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time.${p.notes ? ' ' + p.notes : ''}
+Specifically, ${p.firm} will ${employeeCompPhrase(p.compBasis, sal, p.cadence)}. Your benefits will include health, dental, and life insurance, to which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have completed one year of employment. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time.${p.notes ? ' ' + p.notes : ''}
 
 Your anticipated start date will be ${startDisplay}. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us. Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns.
 
@@ -155,47 +164,18 @@ export async function generateDraft(kind: DraftKind, params: OfferParams | SopPa
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5-20250929';
 
+  // Offer letters are a fixed legal template — always use the deterministic
+  // builder so the candidate's exact name/email and firm language are used
+  // (the AI path could paraphrase or invent recipient details).
+  if (kind === 'offer') return localOffer(params as OfferParams);
+
   if (!apiKey) {
-    if (kind === 'offer') return localOffer(params as OfferParams);
     return localSop(params as SopParams);
   }
 
-  let prompt: string;
-  if (kind === 'offer') {
-    const p = params as OfferParams;
-    const first = (p.name || 'Candidate').split(' ')[0];
-    const last = (p.name || 'Candidate').split(' ').slice(1).join(' ');
-    const salTitle = (p.salutationTitle ?? '').trim();
-    const salutation = salTitle && last ? `${salTitle} ${last}` : first;
-    const loc = p.location || (p.employeeType === 'contractor' ? 'Remote' : 'Nashville, TN');
-    const startDisplay = p.startDate
-      ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-      : '[Start Date TBD]';
-    const sal = Number(p.salary).toLocaleString('en-US');
-    if (p.employeeType === 'contractor') {
-      prompt = `Draft a formal 1099 independent contractor offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Structure exactly: centered date line; blank line; "Via Email"; blank line; candidate full name; candidate email; blank line; "    Re:    Offer of Employment" (indented); blank line; "Dear ${salutation},"; blank line; opening paragraph: ${p.firm} PLLC is pleased to offer the opportunity to join as ${p.role}, an independent contractor role with ${contractorCompPhrase(p.rateBasis, p.payBasis, sal)}; blank line; paragraph: this engagement is structured as a 1099 independent contractor relationship, not W-2; performance reviewed periodically at sole discretion of ${p.firm} PLLC; blank line; paragraph: fully remote position (or ${loc}); as independent contractor solely responsible for federal, state, and local taxes; position does not include employee benefits including health dental or vision insurance; blank line; paragraph: either party may terminate with seven (7) days written notice; blank line; paragraph: anticipate start date on or before ${startDisplay}; please confirm acceptance in writing; blank line; paragraph: excited about working together; questions contact Zack Lawson at zack@litson.co or 865-719-4067, or myself; blank line; blank line; "cc:    Zack Lawson, Founding Partner"; "         Catie Toole, Director of Operations"; 3 blank lines (for signature space); "Very truly yours,"; blank line; "Alex Little"; "Founding & Managing Partner". Return ONLY the letter text, no preamble.`;
-    } else {
-      prompt = `Draft a W-2 employment offer letter for ${p.firm}, PLLC, a law firm. Today is ${todayStr()}. Write plain text only — no markdown, no asterisks, no bold markers. Match this exact structure and tone:
-
-Line 1: centered date
-"Via Email"
-candidate full name
-candidate email
-"    Re:    Offer of Employment"
-"Dear ${salutation},"
-Paragraph 1: "We are pleased to extend an offer for you to join ${p.firm} PLLC as ${/^[aeiou]/i.test(p.role.trim()) ? 'an' : 'a'} ${p.role}. This letter is to confirm the details of our employment offer in writing."
-Paragraph 2: "Specifically, ${p.firm} will set your annual base compensation at $${sal}, paid ${(p.cadence || 'semi-monthly').toLowerCase()}. Your benefits will include health, dental, and life insurance, to which the firm will contribute in whole or part, and the firm will provide a 6% match on your 401(k) contributions after you have completed one year of employment. As you are aware, you will be an at-will employee, and your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time."${p.notes ? ' Also include: ' + p.notes + '.' : ''}
-Paragraph 3: "Your anticipated start date will be ${startDisplay}. We ask that you respond in writing confirming your acceptance of this offer. We are excited about the prospect of you joining us. Please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or myself with any questions or concerns."
-Then a cc block on its own lines: "cc:    Zack Lawson, Founding Partner" then "         Catie Toole, Director of Operations"
-"Very truly yours,"
-"Alex Little"
-"Founding & Managing Partner"
-Return ONLY the letter text.`;
-    }
-  } else {
-    const p = params as SopParams;
-    prompt = `Write a Standard Operating Procedure for ${p.firm}, PLLC, a law firm. Title: "${p.title}". Category: ${p.template}. Today is ${todayStr()}. Use this exact section structure with numbered headings: a header block (firm name, title, SOP ID, effective date, version 1.0, owner: HR Administrator), then 1. PURPOSE, 2. SCOPE, 3. RESPONSIBILITIES, 4. PROCEDURE (numbered steps), 5. RECORDS & REFERENCES, 6. REVISION HISTORY. ${p.notes ? `Incorporate these specifics: ${p.notes}.` : ''} Keep it concise and practical for a 33-person firm, about 250 words. Return ONLY the SOP text.`;
-  }
+  // Only SOPs reach here (offer letters return the deterministic template above).
+  const p = params as SopParams;
+  const prompt = `Write a Standard Operating Procedure for ${p.firm}, PLLC, a law firm. Title: "${p.title}". Category: ${p.template}. Today is ${todayStr()}. Use this exact section structure with numbered headings: a header block (firm name, title, SOP ID, effective date, version 1.0, owner: HR Administrator), then 1. PURPOSE, 2. SCOPE, 3. RESPONSIBILITIES, 4. PROCEDURE (numbered steps), 5. RECORDS & REFERENCES, 6. REVISION HISTORY. ${p.notes ? `Incorporate these specifics: ${p.notes}.` : ''} Keep it concise and practical for a 33-person firm, about 250 words. Return ONLY the SOP text.`;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -207,8 +187,8 @@ Return ONLY the letter text.`;
       messages: [{ role: 'user', content: prompt }],
     });
     const text = msg.content[0]?.type === 'text' ? msg.content[0].text : '';
-    return text.trim() || (kind === 'offer' ? localOffer(params as OfferParams) : localSop(params as SopParams));
+    return text.trim() || localSop(params as SopParams);
   } catch {
-    return kind === 'offer' ? localOffer(params as OfferParams) : localSop(params as SopParams);
+    return localSop(params as SopParams);
   }
 }
