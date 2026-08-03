@@ -169,63 +169,19 @@ const C_TASKS: [string, string][] = [
 ];
 
 // ---------- BENEFITS PACKAGE guide (Attorneys only, for now) ----------
+// Each benefit is its own section with its table inline (via a [TABLE] fence),
+// so the heading, the short explanation, and the table stay together — mirroring
+// the Benefits Package document instead of pushing every table to the bottom.
 const B_SECTIONS: [number, string, string][] = [
-  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. Benefits are viewed and managed through the Ease / Gusto employee portal.\n\nPrepared for: [EMPLOYEE NAME]\nPosition: Attorney\nStart date: [START DATE]\n\nEach benefit is summarized in the tables below. Enrollment and beneficiary elections are made during benefits enrollment.`],
-  [6, 'Paid Time Off — Unlimited', `Litson PLLC offers **Unlimited Paid Time Off** for full-time employees — designed for flexibility while maintaining accountability and performance.\n\nKey principles:\n• Unlimited PTO does not eliminate job responsibilities, deadlines, or performance expectations.\n• The benefit is based on trust and may be reviewed or restricted if abused or misused.\n\nEmployee responsibilities:\n• Meet all deadlines, deliverables, and client obligations.\n• If work is due during PTO, complete it in advance or secure coverage with a proper handoff.\n• Coordinate coverage independently.\n• Keep the Firm's availability calendar current (out-of-office).\n\nPTO protocol:\n• Submit the PTO form: https://litson-apps.zapier.app/\n• Add to the shared availability calendar as: NAME – PTO\n• Coordinate coverage in advance and address deadlines before taking time off.\nBoth the form and the calendar entry are required; the form does not update the calendar automatically.`],
-  [7, 'Bonus Structure — Attorneys', `Bonuses are calculated and paid **twice annually, in July and December**. All bonuses are contingent on the firm's overall performance and are not a fixed entitlement.\n\nCalculation: based on average monthly adjusted hours over the six-month period, expressed as a percentage of salary (see the Bonus Tiers table).\n\nWhat counts as hours: total billable and adjusted hours. Adjusted hours include approved nonbillable legal work (micro-firm work, contingency matters, and other designated adjusted time). Administrative work is not included.\n\nFirst bonus period: the standard second-half period runs July–December. For attorneys joining mid-period, the first bonus is measured from the start date through December, based on months actually worked.\n\nOrigination bonuses: attorneys are also eligible for origination bonuses, calculated and paid separately under a separate program (not reflected in the tiers).`],
-];
-const B_LINKS = ['Employee benefits portal (Ease / Gusto)', 'PTO form — Litson Employee Forms'];
-const B_TABLES: { title: string; headers: string[]; rows: string[][] }[] = [
-  { title: 'Medical Insurance', headers: ['Detail', 'Information'], rows: [
-    ['Provider', 'Blue Cross Blue Shield'],
-    ['Plan — Option 1', 'BlueCross SG Silver 147P · Blue Network P'],
-    ['Plan — Option 2', 'BlueCross SG Gold 117P · Blue Network P'],
-    ['Member services', '(800) 565-9140'],
-    ['ID cards', 'Mailed within 10–14 business days of the effective date; electronic cards also available'],
-  ] },
-  { title: 'Dental Insurance', headers: ['Detail', 'Information'], rows: [
-    ['Provider', 'Guardian'],
-    ['Plan', 'Guardian 1500 with Child Ortho (UCR)'],
-    ['Member services', '(800) 541-7846'],
-  ] },
-  { title: 'Vision Insurance', headers: ['Detail', 'Information'], rows: [
-    ['Provider', 'Guardian (VSP)'],
-    ['Plan', 'Guardian 10/20/150, 12/12'],
-    ['Member services', '(800) 877-7195'],
-  ] },
-  { title: 'Life Insurance', headers: ['Detail', 'Information'], rows: [
-    ['Provider', 'PRINCIPAL'],
-    ['Total face amount', '$1,500,000'],
-    ['Cost to employee', 'None — fully firm-paid (no payroll deduction)'],
-    ['Enrollment', 'Optional & NOT automatic — you must elect coverage and designate a beneficiary'],
-    ['Structure', 'Employer-owned policy; firm pays the full premium and is a named partial beneficiary (see split)'],
-    ['Member services', 'Ask HR'],
-  ] },
-  { title: 'Life Insurance — Death Benefit Split', headers: ['Payable to', 'Amount', 'Share'], rows: [
-    ['Your designated beneficiary', '$750,000', '50%'],
-    ['Litson PLLC (fixed by policy)', '$750,000', '50%'],
-  ] },
-  { title: '401(k) Retirement Plan', headers: ['Detail', 'Information'], rows: [
-    ['Provider', 'Guideline'],
-    ['Eligibility', 'After 1 year of continuous full-time employment'],
-    ['Employer match', 'Up to 6% of salary'],
-    ['Member services', '(888) 344-5188'],
-  ] },
-  { title: 'Attorney Bonus Tiers (avg hours / month → % of salary)', headers: ['Average hours / month', 'Tier', 'Bonus'], rows: [
-    ['Under 130', '—', '0%'],
-    ['130 – 154.9', 'Tier 1', '1–8% of salary'],
-    ['155 – 184.9', 'Tier 2', '9–15% of salary'],
-    ['185+', 'Tier 3', '15–20%+ of salary'],
-  ] },
-  { title: 'Key Contacts', headers: ['Purpose', 'Contact'], rows: [
-    ['Benefits — HR', 'Clarizz — clarizz@litson.co'],
-    ['Medical — BCBS', '(800) 565-9140'],
-    ['Dental — Guardian', '(800) 541-7846'],
-    ['Vision — Guardian (VSP)', '(800) 877-7195'],
-    ['Life insurance — PRINCIPAL', 'Ask HR'],
-    ['401(k) — Guideline', '(888) 344-5188'],
-    ['Bonus program questions', 'Alex Little — alex@litson.co'],
-  ] },
+  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. The insurance benefits described here are viewed and managed through the Ease / Gusto employee portal.\n\n[TABLE]\nDetail | Information\nPrepared for | [EMPLOYEE NAME]\nPosition | Attorney\nStart date | [START DATE]\n[/TABLE]`],
+  [1, 'Medical Insurance', `Provider: **Blue Cross Blue Shield**\n\n[TABLE]\nOption | Plan | Network\nOption 1 | BlueCross SG Silver 147P | Blue Network P\nOption 2 | BlueCross SG Gold 117P | Blue Network P\n[/TABLE]\n\nMember services: (800) 565-9140\nID cards: Physical cards are mailed within 10–14 business days of the coverage effective date. If they do not arrive, contact member services. Electronic ID cards are also available.`],
+  [2, 'Dental Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian | Guardian 1500 with Child Ortho (UCR) | (800) 541-7846\n[/TABLE]`],
+  [3, 'Vision Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian (VSP) | Guardian 10/20/150, 12/12 | (800) 877-7195\n[/TABLE]`],
+  [4, 'Life Insurance', `[TABLE]\nProvider | Total Face Amount | Cost to Employee | Member Services\nPRINCIPAL | $1,500,000 | None — fully firm-paid | Ask HR\n[/TABLE]\n\n**How the death benefit is divided**\nThis is an employer-owned policy. The firm pays the full premium and is a named partial beneficiary. The $1,500,000 face amount is split as follows:\n\n[TABLE]\nPayable To | Amount | Share\nYour designated beneficiary | $750,000 | 50%\nLitson PLLC | $750,000 | 50%\n[/TABLE]\n\nYou designate the beneficiary for your 50% share. The firm's 50% share is fixed by the policy structure and is not redirectable.\n\n**Enrollment**\nEnrollment is optional. Coverage costs you nothing — the firm pays the entire premium and there is no payroll deduction — but it is not automatic. You must elect coverage and designate a beneficiary during benefits enrollment. If you do not elect, you will not be enrolled and no benefit is payable to anyone.`],
+  [5, '401(k) Retirement Plan', `[TABLE]\nProvider | Eligibility | Employer Match | Member Services\nGuideline | After one year of continuous full-time employment | Up to 6% of salary | (888) 344-5188\n[/TABLE]`],
+  [6, 'Paid Time Off — Unlimited', `Litson PLLC offers an **Unlimited Paid Time Off** policy for full-time employees. It is designed to provide flexibility while maintaining high standards of accountability and performance.\n\n**Key principles**\n• Unlimited PTO does not eliminate job responsibilities, deadlines, or performance expectations. You remain fully responsible for your work regardless of time taken.\n• The benefit is based on trust and accountability, and may be reviewed or restricted if abused or misused.\n\n**Employee responsibilities**\n• Ensure all deadlines, deliverables, and client obligations are met.\n• If work is due during a period of PTO, either complete it in advance or secure appropriate coverage with a proper handoff.\n• Coordinate coverage independently — coverage is not arranged on your behalf.\n• Keep the Firm's availability calendar current to reflect out-of-office status.\n\n**PTO protocol**\n• Submit the PTO form through Litson Employee Forms: https://litson-apps.zapier.app/\n• Add the time off to the Firm's shared availability calendar using the format: NAME – PTO\n• Coordinate any necessary coverage in advance, and address all deadlines and deliverables before taking time off.\nBoth the form submission and the calendar entry are required; the form does not update the calendar automatically. PTO does not transfer ownership of work — if coverage is not secured, you remain responsible for meeting all deadlines and obligations.`],
+  [7, 'Bonus Structure — Attorneys', `Bonuses are calculated and paid **twice annually, in July and December**. All bonuses are contingent on the firm's overall performance and do not constitute a fixed entitlement. As the firm grows, this structure will continue to evolve.\n\n**Calculation**\nAttorney bonuses are based on average monthly adjusted hours over the applicable six-month period, expressed as a percentage of salary.\n\n[TABLE]\nAverage Hours / Month | Tier | Bonus\nUnder 130 | No bonus | 0%\n130 – 154.9 | Tier 1 | 1–8% of salary\n155 – 184.9 | Tier 2 | 9–15% of salary\n185+ | Tier 3 | 15–20%+ of salary\n[/TABLE]\n\n**What counts as hours**\n"Hours worked" means total billable and adjusted hours. Adjusted hours include approved nonbillable legal work — micro-firm work, contingency matters, and other work designated as adjusted time. Administrative work is not included.\n\n**First bonus period**\nThe standard second-half measurement period runs July through December. For attorneys joining mid-period, the first bonus is measured from the start date through December, based on the months actually worked.\n\n**Origination bonuses**\nAttorneys are also eligible for origination bonuses. These are calculated and paid separately under a separate program and are not reflected in the tiers above.`],
+  [8, 'Key Contacts', `[TABLE]\nPurpose | Contact\nBenefits — HR | Clarizz — clarizz@litson.co\nMedical — BCBS | (800) 565-9140\nDental — Guardian | (800) 541-7846\nVision — Guardian (VSP) | (800) 877-7195\nLife insurance — PRINCIPAL | Ask HR\n401(k) — Guideline | (888) 344-5188\nBonus program questions | Alex Little — alex@litson.co\n[/TABLE]\n\nThis document is provided for informational purposes as part of onboarding. Plan documents and the employee handbook govern in the event of any conflict.`],
 ];
 const B_TASKS: [string, string][] = [
   ['Review the benefits package with the attorney', 'HR'],
@@ -238,23 +194,35 @@ const B_TASKS: [string, string][] = [
   ['Review the attorney bonus structure', 'New Hire'],
 ];
 
+// Hide standard content blocks (schedule / tools / SOP links / tables) for a
+// guide so empty blocks don't render. Restorable from the guide UI. Mirrors the
+// 'blockhidden' items the app creates when a user removes a block.
+async function hideBlocksFor(guide: string, keys: string[]) {
+  for (const k of keys)
+    await sql`INSERT INTO onboarding_items (id, guide, kind, title, day, sort_order) VALUES (${cuid()}, ${guide}, 'blockhidden', ${k}, ${k}, 0)`;
+}
+
 async function seedAll() {
   await seedGuide('General', G_SECTIONS, G_SCHEDULE, G_TOOLS, G_LINKS, G_TASKS);
   await seedGuide('Attorney', A_SECTIONS, [], A_TOOLS, A_LINKS, A_TASKS, A_TABLES);
   await seedGuide('Contractor', C_SECTIONS, [], C_TOOLS, [], C_TASKS, C_TABLES);
-  await seedGuide('Benefits Package', B_SECTIONS, [], [], B_LINKS, B_TASKS, B_TABLES);
+  // Benefits Package: each benefit's table lives inline in its section, so the
+  // separate schedule / tools / SOP / tables blocks are hidden.
+  await seedGuide('Benefits Package', B_SECTIONS, [], [], [], B_TASKS);
+  await hideBlocksFor('Benefits Package', ['schedule', 'tools', 'sop', 'tables']);
 }
 
 // Add / refresh the Benefits Package guide without disturbing other guides.
 // Bump BENEFITS_V to re-seed just this guide from the definitions above.
-const BENEFITS_V = 2;
+const BENEFITS_V = 3;
 async function ensureBenefitsGuide() {
   const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'benefits_guide_v' LIMIT 1` as any[];
   const cur = meta.length ? parseInt(meta[0].body ?? '0') : 0;
   const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = 'Benefits Package'`;
   if (n > 0 && cur >= BENEFITS_V) return;
   await sql`DELETE FROM onboarding_items WHERE guide = 'Benefits Package'`;
-  await seedGuide('Benefits Package', B_SECTIONS, [], [], B_LINKS, B_TASKS, B_TABLES);
+  await seedGuide('Benefits Package', B_SECTIONS, [], [], [], B_TASKS);
+  await hideBlocksFor('Benefits Package', ['schedule', 'tools', 'sop', 'tables']);
   if (meta.length) await sql`UPDATE onboarding_items SET body = ${String(BENEFITS_V)} WHERE kind = 'meta' AND title = 'benefits_guide_v'`;
   else await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'benefits_guide_v', ${String(BENEFITS_V)})`;
 }

@@ -33,6 +33,55 @@ function linkify(text: string | null) {
   return out;
 }
 
+// A section body can embed a table using a [TABLE] … [/TABLE] fence — the first
+// row is the header, cells are separated by "|", everything outside a fence is
+// normal section text. This keeps each topic's prose and its table together in
+// reading order, instead of pushing every table into one block at the bottom.
+type BodyBlock = { type: 'text'; text: string } | { type: 'table'; headers: string[]; rows: string[][] };
+function parseBodyBlocks(body: string | null): BodyBlock[] {
+  const src = String(body ?? '');
+  const out: BodyBlock[] = [];
+  const re = /\[TABLE\]\r?\n?([\s\S]*?)\[\/TABLE\]/gi;
+  let last = 0, m: RegExpExecArray | null;
+  const pushText = (t: string) => { const s = t.replace(/^\s*\n|\s+$/g, ''); if (s) out.push({ type: 'text', text: s }); };
+  while ((m = re.exec(src))) {
+    if (m.index > last) pushText(src.slice(last, m.index));
+    const grid = m[1].split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.split('|').map(c => c.trim()));
+    if (grid.length) out.push({ type: 'table', headers: grid[0], rows: grid.slice(1) });
+    last = re.lastIndex;
+  }
+  if (last < src.length) pushText(src.slice(last));
+  if (!out.length) out.push({ type: 'text', text: src });
+  return out;
+}
+
+// Read-only render of a section body (text + inline tables) for the guide view.
+// Clicking anywhere opens the section editor, matching the plain-text sections.
+function SectionBodyView({ body, onEdit }: { body: string | null; onEdit: () => void }) {
+  const blocks = parseBodyBlocks(body);
+  return (
+    <div className="mt-2 pl-3 space-y-2.5">
+      {blocks.map((b, i) => b.type === 'text' ? (
+        <p key={i} onClick={e => { if ((e.target as HTMLElement).tagName !== 'A') onEdit(); }} title="Click to edit"
+          className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed cursor-text">{linkify(b.text)}</p>
+      ) : (
+        <div key={i} onClick={onEdit} title="Click to edit" className="overflow-x-auto cursor-text">
+          <table className="w-full text-sm bg-white border border-border rounded-card overflow-hidden">
+            <thead className="bg-[#f0ece4]"><tr>{b.headers.map((h, ci) => (
+              <th key={ci} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[#8a6d3b]">{h}</th>
+            ))}</tr></thead>
+            <tbody>{b.rows.map((r, ri) => (
+              <tr key={ri} className="border-t border-[#f1ece3]">{r.map((c, ci) => (
+                <td key={ci} className="px-3 py-2 text-text-secondary align-top">{linkify(c)}</td>
+              ))}</tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // New-hire journey: undecided (no offer yet) → offer sent → viewed → accepted →
 // onboarding → hired.
 const STAGES: { key: string; label: string; icon: string }[] = [
@@ -910,7 +959,7 @@ export default function OnboardingClient() {
           </div>
           <textarea ref={bodyRef} value={draft.body} onChange={e => setDraft(d => ({ ...d, body: e.target.value }))} onKeyDown={onBodyKeyDown} rows={6} placeholder="Write the section content…"
             className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-          <p className="text-[11px] text-text-muted">Tip: paste a link and it becomes clickable. For a friendly label use <code>[Label](https://link)</code>.</p>
+          <p className="text-[11px] text-text-muted">Tip: paste a link and it becomes clickable. For a friendly label use <code>[Label](https://link)</code>. To drop in a table, wrap rows in <code>[TABLE] … [/TABLE]</code> — first line is the header, separate columns with <code>|</code>.</p>
           <div className="flex gap-2">
             <button onClick={() => saveEdit(s.id)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Save</button>
             <button onClick={() => setEditing(null)} className="text-sm text-text-muted px-3">Cancel</button>
@@ -939,8 +988,7 @@ export default function OnboardingClient() {
             <button onClick={() => remove(s.id)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea] opacity-0 group-hover:opacity-100">Delete</button>
           </div>
           {(s.body ?? '').trim()
-            ? <p onClick={e => { if ((e.target as HTMLElement).tagName !== 'A') startEdit(s); }} title="Click to edit"
-                className="text-sm text-text-secondary mt-2 whitespace-pre-wrap leading-relaxed pl-3 cursor-text">{linkify(s.body)}</p>
+            ? <SectionBodyView body={s.body} onEdit={() => startEdit(s)} />
             : <p onClick={() => startEdit(s)} title="Click to edit"
                 className="text-sm text-text-faint italic mt-2 leading-relaxed pl-3 cursor-text hover:text-text-muted">Click to add content…</p>}
         </div>
@@ -1019,14 +1067,25 @@ export default function OnboardingClient() {
     const lnk = list.filter(i => i.kind === 'sop');
     const tbls = list.filter(i => i.kind === 'table');
     const greet = name.trim() ? `Hi ${name.trim()},` : 'Welcome aboard,';
-    const secHtml = secs.map(s => `
+    const textToHtml = (str: string) => esc(str)
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#3f6b8a">$1</a>')
+      .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const inlineTableHtml = (headers: string[], rows: string[][]) => `
+      <table style="width:100%;border-collapse:collapse;font-size:11px;break-inside:avoid;margin:6px 0 8px">
+        <thead><tr style="background:#f0ece4">${headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr style="border-top:1px solid #eee">${r.map(c => `<td style="padding:5px 8px;color:#333">${textToHtml(c) || '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    const secHtml = secs.map(s => {
+      const inner = parseBodyBlocks(s.body).map(b => b.type === 'text'
+        ? `<div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333;margin:0 0 6px">${textToHtml(b.text)}</div>`
+        : inlineTableHtml(b.headers, b.rows)).join('');
+      return `
       <section style="margin:0 0 18px;break-inside:avoid">
         <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px;margin:0 0 6px">${esc(s.title)}</h2>
-        <div style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#333">${esc(s.body ?? '')
-          .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#3f6b8a">$1</a>')
-          .replace(/(?<!href=")(https?:\/\/[^\s<]+)/g, (u: string) => { let l = u.replace(/^https?:\/\//, '').replace(/^www\./, ''); if (l.length > 42) l = l.slice(0, 42) + '…'; return `<a href="${u}" style="color:#3f6b8a">${l} ↗</a>`; })
-          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</div>
-      </section>`).join('');
+        ${inner}
+      </section>`;
+    }).join('');
     const schedHtml = sched.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px">
@@ -1097,8 +1156,11 @@ export default function OnboardingClient() {
 
   function buildText() {
     const tbl = (t: Item) => { const d = parseTable(t.body); return `${t.title.toUpperCase()}\n` + [d.headers.join(' | '), ...d.rows.map(r => r.join(' | '))].join('\n'); };
+    const bodyText = (body: string | null) => parseBodyBlocks(body).map(b => b.type === 'text'
+      ? b.text
+      : [b.headers.join(' | '), ...b.rows.map(r => r.join(' | '))].join('\n')).join('\n\n');
     return `${greeting}\n\n`
-      + sections.map(s => `${s.title.toUpperCase()}\n${s.body ?? ''}`).join('\n\n')
+      + sections.map(s => `${s.title.toUpperCase()}\n${bodyText(s.body)}`).join('\n\n')
       + (schedule.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
       + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
       + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
