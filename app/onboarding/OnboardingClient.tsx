@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 
 interface Item {
-  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel';
+  id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel' | 'blockhidden';
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
 }
@@ -990,6 +990,9 @@ export default function OnboardingClient() {
             className="ml-auto text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
             title={`Copy these ${title} (with their links) to another guide`}>⧉ Copy to…</button>
         )}
+        <button onClick={() => hideBlock(kind === 'tool' ? 'tools' : 'sop')}
+          className={`${list.length > 0 ? '' : 'ml-auto'} text-[11px] font-semibold text-litred-alt hover:underline`}
+          title="Remove this whole section from this guide (you can restore it)">✕ Remove section</button>
       </div>
       <div className="bg-white border border-border rounded-card p-3 space-y-1">
         {list.map(l => (
@@ -1110,7 +1113,23 @@ export default function OnboardingClient() {
   // ---- Reorderable content blocks (left column) ----
   const DEFAULT_BLOCK_ORDER = ['sections', 'schedule', 'tools', 'sop', 'tables'];
   const scheduleShown = schedule.length > 0 || guide === 'General';
-  const blockShown: Record<string, boolean> = { sections: true, schedule: scheduleShown, tools: true, sop: true, tables: true };
+  // Blocks the user has removed (hidden) for this guide — restorable.
+  const hiddenBlocks = new Set(items.filter(i => i.kind === 'blockhidden' && i.guide === guide).map(i => i.day || ''));
+  const BLOCK_LABELS: Record<string, string> = { schedule: 'Schedule', tools: 'Tools', sop: 'SOP Links', tables: 'Tables' };
+  async function hideBlock(key: string) {
+    if (items.some(i => i.kind === 'blockhidden' && i.guide === guide && i.day === key)) return;
+    await add('blockhidden' as Item['kind'], { title: key, day: key }, guide);
+  }
+  async function restoreBlock(key: string) {
+    for (const it of items.filter(i => i.kind === 'blockhidden' && i.guide === guide && i.day === key)) remove(it.id);
+  }
+  const blockShown: Record<string, boolean> = {
+    sections: true,
+    schedule: scheduleShown && !hiddenBlocks.has('schedule'),
+    tools: !hiddenBlocks.has('tools'),
+    sop: !hiddenBlocks.has('sop'),
+    tables: !hiddenBlocks.has('tables'),
+  };
   // Saved order for this guide, sanitized to known keys with any missing appended.
   const blockOrder = (() => {
     const saved = blockOrders[guide];
@@ -1167,6 +1186,7 @@ export default function OnboardingClient() {
           <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">2-Week Training Schedule</h2>
           <span className="text-[11px] text-text-muted font-normal normal-case tracking-normal">— click any cell to edit</span>
+          <button onClick={() => hideBlock('schedule')} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove this schedule from this guide (restorable)">✕ Remove section</button>
         </div>
         <div className="bg-white border border-border rounded-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
@@ -1201,6 +1221,11 @@ export default function OnboardingClient() {
     sop: LinkBlock({ kind: 'sop', title: 'SOP Links', color: '#3f6b8a', list: lnks, placeholder: 'SOP name', addGuide: srcGuide }),
     tables: (
       <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
+          <h2 className="text-sm font-bold uppercase tracking-wider text-[#6b5427]">Tables</h2>
+          <button onClick={() => hideBlock('tables')} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove all tables from this guide (restorable)">✕ Remove section</button>
+        </div>
         {tbls.map(t => {
           const d = parseTable(t.body);
           return (
@@ -1494,6 +1519,14 @@ export default function OnboardingClient() {
                 {blockNodes[k]}
               </div>
             ))}
+            {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted border-t border-border-light pt-3">
+                <span className="font-semibold">Removed sections:</span>
+                {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).map(k => (
+                  <button key={k} onClick={() => restoreBlock(k)} className="font-semibold text-[#3f6b8a] hover:underline border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas">↩ Restore {BLOCK_LABELS[k]}</button>
+                ))}
+              </div>
+            )}
           </div>
 
         </div>
