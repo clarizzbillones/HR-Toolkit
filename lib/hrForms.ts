@@ -479,8 +479,6 @@ A couple of deadlines worth knowing, and the shorter one catches people off guar
 • Spouse's or partner's employer plan — if this is an option, you generally have only 30 days from the loss of coverage to enroll. This is often the least expensive route.
 • Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period. You can enroll at HealthCare.gov or by calling 1-800-318-2596. Depending on income, you may qualify for premium subsidies that significantly reduce the cost.
 
-Most enrollments require proof that your prior coverage ended — I have enclosed a certificate confirming your coverage dates so you have it ready.
-
 MALPRACTICE (PROFESSIONAL LIABILITY)
 Your malpractice coverage under Litson PLLC's policy with Hanover ends on [LAST DAY OF WORK], which is your last day of work. After that date, you are no longer covered under the firm's Hanover policy for new work.
 
@@ -491,10 +489,10 @@ A couple of things worth knowing:
 • New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before [LAST DAY OF WORK].
 
 RETIREMENT PLAN — GUIDELINE 401(K)
-Your 401(k) is administered by Guideline, and your vested balance remains yours. You can generally leave it in the plan, roll it into an IRA or a new employer's plan, or request a distribution. Contact Guideline at (888) 344-5188 or guideline.com to review your options.
+Your 401(k) is administered by Guideline, and your vested balance remains yours. Your plan termination date is [LAST DAY OF WORK], your last day of work. Guideline will email you directly with the steps on how to proceed about 2–3 business days after your termination date. From there you can generally leave the funds in the plan, roll them into an IRA or a new employer's plan, or request a distribution. Questions: Guideline at (888) 344-5188 or guideline.com.
 
 LIFE INSURANCE — PRINCIPAL
-Your firm-paid group life coverage through Principal ends on [COVERAGE END DATE]. You may be able to convert or port the policy to an individual plan, which usually must be done within a limited window after coverage ends. If you would like the conversion details, let me know and I will request them from Principal.
+Your firm-paid group life coverage through Principal ends on [COVERAGE END DATE].
 
 If anything here is unclear, please reach out. I am glad to help however I can.
 
