@@ -166,6 +166,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     setInviteBusy(false);
   }
 
+  // Open the invite modal already set up for one reviewee: their name, the
+  // review deadline (their next-review date), the connected form link, a
+  // self-assessment row for them, and one empty peer-reviewer row ready to
+  // fill. Lets HR assign peer reviewers + send for each person in a few clicks
+  // rather than retyping everything per employee.
+  function openInviteFor(name: string, deadline?: string | null) {
+    setInvite({
+      employee: name,
+      reviewType: '',
+      link: linkedUrl || '',
+      deadline: deadline ? String(deadline).slice(0, 10) : '',
+      participants: [
+        { name, email: emailForName(name), type: 'Self-assessment', completed: false },
+        { ...blankParticipant },
+      ],
+    });
+    setShowInvite(true);
+  }
+
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
       if (data.reviews_url) { setLinkedUrl(data.reviews_url); setDashUrl(data.reviews_url); }
@@ -439,6 +458,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   </button>
                 )}
                 {!readOnly && (
+                <button onClick={() => openInviteFor(upNext.e.name, upNext.c.next)}
+                  className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
+                  Assign peer reviewers
+                </button>
+                )}
+                {!readOnly && (
                 <button onClick={() => sendReminderNow(upNext.e.name)}
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Send reminder
@@ -524,7 +549,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">View</button>
                     ) : (
                       <>
-                        <button onClick={() => setDetail(e)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Log / edit</button>
+                        <button onClick={() => openInviteFor(e.name, c.next)} title="Assign peer reviewers and send/schedule their invites" className="text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">✉ Peers</button>
+                        <button onClick={() => setDetail(e)} className="ml-2 text-xs font-semibold text-ink border border-border-light px-3 py-1 rounded-ctrl hover:bg-canvas">Log / edit</button>
                         <button onClick={() => deleteEmployee(e)} className="ml-2 text-xs font-semibold text-litred-alt border border-border-light px-3 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                       </>
                     )}
