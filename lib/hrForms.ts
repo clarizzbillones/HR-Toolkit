@@ -436,6 +436,30 @@ Sincerely,
 [PHONE] · [EMAIL]`,
   },
   {
+    id: "f1", part: "Part F — Malpractice (Professional Liability)", title: "F1 — Malpractice (Professional Liability) Coverage Notice",
+    guidance: "For departing attorneys and other timekeepers covered under the firm's Hanover professional-liability (malpractice) policy. Coverage ends on the employee's last day of work — set the coverage end date to that date. Confirm the Hanover policy number and whether “tail” (extended reporting) coverage applies before sending, and involve counsel if the departure involves any open or potential claim.",
+    body: `Subject: Your malpractice (professional liability) coverage — end date
+
+Hi [FIRST NAME],
+
+As your time with the firm comes to a close, I want to make sure you have clear information about your professional liability (malpractice) coverage.
+
+Your malpractice coverage under Litson PLLC's policy with Hanover ends on [LAST DAY OF WORK], which is your last day of work. After that date, you are no longer covered under the firm's Hanover policy for new work.
+
+A couple of things worth knowing:
+
+• Work done while at the firm — the firm's Hanover policy covers professional work you performed while you were employed at Litson PLLC, subject to the policy's terms and reporting requirements.
+
+• New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before [LAST DAY OF WORK]. If your situation calls for "tail" (extended reporting) coverage, let me know and we can talk it through.
+
+If you would like the specific Hanover policy details — policy number, limits, or reporting requirements — just let me know and I will get them to you.
+
+If anything here is unclear, please reach out. I am glad to help however I can.
+
+All the best,
+[YOUR NAME]`,
+  },
+  {
     id: "offboarding", part: "Part H — Checklists",
     title: "Separation / Offboarding Checklist",
     guidance: "Working checklist built from the HR Compliance & Risk Management Manual. For live per-employee tracking (with N/A steps and age suggestions), use the Offboarding tab.",
@@ -486,7 +510,7 @@ File by phone: (844) 224-5818   ·   File online: www.jobs4tn.gov   ·   Questio
 LB-0489 (Rev. 08-2020) RDA 0063`,
   },
 ];
-export const HR_FORM_PARTS: string[] = ["Part A — Performance & Discipline", "Part B — Pre-Termination", "Part C — Severance", "Part D — Severance Transmittal Letters", "Part E — Health Coverage Notices", "Part G — State & Government Forms", "Part H — Checklists"];
+export const HR_FORM_PARTS: string[] = ["Part A — Performance & Discipline", "Part B — Pre-Termination", "Part C — Severance", "Part D — Severance Transmittal Letters", "Part E — Health Coverage Notices", "Part F — Malpractice (Professional Liability)", "Part G — State & Government Forms", "Part H — Checklists"];
 
 // Escape + highlight [fill-in] fields, used by the preview and the print/Word output.
 function esc(s: string): string { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
