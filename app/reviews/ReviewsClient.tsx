@@ -630,7 +630,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review type</label>
                   <select value={invite.reviewType} onChange={e => setInvite(v => ({ ...v, reviewType: e.target.value }))}
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
-                    {['', '6-month', '1-year', 'Annual', '90-day'].map(t => <option key={t} value={t}>{t || '—'}</option>)}
+                    {['', '6-month', '1-year', 'Annual', '90-day', 'Catch-up'].map(t => <option key={t} value={t}>{t || '—'}</option>)}
                   </select>
                 </div>
                 <div>
