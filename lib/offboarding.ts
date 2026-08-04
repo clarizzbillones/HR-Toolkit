@@ -53,6 +53,13 @@ export const OFFBOARDING_CHECKLIST: ChecklistSection[] = [
   {
     key: 'benefits', heading: 'Benefits', chapter: 'Chapter 14',
     items: [
+      { id: 'benefits-packet', label: 'Prepare and send the benefits offboarding packet / letter to the employee, confirming each coverage below.', hint: 'HR Forms → F2 — Attorney Offboarding: Coverage & Benefits Summary.' },
+      { id: 'benefits-401k', label: '401(k) — Guideline: termination date is the last day of work; Guideline emails the next steps ~2–3 business days after.' },
+      { id: 'benefits-life', label: 'Life insurance — Principal: firm-paid group life ends at month-end.' },
+      { id: 'benefits-medical', label: 'Medical — Blue Cross BlueShield of TN: coverage runs through month-end; include the health-coverage notice (E1/E2).' },
+      { id: 'benefits-vision', label: 'Vision — Guardian (VSP): coverage runs through month-end.' },
+      { id: 'benefits-dental', label: 'Dental — Guardian: coverage runs through month-end.' },
+      { id: 'benefits-malpractice', label: 'Malpractice insurance — Hanover: coverage ends on the last day of work; remind the employee to arrange their own coverage (attorneys/timekeepers).' },
       { id: 'benefits-1', label: "Give the right health-coverage notice — 'No Continuation' (E1) or 'COBRA Available' (E2)." },
       { id: 'benefits-2', label: 'Give a Certificate of Prior Coverage (E3) if it applies.' },
       { id: 'benefits-3', label: 'Check retirement and benefits vesting — never separate someone just to stop their benefits from vesting.', hint: 'ERISA § 510.' },
