@@ -436,7 +436,7 @@ Sincerely,
 [PHONE] · [EMAIL]`,
   },
   {
-    id: "f1", part: "Part F — Malpractice (Professional Liability)", title: "F1 — Malpractice (Professional Liability) Coverage Notice",
+    id: "f1", part: "Part F — Offboarding Coverage Notices", title: "F1 — Malpractice (Professional Liability) Coverage Notice",
     guidance: "For departing attorneys and other timekeepers covered under the firm's Hanover professional-liability (malpractice) policy. Coverage ends on the employee's last day of work — set the coverage end date to that date. Confirm the Hanover policy number and whether “tail” (extended reporting) coverage applies before sending, and involve counsel if the departure involves any open or potential claim.",
     body: `Subject: Your malpractice (professional liability) coverage — end date
 
@@ -450,14 +450,44 @@ A couple of things worth knowing:
 
 • Work done while at the firm — the firm's Hanover policy covers professional work you performed while you were employed at Litson PLLC, subject to the policy's terms and reporting requirements.
 
-• New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before [LAST DAY OF WORK]. If your situation calls for "tail" (extended reporting) coverage, let me know and we can talk it through.
-
-If you would like the specific Hanover policy details — policy number, limits, or reporting requirements — just let me know and I will get them to you.
+• New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before [LAST DAY OF WORK].
 
 If anything here is unclear, please reach out. I am glad to help however I can.
 
 All the best,
-[YOUR NAME]`,
+[YOUR NAME]
+[YOUR TITLE], Litson PLLC`,
+  },
+  {
+    id: "f2", part: "Part F — Offboarding Coverage Notices", title: "F2 — Attorney Offboarding: Coverage & Benefits Summary",
+    guidance: "Master coverage summary for a departing attorney — combines health/dental/vision (BCBST & Guardian), malpractice (Hanover), 401(k) (Guideline), and group life (Principal). Health/dental/vision and group life run through the end of the separation month; malpractice ends on the last day of work — so [COVERAGE END DATE] and [LAST DAY OF WORK] are usually different dates. Send the standalone Health Coverage Notice (E1/E2) and Certificate of Prior Coverage (E3) alongside this. For separations on or after January 1, 2027, replace the “continuation is not available” line with the COBRA notice (E2). Confirm the Guideline vesting/balance and the Principal conversion window before sending, and involve counsel if there is any open or potential malpractice claim.",
+    body: `Subject: Your coverage and benefits as you leave Litson PLLC
+
+Hi [FIRST NAME],
+
+As your time with the firm comes to a close, here is a clear summary of what happens to each of your coverages and benefits — the dates, and anything you need to do. Your last day of work is [LAST DAY OF WORK].
+
+MEDICAL, DENTAL & VISION
+Your health, dental, and vision coverage continues through [COVERAGE END DATE], the end of your separation month, and then ends. Continuation coverage is not available through our plan, so you will need to arrange new coverage directly. I have enclosed a separate health coverage notice with the enrollment deadlines that matter most.
+
+• Medical — Blue Cross BlueShield of Tennessee · member services (800) 565-9140
+• Dental — Guardian · member services (800) 541-7846
+• Vision — Guardian (VSP) · member services (800) 877-7195
+
+MALPRACTICE (PROFESSIONAL LIABILITY)
+Your malpractice coverage under the firm's policy with Hanover ends on [LAST DAY OF WORK], your last day of work. The Hanover policy covers professional work you performed while you were employed at Litson PLLC, subject to its terms and reporting requirements. If you are continuing to practice, please arrange your own professional liability coverage so there is no gap.
+
+RETIREMENT PLAN — GUIDELINE 401(K)
+Your 401(k) is administered by Guideline, and your vested balance remains yours. You can generally leave it in the plan, roll it into an IRA or a new employer's plan, or request a distribution. Contact Guideline at (888) 344-5188 or guideline.com to review your options.
+
+LIFE INSURANCE — PRINCIPAL
+Your firm-paid group life coverage through Principal ends on [COVERAGE END DATE]. You may be able to convert or port the policy to an individual plan, which usually must be done within a limited window after coverage ends. If you would like the conversion details, let me know and I will request them from Principal.
+
+If anything here is unclear, please reach out. I am glad to help however I can.
+
+All the best,
+[YOUR NAME]
+[YOUR TITLE], Litson PLLC`,
   },
   {
     id: "offboarding", part: "Part H — Checklists",
@@ -510,7 +540,7 @@ File by phone: (844) 224-5818   ·   File online: www.jobs4tn.gov   ·   Questio
 LB-0489 (Rev. 08-2020) RDA 0063`,
   },
 ];
-export const HR_FORM_PARTS: string[] = ["Part A — Performance & Discipline", "Part B — Pre-Termination", "Part C — Severance", "Part D — Severance Transmittal Letters", "Part E — Health Coverage Notices", "Part F — Malpractice (Professional Liability)", "Part G — State & Government Forms", "Part H — Checklists"];
+export const HR_FORM_PARTS: string[] = ["Part A — Performance & Discipline", "Part B — Pre-Termination", "Part C — Severance", "Part D — Severance Transmittal Letters", "Part E — Health Coverage Notices", "Part F — Offboarding Coverage Notices", "Part G — State & Government Forms", "Part H — Checklists"];
 
 // Escape + highlight [fill-in] fields, used by the preview and the print/Word output.
 function esc(s: string): string { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }

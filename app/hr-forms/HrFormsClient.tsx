@@ -52,7 +52,7 @@ export default function HrFormsClient() {
   const guidance = HR_FORMS.find(x => x.id === id)?.guidance;
 
   // The person who prepares / sends these letters (return contact + signature).
-  const SENDER = { name: 'Clarizz Ann Alon', title: 'Human Resources', phone: '615-380-6550', email: 'clarizz@litson.co' };
+  const SENDER = { name: 'Clarizz Ann Alon', title: 'HR Admin Specialist', phone: '615-380-6550', email: 'clarizz@litson.co' };
 
   // Employee roster for the name dropdowns (auto-fills position + address).
   const [staff, setStaff] = useState<any[]>([]);
@@ -71,6 +71,7 @@ export default function HrFormsClient() {
       else if (/\bphone\b/i.test(t)) next[t] = SENDER.phone;
       else if (/email\s*\/\s*address/i.test(t)) next[t] = SENDER.email;
       else if (/\bemail\b/i.test(t)) next[t] = SENDER.email;
+      else if (/^\[your title\]$/i.test(t)) next[t] = SENDER.title;
       else if (/^\[title\]$/i.test(t) && isLetterLike) next[t] = SENDER.title;
     }
   }
