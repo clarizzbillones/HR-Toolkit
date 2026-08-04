@@ -481,7 +481,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap gap-x-6 gap-y-1 text-sm text-white/60">
                 <span className="text-[10px] uppercase tracking-widest text-white/40 self-center">Then due</span>
                 {thenDue.map((r, i) => (
-                  <button key={i} onClick={() => setDetail(r.e)} className="hover:text-gold transition-colors">
+                  <button key={i} onClick={() => readOnly ? setDetail(r.e) : openInviteFor(r.e.name, r.c.next)}
+                    title={readOnly ? 'View profile' : 'Assign peer reviewers and send/schedule their invites'}
+                    className="hover:text-gold transition-colors">
                     {r.e.name} <span className="text-white/40">· {r.c.days != null ? relLabel(r.c.days) : ''}</span>
                   </button>
                 ))}
