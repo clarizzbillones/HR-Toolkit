@@ -465,10 +465,10 @@ All the best,
 
 Hi [FIRST NAME],
 
-As your time with the firm comes to a close, here is a clear summary of what happens to each of your coverages and benefits — the dates, and anything you need to do. Your last day of work is [LAST DAY OF WORK].
+As your time with the firm comes to a close, here is a clear summary of what happens to each of your coverages and benefits — the dates, and anything you need to do. Your last day of work is **[LAST DAY OF WORK]**.
 
 MEDICAL, DENTAL & VISION
-Your health, dental, and vision coverage continues through [COVERAGE END DATE], the end of your separation month, and then ends. Continuation coverage is not available through our plan, so you will need to arrange new coverage directly.
+Your health, dental, and vision coverage continues through **[COVERAGE END DATE]**, the end of your separation month, and then ends. Continuation coverage is not available through our plan, so you will need to arrange new coverage directly.
 
 • Medical — Blue Cross BlueShield of Tennessee · member services (800) 565-9140
 • Dental — Guardian · member services (800) 541-7846
@@ -480,19 +480,19 @@ A couple of deadlines worth knowing, and the shorter one catches people off guar
 • Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period. You can enroll at HealthCare.gov or by calling 1-800-318-2596. Depending on income, you may qualify for premium subsidies that significantly reduce the cost.
 
 MALPRACTICE (PROFESSIONAL LIABILITY)
-Your malpractice coverage under Litson PLLC's policy with Hanover ends on [LAST DAY OF WORK], which is your last day of work. After that date, you are no longer covered under the firm's Hanover policy for new work.
+Your malpractice coverage under Litson PLLC's policy with Hanover ends on **[LAST DAY OF WORK]**, which is your last day of work. After that date, you are no longer covered under the firm's Hanover policy for new work.
 
 A couple of things worth knowing:
 
 • Work done while at the firm — the firm's Hanover policy covers professional work you performed while you were employed at Litson PLLC, subject to the policy's terms and reporting requirements.
 
-• New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before [LAST DAY OF WORK].
+• New coverage — if you are continuing to practice, please arrange your own professional liability coverage so there is no gap. It is best to have that coverage in place on or before **[LAST DAY OF WORK]**.
 
 RETIREMENT PLAN — GUIDELINE 401(K)
-Your 401(k) is administered by Guideline, and your vested balance remains yours. Your plan termination date is [LAST DAY OF WORK], your last day of work. Guideline will email you directly with the steps on how to proceed about 2–3 business days after your termination date. From there you can generally leave the funds in the plan, roll them into an IRA or a new employer's plan, or request a distribution. Questions: Guideline at (888) 344-5188 or guideline.com.
+Your 401(k) is administered by Guideline, and your vested balance remains yours. Your plan termination date is **[LAST DAY OF WORK]**, your last day of work. Guideline will email you directly with the steps on how to proceed about 2–3 business days after your termination date. From there you can generally leave the funds in the plan, roll them into an IRA or a new employer's plan, or request a distribution. Questions: Guideline at (888) 344-5188 or guideline.com.
 
 LIFE INSURANCE — PRINCIPAL
-Your firm-paid group life coverage through Principal ends on [COVERAGE END DATE].
+Your firm-paid group life coverage through Principal ends on **[COVERAGE END DATE]**.
 
 If anything here is unclear, please reach out. I am glad to help however I can.
 
