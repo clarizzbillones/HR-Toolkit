@@ -88,6 +88,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [showEmbed, setShowEmbed] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
+  // Which "Then due" name has its quick-action menu open (by employee id).
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
   const blankParticipant = { name: '', email: '', type: 'Peer reviewer', completed: false };
   const [invite, setInvite] = useState<{ employee: string; reviewType: string; link: string; deadline: string; participants: { name: string; email: string; type: string; completed: boolean }[] }>(
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
@@ -481,11 +483,23 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap gap-x-6 gap-y-1 text-sm text-white/60">
                 <span className="text-[10px] uppercase tracking-widest text-white/40 self-center">Then due</span>
                 {thenDue.map((r, i) => (
-                  <button key={i} onClick={() => readOnly ? setDetail(r.e) : openInviteFor(r.e.name, r.c.next)}
-                    title={readOnly ? 'View profile' : 'Assign peer reviewers and send/schedule their invites'}
-                    className="hover:text-gold transition-colors">
-                    {r.e.name} <span className="text-white/40">· {r.c.days != null ? relLabel(r.c.days) : ''}</span>
-                  </button>
+                  <div key={i} className="relative">
+                    <button onClick={() => readOnly ? setDetail(r.e) : setRowMenu(rowMenu === r.e.id ? null : r.e.id)}
+                      title={readOnly ? 'View profile' : 'Reminders, peer reviewers, or profile'}
+                      className={`hover:text-gold transition-colors ${rowMenu === r.e.id ? 'text-gold' : ''}`}>
+                      {r.e.name} <span className="text-white/40">· {r.c.days != null ? relLabel(r.c.days) : ''}</span>
+                    </button>
+                    {!readOnly && rowMenu === r.e.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setRowMenu(null)} />
+                        <div className="absolute left-0 top-full mt-1.5 z-50 bg-white text-text-primary rounded-card shadow-xl border border-border-light py-1 min-w-[220px]">
+                          <button onClick={() => { setRowMenu(null); sendReminderNow(r.e.name); }} className="block w-full text-left px-3 py-2 text-sm font-medium hover:bg-canvas">🔔 Send reminder to pending</button>
+                          <button onClick={() => { setRowMenu(null); openInviteFor(r.e.name, r.c.next); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-canvas">✉ Assign peer reviewers</button>
+                          <button onClick={() => { setRowMenu(null); setDetail(r.e); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-canvas">👤 View profile</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
