@@ -255,9 +255,13 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
 
   const active = TABS.find(t => t.key === tab)!;
   const s = search.toLowerCase();
-  const fStaff = rows.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
-  const fOff = offboarded.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
-  const fVen = vendors.filter(r => !search || (r.entity ?? '').toLowerCase().includes(s) || (r.name ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s));
+  // Alphabetical by name (case-insensitive); blanks sort last.
+  const alpha = (x: string, y: string) => { const a = x.trim(), b = y.trim(); if (!a && !b) return 0; if (!a) return 1; if (!b) return -1; return a.localeCompare(b, undefined, { sensitivity: 'base' }); };
+  const byName = (a: any, b: any) => alpha(a.name ?? '', b.name ?? '');
+  const byEntity = (a: any, b: any) => alpha((a.entity ?? a.name) ?? '', (b.entity ?? b.name) ?? '');
+  const fStaff = rows.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byName);
+  const fOff = offboarded.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byName);
+  const fVen = vendors.filter(r => !search || (r.entity ?? '').toLowerCase().includes(s) || (r.name ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byEntity);
   // Split the roster into 1099 contractors vs W-2 employees for the header count.
   const contractorCount = rows.filter(r => /contractor|1099/i.test(r.worker_type ?? '')).length;
   const employeeCount = rows.length - contractorCount;
