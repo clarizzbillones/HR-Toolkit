@@ -62,6 +62,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const { pushUndo } = useUndo();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [view, setView] = useState<'board' | 'list' | 'archived'>('board');
+  const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
@@ -78,6 +79,15 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
   const today = overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const pending = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
   const done = tasks.filter(t => t.status === 'done');
+  // Text search across title, subtitle, and note text — used by every view.
+  const q = search.trim().toLowerCase();
+  function matchesSearch(t: Task) {
+    if (!q) return true;
+    if ((t.title ?? '').toLowerCase().includes(q)) return true;
+    if ((t.sub ?? '').toLowerCase().includes(q)) return true;
+    try { const notes = JSON.parse(t.notes || '[]'); if (Array.isArray(notes) && notes.some((n: any) => String(n?.text ?? '').toLowerCase().includes(q))) return true; } catch { /* ignore */ }
+    return false;
+  }
 
   function loadArchived() {
     fetch('/api/tasks?status=archived').then(r => r.json()).then(d => setArchivedTasks(d.tasks ?? []));
@@ -194,6 +204,13 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
           <p className="text-sm text-text-muted mt-0.5">{view === 'archived' ? `${archivedTasks.length} archived tasks` : `${pending.length} open · ${done.length} completed today`}</p>
         </div>
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">🔍</span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder={view === 'archived' ? 'Search archived…' : 'Search tasks…'}
+              className="w-48 border border-border-light rounded-ctrl pl-7 pr-6 py-2 text-sm focus:outline-none focus:border-ink" />
+            {search && <button onClick={() => setSearch('')} title="Clear" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-ink text-xs">✕</button>}
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-text-muted font-semibold">Date</span>
             <input type="date" value={overrideDate} onChange={e => setOverrideDate(e.target.value)}
@@ -259,7 +276,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
         <div className="flex-1 overflow-auto p-8">
           <div className="grid grid-cols-3 gap-4 items-start">
             {COLS.map(col => {
-              const colTasks = tasks.filter(t => t.status === col.key).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
+              const colTasks = tasks.filter(t => t.status === col.key && matchesSearch(t)).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
               return (
                 <div
                   key={col.key}
@@ -354,7 +371,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
         <div className="flex-1 overflow-auto px-8 py-6 max-w-3xl w-full">
           <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-2.5">Pending</div>
           <div className="bg-white border border-border rounded-card overflow-hidden mb-6">
-            {[...pending].sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)).map(t => {
+            {[...pending].filter(matchesSearch).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)).map(t => {
               const notesArr = JSON.parse(t.notes || '[]');
               const isChecked = checkedIds.has(t.id);
               return (
@@ -377,11 +394,11 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                 </div>
               );
             })}
-            {pending.length === 0 && <div className="px-4.5 py-4 text-sm text-text-muted">No pending tasks</div>}
+            {pending.filter(matchesSearch).length === 0 && <div className="px-4.5 py-4 text-sm text-text-muted">{q ? 'No matching pending tasks' : 'No pending tasks'}</div>}
           </div>
           <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-2.5">Completed today</div>
           <div className="bg-white border border-border rounded-card overflow-hidden">
-            {done.map(t => {
+            {done.filter(matchesSearch).map(t => {
               const isChecked = checkedIds.has(t.id);
               return (
                 <div key={t.id} className={clsx('group flex items-center gap-3.5 px-4.5 py-3.5 border-b border-[#f1ece3] last:border-0', isChecked && 'bg-[#f0f5fa]')}>
@@ -400,7 +417,7 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
                 </div>
               );
             })}
-            {done.length === 0 && <div className="px-4.5 py-4 text-sm text-text-muted">None yet today</div>}
+            {done.filter(matchesSearch).length === 0 && <div className="px-4.5 py-4 text-sm text-text-muted">{q ? 'No matching completed tasks' : 'None yet today'}</div>}
           </div>
         </div>
       )}
@@ -484,10 +501,10 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
             {archivedDateFilter && <button onClick={() => setArchivedDateFilter('')} className="text-xs text-text-muted hover:text-text-primary font-semibold">Clear</button>}
           </div>
           {(() => {
-            const filtered = archivedDateFilter
-              ? archivedTasks.filter(t => t.completed_date === archivedDateFilter)
-              : archivedTasks;
-            if (filtered.length === 0) return <div className="text-sm text-text-muted">No archived tasks{archivedDateFilter ? ' for this date' : ''}.</div>;
+            const filtered = archivedTasks
+              .filter(t => !archivedDateFilter || t.completed_date === archivedDateFilter)
+              .filter(matchesSearch);
+            if (filtered.length === 0) return <div className="text-sm text-text-muted">No archived tasks{q ? ' match your search' : archivedDateFilter ? ' for this date' : ''}.</div>;
             // Group by completed_date
             const groups: Record<string, Task[]> = {};
             for (const t of filtered) {
