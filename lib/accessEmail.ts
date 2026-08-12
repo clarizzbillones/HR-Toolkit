@@ -8,6 +8,7 @@ export function buildAccessInvite(opts: {
   reportTabs: string[];
   appUrl: string;
   password: string;
+  full?: boolean;   // full-access admin invite (not a view-only viewer)
 }): { subject: string; html: string } {
   const first = (opts.name || opts.email.split('@')[0]).split(' ')[0];
   const secLabel = (k: string) => SECTIONS.find(s => s.key === k)?.label ?? k;
@@ -23,22 +24,30 @@ export function buildAccessInvite(opts: {
     ? `<div style="margin-top:14px"><div style="font-size:12px;font-weight:700;color:#8a6d3b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Within Reports, you can view</div>${opts.reportTabs.map(k => chip(tabLabel(k))).join('')}</div>`
     : '';
 
-  const subject = 'Your access to the Litson HR Toolkit';
-  const html = `<!DOCTYPE html><html><body style="margin:0;background:#f4f1ea;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2a2a">
-    <div style="max-width:560px;margin:0 auto;padding:24px 16px">
-      <div style="background-color:#ffffff;padding:22px 28px;border-radius:10px 10px 0 0;border:1px solid #e6ddcd;border-bottom:4px solid #c9a24a">
-        <div style="font-size:26px;font-weight:800;letter-spacing:.20em;color:#1b2a3d">LITSON</div>
-        <div style="font-size:11px;color:#8a6d3b;letter-spacing:.12em;font-weight:600;margin-top:2px">HR TOOLKIT · VIEWER ACCESS</div>
-      </div>
-      <div style="background:#fff;padding:26px 28px;border-radius:0 0 10px 10px;border:1px solid #e6ddcd;border-top:none">
-        <p style="font-size:15px;margin:0 0 14px">Hi ${first},</p>
-        <p style="font-size:14px;line-height:1.6;margin:0 0 18px">You've been given <strong>view-only access</strong> to the Litson HR Toolkit. You can open the sections below and view (but not edit) their information.</p>
+  const subject = opts.full ? 'Your admin access to the Litson HR Toolkit' : 'Your access to the Litson HR Toolkit';
+  const banner = opts.full ? 'HR TOOLKIT · FULL ACCESS' : 'HR TOOLKIT · VIEWER ACCESS';
+  const introHtml = opts.full
+    ? `<p style="font-size:14px;line-height:1.6;margin:0 0 18px">You've been given <strong>full access</strong> to the Litson HR Toolkit — you can open and edit every section, and manage access for others.</p>
+        <div style="background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:16px 18px;margin:0 0 20px">
+          <div style="font-size:12px;font-weight:700;color:#2f7d5b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Your access</div>
+          <div style="font-size:14px;line-height:1.6;color:#2a2a2a">Full access to every section, including Employee Files — plus access management.</div>
+        </div>`
+    : `<p style="font-size:14px;line-height:1.6;margin:0 0 18px">You've been given <strong>view-only access</strong> to the Litson HR Toolkit. You can open the sections below and view (but not edit) their information.</p>
 
         <div style="background:#faf7f0;border:1px solid #efe6d5;border-radius:8px;padding:16px 18px;margin:0 0 20px">
           <div style="font-size:12px;font-weight:700;color:#8a6d3b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Sections you can view</div>
           ${sectionChips}
           ${tabChips}
-        </div>
+        </div>`;
+  const html = `<!DOCTYPE html><html><body style="margin:0;background:#f4f1ea;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2a2a">
+    <div style="max-width:560px;margin:0 auto;padding:24px 16px">
+      <div style="background-color:#ffffff;padding:22px 28px;border-radius:10px 10px 0 0;border:1px solid #e6ddcd;border-bottom:4px solid #c9a24a">
+        <div style="font-size:26px;font-weight:800;letter-spacing:.20em;color:#1b2a3d">LITSON</div>
+        <div style="font-size:11px;color:#8a6d3b;letter-spacing:.12em;font-weight:600;margin-top:2px">${banner}</div>
+      </div>
+      <div style="background:#fff;padding:26px 28px;border-radius:0 0 10px 10px;border:1px solid #e6ddcd;border-top:none">
+        <p style="font-size:15px;margin:0 0 14px">Hi ${first},</p>
+        ${introHtml}
 
         <div style="background:#f4f8fb;border:1px solid #d9e4ee;border-radius:8px;padding:16px 18px;margin:0 0 22px">
           <div style="font-size:12px;font-weight:700;color:#3f5a76;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">How to sign in</div>

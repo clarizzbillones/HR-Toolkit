@@ -59,9 +59,20 @@ export default function AccessClient() {
       setPortalAdmins(d.portalAdmins ?? []);
       setAdmins(prev => Array.from(new Set([...prev, email])).sort());
       if (d.removedGrant) setGrants(prev => prev.filter(g => g.email !== d.removedGrant));
+      const nm = newAdmin.name.trim();
       setNewAdmin({ email: '', name: '' });
       showToast(`${email} is now a full-access admin`);
+      // Email them the invite (link + how to sign in), like viewer invites.
+      const inv = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name: nm, full: true, appUrl }) });
+      const invd = await inv.json().catch(() => ({}));
+      showToast(inv.ok ? `Invite emailed to ${email}` : (invd.error ?? 'Admin added, but the invite email could not be sent'));
     } finally { setAddingAdmin(false); }
+  }
+  async function emailAdminInvite(email: string) {
+    const name = portalAdmins.find(p => p.email === email)?.name ?? '';
+    const inv = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name, full: true, appUrl }) });
+    const invd = await inv.json().catch(() => ({}));
+    showToast(inv.ok ? `Invite emailed to ${email}` : (invd.error ?? 'Could not send email'));
   }
   async function removeAdmin(email: string) {
     if (!confirm(`Remove ${email} as a full-access admin? They'll fall back to full access without admin rights (unless you also add them as a viewer).`)) return;
@@ -132,7 +143,10 @@ export default function AccessClient() {
                 <span key={a} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe4d8] px-3 py-1 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />{a}
                   {removable
-                    ? <button onClick={() => removeAdmin(a)} title="Remove admin" className="ml-0.5 text-[#2f7d5b]/60 hover:text-litred-alt">✕</button>
+                    ? <>
+                        <button onClick={() => emailAdminInvite(a)} title="Email invite (link + password)" className="ml-0.5 text-[#2f7d5b]/70 hover:text-[#2f7d5b]">✉</button>
+                        <button onClick={() => removeAdmin(a)} title="Remove admin" className="text-[#2f7d5b]/60 hover:text-litred-alt">✕</button>
+                      </>
                     : <span title="Set in the environment — permanent" className="ml-0.5 text-[10px] text-[#2f7d5b]/60 uppercase tracking-wide">env</span>}
                 </span>
               );

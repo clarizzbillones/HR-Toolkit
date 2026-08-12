@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     reportTabs: Array.isArray(body.reportTabs) ? body.reportTabs.map(String) : [],
     appUrl: String(body.appUrl ?? ''),
     password: process.env.APP_PASSWORD ?? 'litson2026',
+    full: !!body.full,
   });
 
   // Preview mode: render the email without sending.
