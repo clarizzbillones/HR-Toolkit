@@ -59,6 +59,7 @@ const STATUS_PILL: Record<ReviewStatus, string> = {
   'Forms due': 'bg-[#faf3e6] text-[#c19653]',
   'Send forms': 'bg-[#e9f0f5] text-[#3f6b8a]',
   'Scheduled': 'bg-[#eef5f1] text-[#2f7d5b]',
+  'Complete': 'bg-[#e6f3ec] text-[#1f6b4a]',
   'Not started': 'bg-[#f1ece3] text-[#8b8478]',
 };
 
@@ -997,10 +998,15 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Last review date</label>
-              <input type="date" value={lastRev} onChange={e => setLastRev(e.target.value)}
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Last review date</label>
+                {!readOnly && <button type="button" onClick={() => { setLastRev(today); setNextRev(''); }} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">Today</button>}
+              </div>
+              {/* Changing the last review re-plans the next one to +6 months
+                  (clears any manual override so it follows the prediction). */}
+              <input type="date" value={lastRev} onChange={e => { setLastRev(e.target.value); setNextRev(''); }}
                 className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
-              <p className="text-[11px] text-text-muted mt-1">The only writable date — everything else derives from it.</p>
+              <p className="text-[11px] text-text-muted mt-1">The only writable date — the next review auto-plans 6 months out.</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Next review <span className="font-normal normal-case">(predicted — editable)</span></label>
