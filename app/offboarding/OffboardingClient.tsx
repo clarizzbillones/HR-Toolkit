@@ -97,9 +97,16 @@ export default function OffboardingClient() {
       if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
     } catch { showToast('Save failed'); }
   }
-  function toggleItem(rec: Rec, itemId: string) {
+  async function toggleItem(rec: Rec, itemId: string) {
     if (readOnly) return;
-    patch(rec.id, { checklist: { ...rec.checklist, [itemId]: !rec.checklist[itemId] } });
+    const checklist = { ...rec.checklist, [itemId]: !rec.checklist[itemId] };
+    await patch(rec.id, { checklist });
+    // When the checklist reaches Complete, move the employee to Offboarded in
+    // Staffing & Employee Files automatically (same as the manual button).
+    // Guarded by !rec.offboarded so it fires once, on the transition.
+    if (!rec.offboarded && offboardingStatus({ ...rec, checklist } as any) === 'Complete') {
+      await markOffboarded({ ...rec, checklist }, true);
+    }
   }
   function toggleExclude(rec: Rec, itemId: string) {
     if (readOnly) return;
