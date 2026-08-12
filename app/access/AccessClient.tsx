@@ -17,7 +17,7 @@ export default function AccessClient() {
   const [editing, setEditing] = useState<typeof blank | null>(null);
   const [saving, setSaving] = useState(false);
   const [emailOnSave, setEmailOnSave] = useState(true);
-  const [preview, setPreview] = useState<{ to: string; subject: string; html: string; src: { email: string; name: string; sections: string[]; reportTabs: string[] } } | null>(null);
+  const [preview, setPreview] = useState<{ to: string; subject: string; html: string; full?: boolean; src: { email: string; name: string; sections: string[]; reportTabs: string[] } } | null>(null);
   const [busyEmail, setBusyEmail] = useState('');
 
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -27,7 +27,7 @@ export default function AccessClient() {
     if (!res.ok) { showToast(d.error ?? 'Could not build preview'); return; }
     setPreview({ to: d.to, subject: d.subject, html: d.html, src: { email: g.email, name: g.name, sections: g.sections, reportTabs: g.reportTabs } });
   }
-  async function sendInvite(g: { email: string; name: string; sections: string[]; reportTabs: string[] }) {
+  async function sendInvite(g: { email: string; name: string; sections: string[]; reportTabs: string[]; full?: boolean }) {
     setBusyEmail(g.email);
     try {
       const res = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...g, appUrl }) });
@@ -48,6 +48,14 @@ export default function AccessClient() {
   }
   useEffect(() => { load(); }, []);
 
+  async function previewAdminEmail() {
+    const email = newAdmin.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid email to preview'); return; }
+    const res = await fetch('/api/access/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name: newAdmin.name.trim(), full: true, appUrl, preview: true }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error ?? 'Could not build preview'); return; }
+    setPreview({ to: d.to, subject: d.subject, html: d.html, full: true, src: { email, name: newAdmin.name.trim(), sections: [], reportTabs: [] } });
+  }
   async function addAdmin() {
     const email = newAdmin.email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid email'); return; }
@@ -166,7 +174,8 @@ export default function AccessClient() {
                 onKeyDown={e => e.key === 'Enter' && addAdmin()} placeholder="Full name"
                 className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-48" />
             </div>
-            <button onClick={addAdmin} disabled={addingAdmin} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{addingAdmin ? 'Adding…' : '＋ Add admin'}</button>
+            <button onClick={previewAdminEmail} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">👁 Preview email</button>
+            <button onClick={addAdmin} disabled={addingAdmin} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{addingAdmin ? 'Adding…' : '＋ Add admin & email invite'}</button>
           </div>
           <p className="text-[11px] text-text-muted mt-2">Add a full-access admin here, or set permanent ones via the ACCESS_ADMINS / HR_ADMINS environment variables (marked <b>env</b>). Everyone here has full access and cannot be restricted. They log in with the shared password.</p>
         </div>
@@ -270,7 +279,7 @@ export default function AccessClient() {
             </div>
             <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
               <button onClick={() => setPreview(null)} className="text-sm text-text-muted px-3">Close</button>
-              <button onClick={async () => { const ok = await sendInvite(preview.src); if (ok) setPreview(null); }}
+              <button onClick={async () => { const ok = await sendInvite({ ...preview.src, full: preview.full }); if (ok) setPreview(null); }}
                 className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">✉ Send this email</button>
             </div>
           </div>
