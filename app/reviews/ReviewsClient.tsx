@@ -58,9 +58,9 @@ const STATUS_PILL: Record<ReviewStatus, string> = {
   'Review week': 'bg-[#f7efe1] text-[#b07d2a]',
   'Forms due': 'bg-[#faf3e6] text-[#c19653]',
   'Send forms': 'bg-[#e9f0f5] text-[#3f6b8a]',
-  // Scheduled = far out, nothing due yet → calm neutral slate (not green, so it
-  // never gets confused with Complete).
-  'Scheduled': 'bg-[#eceff3] text-[#4a5a6d]',
+  // Scheduled = far out, nothing due yet → cool blue-slate (clearly not pink,
+  // and not green so it never gets confused with Complete).
+  'Scheduled': 'bg-[#e6ecf3] text-[#42587a]',
   // Complete = the only green pill.
   'Complete': 'bg-[#e6f3ec] text-[#1f6b4a]',
   'Not started': 'bg-[#f1ece3] text-[#8b8478]',
