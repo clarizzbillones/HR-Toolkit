@@ -27,7 +27,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (note) {
     const notes = JSON.parse(task.notes || '[]');
-    notes.push({ date: new Date().toLocaleDateString('en-US'), text: note });
+    // `date` (date-only) kept for older notes; `ts` is the full timestamp so
+    // the EOD report and note list can show the time a note was added.
+    notes.push({ date: new Date().toLocaleDateString('en-US'), ts: new Date().toISOString(), text: note });
     await sql`UPDATE tasks SET notes = ${JSON.stringify(notes)} WHERE id = ${params.id}`;
   }
 

@@ -8,6 +8,19 @@ interface Task {
   id: string; title: string; sub: string; due_tag: string; status: string; notes: string; completed_date?: string;
 }
 
+// A note's display stamp + text. New notes carry a full ISO `ts` → shown as a
+// date + time in CST; older notes only have a date → shown as-is.
+function noteLine(n: any): { stamp: string; text: string } {
+  const text = String(n?.text ?? '');
+  let stamp = '';
+  if (n?.ts) {
+    const d = new Date(n.ts);
+    if (!isNaN(d.getTime())) stamp = d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+  }
+  if (!stamp && n?.date) stamp = String(n.date);
+  return { stamp, text };
+}
+
 function dedupeNames(names: string[]): string[] {
   const seen = new Map<string, string>();
   for (const n of names) {
@@ -70,12 +83,15 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
 
   function printPdf() {
     const taskRows = [...done, ...pending].map(t => {
-      const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
+      const taskNotes = JSON.parse(t.notes || '[]') as any[];
+      const notesHtml = taskNotes.length
+        ? taskNotes.map(n => { const { stamp, text } = noteLine(n); return `${stamp ? `<span style="color:#999;font-size:11px">${stamp}</span> ` : ''}${text}`; }).join('<br>')
+        : '—';
       return `<tr style="border-bottom:1px solid #f4efe6">
         <td style="padding:10px 8px;font-size:13px;font-weight:500;color:#1a1a1a">${t.title}${t.sub ? `<br><span style="font-size:11px;color:#888">${t.sub}</span>` : ''}</td>
         <td style="padding:10px 8px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;${pillBg(t.status)}">${statusLabel(t.status)}</span></td>
         <td style="padding:10px 8px;font-size:12px;color:#555">${t.due_tag || '—'}</td>
-        <td style="padding:10px 8px;font-size:12px;color:#555">${taskNotes.map(n=>n.text).join('; ') || '—'}</td>
+        <td style="padding:10px 8px;font-size:12px;color:#555">${notesHtml}</td>
       </tr>`;
     }).join('');
 
@@ -209,7 +225,7 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
               <div>Task</div><div>Status</div><div>Due</div><div>Notes</div>
             </div>
             {[...done, ...pending].map((t) => {
-              const taskNotes = JSON.parse(t.notes || '[]') as {text:string}[];
+              const taskNotes = JSON.parse(t.notes || '[]') as any[];
               return (
                 <div key={t.id} className="grid grid-cols-[2fr_1fr_1fr_2fr] gap-2 py-2.5 border-b border-[#f4efe6] items-start">
                   <div>
@@ -218,7 +234,9 @@ export default function EodModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusPill(t.status)}`}>{statusLabel(t.status)}</span></div>
                   <div className="text-xs text-text-secondary">{t.due_tag || '—'}</div>
-                  <div className="text-xs text-text-secondary">{taskNotes.map(n=>n.text).join('; ') || '—'}</div>
+                  <div className="text-xs text-text-secondary">
+                    {taskNotes.length ? taskNotes.map((n, i) => { const { stamp, text } = noteLine(n); return <div key={i}>{stamp && <span className="text-text-faint">{stamp} </span>}{text}</div>; }) : '—'}
+                  </div>
                 </div>
               );
             })}
