@@ -9,6 +9,10 @@ export default function AccessClient() {
   const { showToast } = useToast();
   const [grants, setGrants] = useState<AccessGrant[]>([]);
   const [admins, setAdmins] = useState<string[]>([]);
+  const [envAdmins, setEnvAdmins] = useState<string[]>([]);
+  const [portalAdmins, setPortalAdmins] = useState<{ email: string; name: string }[]>([]);
+  const [newAdmin, setNewAdmin] = useState({ email: '', name: '' });
+  const [addingAdmin, setAddingAdmin] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [editing, setEditing] = useState<typeof blank | null>(null);
   const [saving, setSaving] = useState(false);
@@ -39,8 +43,35 @@ export default function AccessClient() {
     const d = await res.json();
     setGrants(d.grants ?? []);
     setAdmins(d.admins ?? []);
+    setEnvAdmins(d.envAdmins ?? []);
+    setPortalAdmins(d.portalAdmins ?? []);
   }
   useEffect(() => { load(); }, []);
+
+  async function addAdmin() {
+    const email = newAdmin.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter a valid email'); return; }
+    setAddingAdmin(true);
+    try {
+      const res = await fetch('/api/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add-admin', email, name: newAdmin.name.trim() }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Could not add admin'); return; }
+      setPortalAdmins(d.portalAdmins ?? []);
+      setAdmins(prev => Array.from(new Set([...prev, email])).sort());
+      if (d.removedGrant) setGrants(prev => prev.filter(g => g.email !== d.removedGrant));
+      setNewAdmin({ email: '', name: '' });
+      showToast(`${email} is now a full-access admin`);
+    } finally { setAddingAdmin(false); }
+  }
+  async function removeAdmin(email: string) {
+    if (!confirm(`Remove ${email} as a full-access admin? They'll fall back to full access without admin rights (unless you also add them as a viewer).`)) return;
+    const res = await fetch('/api/access', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove-admin', email }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error ?? 'Could not remove'); return; }
+    setPortalAdmins(d.portalAdmins ?? []);
+    setAdmins(prev => prev.filter(a => a !== email));
+    showToast('Admin removed');
+  }
 
   function toggle(list: string[], key: string): string[] {
     return list.includes(key) ? list.filter(k => k !== key) : [...list, key];
@@ -95,13 +126,35 @@ export default function AccessClient() {
             <span className="text-[11px] text-text-muted">· manage access, see every tab (incl. Employee Files)</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {admins.length === 0 ? <span className="text-sm text-text-muted">—</span> : admins.map(a => (
-              <span key={a} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe4d8] px-3 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />{a}
-              </span>
-            ))}
+            {admins.length === 0 ? <span className="text-sm text-text-muted">—</span> : admins.map(a => {
+              const removable = !envAdmins.includes(a);
+              return (
+                <span key={a} className="inline-flex items-center gap-1.5 text-sm font-medium bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe4d8] px-3 py-1 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />{a}
+                  {removable
+                    ? <button onClick={() => removeAdmin(a)} title="Remove admin" className="ml-0.5 text-[#2f7d5b]/60 hover:text-litred-alt">✕</button>
+                    : <span title="Set in the environment — permanent" className="ml-0.5 text-[10px] text-[#2f7d5b]/60 uppercase tracking-wide">env</span>}
+                </span>
+              );
+            })}
           </div>
-          <p className="text-[11px] text-text-muted mt-2">Set via the ACCESS_ADMINS / HR_ADMINS environment variables. Everyone here has full access and cannot be restricted.</p>
+          {/* Add a full-access admin from the portal (stored in the app). */}
+          <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-border-light">
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted block mb-1">Email</label>
+              <input value={newAdmin.email} onChange={e => setNewAdmin({ ...newAdmin, email: e.target.value })}
+                onKeyDown={e => e.key === 'Enter' && addAdmin()} placeholder="person@litson.co"
+                className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-56" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted block mb-1">Name <span className="font-normal normal-case text-text-faint">(optional)</span></label>
+              <input value={newAdmin.name} onChange={e => setNewAdmin({ ...newAdmin, name: e.target.value })}
+                onKeyDown={e => e.key === 'Enter' && addAdmin()} placeholder="Full name"
+                className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-48" />
+            </div>
+            <button onClick={addAdmin} disabled={addingAdmin} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{addingAdmin ? 'Adding…' : '＋ Add admin'}</button>
+          </div>
+          <p className="text-[11px] text-text-muted mt-2">Add a full-access admin here, or set permanent ones via the ACCESS_ADMINS / HR_ADMINS environment variables (marked <b>env</b>). Everyone here has full access and cannot be restricted. They log in with the shared password.</p>
         </div>
         {editing && (
           <div className="bg-[#fbf7ee] border border-border rounded-card p-5 max-w-3xl">

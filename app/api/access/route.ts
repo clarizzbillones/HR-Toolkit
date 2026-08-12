@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
 import { isAccessAdmin, accessAdminList, hrAdminList, SECTIONS, REPORT_TABS } from '@/lib/access';
+import { listPortalAdmins, portalAdminEmails, addPortalAdmin, removePortalAdmin } from '@/lib/adminGrants';
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS access_grants (
@@ -17,9 +18,16 @@ async function ensureTable() {
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? '';
+  const email = (session?.user?.email ?? '').toLowerCase();
   const role = (session?.user as any)?.role ?? '';
-  return isAccessAdmin(email, role) ? { email, role } : null;
+  if (isAccessAdmin(email, role)) return { email, role };
+  if (email && (await portalAdminEmails()).includes(email)) return { email, role };
+  return null;
+}
+// Env-var admins are permanent and can't be removed from the portal.
+function isEnvAdmin(email: string) {
+  const e = email.toLowerCase();
+  return accessAdminList().includes(e) || hrAdminList().includes(e);
 }
 
 const SECTION_KEYS = new Set(SECTIONS.map(s => s.key));
@@ -35,8 +43,11 @@ export async function GET() {
   await ensureTable();
   const rows = await sql`SELECT * FROM access_grants ORDER BY name ASC, email ASC` as any[];
   // Full-access admins (manage access + see every tab, incl. Employee Files).
-  const admins = Array.from(new Set([...accessAdminList(), ...hrAdminList()])).sort();
-  return NextResponse.json({ grants: rows.map(parseRow), admins });
+  // Permanent env-var admins + portal-added admins (the latter are removable).
+  const envAdmins = Array.from(new Set([...accessAdminList(), ...hrAdminList()])).sort();
+  const portalAdmins = (await listPortalAdmins()).filter(a => !envAdmins.includes(a.email));
+  const admins = Array.from(new Set([...envAdmins, ...portalAdmins.map(a => a.email)])).sort();
+  return NextResponse.json({ grants: rows.map(parseRow), admins, envAdmins, portalAdmins });
 }
 
 export async function POST(req: Request) {
@@ -45,6 +56,18 @@ export async function POST(req: Request) {
   const body = await req.json();
   const email = String(body.email ?? '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
+
+  // Promote someone to a full-access admin (portal-managed). Admins can't be
+  // restricted, so also drop any viewer grant they had.
+  if (body.action === 'add-admin') {
+    const nm = String(body.name ?? '').slice(0, 120) || email.split('@')[0];
+    await addPortalAdmin(email, nm);
+    await sql`DELETE FROM access_grants WHERE email = ${email}`;
+    const envAdmins = Array.from(new Set([...accessAdminList(), ...hrAdminList()])).sort();
+    const portalAdmins = (await listPortalAdmins()).filter(a => !envAdmins.includes(a.email));
+    return NextResponse.json({ portalAdmins, removedGrant: email });
+  }
+
   const name = String(body.name ?? '').slice(0, 120) || email.split('@')[0];
   let sections: string[] = Array.isArray(body.sections) ? body.sections.map(String).filter((s: string) => SECTION_KEYS.has(s)) : [];
   const reportTabs: string[] = Array.isArray(body.reportTabs) ? body.reportTabs.map(String).filter((s: string) => TAB_KEYS.has(s)) : [];
@@ -60,7 +83,18 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await ensureTable();
-  const { email } = await req.json();
-  await sql`DELETE FROM access_grants WHERE email = ${String(email ?? '').trim().toLowerCase()}`;
+  const body = await req.json();
+  const email = String(body.email ?? '').trim().toLowerCase();
+
+  // Remove a portal-added admin (env-var admins are permanent — reject those).
+  if (body.action === 'remove-admin') {
+    if (isEnvAdmin(email)) return NextResponse.json({ error: 'This admin is set in the environment and can’t be removed here.' }, { status: 400 });
+    await removePortalAdmin(email);
+    const envAdmins = Array.from(new Set([...accessAdminList(), ...hrAdminList()])).sort();
+    const portalAdmins = (await listPortalAdmins()).filter(a => !envAdmins.includes(a.email));
+    return NextResponse.json({ ok: true, portalAdmins });
+  }
+
+  await sql`DELETE FROM access_grants WHERE email = ${email}`;
   return NextResponse.json({ ok: true });
 }

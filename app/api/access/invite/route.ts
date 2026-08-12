@@ -4,15 +4,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sendMail, sendMailAsApp } from '@/lib/graph';
 import { isAccessAdmin } from '@/lib/access';
+import { portalAdminEmails } from '@/lib/adminGrants';
 import { buildAccessInvite } from '@/lib/accessEmail';
 
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? '';
+  const email = (session?.user?.email ?? '').toLowerCase();
   const role = (session?.user as any)?.role ?? '';
-  if (!isAccessAdmin(email, role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const portalAdmin = !!email && (await portalAdminEmails().catch((): string[] => [])).includes(email);
+  if (!isAccessAdmin(email, role) && !portalAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
   const to = String(body.email ?? '').trim().toLowerCase();
