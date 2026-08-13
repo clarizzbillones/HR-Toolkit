@@ -330,14 +330,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   </div>
                 ) : (
                   <>
-                    <div className="hidden sm:grid grid-cols-[1.3fr_1.5fr_1fr_128px_1.3fr_26px] gap-2 px-4 py-2 bg-[#f1ece3] text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                      <span>System</span><span>Login / account</span><span>Access level</span><span>Status</span><span>Notes</span><span></span>
+                    <div className="hidden sm:grid grid-cols-[1.4fr_1fr_128px_1.6fr_26px] gap-2 px-4 py-2 bg-[#f1ece3] text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                      <span>System</span><span>Access level</span><span>Status</span><span>Notes</span><span></span>
                     </div>
                     <div className="divide-y divide-[#f1ece3]">
                       {accounts.map(a => (
-                        <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.3fr_1.5fr_1fr_128px_1.3fr_26px] gap-2 px-4 py-2 items-center">
+                        <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1fr_128px_1.6fr_26px] gap-2 px-4 py-2 items-center">
                           <input list="firm-systems" disabled={readOnly} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
-                          <input disabled={readOnly} value={a.account ?? ''} onChange={e => editAccount(a.id, { account: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="email / username" className={ACCT_INPUT} />
                           <select disabled={readOnly} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={ACCT_INPUT + ' cursor-pointer'}>
                             {(a.access_level && !ACCESS_LEVELS.includes(a.access_level as any) ? [a.access_level] : []).map(v => <option key={v} value={v}>{v}</option>)}
                             {ACCESS_LEVELS.map(v => <option key={v} value={v}>{v}</option>)}

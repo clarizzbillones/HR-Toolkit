@@ -112,10 +112,10 @@ export async function POST(req: Request) {
   try {
     const [prof] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${lc(b.name)} LIMIT 1` as any[];
     if (prof) {
-      const accts = await sql`SELECT system, account, access_level FROM employee_accounts WHERE profile_id = ${prof.id} AND lower(coalesce(status,'')) <> 'closed' ORDER BY lower(system) ASC` as any[];
+      const accts = await sql`SELECT system, access_level FROM employee_accounts WHERE profile_id = ${prof.id} AND lower(coalesce(status,'')) <> 'closed' ORDER BY lower(system) ASC` as any[];
       if (accts.length) {
         const doc = emptyDoc();
-        doc.accounts = accts.map(a => ({ id: gid('acct'), label: String(a.system || 'Account'), hint: [a.account, a.access_level].filter(Boolean).join(' · ') || undefined, cell: {} }));
+        doc.accounts = accts.map(a => ({ id: gid('acct'), label: String(a.system || 'Account'), hint: a.access_level ? String(a.access_level) : undefined, cell: {} }));
         docJson = JSON.stringify(doc);
       }
     }
