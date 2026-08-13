@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     email: to,
     sections: Array.isArray(body.sections) ? body.sections.map(String) : [],
     reportTabs: Array.isArray(body.reportTabs) ? body.reportTabs.map(String) : [],
+    editSections: Array.isArray(body.editSections) ? body.editSections.map(String) : [],
     appUrl: String(body.appUrl ?? ''),
     password: process.env.APP_PASSWORD ?? 'litson2026',
     full: !!body.full,

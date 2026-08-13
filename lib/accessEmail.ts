@@ -8,36 +8,46 @@ export function buildAccessInvite(opts: {
   reportTabs: string[];
   appUrl: string;
   password: string;
-  full?: boolean;   // full-access admin invite (not a view-only viewer)
+  full?: boolean;          // full-access admin invite (not a view-only viewer)
+  editSections?: string[]; // sections this person may edit (subset of sections)
 }): { subject: string; html: string } {
   const first = (opts.name || opts.email.split('@')[0]).split(' ')[0];
   const secLabel = (k: string) => SECTIONS.find(s => s.key === k)?.label ?? k;
   const tabLabel = (k: string) => REPORT_TABS.find(t => t.key === k)?.label ?? k;
-  // List every granted section; if only Reports was granted via a tab, we still
-  // show Reports, with the specific tabs detailed underneath.
-  const sectionNames = opts.sections.map(secLabel);
+  const editSet = new Set(opts.editSections ?? []);
+  const canEditAny = opts.sections.some(k => editSet.has(k));
   const url = (opts.appUrl || '').replace(/\/$/, '') || 'https://hr-toolkit-delta.vercel.app';
 
-  const chip = (t: string) => `<span style="display:inline-block;background:#eef2f7;color:#3f5a76;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;margin:0 6px 6px 0">${t}</span>`;
-  const sectionChips = sectionNames.length ? sectionNames.map(chip).join('') : '<span style="color:#888">—</span>';
+  // Editable sections get a gold "✎" chip; view-only sections stay blue.
+  const chip = (t: string, editable = false) => editable
+    ? `<span style="display:inline-block;background:#f7efe1;color:#b07d2a;border:1px solid #e0c48a;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;margin:0 6px 6px 0">✎ ${t}</span>`
+    : `<span style="display:inline-block;background:#eef2f7;color:#3f5a76;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;margin:0 6px 6px 0">${t}</span>`;
+  const sectionChips = opts.sections.length ? opts.sections.map(k => chip(secLabel(k), editSet.has(k))).join('') : '<span style="color:#888">—</span>';
   const tabChips = opts.reportTabs.length
     ? `<div style="margin-top:14px"><div style="font-size:12px;font-weight:700;color:#8a6d3b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Within Reports, you can view</div>${opts.reportTabs.map(k => chip(tabLabel(k))).join('')}</div>`
     : '';
+  const editNote = canEditAny
+    ? `<div style="font-size:12px;color:#8a6d3b;line-height:1.5;margin-top:10px"><strong>✎</strong> = you can add &amp; edit entries here (e.g. your initials, dates and notes). Everything else is view-only.</div>`
+    : '';
 
   const subject = opts.full ? 'Your admin access to the Litson HR Toolkit' : 'Your access to the Litson HR Toolkit';
-  const banner = opts.full ? 'HR TOOLKIT · FULL ACCESS' : 'HR TOOLKIT · VIEWER ACCESS';
+  const banner = opts.full ? 'HR TOOLKIT · FULL ACCESS' : canEditAny ? 'HR TOOLKIT · TEAM ACCESS' : 'HR TOOLKIT · VIEWER ACCESS';
+  const viewerIntro = canEditAny
+    ? `You've been given access to the Litson HR Toolkit. You can open the sections below — and on the ones marked <strong>✎</strong> you can add and edit entries; the rest are view-only.`
+    : `You've been given <strong>view-only access</strong> to the Litson HR Toolkit. You can open the sections below and view (but not edit) their information.`;
   const introHtml = opts.full
     ? `<p style="font-size:14px;line-height:1.6;margin:0 0 18px">You've been given <strong>full access</strong> to the Litson HR Toolkit — you can open and edit every section, and manage access for others.</p>
         <div style="background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:16px 18px;margin:0 0 20px">
           <div style="font-size:12px;font-weight:700;color:#2f7d5b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Your access</div>
           <div style="font-size:14px;line-height:1.6;color:#2a2a2a">Full access to every section, including Employee Files — plus access management.</div>
         </div>`
-    : `<p style="font-size:14px;line-height:1.6;margin:0 0 18px">You've been given <strong>view-only access</strong> to the Litson HR Toolkit. You can open the sections below and view (but not edit) their information.</p>
+    : `<p style="font-size:14px;line-height:1.6;margin:0 0 18px">${viewerIntro}</p>
 
         <div style="background:#faf7f0;border:1px solid #efe6d5;border-radius:8px;padding:16px 18px;margin:0 0 20px">
-          <div style="font-size:12px;font-weight:700;color:#8a6d3b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Sections you can view</div>
+          <div style="font-size:12px;font-weight:700;color:#8a6d3b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${canEditAny ? 'Sections you can open' : 'Sections you can view'}</div>
           ${sectionChips}
           ${tabChips}
+          ${editNote}
         </div>`;
   const html = `<!DOCTYPE html><html><body style="margin:0;background:#f4f1ea;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#2a2a2a">
     <div style="max-width:560px;margin:0 auto;padding:24px 16px">
