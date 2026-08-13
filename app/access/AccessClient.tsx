@@ -132,7 +132,7 @@ export default function AccessClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex items-center gap-4 flex-wrap flex-shrink-0">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Access Control</h1>
-          <p className="text-sm text-text-muted mt-0.5">Give specific people access to just the tabs you check — view-only by default, or mark a tab <b className="text-[#b07d2a]">✎ edit</b> to let them change it (e.g. Offboarding for Catie, Caitlin &amp; IT). Everyone not listed keeps full access.</p>
+          <p className="text-sm text-text-muted mt-0.5">Check the tabs a person can open. Each is <b>view-only</b> until you switch it to <b className="text-[#b07d2a]">✎ Can edit</b> — which lets them fill in and change entries (e.g. add their initials, date &amp; notes on <b>Offboarding</b>). Everyone not listed keeps full access.</p>
         </div>
         <button onClick={() => setEditing({ ...blank })} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">＋ Add viewer</button>
       </header>
@@ -195,20 +195,20 @@ export default function AccessClient() {
             </div>
 
             <div className="mb-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2">Sidebar sections they can view <span className="font-normal normal-case text-text-faint">· click <b className="text-[#b07d2a]">✎ edit</b> on a checked section to let them change it (not just view)</span></div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2">Sidebar sections they can open <span className="font-normal normal-case text-text-faint">· each checked tab is view-only until you switch it to <b className="text-[#b07d2a]">✎ Can edit</b></span></div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {SECTIONS.map(s => {
                   const viewing = editing.sections.includes(s.key);
                   const canEdit = editing.editSections.includes(s.key);
                   return (
                     <label key={s.key} className="flex items-center gap-2 text-sm bg-white border border-border-light rounded-ctrl px-3 py-2 cursor-pointer hover:border-ink">
-                      <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d]" checked={viewing}
+                      <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d] shrink-0" checked={viewing}
                         onChange={() => setEditing({ ...editing, sections: toggle(editing.sections, s.key), editSections: editing.editSections.filter(k => k !== s.key) })} />
                       <span className="truncate">{s.label}</span>
                       {viewing && (
                         <button type="button" onClick={e => { e.preventDefault(); setEditing({ ...editing, editSections: toggle(editing.editSections, s.key) }); }}
-                          title={canEdit ? 'They can edit this section — click to make view-only' : 'View-only — click to allow editing'}
-                          className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded border ${canEdit ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]' : 'border-border-light text-text-faint hover:text-[#b07d2a] hover:border-[#e0c48a]'}`}>✎ edit</button>
+                          title={canEdit ? 'Can edit — they can add & change entries (initials, dates, notes). Click to make view-only.' : 'View-only — they can see but not change anything. Click to let them add & change entries.'}
+                          className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${canEdit ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]' : 'border-border-light text-text-muted hover:text-[#b07d2a] hover:border-[#e0c48a]'}`}>{canEdit ? '✎ Can edit' : '👁 View only'}</button>
                       )}
                     </label>
                   );

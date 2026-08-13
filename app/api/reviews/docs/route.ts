@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { sql, cuid } from '@/lib/db';
+import { syncReviewsToEmployeeFile } from '@/lib/employeeFiles';
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS review_docs (
@@ -53,6 +54,8 @@ export async function POST(req: Request) {
   await sql`INSERT INTO review_docs (id, employee_id, which, name, data)
     VALUES (${cuid()}, ${id}, ${which}, ${file.name}, ${dataUrl})
     ON CONFLICT (employee_id, which) DO UPDATE SET name = ${file.name}, data = ${dataUrl}, created_at = now()`;
+  // Auto-attach the uploaded review PDF to the employee's Employee File.
+  try { await syncReviewsToEmployeeFile(id); } catch { /* best-effort */ }
   return NextResponse.json({ name: file.name });
 }
 
@@ -60,5 +63,11 @@ export async function DELETE(req: Request) {
   await ensureTable();
   const { id, which } = await req.json();
   await sql`DELETE FROM review_docs WHERE employee_id = ${id} AND which = ${which}`;
+  // Drop any standalone Employee-File entry for this doc, then re-sync so the
+  // combined summary reflects the remaining documents.
+  try {
+    await sql`DELETE FROM employee_files WHERE source_ref = ${`reviews-doc:${id}:${which}`}`;
+    await syncReviewsToEmployeeFile(id);
+  } catch { /* best-effort */ }
   return NextResponse.json({ ok: true });
 }
