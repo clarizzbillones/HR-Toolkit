@@ -15,6 +15,9 @@ export const SYSTEM_HINTS: Record<string, string> = {
   'Ramp': 'Corporate cards & spend',
 };
 
+// Access levels an account can be held at.
+export const ACCESS_LEVELS = ['Standard user', 'Admin'] as const;
+
 export const ACCOUNT_STATUSES = ['Active', 'Needs review', 'Suspended', 'Closed'] as const;
 export const ACCOUNT_SOURCES = ['Manual', 'Onboarding', 'Ramp', 'SSO'] as const;
 

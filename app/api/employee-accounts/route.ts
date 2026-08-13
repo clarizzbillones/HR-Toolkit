@@ -32,6 +32,11 @@ export async function POST(req: Request) {
   const profileId = String(b.profileId ?? '');
   if (!profileId) return NextResponse.json({ error: 'Missing profileId' }, { status: 400 });
 
+  // Employees log in to firm systems with their firm email, so default the
+  // login to it (and access level to Standard user).
+  const [prof] = await sql`SELECT email FROM employee_profiles WHERE id = ${profileId}` as any[];
+  const email = String(prof?.email ?? '').trim();
+
   // Seed the standard firm systems that aren't already listed for this employee.
   if (b.action === 'seed-standard') {
     const existing = await sql`SELECT lower(system) AS s FROM employee_accounts WHERE profile_id = ${profileId}` as any[];
@@ -40,16 +45,20 @@ export async function POST(req: Request) {
     for (const sys of FIRM_SYSTEMS) {
       if (have.has(sys.toLowerCase())) continue;
       await sql`INSERT INTO employee_accounts (id, profile_id, system, account, access_level, status, source, notes)
-        VALUES (${cuid()}, ${profileId}, ${sys}, ${''}, ${''}, ${'Active'}, ${'Manual'}, ${SYSTEM_HINTS[sys] ?? ''})`;
+        VALUES (${cuid()}, ${profileId}, ${sys}, ${email}, ${'Standard user'}, ${'Active'}, ${'Manual'}, ${SYSTEM_HINTS[sys] ?? ''})`;
       created++;
     }
+    // Backfill blanks on any rows already present (e.g. seeded before this).
+    if (email) await sql`UPDATE employee_accounts SET account = ${email} WHERE profile_id = ${profileId} AND coalesce(account, '') = ''`;
+    await sql`UPDATE employee_accounts SET access_level = ${'Standard user'} WHERE profile_id = ${profileId} AND coalesce(access_level, '') = ''`;
     const accounts = await sql`SELECT * FROM employee_accounts WHERE profile_id = ${profileId} ORDER BY lower(system) ASC, created_at ASC`;
     return NextResponse.json({ accounts, created });
   }
 
   const id = cuid();
+  const acct = (b.account ?? '').trim() || email;
   await sql`INSERT INTO employee_accounts (id, profile_id, system, account, access_level, status, source, notes)
-    VALUES (${id}, ${profileId}, ${b.system ?? ''}, ${b.account ?? ''}, ${b.access_level ?? ''}, ${b.status ?? 'Active'}, ${b.source ?? 'Manual'}, ${b.notes ?? ''})`;
+    VALUES (${id}, ${profileId}, ${b.system ?? ''}, ${acct}, ${b.access_level ?? 'Standard user'}, ${b.status ?? 'Active'}, ${b.source ?? 'Manual'}, ${b.notes ?? ''})`;
   const [row] = await sql`SELECT * FROM employee_accounts WHERE id = ${id}`;
   return NextResponse.json({ account: row }, { status: 201 });
 }

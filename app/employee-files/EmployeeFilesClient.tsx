@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
-import { FIRM_SYSTEMS, ACCOUNT_STATUSES } from '@/lib/firmSystems';
+import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -338,7 +338,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.3fr_1.5fr_1fr_128px_1.3fr_26px] gap-2 px-4 py-2 items-center">
                           <input list="firm-systems" disabled={readOnly} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
                           <input disabled={readOnly} value={a.account ?? ''} onChange={e => editAccount(a.id, { account: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="email / username" className={ACCT_INPUT} />
-                          <input disabled={readOnly} value={a.access_level ?? ''} onChange={e => editAccount(a.id, { access_level: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="Standard / Admin" className={ACCT_INPUT} />
+                          <select disabled={readOnly} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={ACCT_INPUT + ' cursor-pointer'}>
+                            {(a.access_level && !ACCESS_LEVELS.includes(a.access_level as any) ? [a.access_level] : []).map(v => <option key={v} value={v}>{v}</option>)}
+                            {ACCESS_LEVELS.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select>
                           <select disabled={readOnly} value={a.status || 'Active'} onChange={e => editAccount(a.id, { status: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer ${ACCT_STATUS_COLOR[a.status] || ACCT_STATUS_COLOR['Active']}`}>
                             {ACCOUNT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
