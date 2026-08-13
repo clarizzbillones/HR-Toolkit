@@ -7,12 +7,15 @@ import {
   activeProgress, offboardingStatus, isItemExcluded, ageAt, tenureLabel, defaultExcluded,
 } from '@/lib/offboarding';
 import { EXIT_QUESTIONS as EXIT_Q } from '@/lib/exitInterview';
+import OffboardingDoc from './OffboardingDoc';
+import { DOC_SECTIONS, BENEFITS_REF, type OffboardingDoc as Doc } from '@/lib/offboardingDoc';
 
 interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
   separation_date: string | null; separation_type: string | null; prepared_by: string | null;
   checklist: Record<string, boolean>; excluded: Record<string, boolean>; offer_severance: boolean;
   dob: string | null; hire_date: string | null; notes: string | null; offboarded?: boolean;
+  doc: Doc;
 }
 interface Emp { name: string; position: string | null; dob: string | null; start_date: string | null; email?: string | null }
 
@@ -33,6 +36,9 @@ export default function OffboardingClient() {
   const [employees, setEmployees] = useState<Emp[]>([]);
   const [loading, setLoading] = useState(true);
   const [selId, setSelId] = useState<string | null>(null);
+  // Which view of a record: Catie's streamlined signed document, or the longer
+  // legal-compliance checklist. Default to the document (the go-forward process).
+  const [docView, setDocView] = useState<'document' | 'compliance'>('document');
   const [showAdd, setShowAdd] = useState(false);
   const emptyForm = { name: '', position: '', manager: '', separation_date: '', separation_type: SEPARATION_TYPES[0], prepared_by: '', dob: '', hire_date: '', offer_severance: false };
   const [form, setForm] = useState({ ...emptyForm });
@@ -180,6 +186,54 @@ export default function OffboardingClient() {
     win.document.close();
   }
 
+  // Print Catie's signed Offboarding Document (HR → Ops → IT, initials/dates).
+  function printOffDoc(rec: Rec) {
+    const win = window.open('', '_blank'); if (!win) return;
+    const d = rec.doc;
+    const th = (h: string[]) => `<tr>${h.map(x => `<th style="text-align:left;padding:5px 7px;font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:#8a8474;border-bottom:1.5px solid #e6ddcd">${esc(x)}</th>`).join('')}</tr>`;
+    const cellRow = (label: string, hint: string | undefined, c: any) => `<tr style="border-bottom:1px solid #f1ece3">
+      <td style="padding:6px 7px;font-size:12px;vertical-align:top">${esc(label)}${hint ? `<div style="color:#8a8474;font-size:10px">${esc(hint)}</div>` : ''}</td>
+      <td style="padding:6px 7px;font-size:12px">${esc(c?.assignee || '')}</td>
+      <td style="padding:6px 7px;font-size:12px;text-transform:uppercase">${esc(c?.initial || '')}</td>
+      <td style="padding:6px 7px;font-size:12px;white-space:nowrap">${esc(fmtDate(c?.date) || '')}</td>
+      <td style="padding:6px 7px;font-size:11px;color:#555">${esc(c?.notes || '')}</td>
+    </tr>`;
+    const table = (rows: string) => `<table style="width:100%;border-collapse:collapse;margin-top:6px"><thead>${th(['Item', 'Assigned To', 'Initial', 'Date', 'Notes'])}</thead><tbody>${rows}</tbody></table>`;
+    const hr = DOC_SECTIONS.find(s => s.key === 'hr')!;
+    const it = DOC_SECTIONS.find(s => s.key === 'it')!;
+    const sectionHead = (h: string, blurb: string) => `<div style="font-size:13px;font-weight:700;color:#1b2a3d;margin-top:18px">${esc(h)}</div><div style="font-size:11px;color:#8a8474">${esc(blurb)}</div>`;
+    const benefits = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:12px">Benefits quick reference</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:4px"><thead>${th(['Benefit', 'Coverage ends', 'Notes'])}</thead><tbody>${BENEFITS_REF.map(b => `<tr style="border-bottom:1px solid #f1ece3"><td style="padding:5px 7px;font-size:12px;font-weight:600">${esc(b.benefit)}</td><td style="padding:5px 7px;font-size:12px">${esc(b.ends)}</td><td style="padding:5px 7px;font-size:11px;color:#555">${esc(b.notes)}</td></tr>`).join('')}</tbody></table>`;
+    const opsInfo = `<div style="margin-top:8px;font-size:12px;line-height:1.7">
+      <div><b>Access cutoff date:</b> ${esc(d.ops.accessCutoff || '—')}</div>
+      <div><b>Mailbox disposition:</b> ${esc(d.ops.mailbox || '—')}</div>
+      <div><b>Electronic file ownership transferred to:</b> ${esc(d.ops.fileOwner || '—')}</div>
+      <div><b>Exceptions or holds:</b> ${esc(d.ops.exceptions || '—')}</div></div>`;
+    const signoff = `<div style="font-size:13px;font-weight:700;color:#1b2a3d;margin-top:18px">Sign-Off — Catie</div>
+      ${table([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']].map(([k, l]) => cellRow(l, undefined, (d.signoff as any)[k])).join(''))}`;
+    const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offboarding Document — ${esc(rec.name)}</title>
+<style>@page{size:letter;margin:0.5in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:22px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d}table{page-break-inside:auto}tr{page-break-inside:avoid}</style></head><body>
+<div style="max-width:740px;margin:0 auto">
+  <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px">
+    <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON PLLC</div>
+    <div style="font-size:19px;font-weight:700;color:#fff;margin-top:8px">Employee Offboarding Checklist</div>
+    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: HR first, then Ops, then IT. Each item is signed off with initials and a date as it's completed.</div>
+  </div>
+  <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
+    ${meta('Employee name', rec.name)}${meta('Position / Title', rec.position || '')}${meta('Last day of employment', fmtDate(rec.separation_date))}
+  </div>
+  ${sectionHead(hr.heading, hr.blurb)}${table(hr.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}${benefits}
+  ${sectionHead('Section 2 — Ops', 'Access, mailbox, and account decisions. Complete after HR; IT will not act until this section is signed off.')}${opsInfo}
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts to close</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
+  ${sectionHead(it.heading, it.blurb)}${table(it.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}
+  ${signoff}
+  <div style="margin-top:18px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Offboarding is complete only once Catie has signed off all three sections. File the completed document in the employee's Employee File (HR Hub).</div>
+</div>
+<script>window.onload=function(){window.print()}</script></body></html>`);
+    win.document.close();
+  }
+
   // ---- Detail view ----
   if (selected) {
     const rec = selected;
@@ -210,7 +264,7 @@ export default function OffboardingClient() {
             {!readOnly && (rec.offboarded
               ? <button onClick={() => markOffboarded(rec, false)} className="text-sm font-semibold text-text-secondary border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">↩ Restore to active</button>
               : <button onClick={() => markOffboarded(rec, true)} className="bg-[#4a5a6d] text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-[#3c4a5a]" title="Mark offboarded and move to the Offboarded lists in Staffing & Employee Files">✓ Move to Offboarded</button>)}
-            <button onClick={() => printDoc(rec)} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark">⤓ Print / PDF</button>
+            <button onClick={() => (docView === 'document' ? printOffDoc(rec) : printDoc(rec))} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark" title={docView === 'document' ? 'Print Catie’s signed offboarding document' : 'Print the compliance checklist'}>⤓ Print / PDF</button>
             {!readOnly && <button onClick={() => remove(rec)} className="text-sm font-semibold text-litred-alt border border-border-light px-3 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
           </div>
         </header>
@@ -247,6 +301,7 @@ export default function OffboardingClient() {
                 </div>
               )}
 
+              {docView === 'compliance' && (
               <div className="mt-5">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-semibold text-text-secondary">{done} of {total} applicable steps complete</span>
@@ -256,11 +311,26 @@ export default function OffboardingClient() {
                   <div className="h-full rounded-full bg-[#c9a24a] transition-all" style={{ width: `${pct}%` }} />
                 </div>
               </div>
+              )}
+            </div>
+
+            {/* View toggle: Catie's signed document vs the compliance checklist */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5">
+                {([['document', 'Offboarding document'], ['compliance', 'Compliance checklist']] as const).map(([v, label]) => (
+                  <button key={v} onClick={() => setDocView(v)}
+                    className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${docView === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>{label}</button>
+                ))}
+              </div>
+              {docView === 'document' && <span className="text-[11px] text-text-muted">Catie’s streamlined process — assign each task, initial &amp; date, then Catie signs off.</span>}
             </div>
 
             {/* Checklist */}
             <div className="space-y-5">
-              {OFFBOARDING_CHECKLIST.map(sec => {
+              {docView === 'document' && (
+                <OffboardingDoc rec={rec as any} readOnly={readOnly} onSave={d => patch(rec.id, { doc: d } as any)} />
+              )}
+              {docView === 'compliance' && OFFBOARDING_CHECKLIST.map(sec => {
                 const sectionOff = !!sec.severance && !rec.offer_severance;
                 const activeItems = sec.items.filter(it => !isItemExcluded(rec, sec, it));
                 const secDone = activeItems.filter(it => rec.checklist[it.id]).length;

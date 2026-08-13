@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { defaultExcluded } from '@/lib/offboarding';
+import { parseDoc } from '@/lib/offboardingDoc';
 
 // Offboarding tracker: one record per departing employee with a checklist state
 // (item id -> boolean) drawn from lib/offboarding.ts.
@@ -18,6 +19,7 @@ async function ensure() {
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS offer_severance BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS excluded TEXT`;
   await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE offboarding ADD COLUMN IF NOT EXISTS doc TEXT`;
 }
 const lc = (s: any) => String(s ?? '').trim().toLowerCase();
 async function ensureOffboardedStaff() {
@@ -65,7 +67,7 @@ function parseMap(v: any): Record<string, boolean> {
   return {};
 }
 function parse(row: any) {
-  return { ...row, checklist: parseMap(row.checklist), excluded: parseMap(row.excluded), offer_severance: !!row.offer_severance };
+  return { ...row, checklist: parseMap(row.checklist), excluded: parseMap(row.excluded), offer_severance: !!row.offer_severance, doc: parseDoc(row.doc) };
 }
 
 export async function GET() {
@@ -119,6 +121,7 @@ export async function PATCH(req: Request) {
   if (typeof b.offer_severance === 'boolean') updates.offer_severance = b.offer_severance;
   if (b.checklist && typeof b.checklist === 'object') updates.checklist = JSON.stringify(b.checklist);
   if (b.excluded && typeof b.excluded === 'object') updates.excluded = JSON.stringify(b.excluded);
+  if (b.doc && typeof b.doc === 'object') updates.doc = JSON.stringify(b.doc);
   if (!Object.keys(updates).length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   await sql`UPDATE offboarding SET ${sql(updates)} WHERE id = ${b.id}`;
   const [row] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
