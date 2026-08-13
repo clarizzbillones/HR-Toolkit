@@ -36,8 +36,9 @@ export const REPORT_TABS: { key: string; label: string }[] = [
 export interface AccessGrant {
   email: string;
   name: string;
-  sections: string[];    // allowed section keys (route paths)
-  reportTabs: string[];  // allowed report tab keys
+  sections: string[];      // allowed section keys (route paths)
+  reportTabs: string[];    // allowed report tab keys
+  editSections: string[];  // sections they may EDIT (subset of sections)
 }
 
 // The caller's effective access, as returned by /api/access/me.
@@ -47,6 +48,15 @@ export interface MyAccess {
   restricted: boolean;    // false = full access (not in the grant list)
   sections: string[];     // allowed sections (only meaningful when restricted)
   reportTabs: string[];   // allowed report tabs (only meaningful when restricted)
+  editSections: string[]; // sections a restricted viewer may edit (else view-only)
+}
+
+// May the caller edit the given section? Full-access users always can; a
+// restricted viewer only if the section is in their editSections grant.
+export function canEditSection(me: MyAccess | null | undefined, section: string): boolean {
+  if (!me) return true;
+  if (!me.restricted) return true;
+  return (me.editSections ?? []).includes(section);
 }
 
 // Sections locked to HR admins only — hidden from everyone else, including

@@ -31,7 +31,9 @@ function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</
 
 export default function OffboardingClient() {
   const { showToast } = useToast();
-  const { me } = useAccess(); const readOnly = !!me?.restricted;
+  // Restricted viewers are read-only — unless they were granted edit rights on
+  // Offboarding (so Catie / Caitlin / IT can add their initials).
+  const { me } = useAccess(); const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/offboarding');
   const [rows, setRows] = useState<Rec[]>([]);
   const [employees, setEmployees] = useState<Emp[]>([]);
   const [loading, setLoading] = useState(true);

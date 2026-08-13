@@ -4,6 +4,9 @@
 
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import { parseSignatories, fmtLong } from './coachingDoc';
+import { DOC_SECTIONS, BENEFITS_REF, type OffboardingDoc, type Cell } from './offboardingDoc';
+
+const GREEN = rgb(0.18, 0.49, 0.36);
 
 const NAVY = rgb(0.106, 0.165, 0.239);
 const GOLD = rgb(0.788, 0.635, 0.290);
@@ -209,6 +212,63 @@ export async function exitInterviewPdfDataUrl(name: string, qa: { q: string; a: 
     d.para(item.a || '—', { color: rgb(0.28, 0.3, 0.34) });
     d.gap(6);
   }
+  return dataUrl(await d.bytes());
+}
+
+// A branded PDF of Catie's signed Offboarding Document (HR -> Ops -> IT, with
+// each task's assignee/initials/date and Catie's sign-off). Filed to the
+// employee's Employee File when the document is fully signed off.
+export async function offboardingDocPdfDataUrl(rec: any): Promise<string> {
+  const doc: OffboardingDoc = rec.doc;
+  const fmtD = (s: any) => { if (!s) return ''; const dt = new Date(String(s) + 'T12:00:00'); return isNaN(+dt) ? String(s) : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const d = await Doc.create('Employee Offboarding Checklist', '');
+  const bold = (d as any).bold as PDFFont;
+  d.label('Employee name', String(rec.name ?? ''));
+  d.label('Position / Title', String(rec.position ?? ''));
+  d.label('Last day of employment', fmtD(rec.separation_date));
+  d.rule();
+
+  const cellDone = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
+  const taskRow = (label: string, hint: string | undefined, c?: Cell) => {
+    d.para(label, { font: bold, size: 11 });
+    if (hint) d.para(hint, { size: 9.5, color: MUTED, indent: 8 });
+    const parts = [
+      `Assigned: ${c?.assignee || '—'}`,
+      `Initials: ${(c?.initial || '____').toUpperCase()}`,
+      `Date: ${c?.date ? fmtD(c.date) : '________'}`,
+    ];
+    if (c?.notes) parts.push(`Notes: ${c.notes}`);
+    d.para(parts.join('   .   '), { size: 10, indent: 8, color: cellDone(c) ? GREEN : MUTED });
+    d.gap(5);
+  };
+  const heading = (t: string) => { d.gap(4); d.para(t, { font: bold, size: 13 }); d.gap(4); };
+
+  const hr = DOC_SECTIONS.find(s => s.key === 'hr')!;
+  const it = DOC_SECTIONS.find(s => s.key === 'it')!;
+
+  heading('Section 1 - HR');
+  for (const i of hr.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  d.gap(2); d.para('BENEFITS QUICK REFERENCE', { font: bold, size: 8, color: MUTED });
+  for (const b of BENEFITS_REF) d.para(`${b.benefit} - ${b.ends}. ${b.notes}`, { bullet: true, indent: 14, size: 9.5 });
+  d.rule();
+
+  heading('Section 2 - Ops');
+  d.para(`Access cutoff date: ${doc.ops.accessCutoff || '—'}`, { size: 10.5 });
+  d.para(`Mailbox disposition: ${doc.ops.mailbox || '—'}`, { size: 10.5 });
+  d.para(`Electronic file ownership transferred to: ${doc.ops.fileOwner || '—'}`, { size: 10.5 });
+  d.para(`Exceptions or holds: ${doc.ops.exceptions || '—'}`, { size: 10.5 });
+  d.gap(4); d.para('ACCOUNTS TO CLOSE', { font: bold, size: 8, color: MUTED }); d.gap(2);
+  for (const a of doc.accounts) taskRow(a.label, a.hint, a.cell);
+  d.rule();
+
+  heading('Section 3 - IT');
+  for (const i of it.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  d.rule();
+
+  heading('Sign-Off - Catie');
+  taskRow('HR - Section 1 complete', undefined, doc.signoff.hr);
+  taskRow('Ops - Section 2 complete', undefined, doc.signoff.ops);
+  taskRow('IT - Section 3 complete', undefined, doc.signoff.it);
   return dataUrl(await d.bytes());
 }
 

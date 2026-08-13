@@ -18,14 +18,15 @@ export async function GET() {
 
   // Admins/owners are never restricted.
   if (isAdmin || !email) {
-    return NextResponse.json({ isAdmin, isHrAdmin: hrAdmin, restricted: false, sections: [], reportTabs: [] });
+    return NextResponse.json({ isAdmin, isHrAdmin: hrAdmin, restricted: false, sections: [], reportTabs: [], editSections: [] });
   }
   let row: any;
   try {
     await sql`CREATE TABLE IF NOT EXISTS access_grants (email TEXT PRIMARY KEY, name TEXT, sections TEXT, report_tabs TEXT, updated_at TIMESTAMPTZ DEFAULT now())`;
-    [row] = await sql`SELECT sections, report_tabs FROM access_grants WHERE email = ${email}` as any[];
+    await sql`ALTER TABLE access_grants ADD COLUMN IF NOT EXISTS edit_sections TEXT`;
+    [row] = await sql`SELECT sections, report_tabs, edit_sections FROM access_grants WHERE email = ${email}` as any[];
   } catch { /* table may not exist */ }
-  if (!row) return NextResponse.json({ isAdmin: false, isHrAdmin: hrAdmin, restricted: false, sections: [], reportTabs: [] });
+  if (!row) return NextResponse.json({ isAdmin: false, isHrAdmin: hrAdmin, restricted: false, sections: [], reportTabs: [], editSections: [] });
   const safe = (v: any) => { try { const a = JSON.parse(v ?? '[]'); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } };
-  return NextResponse.json({ isAdmin: false, isHrAdmin: hrAdmin, restricted: true, sections: safe(row.sections), reportTabs: safe(row.report_tabs) });
+  return NextResponse.json({ isAdmin: false, isHrAdmin: hrAdmin, restricted: true, sections: safe(row.sections), reportTabs: safe(row.report_tabs), editSections: safe(row.edit_sections) });
 }

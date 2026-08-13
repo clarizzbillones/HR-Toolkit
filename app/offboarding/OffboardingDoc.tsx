@@ -89,8 +89,8 @@ export default function OffboardingDoc({ rec, readOnly, onSave }: {
         <div className="h-2.5 rounded-full bg-[#eee7da] overflow-hidden"><div className="h-full rounded-full bg-[#c9a24a] transition-all" style={{ width: `${pct}%` }} /></div>
         <div className={`mt-3 text-sm rounded-ctrl px-3 py-2 ${signed ? 'bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe4d8]' : 'bg-[#faf7f0] text-text-secondary border border-[#efe6d5]'}`}>
           {signed
-            ? '✓ Signed off by Catie — this offboarding is complete and ready to file in the employee’s Employee File (HR Hub).'
-            : 'Not complete until Catie reviews and signs off all three sections below.'}
+            ? '✓ Signed off by Catie — complete. The employee has been moved to Offboarded and the signed document filed to their Employee File (HR Hub) automatically.'
+            : 'Not complete until Catie reviews and signs off all three sections below. On sign-off, the employee is moved to Offboarded and the signed PDF is filed automatically.'}
         </div>
       </div>
 

@@ -4,7 +4,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { defaultExcluded } from '@/lib/offboarding';
-import { parseDoc } from '@/lib/offboardingDoc';
+import { parseDoc, docSignedOff } from '@/lib/offboardingDoc';
+import { attachPdfToEmployeeFile } from '@/lib/employeeFiles';
+import { offboardingDocPdfDataUrl } from '@/lib/employeePdf';
 
 // Offboarding tracker: one record per departing employee with a checklist state
 // (item id -> boolean) drawn from lib/offboarding.ts.
@@ -121,11 +123,38 @@ export async function PATCH(req: Request) {
   if (typeof b.offer_severance === 'boolean') updates.offer_severance = b.offer_severance;
   if (b.checklist && typeof b.checklist === 'object') updates.checklist = JSON.stringify(b.checklist);
   if (b.excluded && typeof b.excluded === 'object') updates.excluded = JSON.stringify(b.excluded);
+  // When Catie's document is provided, detect a full sign-off so we can
+  // auto-complete: move the employee to Offboarded and file the signed PDF.
+  const signed = b.doc && typeof b.doc === 'object' ? docSignedOff(parseDoc(b.doc)) : false;
   if (b.doc && typeof b.doc === 'object') updates.doc = JSON.stringify(b.doc);
   if (!Object.keys(updates).length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+
+  const [prev] = await sql`SELECT offboarded, name, separation_date FROM offboarding WHERE id = ${b.id}` as any[];
+  if (!prev) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Flag the record offboarded on the sign-off transition (idempotent).
+  if (signed && !prev.offboarded) updates.offboarded = true;
+
   await sql`UPDATE offboarding SET ${sql(updates)} WHERE id = ${b.id}`;
   const [row] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  if (signed) {
+    // Move to the Offboarded lists once, then (re)file the signed PDF so the
+    // employee's file always has the latest version.
+    if (!prev.offboarded) await setOffboarded(prev.name, true, prev.separation_date ?? null);
+    try {
+      const parsed = parse(row);
+      const dataUrl = await offboardingDocPdfDataUrl(parsed);
+      await attachPdfToEmployeeFile({
+        name: prev.name, category: 'Offboarding', title: 'Offboarding Checklist (signed)',
+        docDate: prev.separation_date ?? null,
+        attName: `Offboarding-${String(prev.name).replace(/[^\w]+/g, '-')}.pdf`,
+        dataUrl, sourceRef: `offboarding:${b.id}`,
+        summary: 'Signed offboarding document — HR, Ops, and IT complete and signed off by Catie.',
+        author: 'Catie',
+      });
+    } catch { /* best-effort — never block the save */ }
+  }
   return NextResponse.json({ row: parse(row) });
 }
 

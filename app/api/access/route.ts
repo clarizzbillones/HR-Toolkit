@@ -14,6 +14,7 @@ async function ensureTable() {
     report_tabs TEXT,
     updated_at TIMESTAMPTZ DEFAULT now()
   )`;
+  await sql`ALTER TABLE access_grants ADD COLUMN IF NOT EXISTS edit_sections TEXT`;
 }
 
 async function requireAdmin() {
@@ -35,7 +36,7 @@ const TAB_KEYS = new Set(REPORT_TABS.map(t => t.key));
 
 function parseRow(r: any) {
   const safe = (v: any) => { try { const a = JSON.parse(v ?? '[]'); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } };
-  return { email: r.email, name: r.name ?? '', sections: safe(r.sections), reportTabs: safe(r.report_tabs) };
+  return { email: r.email, name: r.name ?? '', sections: safe(r.sections), reportTabs: safe(r.report_tabs), editSections: safe(r.edit_sections) };
 }
 
 export async function GET() {
@@ -73,9 +74,12 @@ export async function POST(req: Request) {
   const reportTabs: string[] = Array.isArray(body.reportTabs) ? body.reportTabs.map(String).filter((s: string) => TAB_KEYS.has(s)) : [];
   // Granting any report tab implies access to the Reports section.
   if (reportTabs.length && !sections.includes('/reports')) sections = [...sections, '/reports'];
-  await sql`INSERT INTO access_grants (email, name, sections, report_tabs, updated_at)
-    VALUES (${email}, ${name}, ${JSON.stringify(sections)}, ${JSON.stringify(reportTabs)}, now())
-    ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, sections = EXCLUDED.sections, report_tabs = EXCLUDED.report_tabs, updated_at = now()`;
+  // Edit rights are only meaningful for sections they can also view.
+  const editSections: string[] = (Array.isArray(body.editSections) ? body.editSections.map(String) : [])
+    .filter((s: string) => SECTION_KEYS.has(s) && sections.includes(s));
+  await sql`INSERT INTO access_grants (email, name, sections, report_tabs, edit_sections, updated_at)
+    VALUES (${email}, ${name}, ${JSON.stringify(sections)}, ${JSON.stringify(reportTabs)}, ${JSON.stringify(editSections)}, now())
+    ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, sections = EXCLUDED.sections, report_tabs = EXCLUDED.report_tabs, edit_sections = EXCLUDED.edit_sections, updated_at = now()`;
   const [row] = await sql`SELECT * FROM access_grants WHERE email = ${email}` as any[];
   return NextResponse.json({ grant: parseRow(row) });
 }
