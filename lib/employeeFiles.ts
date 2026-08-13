@@ -4,6 +4,7 @@
 
 import { sql, cuid } from '@/lib/db';
 import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
+import { staffToProfile } from '@/lib/employeeProfile';
 
 // Drop the light inline markdown we use in notes so the summary text reads
 // cleanly in the Employee File card (which renders plain text).
@@ -143,6 +144,50 @@ export async function syncReviewsToEmployeeFile(employeeId: string, profileId?: 
       : (exists ? 'Updated the review summary — dates and signed PDF combined into one entry.' : 'Imported the review summary with the signed PDF attached.');
     return { imported: 1 + attached, message };
   } catch { return { imported: 0, message: 'Could not sync reviews.' }; }
+}
+
+// Bring an Employee File fully up to date from every source in one shot —
+// Staffing details, all Coaching forms, and Performance Reviews — so the tab is
+// current without anyone clicking "Pull". Runs when the file is opened; every
+// step is best-effort and never throws. Returns what changed (for messaging).
+export async function syncAllForProfile(profileId: string): Promise<{ coaching: number; reviews: number; staffingFilled: boolean }> {
+  const out = { coaching: 0, reviews: 0, staffingFilled: false };
+  try {
+    await ensureFiles();
+    const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${profileId}` as any[];
+    if (!profile) return out;
+    const key = String(profile.name ?? '').trim().toLowerCase();
+    if (!key) return out;
+
+    // 1) Staffing — fill any blank profile field (never overwrites existing).
+    try {
+      const [srow] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
+      if (srow) {
+        const src = staffToProfile(srow);
+        const updates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(src)) {
+          const sv = v == null ? '' : String(v).trim();
+          const cur = profile[k] == null ? '' : String(profile[k]).trim();
+          if (sv && !cur) updates[k] = sv;
+        }
+        if (Object.keys(updates).length) { await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${profileId}`; out.staffingFilled = true; }
+      }
+    } catch { /* best-effort */ }
+
+    // 2) Coaching — attach / refresh every form's branded PDF.
+    try {
+      const list = await sql`SELECT * FROM coaching_notes WHERE lower(employee) = ${key} ORDER BY date DESC NULLS LAST` as any[];
+      for (const c of list) await upsertCoachingFile(profileId, c);
+      out.coaching = list.length;
+    } catch { /* best-effort */ }
+
+    // 3) Performance Reviews — summary + signed PDFs.
+    try {
+      const [emp] = await sql`SELECT id FROM employees WHERE lower(name) = ${key} LIMIT 1` as any[];
+      if (emp) { const r = await syncReviewsToEmployeeFile(emp.id, profileId); out.reviews = r.imported; }
+    } catch { /* best-effort */ }
+  } catch { /* best-effort */ }
+  return out;
 }
 
 // Best-effort: when a coaching form is signed, make sure the signed PDF is on

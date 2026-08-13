@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { EXTRA_COLS, staffToProfile } from '@/lib/employeeProfile';
+import { syncAllForProfile } from '@/lib/employeeFiles';
 
 // Employee Files is HR-admin-only; enforce it on every request.
 async function requireHrAdmin() {
@@ -38,8 +39,12 @@ export async function GET(req: Request) {
   await ensure();
   const id = new URL(req.url).searchParams.get('id');
   if (id) {
+    const [exists] = await sql`SELECT id FROM employee_profiles WHERE id = ${id}` as any[];
+    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Auto-refresh from every source (Staffing / Coaching / Reviews) on open, so
+    // the file is always current without anyone clicking "Pull".
+    try { await syncAllForProfile(id); } catch { /* best-effort */ }
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${id}` as any[];
-    if (!profile) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const docs = await sql`SELECT * FROM employee_files WHERE profile_id = ${id} ORDER BY doc_date DESC NULLS LAST, created_at DESC`;
     return NextResponse.json({ profile, docs: (docs as any[]).map(stripDoc) });
   }

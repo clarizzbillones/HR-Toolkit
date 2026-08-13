@@ -161,13 +161,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     finally { setParsing(false); }
   }
 
-  async function pullFrom(source: 'staffing' | 'coaching' | 'reviews') {
+  // Re-pull from every source on demand. The file already auto-syncs on open;
+  // this is just a manual "check for updates now" that re-opens it.
+  async function refreshNow() {
     if (!selected) return;
-    const res = await fetch('/api/employee-files/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selected.id, source }) });
-    const d = await res.json();
-    if (!res.ok) { showToast(d.error || 'Import failed'); return; }
-    await openProfile(selected);
-    showToast(d.message || 'Imported');
+    setSyncing(true);
+    try { await openProfile(selected); showToast('Refreshed from Staffing, Coaching & Reviews'); }
+    finally { setSyncing(false); }
   }
 
   // ---- Detail view ----
@@ -268,11 +268,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
               <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Documents & timeline</h2>
                 {!readOnly && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-text-muted">Pull:</span>
-                    <button onClick={() => pullFrom('staffing')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Staffing details</button>
-                    <button onClick={() => pullFrom('coaching')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Coaching</button>
-                    <button onClick={() => pullFrom('reviews')} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Reviews</button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-text-muted" title="Staffing details, Coaching forms, and Performance Reviews are pulled in automatically whenever this file is opened — no need to click anything.">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />Auto-synced from Staffing · Coaching · Reviews
+                    </span>
+                    <button onClick={() => refreshNow()} disabled={syncing} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas disabled:opacity-50">{syncing ? 'Refreshing…' : '↻ Refresh now'}</button>
                     <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark ml-1">+ Add entry</button>
                   </div>
                 )}
