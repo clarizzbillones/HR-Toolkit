@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { defaultExcluded } from '@/lib/offboarding';
-import { parseDoc, docSignedOff } from '@/lib/offboardingDoc';
+import { parseDoc, docSignedOff, emptyDoc } from '@/lib/offboardingDoc';
 import { attachPdfToEmployeeFile } from '@/lib/employeeFiles';
 import { offboardingDocPdfDataUrl } from '@/lib/employeePdf';
 
@@ -104,8 +104,25 @@ export async function POST(req: Request) {
   const id = cuid();
   // Pre-mark the age-40 steps N/A when the employee is under 40 at separation.
   const excluded = defaultExcluded(b.dob, b.separation_date);
-  await sql`INSERT INTO offboarding (id, name, position, manager, separation_date, separation_type, prepared_by, checklist, notes, dob, hire_date, offer_severance, excluded)
-    VALUES (${id}, ${b.name.trim()}, ${b.position ?? null}, ${b.manager ?? null}, ${b.separation_date ?? null}, ${b.separation_type ?? null}, ${b.prepared_by ?? null}, ${'{}'}, ${b.notes ?? null}, ${b.dob ?? null}, ${b.hire_date ?? null}, ${!!b.offer_severance}, ${JSON.stringify(excluded)})`;
+
+  // Seed Catie's "Accounts to close" from the employee's maintained Accounts &
+  // Access list (Employee File) when they have one, so offboarding starts with
+  // their real systems. Falls back to the standard template otherwise.
+  let docJson: string | null = null;
+  try {
+    const [prof] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${lc(b.name)} LIMIT 1` as any[];
+    if (prof) {
+      const accts = await sql`SELECT system, account, access_level FROM employee_accounts WHERE profile_id = ${prof.id} AND lower(coalesce(status,'')) <> 'closed' ORDER BY lower(system) ASC` as any[];
+      if (accts.length) {
+        const doc = emptyDoc();
+        doc.accounts = accts.map(a => ({ id: gid('acct'), label: String(a.system || 'Account'), hint: [a.account, a.access_level].filter(Boolean).join(' · ') || undefined, cell: {} }));
+        docJson = JSON.stringify(doc);
+      }
+    }
+  } catch { /* best-effort — fall back to the default template */ }
+
+  await sql`INSERT INTO offboarding (id, name, position, manager, separation_date, separation_type, prepared_by, checklist, notes, dob, hire_date, offer_severance, excluded, doc)
+    VALUES (${id}, ${b.name.trim()}, ${b.position ?? null}, ${b.manager ?? null}, ${b.separation_date ?? null}, ${b.separation_type ?? null}, ${b.prepared_by ?? null}, ${'{}'}, ${b.notes ?? null}, ${b.dob ?? null}, ${b.hire_date ?? null}, ${!!b.offer_severance}, ${JSON.stringify(excluded)}, ${docJson})`;
   const [row] = await sql`SELECT * FROM offboarding WHERE id = ${id}`;
   return NextResponse.json({ row: parse(row) }, { status: 201 });
 }

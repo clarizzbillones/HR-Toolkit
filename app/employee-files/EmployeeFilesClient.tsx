@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
+import { FIRM_SYSTEMS, ACCOUNT_STATUSES } from '@/lib/firmSystems';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -21,6 +22,19 @@ interface Doc {
   id: string; profile_id: string; category: string; title: string; doc_date: string | null;
   summary: string; what_we_did: string; next_steps: string; author: string; has_attachment?: boolean; attachment_name?: string | null;
 }
+
+interface Account {
+  id: string; profile_id: string; system: string; account: string;
+  access_level: string; status: string; source: string; notes: string;
+}
+const ACCT_STATUS_COLOR: Record<string, string> = {
+  'Active': 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]',
+  'Needs review': 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]',
+  'Suspended': 'bg-[#eef2f7] text-[#3f5a76] border-[#d4dde8]',
+  'Closed': 'bg-[#f1ece3] text-[#8b8478] border-[#e2dccf]',
+};
+
+const ACCT_INPUT = 'w-full bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-2 py-1 text-sm focus:outline-none disabled:hover:border-transparent';
 
 const CATEGORIES = ['Performance Review', 'Coaching', 'Remark / Timeline', 'Other'];
 const CAT_COLOR: Record<string, string> = {
@@ -48,6 +62,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Profile | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAddEmp, setShowAddEmp] = useState(false);
   const [empForm, setEmpForm] = useState({ ...EMPTY_P });
   const [editingProfile, setEditingProfile] = useState(false);
@@ -67,9 +82,40 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
   async function openProfile(p: Profile) {
     setSelected(p); setEditingProfile(false); setShowDocForm(false); setEditDocId(null);
-    const d = await fetch(`/api/employee-files?id=${p.id}`).then(r => r.json());
+    setAccounts([]);
+    const [d, a] = await Promise.all([
+      fetch(`/api/employee-files?id=${p.id}`).then(r => r.json()),
+      fetch(`/api/employee-accounts?profileId=${p.id}`).then(r => r.json()).catch(() => ({})),
+    ]);
     if (d.profile) setSelected(d.profile);
     setDocs(d.docs ?? []);
+    setAccounts(a.accounts ?? []);
+  }
+
+  // ---- Accounts & Access ----
+  async function addAccount() {
+    if (!selected) return;
+    const res = await fetch('/api/employee-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selected.id, status: 'Active' }) });
+    const d = await res.json();
+    if (d.account) setAccounts(prev => [...prev, d.account]);
+  }
+  async function seedStandardAccounts() {
+    if (!selected) return;
+    const res = await fetch('/api/employee-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selected.id, action: 'seed-standard' }) });
+    const d = await res.json();
+    if (d.accounts) { setAccounts(d.accounts); showToast(d.created ? `Added ${d.created} standard system${d.created > 1 ? 's' : ''}` : 'All standard systems already listed'); }
+  }
+  // Update a field locally; commit=true persists (selects on change, text on blur).
+  function editAccount(id: string, changes: Partial<Account>, commit: boolean) {
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...changes } : a));
+    if (commit) void fetch('/api/employee-accounts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...changes }) });
+  }
+  function commitAccount(a: Account) {
+    void fetch('/api/employee-accounts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: a.id, system: a.system, account: a.account, access_level: a.access_level, notes: a.notes }) });
+  }
+  async function removeAccount(id: string) {
+    setAccounts(prev => prev.filter(a => a.id !== id));
+    await fetch(`/api/employee-accounts?id=${id}`, { method: 'DELETE' });
   }
 
   const [syncing, setSyncing] = useState(false);
@@ -261,6 +307,50 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Accounts & access */}
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div>
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Accounts &amp; access</h2>
+                  <p className="text-[11px] text-text-muted mt-0.5">A running list of the firm systems {selected.name.split(' ')[0]} can access — pulled into their offboarding checklist automatically.</p>
+                </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {accounts.length > 0 && <button onClick={seedStandardAccounts} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">+ Standard systems</button>}
+                    <button onClick={addAccount} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add account</button>
+                  </div>
+                )}
+              </div>
+              <div className="bg-white border border-border rounded-card overflow-hidden mb-2">
+                {accounts.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-text-muted">
+                    No accounts listed yet.{!readOnly && <> Start with <button onClick={seedStandardAccounts} className="text-[#3f6b8a] font-semibold hover:underline">the standard firm systems</button>, then adjust per person.</>}
+                  </div>
+                ) : (
+                  <>
+                    <div className="hidden sm:grid grid-cols-[1.3fr_1.5fr_1fr_128px_1.3fr_26px] gap-2 px-4 py-2 bg-[#f1ece3] text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                      <span>System</span><span>Login / account</span><span>Access level</span><span>Status</span><span>Notes</span><span></span>
+                    </div>
+                    <div className="divide-y divide-[#f1ece3]">
+                      {accounts.map(a => (
+                        <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.3fr_1.5fr_1fr_128px_1.3fr_26px] gap-2 px-4 py-2 items-center">
+                          <input list="firm-systems" disabled={readOnly} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
+                          <input disabled={readOnly} value={a.account ?? ''} onChange={e => editAccount(a.id, { account: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="email / username" className={ACCT_INPUT} />
+                          <input disabled={readOnly} value={a.access_level ?? ''} onChange={e => editAccount(a.id, { access_level: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="Standard / Admin" className={ACCT_INPUT} />
+                          <select disabled={readOnly} value={a.status || 'Active'} onChange={e => editAccount(a.id, { status: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer ${ACCT_STATUS_COLOR[a.status] || ACCT_STATUS_COLOR['Active']}`}>
+                            {ACCOUNT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          <input disabled={readOnly} value={a.notes ?? ''} onChange={e => editAccount(a.id, { notes: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="Notes" className={ACCT_INPUT} />
+                          {!readOnly ? <button onClick={() => removeAccount(a.id)} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm justify-self-center">✕</button> : <span />}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <datalist id="firm-systems">{FIRM_SYSTEMS.map(s => <option key={s} value={s} />)}</datalist>
             </div>
 
             {/* Documents */}
