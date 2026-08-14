@@ -111,8 +111,8 @@ export async function POST(req: Request) {
     try {
       await ensureStaff();
       const [ex] = await sql`SELECT id FROM staff_directory WHERE lower(name) = lower(${name}) LIMIT 1` as any[];
-      if (!ex) await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, start_date, dob, worker_type)
-        VALUES (${cuid()}, ${name}, ${position}, ${email}, ${answers.phone ?? null}, ${startDate}, ${answers.dob ?? null}, ${meta.workerType})`;
+      if (!ex) await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, start_date, dob, worker_type, weight, ktn, favorite_color, favorite_treat)
+        VALUES (${cuid()}, ${name}, ${position}, ${email}, ${answers.phone ?? null}, ${startDate}, ${answers.dob ?? null}, ${meta.workerType}, ${answers.weight ?? null}, ${answers.tsa_ktn ?? null}, ${answers.favorite_color ?? null}, ${answers.favorite_snack ?? null})`;
     } catch { /* best-effort */ }
 
     // 3) Employee File profile (fill blanks) + file the uploads and a summary.
@@ -125,11 +125,13 @@ export async function POST(req: Request) {
         const setBlank = (col: string, val: any) => { const v = val == null ? '' : String(val).trim(); if (v && !String(profile[col] ?? '').trim()) upd[col] = v; };
         setBlank('email', email); setBlank('phone', answers.phone); setBlank('position', position);
         setBlank('start_date', startDate); setBlank('dob', answers.dob); setBlank('address', answers.home_address);
-        setBlank('worker_type', meta.workerType);
+        setBlank('worker_type', meta.workerType); setBlank('weight', answers.weight); setBlank('ktn', answers.tsa_ktn);
+        setBlank('favorite_color', answers.favorite_color); setBlank('favorite_treat', answers.favorite_snack);
+        setBlank('details', answers.additional_notes);
         if (Object.keys(upd).length) { try { await sql`UPDATE employee_profiles SET ${sql(upd)} WHERE id = ${profile.id}`; } catch { /* older schema */ } }
 
-        // A summary remark of everything they entered.
-        const lines = intakeFields(role).map(f => { const v = answers[f.id]; return v ? `${f.label}: ${v}` : ''; }).filter(Boolean);
+        // A summary remark of everything they entered (list fields joined).
+        const lines = intakeFields(role).map(f => { const v = answers[f.id]; const val = Array.isArray(v) ? v.filter(Boolean).join('; ') : v; return val ? `${f.label}: ${val}` : ''; }).filter(Boolean);
         const emergency = [answers.emergency_name, answers.emergency_phone].filter(Boolean).join(' · ');
         const summary = [`Submitted the ${roleLabel(role)} onboarding intake form.`, ...lines].join('\n');
         await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)

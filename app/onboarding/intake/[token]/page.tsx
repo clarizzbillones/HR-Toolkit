@@ -53,6 +53,11 @@ export default function IntakePage({ params }: { params: { token: string } }) {
 
   const inp: React.CSSProperties = { width: '100%', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, boxSizing: 'border-box', background: '#fff' };
   const set = (id: string, v: any) => setAnswers(a => ({ ...a, [id]: v }));
+  // Repeatable "list" fields (e.g. court admissions).
+  const listVals = (id: string): string[] => { const v = answers[id]; return Array.isArray(v) && v.length ? v : ['']; };
+  const setListVal = (id: string, i: number, v: string) => setAnswers(a => { const arr = [...listVals(id)]; arr[i] = v; return { ...a, [id]: arr }; });
+  const addRow = (id: string) => setAnswers(a => ({ ...a, [id]: [...listVals(id), ''] }));
+  const removeRow = (id: string, i: number) => setAnswers(a => { const arr = listVals(id).filter((_, j) => j !== i); return { ...a, [id]: arr.length ? arr : [''] }; });
 
   return (
     <div style={{ minHeight: '100vh', background: '#faf8f4', padding: '32px 16px', fontFamily: 'system-ui, sans-serif' }}>
@@ -76,7 +81,17 @@ export default function IntakePage({ params }: { params: { token: string } }) {
             {(row?.fields ?? []).map((f: Field) => (
               <div key={f.id} style={{ marginBottom: 15 }}>
                 <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 14 }}>{f.label}{f.required && <span style={{ color: '#b0412f' }}> *</span>}</label>
-                {f.type === 'longtext' ? <textarea rows={2} value={answers[f.id] ?? ''} onChange={e => set(f.id, e.target.value)} style={{ ...inp, resize: 'vertical' }} />
+                {f.type === 'list' ? (
+                  <div>
+                    {listVals(f.id).map((v, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                        <input value={v} onChange={e => setListVal(f.id, i, e.target.value)} placeholder="e.g. U.S. District Court, N.D. Texas" style={inp} />
+                        {listVals(f.id).length > 1 && <button type="button" onClick={() => removeRow(f.id, i)} style={{ border: '1px solid #d8cfbe', background: '#fff', borderRadius: 8, padding: '0 12px', color: '#b0412f', cursor: 'pointer', fontSize: 15 }}>✕</button>}
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addRow(f.id)} style={{ border: '1px dashed #c9b48a', background: '#fbf7ee', borderRadius: 8, padding: '7px 12px', color: '#8a6d3b', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Add another</button>
+                  </div>
+                ) : f.type === 'longtext' ? <textarea rows={2} value={answers[f.id] ?? ''} onChange={e => set(f.id, e.target.value)} style={{ ...inp, resize: 'vertical' }} />
                 : f.type === 'select' ? (
                   <select value={answers[f.id] ?? ''} onChange={e => set(f.id, e.target.value)} style={inp}>
                     <option value="">Select…</option>

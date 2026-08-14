@@ -13,11 +13,11 @@ export const INTAKE_ROLES: { key: IntakeRole; label: string; workerType: string;
 
 export interface IntakeField {
   id: string; label: string;
-  type: 'text' | 'email' | 'tel' | 'date' | 'longtext' | 'select';
+  type: 'text' | 'email' | 'tel' | 'date' | 'longtext' | 'select' | 'list';
   required?: boolean; options?: string[]; hint?: string;
 }
 
-// Fields everyone fills in.
+// Fields everyone fills in (all three forms).
 const COMMON: IntakeField[] = [
   { id: 'full_legal_name', label: 'Full legal name', type: 'text', required: true },
   { id: 'preferred_name', label: 'Preferred name', type: 'text' },
@@ -25,16 +25,20 @@ const COMMON: IntakeField[] = [
   { id: 'phone', label: 'Mobile phone', type: 'tel', required: true },
   { id: 'home_address', label: 'Home mailing address', type: 'longtext' },
   { id: 'dob', label: 'Date of birth', type: 'date' },
-  { id: 'start_date', label: 'Anticipated start date', type: 'date' },
+  { id: 'weight', label: 'Weight (lbs)', type: 'text', hint: 'Used only for weight-and-balance planning in case you ever travel on the firm’s Vision Jet in the future.' },
+  { id: 'tsa_ktn', label: 'TSA PreCheck / Known Traveler Number (KTN)', type: 'text' },
+  { id: 'favorite_color', label: 'Favorite color', type: 'text' },
+  { id: 'favorite_snack', label: 'Favorite snack', type: 'text' },
   { id: 'emergency_name', label: 'Emergency contact — name', type: 'text' },
   { id: 'emergency_phone', label: 'Emergency contact — phone', type: 'tel' },
 ];
 
-// Role-specific fields, appended after the common ones.
+// Role-specific fields, inserted after the common ones.
 const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
   attorney: [
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
+    { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
     { id: 'practice_areas', label: 'Primary practice areas', type: 'text' },
     { id: 'pacer_username', label: 'PACER username (if you have one)', type: 'text' },
@@ -51,16 +55,22 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
   ],
 };
 
-// Suggested documents per role. Freeform uploads are always allowed too.
+// Always last on every form.
+const TAIL: IntakeField[] = [
+  { id: 'additional_notes', label: 'Additional notes', type: 'longtext', hint: 'Anything else you’d like us to know.' },
+];
+
+// Documents everyone should upload, plus role-specific ones.
+const COMMON_UPLOADS = ['Driver’s license', 'Passport'];
 const UPLOADS: Record<IntakeRole, string[]> = {
-  attorney: ['Bar card / license', 'Signed offer letter', 'Direct deposit form or voided check', 'Government photo ID'],
-  support: ['Signed offer letter', 'Direct deposit form or voided check', 'Government photo ID'],
+  attorney: ['Bar card / license', 'Court admission certificates (if not listed above)', 'Signed offer letter', 'Direct deposit form or voided check'],
+  support: ['Signed offer letter', 'Direct deposit form or voided check'],
   contractor: ['Signed W-9', 'Certificate of Insurance (COI)', 'Signed contract / SOW'],
 };
 
 export function isIntakeRole(v: any): v is IntakeRole { return INTAKE_ROLES.some(r => r.key === v); }
-export function intakeFields(role: IntakeRole): IntakeField[] { return [...COMMON, ...(BY_ROLE[role] ?? [])]; }
-export function intakeUploads(role: IntakeRole): string[] { return UPLOADS[role] ?? []; }
+export function intakeFields(role: IntakeRole): IntakeField[] { return [...COMMON, ...(BY_ROLE[role] ?? []), ...TAIL]; }
+export function intakeUploads(role: IntakeRole): string[] { return [...COMMON_UPLOADS, ...(UPLOADS[role] ?? [])]; }
 export function roleLabel(role: string): string { return INTAKE_ROLES.find(r => r.key === role)?.label ?? role; }
 export function roleMeta(role: string) { return INTAKE_ROLES.find(r => r.key === role) ?? INTAKE_ROLES[0]; }
 
