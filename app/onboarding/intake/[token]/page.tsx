@@ -38,8 +38,13 @@ export default function IntakePage({ params }: { params: { token: string } }) {
 
   async function submit() {
     setError('');
-    const missing = (row?.fields ?? []).filter((f: Field) => f.required && !String(answers[f.id] ?? '').trim());
-    if (missing.length) { setError(`Please fill in: ${missing.map((f: Field) => f.label).join(', ')}`); return; }
+    // Every question is required; document uploads are not.
+    const missing = (row?.fields ?? []).filter((f: Field) => {
+      const v = answers[f.id];
+      if (Array.isArray(v)) return !v.some(x => String(x).trim());
+      return !String(v ?? '').trim();
+    });
+    if (missing.length) { setError(`Please complete: ${missing.map((f: Field) => f.label).join(', ')}`); return; }
     setBusy(true);
     try {
       const res = await fetch('/api/onboarding/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', token, answers, files }) });
@@ -79,7 +84,7 @@ export default function IntakePage({ params }: { params: { token: string } }) {
 
             {(row?.fields ?? []).map((f: Field) => (
               <div key={f.id} style={{ marginBottom: 15 }}>
-                <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 14 }}>{f.label}{f.required && <span style={{ color: '#b0412f' }}> *</span>}</label>
+                <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 14 }}>{f.label}</label>
                 {f.type === 'list' ? (
                   <div>
                     {listVals(f.id).map((v, i) => (
@@ -110,7 +115,7 @@ export default function IntakePage({ params }: { params: { token: string } }) {
                 const other = label === 'Other documents';
                 return (
                   <div key={label} style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 13.5 }}>{label}{other ? <span style={{ color: '#8a8474', fontWeight: 400 }}> (optional)</span> : ''}</label>
+                    <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 13.5 }}>{label}</label>
                     <input type="file" accept={ACCEPT} multiple={other}
                       onChange={e => { const el = e.currentTarget; onPick(el.files, label).finally(() => { el.value = ''; }); }}
                       style={{ display: 'block', fontSize: 13 }} />
