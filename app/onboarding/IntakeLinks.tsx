@@ -30,6 +30,7 @@ export default function IntakeLinks() {
   useEffect(() => { void load(); }, []);
 
   async function create() {
+    if (!form.name.trim()) { showToast('Enter the hire’s name first'); return; }
     setCreating(true);
     try {
       const res = await fetch('/api/onboarding/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...form }) });
@@ -57,7 +58,7 @@ export default function IntakeLinks() {
       <div className="max-w-4xl space-y-6">
         <div className="bg-white border border-border rounded-card p-5">
           <h2 className="font-spectral text-[17px] font-semibold text-text-primary">Create an onboarding link</h2>
-          <p className="text-sm text-text-muted mt-0.5 mb-4">Generate a unique link for a future hire to fill out their prerequisite info and upload documents — no login needed. On submit, they’re added to Staffing and given an Employee File, with their uploads attached. The form matches the role you pick.</p>
+          <p className="text-sm text-text-muted mt-0.5 mb-4">Generate a unique link for a future hire to fill out their prerequisite info and upload documents — no login needed. Creating the link <b>adds them to the Onboarding dashboard right away</b> (awaiting their submission). When they submit, their details + uploaded files are added to their <b>Employee File</b> and their name is added to <b>Staffing</b>. The form matches the role you pick. Every link is saved below so you can copy it again anytime.</p>
           {readOnly ? (
             <div className="text-sm text-text-muted">You have view-only access here.</div>
           ) : (
@@ -69,8 +70,8 @@ export default function IntakeLinks() {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Name <span className="font-normal normal-case text-text-faint">(optional)</span></label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Future hire’s name" className={input + ' w-52'} />
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Name <span className="text-litred-alt">*</span></label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Future hire’s name" className={input + ' w-52'} />
               </div>
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Email <span className="font-normal normal-case text-text-faint">(optional)</span></label>
@@ -104,7 +105,11 @@ export default function IntakeLinks() {
                         : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f7efe1] text-[#b07d2a]">Awaiting submission</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => copy(r.token)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">⧉ Copy link</button>
+                      <div className="flex items-center gap-1.5 max-w-[300px]">
+                        <input readOnly value={linkFor(r.token)} onFocus={e => e.currentTarget.select()} className="flex-1 min-w-0 text-[11px] font-mono bg-[#f7f3ea] border border-border-light rounded px-2 py-1 text-text-secondary" />
+                        <button onClick={() => copy(r.token)} title="Copy link" className="shrink-0 text-[#3f6b8a] hover:text-ink text-sm">⧉</button>
+                        <a href={linkFor(r.token)} target="_blank" rel="noopener noreferrer" title="Open the form" className="shrink-0 text-[#3f6b8a] hover:text-ink text-sm">↗</a>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {!readOnly && <button onClick={() => remove(r.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete</button>}

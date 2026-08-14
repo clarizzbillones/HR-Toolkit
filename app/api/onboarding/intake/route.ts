@@ -93,13 +93,14 @@ export async function POST(req: Request) {
       await sql`INSERT INTO onboarding_intake_files (id, intake_id, name, kind, data) VALUES (${cuid()}, ${row.id}, ${String(f.name ?? 'file').slice(0, 200)}, ${(f.name ?? '').split('.').pop() ?? ''}, ${f.data})`;
     }
 
-    // 1) Onboarding dashboard record.
-    let onboardeeId: string | null = null;
+    // 1) Onboarding dashboard record — update the one created with the link.
+    let onboardeeId: string | null = row.onboardee_id || null;
     try {
       await ensureOnboardees();
-      const [ex] = await sql`SELECT id FROM onboardees WHERE lower(name) = lower(${name}) LIMIT 1` as any[];
-      if (ex) { onboardeeId = ex.id; }
-      else {
+      if (!onboardeeId) { const [ex] = await sql`SELECT id FROM onboardees WHERE lower(name) = lower(${name}) LIMIT 1` as any[]; if (ex) onboardeeId = ex.id; }
+      if (onboardeeId) {
+        await sql`UPDATE onboardees SET email = COALESCE(${email}, email), position = ${position}, worker_type = ${meta.workerType}, start_date = COALESCE(${startDate}, start_date), dob = COALESCE(${answers.dob ?? null}, dob), phone = COALESCE(${answers.phone ?? null}, phone), note = ${'Onboarding intake form submitted'} WHERE id = ${onboardeeId}`;
+      } else {
         onboardeeId = cuid();
         await sql`INSERT INTO onboardees (id, name, email, position, worker_type, start_date, dob, phone, status, stage, tag)
           VALUES (${onboardeeId}, ${name}, ${email}, ${position}, ${meta.workerType}, ${startDate}, ${answers.dob ?? null}, ${answers.phone ?? null}, 'In Progress', 'onboarding', 'New hire')`;
@@ -159,11 +160,27 @@ export async function POST(req: Request) {
 
   if (b.action === 'create') {
     if (!isIntakeRole(b.role)) return NextResponse.json({ error: 'Pick a role' }, { status: 400 });
+    const name = String(b.name ?? '').trim();
+    if (!name) return NextResponse.json({ error: 'Enter the hire’s name' }, { status: 400 });
+    const email = String(b.email ?? '').trim() || null;
+    const meta = roleMeta(b.role);
+    // Add them to the Onboarding dashboard right away (awaiting their submission).
+    let onboardeeId: string | null = null;
+    try {
+      await ensureOnboardees();
+      const [ex] = await sql`SELECT id FROM onboardees WHERE lower(name) = lower(${name}) LIMIT 1` as any[];
+      if (ex) onboardeeId = ex.id;
+      else {
+        onboardeeId = cuid();
+        await sql`INSERT INTO onboardees (id, name, email, position, worker_type, status, stage, tag, note)
+          VALUES (${onboardeeId}, ${name}, ${email}, ${meta.titleHint}, ${meta.workerType}, 'In Progress', 'onboarding', 'New hire', ${'Awaiting onboarding intake form'})`;
+      }
+    } catch { /* best-effort */ }
     const id = cuid(); const token = cuid() + cuid();
-    await sql`INSERT INTO onboarding_intakes (id, token, role, name, email, status, created_by)
-      VALUES (${id}, ${token}, ${b.role}, ${String(b.name ?? '').trim() || null}, ${String(b.email ?? '').trim() || null}, 'Sent', ${(session.user as any).email ?? null})`;
+    await sql`INSERT INTO onboarding_intakes (id, token, role, name, email, status, onboardee_id, created_by)
+      VALUES (${id}, ${token}, ${b.role}, ${name}, ${email}, 'Sent', ${onboardeeId}, ${(session.user as any).email ?? null})`;
     const url = `${origin(req)}/onboarding/intake/${token}`;
-    const [row] = await sql`SELECT id, token, role, name, email, status, created_at FROM onboarding_intakes WHERE id = ${id}` as any[];
+    const [row] = await sql`SELECT id, token, role, name, email, status, onboardee_id, created_at FROM onboarding_intakes WHERE id = ${id}` as any[];
     return NextResponse.json({ row, url }, { status: 201 });
   }
 
