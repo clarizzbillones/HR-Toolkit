@@ -100,6 +100,26 @@ function stageOf(person: any): string {
 }
 function stageIndex(key: string) { return STAGES.findIndex(s => s.key === key); }
 
+// Litson's full hiring & onboarding workflow — the standard journey a new hire
+// follows, interview through first check-ins. Stage 3 is conditional (only when
+// the hire is asked to meet the partners) and rejoins the flow either way.
+const WORKFLOW: { n: number; title: string; sub: string; owner: string; conditional?: boolean }[] = [
+  { n: 1, title: 'Initial interview', sub: 'Director of Operations + HR', owner: 'HR' },
+  { n: 2, title: 'Final interview', sub: 'Alex', owner: 'Alex' },
+  { n: 3, title: 'Partner 1:1 calls', sub: 'Scheduled by HR — only if Alex asks the hire to meet the partners', owner: 'HR', conditional: true },
+  { n: 4, title: 'Offer letter sent', sub: 'Prepared and sent by HR', owner: 'HR' },
+  { n: 5, title: 'Offer letter accepted', sub: 'Start date determined', owner: 'HR' },
+  { n: 6, title: 'Onboarding instructions', sub: 'Emailed to the new employee', owner: 'HR' },
+  { n: 7, title: 'Access and tools activated', sub: 'HR and Catie, before start date', owner: 'HR & Catie' },
+  { n: 8, title: 'Onboarding calls scheduled', sub: 'By HR', owner: 'HR' },
+  { n: 9, title: 'Onboarding form link sent', sub: 'Employee submits the intake form', owner: 'HR' },
+  { n: 10, title: 'Onboarding call', sub: 'On the employee’s start date', owner: 'HR' },
+  { n: 11, title: '1:1 with Caitlin', sub: 'Tasks and support needed', owner: 'Caitlin' },
+  { n: 12, title: 'HR and finance calls', sub: 'Plus any additional calls', owner: 'HR & Finance' },
+  { n: 13, title: '1st weekly check-in', sub: 'Catie, HR, and Caitlin', owner: 'Catie · HR · Caitlin' },
+  { n: 14, title: 'Succeeding check-ins', sub: 'Scheduled by Caitlin', owner: 'Caitlin' },
+];
+
 // Category tags for the person. Re-hires / transfers often skip the standard
 // guide and are tracked with their own plan/to-do list instead.
 const TAGS = ['New hire', 'Re-hire', 'Transfer', 'Promotion', 'Intern', 'Seasonal'];
@@ -192,7 +212,8 @@ export default function OnboardingClient() {
   function enterDraft() { setSnapshot(items.map(i => ({ ...i }))); setDraftMode(true); setEditing(null); }
   function exitDraft() { if (snapshot) setItems(snapshot); setSnapshot(null); setDraftMode(false); setEditing(null); showToast('Reverted to the saved template'); }
   const [hire, setHire] = useState('');
-  const [view, setView] = useState<'dashboard' | 'guides' | 'intake'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'guides' | 'intake' | 'workflow'>('dashboard');
+  const [addingWf, setAddingWf] = useState(false);
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
@@ -728,6 +749,22 @@ export default function OnboardingClient() {
     setItems(prev => [...prev, item]);
     return item as Item;
   }
+  // Append the workflow stages to the onboarding checklist (skipping any already
+  // there by title), so each hire's checklist follows the journey.
+  async function addWorkflowToChecklist() {
+    setAddingWf(true);
+    try {
+      const have = new Set(tasksFor().map(t => String(t.title ?? '').trim().toLowerCase()));
+      let added = 0;
+      for (const s of WORKFLOW) {
+        if (have.has(s.title.toLowerCase())) continue;
+        await add('task', { title: s.title, owner: s.owner }, CHECKLIST_GUIDE);
+        added++;
+      }
+      showToast(added ? `Added ${added} step${added > 1 ? 's' : ''} to the onboarding checklist` : 'All workflow steps are already in the checklist');
+    } finally { setAddingWf(false); }
+  }
+
   async function addGuide() {
     const name = prompt('Name this guide (e.g. Attorney, Intern, Paralegal):')?.trim();
     if (!name) return;
@@ -1337,13 +1374,13 @@ export default function OnboardingClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Onboarding</h1>
-          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : 'Edit, add, or remove anything, then send it'}</p>
+          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : view === 'workflow' ? 'The standard hiring & onboarding journey, interview to first check-ins' : 'Edit, add, or remove anything, then send it'}</p>
         </div>
         <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 ml-4">
-          {(['dashboard', 'guides', 'intake'] as const).map(v => (
+          {(['dashboard', 'workflow', 'guides', 'intake'] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${view === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'guides' ? 'Guide Templates' : 'Intake Links'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'workflow' ? 'Workflow' : v === 'guides' ? 'Guide Templates' : 'Intake Links'}
             </button>
           ))}
         </div>
@@ -1529,6 +1566,35 @@ export default function OnboardingClient() {
       )}
 
       {view === 'intake' && <IntakeLinks />}
+      {view === 'workflow' && (
+        <div className="flex-1 overflow-auto px-8 py-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Hiring &amp; onboarding workflow</h2>
+                <p className="text-sm text-text-muted mt-0.5">The standard journey every new hire follows. Use it as a reference, or add the steps to the onboarding checklist.</p>
+              </div>
+              <button onClick={addWorkflowToChecklist} disabled={addingWf} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50 shrink-0">{addingWf ? 'Adding…' : '＋ Add steps to checklist'}</button>
+            </div>
+            <div>
+              {WORKFLOW.map((s, i) => (
+                <div key={s.n}>
+                  <div className={`bg-white border rounded-card px-4 py-3 flex items-start gap-3 ${s.conditional ? 'border-dashed border-[#e0c48a] bg-[#fbf7ee]' : 'border-border'}`}>
+                    <span className={`shrink-0 w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center ${s.conditional ? 'bg-[#c9a24a]' : 'bg-[#1b2a3d]'}`}>{s.n}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-text-primary text-[15px]">{s.title}{s.conditional && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a] align-middle uppercase tracking-wide">conditional</span>}</div>
+                      <div className="text-[12px] text-text-muted mt-0.5">{s.sub}</div>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-semibold text-text-muted">{s.owner}</span>
+                  </div>
+                  {i < WORKFLOW.length - 1 && <div className="pl-[26px]"><div className="w-px h-3.5 bg-[#d0c7b5]" /></div>}
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-text-muted mt-4 italic">Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
+          </div>
+        </div>
+      )}
       {view === 'dashboard' && Dashboard()}
 
       {view === 'guides' && !showNewHire && isComposed && composedDef && (
