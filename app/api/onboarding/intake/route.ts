@@ -22,6 +22,7 @@ async function ensure() {
     id TEXT PRIMARY KEY, intake_id TEXT NOT NULL, name TEXT, kind TEXT,
     data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE onboarding_intake_files ADD COLUMN IF NOT EXISTS label TEXT`;
 }
 async function ensureStaff() {
   await sql`CREATE TABLE IF NOT EXISTS staff_directory (
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
     if (row.status === 'Completed') return NextResponse.json({ error: 'This form was already submitted.', done: true }, { status: 409 });
     const role = row.role as IntakeRole;
     const answers = (b.answers && typeof b.answers === 'object') ? b.answers : {};
-    const files: { name: string; data: string }[] = Array.isArray(b.files) ? b.files : [];
+    const files: { name: string; data: string; label?: string }[] = Array.isArray(b.files) ? b.files : [];
 
     const name = String(answers.full_legal_name || row.name || '').trim();
     if (!name) return NextResponse.json({ error: 'Please enter your full legal name.' }, { status: 400 });
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
     for (const f of files) {
       if (!f?.data || !/^data:/.test(f.data)) continue;
       if (f.data.length > MAX_FILE * 1.4) continue; // base64 overhead
-      await sql`INSERT INTO onboarding_intake_files (id, intake_id, name, kind, data) VALUES (${cuid()}, ${row.id}, ${String(f.name ?? 'file').slice(0, 200)}, ${(f.name ?? '').split('.').pop() ?? ''}, ${f.data})`;
+      await sql`INSERT INTO onboarding_intake_files (id, intake_id, name, kind, label, data) VALUES (${cuid()}, ${row.id}, ${String(f.name ?? 'file').slice(0, 200)}, ${(f.name ?? '').split('.').pop() ?? ''}, ${String(f.label ?? '').slice(0, 120)}, ${f.data})`;
     }
 
     // 1) Onboarding dashboard record — update the one created with the link.
@@ -139,14 +140,16 @@ export async function POST(req: Request) {
           ON CONFLICT DO NOTHING`;
 
         // Each uploaded document as its own filed entry.
-        const stored = await sql`SELECT id, name, data FROM onboarding_intake_files WHERE intake_id = ${row.id}` as any[];
+        const stored = await sql`SELECT id, name, label, data FROM onboarding_intake_files WHERE intake_id = ${row.id}` as any[];
         let i = 0;
         for (const f of stored) {
+          const docType = String(f.label ?? '').trim();
           await attachPdfToEmployeeFile({
-            name, category: 'Onboarding', title: `Onboarding document — ${f.name}`,
+            name, category: 'Onboarding',
+            title: docType ? `${docType}${f.name ? ` — ${f.name}` : ''}` : `Onboarding document — ${f.name}`,
             docDate: new Date().toISOString().slice(0, 10), attName: f.name || 'document',
             dataUrl: f.data, sourceRef: `intake-file:${row.id}:${i++}`,
-            summary: `Uploaded during onboarding intake (${roleLabel(role)}).`, author: name,
+            summary: `Uploaded during onboarding intake (${roleLabel(role)})${docType ? ` — ${docType}` : ''}.`, author: name,
           });
         }
       }

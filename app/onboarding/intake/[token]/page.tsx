@@ -15,10 +15,9 @@ export default function IntakePage({ params }: { params: { token: string } }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [files, setFiles] = useState<{ name: string; data: string }[]>([]);
+  const [files, setFiles] = useState<{ id: string; name: string; data: string; label: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch(`/api/onboarding/intake?token=${encodeURIComponent(token)}`).then(r => r.json())
@@ -26,16 +25,16 @@ export default function IntakePage({ params }: { params: { token: string } }) {
       .catch(() => setError('Could not load this form.')).finally(() => setLoading(false));
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function onPick(list: FileList | null) {
+  async function onPick(list: FileList | null, label: string) {
     if (!list) return;
-    const next: { name: string; data: string }[] = [];
+    const next: { id: string; name: string; data: string; label: string }[] = [];
     for (const f of Array.from(list)) {
       if (f.size > MAX_FILE) { setError(`"${f.name}" is larger than 6 MB — please compress or split it.`); continue; }
-      next.push({ name: f.name, data: await fileToDataUrl(f) });
+      next.push({ id: Math.random().toString(36).slice(2), name: f.name, data: await fileToDataUrl(f), label });
     }
     setFiles(prev => [...prev, ...next]);
-    if (fileRef.current) fileRef.current.value = '';
   }
+  const removeFile = (id: string) => setFiles(prev => prev.filter(f => f.id !== id));
 
   async function submit() {
     setError('');
@@ -102,22 +101,28 @@ export default function IntakePage({ params }: { params: { token: string } }) {
               </div>
             ))}
 
-            {/* Uploads */}
+            {/* Uploads — one slot per requested document, plus a catch-all */}
             <div style={{ marginTop: 18, borderTop: '1px solid #eee3d0', paddingTop: 16 }}>
               <div style={{ fontWeight: 700, color: '#1b2a3d', fontSize: 14 }}>Upload documents</div>
-              {(row?.uploads ?? []).length > 0 && (
-                <div style={{ fontSize: 13, color: '#8a6d3b', margin: '6px 0 10px' }}>
-                  Please attach: {(row.uploads as string[]).join(' · ')}. PDF, Word, Excel or photo files (up to 6 MB each).
-                </div>
-              )}
-              <input ref={fileRef} type="file" accept={ACCEPT} multiple onChange={e => onPick(e.target.files)}
-                style={{ display: 'block', fontSize: 14, marginBottom: files.length ? 10 : 0 }} />
-              {files.map((f, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f7f3ea', border: '1px solid #e6ddcd', borderRadius: 8, padding: '7px 10px', marginBottom: 6, fontSize: 13 }}>
-                  <span style={{ flex: 1, color: '#1b2a3d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {f.name}</span>
-                  <button type="button" onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', color: '#b0412f', cursor: 'pointer', fontSize: 15 }}>✕</button>
-                </div>
-              ))}
+              <div style={{ fontSize: 13, color: '#8a6d3b', margin: '4px 0 12px' }}>Attach a file for each item below. PDF, Word, Excel or photo files (up to 6 MB each).</div>
+              {[...(row?.uploads ?? []), 'Other documents'].map((label: string) => {
+                const mine = files.filter(f => f.label === label);
+                const other = label === 'Other documents';
+                return (
+                  <div key={label} style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 13.5 }}>{label}{other ? <span style={{ color: '#8a8474', fontWeight: 400 }}> (optional)</span> : ''}</label>
+                    <input type="file" accept={ACCEPT} multiple={other}
+                      onChange={e => { const el = e.currentTarget; onPick(el.files, label).finally(() => { el.value = ''; }); }}
+                      style={{ display: 'block', fontSize: 13 }} />
+                    {mine.map(f => (
+                      <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f7f3ea', border: '1px solid #e6ddcd', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 13 }}>
+                        <span style={{ flex: 1, color: '#1b2a3d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {f.name}</span>
+                        <button type="button" onClick={() => removeFile(f.id)} style={{ border: 'none', background: 'none', color: '#b0412f', cursor: 'pointer', fontSize: 15 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
 
             {error && <p style={{ color: '#b0412f', fontSize: 13, marginTop: 14 }}>{error}</p>}
