@@ -3,17 +3,29 @@
 // offboarding "Accounts to close" checklist. Ramp is included so charges Ryan
 // finds can be reconciled back to a named system here.
 export const FIRM_SYSTEMS = [
-  'Microsoft 365', 'Dropbox', 'Dashlane', 'Clio', 'Donna', 'Briefcatch',
-  'Dialpad', 'Zoom', 'Signitic', 'Logikcull', 'PACER', 'Ramp',
+  'Microsoft 365', 'Dialpad', 'Dashlane', 'Clio', 'Dropbox', 'Zoom', 'Ajax',
+  'Donna', 'Westlaw', 'PACER / ECF', 'ADP', 'Claude', 'Fathom',
+  'Briefcatch & Reality Check', 'Logikcull', 'Adobe', 'Signitic', 'Verizon admin',
 ] as const;
 
-// A short hint shown under a few systems when seeding the standard list.
+// A short hint shown under a system when seeding the standard list / survey.
 export const SYSTEM_HINTS: Record<string, string> = {
   'Microsoft 365': 'Email, calendar, OneDrive',
+  'Dialpad': 'Phone system',
   'Dashlane': 'Shared password vault',
   'Dropbox': 'File storage',
-  'Briefcatch': 'Legal writing / editing',
-  'Ramp': 'Corporate cards & spend',
+  'Ajax': 'Timekeeping',
+  'Donna': 'Internal AI assistant',
+  'Westlaw': 'Legal research',
+  'PACER / ECF': 'Court e-filing',
+  'ADP': 'Payroll / HR',
+  'Claude': 'AI assistant',
+  'Fathom': 'AI meeting notes',
+  'Briefcatch & Reality Check': 'Legal writing / editing',
+  'Logikcull': 'eDiscovery',
+  'Adobe': 'PDF editing',
+  'Signitic': 'Email signatures',
+  'Verizon admin': 'Corporate phone',
 };
 
 // Access levels an account can be held at.

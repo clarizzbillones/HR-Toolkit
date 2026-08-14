@@ -161,15 +161,25 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     showToast(res.ok && d.emailed ? `Test survey emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
   const [bulkBusy, setBulkBusy] = useState(false);
-  async function bulkToolsSurvey(onlyPending = false) {
-    if (!confirm(onlyPending ? 'Email the survey to everyone who hasn’t responded yet?' : 'Email the Tools & Access survey to every active employee who has an email on file?')) return;
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [surveySel, setSurveySel] = useState<Set<string>>(new Set());
+  const sendableEmployees = () => profiles.filter(p => !p.offboarded && String(p.email ?? '').trim());
+  function openSurveyModal() {
+    // Default to everyone who has an email and hasn't submitted yet.
+    setSurveySel(new Set(sendableEmployees().filter(p => surveyStatus[p.id] !== 'Completed').map(p => p.id)));
+    setShowSurvey(true);
+  }
+  function toggleSurveySel(id: string) { setSurveySel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
+  async function sendSurveySelected() {
+    const ids = [...surveySel];
+    if (!ids.length) { showToast('Select at least one employee'); return; }
     setBulkBusy(true);
     try {
-      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk', onlyPending }) });
+      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk', profileIds: ids }) });
       const d = await res.json();
       if (!res.ok) { showToast(d.error || 'Could not send'); return; }
-      showToast(d.total === 0 ? 'Everyone has already responded 🎉' : `Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
-      loadSurveyStatus();
+      showToast(`Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+      loadSurveyStatus(); setShowSurvey(false);
     } finally { setBulkBusy(false); }
   }
 
@@ -522,8 +532,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
           {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
-          {!readOnly && <button onClick={() => bulkToolsSurvey(false)} disabled={bulkBusy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email the Tools & Access survey to every active employee with an email on file">{bulkBusy ? 'Sending…' : '✉ Tools survey to all'}</button>}
-          {!readOnly && <button onClick={() => bulkToolsSurvey(true)} disabled={bulkBusy} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email only the employees who haven't submitted the survey yet">🔔 Nudge non-responders</button>}
+          {!readOnly && <button onClick={openSurveyModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Choose which employees receive the Tools & Access survey">✉ Send tools survey</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
@@ -587,6 +596,46 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
               <button onClick={() => setShowAddEmp(false)} className="text-sm text-text-muted px-3">Cancel</button>
               <button onClick={addEmployee} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Add employee</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tools survey — choose recipients */}
+      {showSurvey && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowSurvey(false)}>
+          <div className="bg-white rounded-card w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-text-primary">Send Tools &amp; Access survey</div>
+                <div className="text-xs text-text-muted mt-0.5">Choose who receives it — <b>{surveySel.size}</b> selected.</div>
+              </div>
+              <button onClick={() => setShowSurvey(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="px-5 py-2 border-b border-border-light flex items-center gap-4 text-[11px] font-semibold">
+              <button onClick={() => setSurveySel(new Set(sendableEmployees().map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select all</button>
+              <button onClick={() => setSurveySel(new Set(sendableEmployees().filter(p => surveyStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
+              <button onClick={() => setSurveySel(new Set())} className="text-text-muted hover:underline">Clear</button>
+            </div>
+            <div className="flex-1 overflow-auto p-3 space-y-0.5">
+              {profiles.filter(p => !p.offboarded).map(p => {
+                const email = String(p.email ?? '').trim();
+                const st = surveyStatus[p.id];
+                return (
+                  <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
+                    <input type="checkbox" disabled={!email} checked={surveySel.has(p.id)} onChange={() => toggleSurveySel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
+                    <span className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-text-primary">{p.name}</span>
+                      <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
+                    </span>
+                    {st && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : 'Sent'}</span>}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button onClick={() => setShowSurvey(false)} className="text-sm text-text-muted px-3">Cancel</button>
+              <button onClick={sendSurveySelected} disabled={bulkBusy || surveySel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{bulkBusy ? 'Sending…' : `✉ Send to ${surveySel.size}`}</button>
             </div>
           </div>
         </div>

@@ -134,7 +134,7 @@ const WF_MILESTONE: Record<string, number[]> = {
 // Firm tools that can be seeded into the onboarding checklist as their own
 // "Tools" group (separate from Tasks). Checklist items whose title matches one
 // of these render under Tools.
-const CHECKLIST_TOOLS = [...FIRM_SYSTEMS, 'Adobe Acrobat', 'Westlaw'];
+const CHECKLIST_TOOLS = [...FIRM_SYSTEMS];
 const TOOL_TITLE_SET = new Set(CHECKLIST_TOOLS.map(t => t.toLowerCase()));
 const isToolTitle = (t: string) => TOOL_TITLE_SET.has(String(t ?? '').trim().toLowerCase());
 
