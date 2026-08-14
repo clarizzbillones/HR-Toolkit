@@ -27,6 +27,10 @@ interface Account {
   id: string; profile_id: string; system: string; account: string;
   access_level: string; status: string; source: string; notes: string;
 }
+const ACCT_LEVEL_COLOR: Record<string, string> = {
+  'Admin': 'bg-[#e9f0f5] text-[#3f6b8a] border-[#cfe0ec]',
+  'Standard user': 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]',
+};
 const ACCT_STATUS_COLOR: Record<string, string> = {
   'Active': 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]',
   'Needs review': 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]',
@@ -404,7 +408,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                       {accounts.map(a => (
                         <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1fr_128px_1.6fr_26px] gap-2 px-4 py-2 items-center">
                           <input list="firm-systems" disabled={readOnly} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
-                          <select disabled={readOnly} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={ACCT_INPUT + ' cursor-pointer'}>
+                          <select disabled={readOnly} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer ${ACCT_LEVEL_COLOR[a.access_level || 'Standard user'] || 'bg-[#f1ece3] text-[#8b8478] border-border-light'}`}>
                             {(a.access_level && !ACCESS_LEVELS.includes(a.access_level as any) ? [a.access_level] : []).map(v => <option key={v} value={v}>{v}</option>)}
                             {ACCESS_LEVELS.map(v => <option key={v} value={v}>{v}</option>)}
                           </select>
