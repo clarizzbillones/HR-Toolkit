@@ -16,9 +16,25 @@ async function ensure() {
 }
 const auth = async () => !!(await getServerSession(authOptions))?.user;
 
+// One-time (idempotent) cleanup: rename old system names to the current ones,
+// merging any duplicate rows per employee. No-op once nothing old remains.
+async function migrateNames() {
+  try {
+    const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM employee_accounts WHERE lower(system) IN ('pacer', 'briefcatch')` as any[];
+    if (!n) return;
+    const renames: [string, string][] = [['pacer', 'PACER / ECF'], ['briefcatch', 'Briefcatch & Reality Check']];
+    for (const [oldL, neu] of renames) {
+      // Drop an old-name row when the new name already exists for that employee.
+      await sql`DELETE FROM employee_accounts a WHERE lower(a.system) = ${oldL} AND EXISTS (SELECT 1 FROM employee_accounts b WHERE b.profile_id = a.profile_id AND lower(b.system) = ${neu.toLowerCase()})`;
+      await sql`UPDATE employee_accounts SET system = ${neu} WHERE lower(system) = ${oldL}`;
+    }
+  } catch { /* best-effort */ }
+}
+
 export async function GET(req: Request) {
   if (!(await auth())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await ensure();
+  await migrateNames();
   const profileId = new URL(req.url).searchParams.get('profileId');
   if (!profileId) return NextResponse.json({ error: 'Missing profileId' }, { status: 400 });
   const rows = await sql`SELECT * FROM employee_accounts WHERE profile_id = ${profileId} ORDER BY lower(system) ASC, created_at ASC` as any[];
