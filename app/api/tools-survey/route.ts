@@ -6,6 +6,23 @@ import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { FIRM_SYSTEMS, SYSTEM_HINTS } from '@/lib/firmSystems';
+import { sendMailAsApp } from '@/lib/graph';
+
+const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
+const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function surveyEmail(name: string, url: string): string {
+  const first = esc(String(name || '').split(' ')[0] || 'there');
+  return `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px">
+    <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+    </div>
+    <p>Hi ${first},</p>
+    <p>We're updating our records of the firm tools each person has access to. Please take two minutes to complete this short Tools &amp; Access survey — for each tool, mark whether you use it, have access but don't use it, or have no access.</p>
+    <p style="margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Complete the survey</a></p>
+    <p style="font-size:12px;color:#666">Or paste this link into your browser:<br>${esc(url)}</p>
+  </div>`;
+}
 
 // Tools & Access survey: a per-person tokenized link (no login) where an
 // employee marks, for each firm tool, whether they use it, have access but
@@ -102,15 +119,40 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  if (b.action === 'create') {
+  // Create a survey (and optionally email it) for one person.
+  if (b.action === 'create' || b.action === 'send') {
     const name = String(b.name ?? '').trim();
     if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+    const email = String(b.email ?? '').trim();
     const id = cuid(); const token = cuid() + cuid();
     await sql`INSERT INTO tools_surveys (id, token, name, email, profile_id, status, created_by)
-      VALUES (${id}, ${token}, ${name}, ${String(b.email ?? '').trim() || null}, ${b.profileId ?? null}, 'Sent', ${(session.user as any).email ?? null})`;
+      VALUES (${id}, ${token}, ${name}, ${email || null}, ${b.profileId ?? null}, 'Sent', ${(session.user as any).email ?? null})`;
     const url = `${origin(req)}/tools-survey/${token}`;
+    let emailed = false;
+    if (b.action === 'send') {
+      if (!email) return NextResponse.json({ error: 'This employee has no email on file — copy the link instead.' }, { status: 400 });
+      const r = await sendMailAsApp(SENDER, email, 'Litson PLLC — Tools & Access survey', surveyEmail(name, url));
+      emailed = !!r.ok;
+      if (!emailed) return NextResponse.json({ error: r.error || 'Could not send the email', url }, { status: 502 });
+    }
     const [row] = await sql`SELECT id, token, name, email, status, created_at FROM tools_surveys WHERE id = ${id}` as any[];
-    return NextResponse.json({ row, url }, { status: 201 });
+    return NextResponse.json({ row, url, emailed }, { status: 201 });
+  }
+
+  // Email the survey to every active employee who has an email on file.
+  if (b.action === 'send-bulk') {
+    let profiles: any[] = [];
+    try { profiles = await sql`SELECT id, name, email FROM employee_profiles WHERE coalesce(email, '') <> '' AND coalesce(offboarded, false) = false ORDER BY name ASC` as any[]; } catch { /* no table */ }
+    let sent = 0; const failed: string[] = [];
+    for (const p of profiles) {
+      // Reuse an outstanding survey for this person if one exists.
+      let [s] = await sql`SELECT id, token FROM tools_surveys WHERE profile_id = ${p.id} AND status <> 'Completed' ORDER BY created_at DESC LIMIT 1` as any[];
+      if (!s) { const id = cuid(); const token = cuid() + cuid(); await sql`INSERT INTO tools_surveys (id, token, name, email, profile_id, status, created_by) VALUES (${id}, ${token}, ${p.name}, ${p.email}, ${p.id}, 'Sent', ${(session.user as any).email ?? null})`; s = { id, token }; }
+      const url = `${origin(req)}/tools-survey/${s.token}`;
+      const r = await sendMailAsApp(SENDER, p.email, 'Litson PLLC — Tools & Access survey', surveyEmail(p.name, url));
+      if (r.ok) sent++; else failed.push(p.name);
+    }
+    return NextResponse.json({ sent, total: profiles.length, failed });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

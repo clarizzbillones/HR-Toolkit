@@ -128,6 +128,24 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     try { await navigator.clipboard.writeText(d.url); showToast('Tools survey link created & copied — share it with the employee'); }
     catch { showToast('Tools survey link created'); }
   }
+  async function emailToolsSurvey() {
+    if (!selected) return;
+    if (!selected.email) { showToast('No email on file — use “Copy link” instead'); return; }
+    const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', profileId: selected.id, name: selected.name, email: selected.email }) });
+    const d = await res.json();
+    showToast(res.ok && d.emailed ? `Tools survey emailed to ${selected.email}` : (d.error || 'Could not email the survey'));
+  }
+  const [bulkBusy, setBulkBusy] = useState(false);
+  async function bulkToolsSurvey() {
+    if (!confirm('Email the Tools & Access survey to every active employee who has an email on file?')) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk' }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      showToast(`Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+    } finally { setBulkBusy(false); }
+  }
 
   const [syncing, setSyncing] = useState(false);
   async function syncStaffing() {
@@ -329,7 +347,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={createToolsSurvey} title="Create a no-login link the employee fills out; their answers update this list & file to their Employee File" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">✉ Tools survey link</button>
+                    {selected.email && <button onClick={emailToolsSurvey} title={`Email the Tools & Access survey to ${selected.email}`} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">✉ Email survey</button>}
+                    <button onClick={createToolsSurvey} title="Create a no-login link the employee fills out; their answers update this list & file to their Employee File" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⧉ Copy survey link</button>
                     {accounts.length > 0 && <button onClick={seedStandardAccounts} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">+ Standard systems</button>}
                     <button onClick={addAccount} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add account</button>
                   </div>
@@ -476,6 +495,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
+          {!readOnly && <button onClick={bulkToolsSurvey} disabled={bulkBusy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email the Tools & Access survey to every active employee with an email on file">{bulkBusy ? 'Sending…' : '✉ Tools survey to all'}</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
