@@ -1572,7 +1572,14 @@ export default function OnboardingClient() {
         const STAGE_WF: Record<string, number> = { '': 0, undecided: 0, offer_sent: 4, offer_viewed: 4, offer_accepted: 5, onboarding: 10, complete: 14 };
         const sel = people.find(p => String(p.id) === wfHire) || null;
         const reached = sel ? (sel.status === 'Complete' ? 14 : (STAGE_WF[stageOf(sel)] ?? 0)) : 0;
-        const stageLabel = sel ? (STAGES.find(s => s.key === stageOf(sel))?.label ?? 'Not started') : '';
+        // Prefer per-step tracking from the hire's checklist when the workflow
+        // steps have been added to it; otherwise fall back to the coarse stage.
+        const clTitles = new Set(tasksFor().map((t: any) => String(t.title ?? '').trim()));
+        const hasChecklist = !!sel && WORKFLOW.some(s => clTitles.has(s.title));
+        const prog: Record<string, any> = sel ? parseProg(sel.progress) : {};
+        const currentStep = hasChecklist ? WORKFLOW.filter(s => !s.conditional && clTitles.has(s.title)).find(s => !prog[s.title]) : null;
+        const currentN = currentStep?.n ?? null;
+        const stageLabel = sel ? (hasChecklist ? (currentStep ? currentStep.title : 'All steps complete') : (STAGES.find(s => s.key === stageOf(sel))?.label ?? 'Not started')) : '';
         return (
         <div className="flex-1 overflow-auto px-8 py-6">
           <div className="max-w-3xl mx-auto">
@@ -1612,6 +1619,12 @@ export default function OnboardingClient() {
                 // Per-hire status of each box: done / current / upcoming (or plain when no hire selected).
                 const statusOf = (item: any): 'plain' | 'done' | 'current' | 'upcoming' => {
                   if (!sel) return 'plain';
+                  if (hasChecklist) {
+                    if (item.decision) return prog['Final interview'] ? 'done' : 'upcoming';
+                    if (prog[item.title]) return 'done';
+                    if (!item.conditional && item.n === currentN) return 'current';
+                    return 'upcoming';
+                  }
                   if (item.decision) return reached >= 4 ? 'done' : reached >= 3 ? 'current' : 'upcoming';
                   if (item.conditional) return reached >= 4 ? 'done' : 'upcoming';
                   const n = item.n as number;
@@ -1650,7 +1663,7 @@ export default function OnboardingClient() {
                 );
               })()}
             </div>
-            <p className="text-[11px] text-text-muted mt-3 italic">{sel ? 'Highlighting reflects the hire’s current onboarding stage. ' : ''}Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
+            <p className="text-[11px] text-text-muted mt-3 italic">{sel ? (hasChecklist ? 'Highlighting reflects the steps checked in this hire’s onboarding checklist. ' : 'Highlighting reflects the hire’s onboarding stage — click “Add steps to checklist” for exact step-by-step tracking. ') : ''}Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
           </div>
         </div>
         );
