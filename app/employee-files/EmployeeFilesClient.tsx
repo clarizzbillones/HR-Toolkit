@@ -36,9 +36,10 @@ const ACCT_STATUS_COLOR: Record<string, string> = {
 
 const ACCT_INPUT = 'w-full bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-2 py-1 text-sm focus:outline-none disabled:hover:border-transparent';
 
-const CATEGORIES = ['Performance Review', 'Coaching', 'Remark / Timeline', 'Other'];
+const CATEGORIES = ['Performance Review', 'Coaching', 'Onboarding', 'Tools & Access', 'Remark / Timeline', 'Other'];
 const CAT_COLOR: Record<string, string> = {
   'Performance Review': 'bg-[#eef2f7] text-[#3f5a76]', 'Coaching': 'bg-[#eef5f1] text-[#2f7d5b]',
+  'Onboarding': 'bg-[#f0ebe0] text-[#8a6d3b]', 'Tools & Access': 'bg-[#eef2f7] text-[#4a5a6d]',
   'Remark / Timeline': 'bg-[#fdeaea] text-[#b0412f]', 'Other': 'bg-[#f1ece3] text-[#8b8478]',
 };
 const MAX_PHOTO = 2 * 1024 * 1024;
@@ -116,6 +117,16 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   async function removeAccount(id: string) {
     setAccounts(prev => prev.filter(a => a.id !== id));
     await fetch(`/api/employee-accounts?id=${id}`, { method: 'DELETE' });
+  }
+  // Generate a per-employee Tools & Access survey link (no login). On submit it
+  // files to the Employee File and updates this Accounts & Access list.
+  async function createToolsSurvey() {
+    if (!selected) return;
+    const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', profileId: selected.id, name: selected.name, email: selected.email }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Could not create link'); return; }
+    try { await navigator.clipboard.writeText(d.url); showToast('Tools survey link created & copied — share it with the employee'); }
+    catch { showToast('Tools survey link created'); }
   }
 
   const [syncing, setSyncing] = useState(false);
@@ -318,6 +329,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={createToolsSurvey} title="Create a no-login link the employee fills out; their answers update this list & file to their Employee File" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">✉ Tools survey link</button>
                     {accounts.length > 0 && <button onClick={seedStandardAccounts} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">+ Standard systems</button>}
                     <button onClick={addAccount} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add account</button>
                   </div>

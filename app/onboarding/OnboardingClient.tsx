@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type Keyb
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 import IntakeLinks from './IntakeLinks';
+import { FIRM_SYSTEMS } from '@/lib/firmSystems';
 
 interface Item {
   id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel' | 'blockhidden';
@@ -130,6 +131,13 @@ const WF_MILESTONE: Record<string, number[]> = {
   offer_accepted: [1, 2, 4, 5],
   onboarding: [1, 2, 4, 5],
 };
+// Firm tools that can be seeded into the onboarding checklist as their own
+// "Tools" group (separate from Tasks). Checklist items whose title matches one
+// of these render under Tools.
+const CHECKLIST_TOOLS = [...FIRM_SYSTEMS, 'Adobe Acrobat', 'Westlaw'];
+const TOOL_TITLE_SET = new Set(CHECKLIST_TOOLS.map(t => t.toLowerCase()));
+const isToolTitle = (t: string) => TOOL_TITLE_SET.has(String(t ?? '').trim().toLowerCase());
+
 // The hiring-journey stage implied by the furthest completed workflow step.
 function stageFromMaxStep(maxN: number): string {
   if (maxN >= 6) return 'onboarding';
@@ -804,6 +812,14 @@ export default function OnboardingClient() {
       }
       showToast(added ? `Added ${added} step${added > 1 ? 's' : ''} to the onboarding checklist` : 'All workflow steps are already in the checklist');
     } finally { setAddingWf(false); }
+  }
+
+  // Add the firm tools (incl. Briefcatch) to the checklist's Tools group.
+  async function addToolsToChecklist() {
+    const have = new Set(tasksFor().map(t => String(t.title ?? '').trim().toLowerCase()));
+    let added = 0;
+    for (const t of CHECKLIST_TOOLS) { if (have.has(t.toLowerCase())) continue; await add('task', { title: t, owner: 'HR' }, CHECKLIST_GUIDE); added++; }
+    showToast(added ? `Added ${added} tool${added > 1 ? 's' : ''} to the checklist` : 'All tools are already in the checklist');
   }
 
   async function addGuide() {
@@ -2011,25 +2027,41 @@ export default function OnboardingClient() {
                       <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding checklist</div>
                       <span className="text-[10px] text-text-faint">Shared checklist — edits apply to every new hire</span>
                     </div>
-                    {list.map(t => {
-                      const isDone = !!prog[t.title];
-                      const isHR = (t.owner ?? '') === 'HR';
+                    {(() => {
+                      const renderRow = (t: any) => {
+                        const isDone = !!prog[t.title];
+                        const isHR = (t.owner ?? '') === 'HR';
+                        return (
+                          <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+                            <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
+                            <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
+                              className={`flex-1 text-sm bg-transparent focus:outline-none ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`} />
+                            <button onClick={() => patch(t.id, { owner: isHR ? '' : 'HR' })} title="Toggle who owns this task"
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isHR ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>
+                              {isHR ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}
+                            </button>
+                            <button onClick={() => remove(t.id)} title="Delete task" className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100 shrink-0">✕</button>
+                          </div>
+                        );
+                      };
+                      const toolItems = list.filter(t => isToolTitle(t.title));
+                      const taskItems = list.filter(t => !isToolTitle(t.title));
                       return (
-                        <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
-                          <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
-                          <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
-                            className={`flex-1 text-sm bg-transparent focus:outline-none ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`} />
-                          <button onClick={() => patch(t.id, { owner: isHR ? '' : 'HR' })} title="Toggle who owns this task"
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isHR ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>
-                            {isHR ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}
-                          </button>
-                          <button onClick={() => remove(t.id)} title="Delete task" className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100 shrink-0">✕</button>
-                        </div>
+                        <>
+                          <div className="flex items-center justify-between px-2 mt-1 mb-0.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#6b4f8a]">🧰 Tools {toolItems.length > 0 && <span className="text-text-faint">({toolItems.filter(t => prog[t.title]).length}/{toolItems.length})</span>}</div>
+                            <button onClick={addToolsToChecklist} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">＋ Add setup tools</button>
+                          </div>
+                          {toolItems.map(renderRow)}
+                          {toolItems.length === 0 && <p className="text-xs text-text-faint px-2 py-1">No tools yet — click “Add setup tools” to list Briefcatch, Clio, Dropbox, etc.</p>}
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted px-2 mt-3 mb-0.5">✓ Tasks {taskItems.length > 0 && <span className="text-text-faint">({taskItems.filter(t => prog[t.title]).length}/{taskItems.length})</span>}</div>
+                          {taskItems.map(renderRow)}
+                          {list.length === 0 && <p className="text-sm text-text-muted px-2 py-2">No checklist items yet.</p>}
+                          <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)}
+                            className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
+                        </>
                       );
-                    })}
-                    {list.length === 0 && <p className="text-sm text-text-muted px-2 py-2">No checklist items yet.</p>}
-                    <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)}
-                      className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
+                    })()}
                   </div>
                   <div className="px-5 py-4 border-t border-border flex items-center justify-between gap-3 flex-wrap">
                     <span className="text-sm text-text-muted">{done}/{total} done</span>

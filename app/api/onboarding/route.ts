@@ -62,7 +62,7 @@ const G_SCHEDULE: [string, string, string, string, string][] = [
 ];
 const G_TOOLS = [
   'Dialpad (phone system)', 'Dashlane (password manager)', 'Clio (case management)', 'Dropbox (documents & files)',
-  'Zoom', 'Ajax (timekeeping)', 'Donna (internal AI assistant)', 'Westlaw', 'PACER',
+  'Zoom', 'Ajax (timekeeping)', 'Donna (internal AI assistant)', 'Briefcatch (legal writing)', 'Adobe Acrobat (PDF)', 'Westlaw', 'PACER',
 ];
 const G_LINKS = [
   'Employee Forms Website', 'Company SOPs', 'Company Directory', 'Company Handbook (via ADP)',
@@ -94,7 +94,7 @@ const A_SECTIONS: [number, string, string][] = [
 ];
 const A_TOOLS = [
   'Case management system', 'Document management platform', 'Court e-filing (PACER / ECF)',
-  'Timekeeping & billing', 'Password manager (Dashlane)', 'Westlaw', 'Firm directory & website profile',
+  'Timekeeping & billing', 'Password manager (Dashlane)', 'Briefcatch (legal writing)', 'Adobe Acrobat (PDF)', 'Westlaw', 'Firm directory & website profile',
 ];
 const A_LINKS: string[] = [];
 const A_TABLES: { title: string; headers: string[]; rows: string[][] }[] = [
@@ -150,7 +150,7 @@ const C_SECTIONS: [number, string, string][] = [
   [2, 'Accounts & Tools', `You'll be granted access to the tools needed for your work. Contact HR if you're missing anything.`],
   [50, 'Point of Contact', `For onboarding, payment, or access questions, contact HR: clarizz@litson.co`],
 ];
-const C_TOOLS = ['Dialpad (if needed)', 'Dashlane (password manager)', 'Clio (case management, if needed)', 'Dropbox (documents & files)', 'Zoom'];
+const C_TOOLS = ['Dialpad (if needed)', 'Dashlane (password manager)', 'Clio (case management, if needed)', 'Dropbox (documents & files)', 'Zoom', 'Briefcatch (legal writing)', 'Adobe Acrobat (PDF)'];
 const C_TABLES: { title: string; headers: string[]; rows: string[][] }[] = [
   { title: 'Wise Payment Details (international contractors only)', headers: ['Field', 'Value'], rows: [
     ['IBAN', ''], ['Account name', ''], ['Bank number', ''], ['Complete address', ''],
@@ -347,6 +347,29 @@ async function migratePaigeSopIntoGeneral() {
   await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'paige_sop_to_general_v2', 'done')`;
 }
 
+// One-time: add Briefcatch + Adobe as tools to the General, Attorney, and
+// Contractor guides that already exist (combined guides compose from these).
+async function ensureGuideToolsV1() {
+  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'tools_briefcatch_adobe_v1' LIMIT 1` as any[];
+  if (done.length) return;
+  const add = ['Briefcatch (legal writing)', 'Adobe Acrobat (PDF)'];
+  for (const g of ['General', 'Attorney', 'Contractor']) {
+    const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = ${g}` as any[];
+    if (!n) continue; // guide not present in this database
+    const existing = await sql`SELECT title FROM onboarding_items WHERE guide = ${g} AND kind = 'tool'` as any[];
+    const have = existing.map(e => String(e.title ?? '').toLowerCase());
+    const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int AS mx FROM onboarding_items WHERE guide = ${g} AND kind = 'tool'` as any[];
+    let so = (mx ?? -1) + 1;
+    for (const t of add) {
+      const kw = t.split(' ')[0].toLowerCase(); // Briefcatch / Adobe
+      if (have.some(h => h.includes(kw))) continue;
+      await sql`INSERT INTO onboarding_items (id, guide, kind, title, sort_order) VALUES (${cuid()}, ${g}, 'tool', ${t}, ${so++})`;
+      have.push(t.toLowerCase());
+    }
+  }
+  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'tools_briefcatch_adobe_v1', 'done')`;
+}
+
 export async function GET() {
   await ensureTable();
   await migrate();
@@ -354,6 +377,7 @@ export async function GET() {
   await ensureBenefitsGuide();
   await ensureSupportBenefitsGuide();
   await migratePaigeSopIntoGeneral();
+  await ensureGuideToolsV1();
   const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
   return NextResponse.json({ items });
 }
