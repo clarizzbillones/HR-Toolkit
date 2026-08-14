@@ -154,8 +154,14 @@ export async function POST(req: Request) {
 
   // Email the survey to every active employee who has an email on file.
   if (b.action === 'send-bulk') {
+    const onlyPending = !!b.onlyPending;
     let profiles: any[] = [];
     try { profiles = await sql`SELECT id, name, email FROM employee_profiles WHERE coalesce(email, '') <> '' AND coalesce(offboarded, false) = false ORDER BY name ASC` as any[]; } catch { /* no table */ }
+    if (onlyPending) {
+      const completed = await sql`SELECT DISTINCT profile_id FROM tools_surveys WHERE status = 'Completed' AND profile_id IS NOT NULL` as any[];
+      const doneIds = new Set(completed.map(r => r.profile_id));
+      profiles = profiles.filter(p => !doneIds.has(p.id));
+    }
     let sent = 0; const failed: string[] = [];
     for (const p of profiles) {
       // Reuse an outstanding survey for this person if one exists.

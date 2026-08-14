@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
@@ -134,7 +134,25 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', profileId: selected.id, name: selected.name, email: selected.email }) });
     const d = await res.json();
     showToast(res.ok && d.emailed ? `Tools survey emailed to ${selected.email}` : (d.error || 'Could not email the survey'));
+    if (res.ok) loadSurveyStatus();
   }
+  // Per-employee tools-survey status (profile_id -> 'Sent' | 'Completed').
+  const [surveyStatus, setSurveyStatus] = useState<Record<string, string>>({});
+  async function loadSurveyStatus() {
+    try {
+      const d = await fetch('/api/tools-survey').then(r => r.json());
+      const map: Record<string, string> = {};
+      for (const r of (d.rows ?? [])) {
+        if (!r.profile_id) continue;
+        if (map[r.profile_id] === 'Completed') continue;
+        if (r.status === 'Completed') map[r.profile_id] = 'Completed';
+        else if (!map[r.profile_id]) map[r.profile_id] = r.status || 'Sent';
+      }
+      setSurveyStatus(map);
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadSurveyStatus(); }, []);
+
   async function testToolsSurvey() {
     const email = window.prompt('Send a test Tools & Access survey to which email?');
     if (!email || !email.trim()) return;
@@ -143,14 +161,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     showToast(res.ok && d.emailed ? `Test survey emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
   const [bulkBusy, setBulkBusy] = useState(false);
-  async function bulkToolsSurvey() {
-    if (!confirm('Email the Tools & Access survey to every active employee who has an email on file?')) return;
+  async function bulkToolsSurvey(onlyPending = false) {
+    if (!confirm(onlyPending ? 'Email the survey to everyone who hasn’t responded yet?' : 'Email the Tools & Access survey to every active employee who has an email on file?')) return;
     setBulkBusy(true);
     try {
-      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk' }) });
+      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk', onlyPending }) });
       const d = await res.json();
       if (!res.ok) { showToast(d.error || 'Could not send'); return; }
-      showToast(`Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+      showToast(d.total === 0 ? 'Everyone has already responded 🎉' : `Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+      loadSurveyStatus();
     } finally { setBulkBusy(false); }
   }
 
@@ -503,7 +522,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
           {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
-          {!readOnly && <button onClick={bulkToolsSurvey} disabled={bulkBusy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email the Tools & Access survey to every active employee with an email on file">{bulkBusy ? 'Sending…' : '✉ Tools survey to all'}</button>}
+          {!readOnly && <button onClick={() => bulkToolsSurvey(false)} disabled={bulkBusy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email the Tools & Access survey to every active employee with an email on file">{bulkBusy ? 'Sending…' : '✉ Tools survey to all'}</button>}
+          {!readOnly && <button onClick={() => bulkToolsSurvey(true)} disabled={bulkBusy} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email only the employees who haven't submitted the survey yet">🔔 Nudge non-responders</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
@@ -528,6 +548,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 <div className="font-semibold text-text-primary mt-3 truncate">{p.name}</div>
                 {p.position && <div className="text-xs text-text-muted truncate">{p.position}</div>}
                 <div className="text-[11px] text-text-muted mt-2">{p.doc_count ?? 0} document{(p.doc_count ?? 0) === 1 ? '' : 's'}</div>
+                {surveyStatus[p.id] && <div className={`mt-1.5 inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${surveyStatus[p.id] === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`} title="Tools & Access survey">{surveyStatus[p.id] === 'Completed' ? '✓ Tools submitted' : 'Survey sent'}</div>}
               </button>
             ))}
           </div>
