@@ -226,6 +226,26 @@ export default function DashboardClient(props: Props) {
           </div>
         </div>
 
+        {/* Onboarding workflow shortcut */}
+        <Link href="/onboarding?tab=workflow" className="block bg-white border border-border rounded-card p-5 mb-6 hover:shadow-card hover:border-[#d0c8b8] transition-all group">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="w-10 h-10 rounded-[10px] bg-[#eef2f7] text-[#3f5a76] flex items-center justify-center shrink-0 text-lg">🧭</div>
+            <div className="min-w-0">
+              <div className="font-semibold text-text-primary">Onboarding workflow</div>
+              <div className="text-sm text-text-muted">The standard 14-stage hiring &amp; onboarding journey{props.onboarding ? ` · ${props.onboarding} in progress` : ''}.</div>
+            </div>
+            <div className="ml-auto hidden md:flex items-center gap-1.5">
+              {['Interview', 'Offer', 'Access & tools', 'Intake form', 'Check-ins'].map((t, i, arr) => (
+                <span key={t} className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-[#f4faf6] text-[#2f7d5b] border border-[#cfe4d8]">{t}</span>
+                  {i < arr.length - 1 && <span className="text-text-faint">→</span>}
+                </span>
+              ))}
+            </div>
+            <span className="text-sm font-semibold text-[#3f6b8a] group-hover:underline shrink-0 md:ml-3">View workflow →</span>
+          </div>
+        </Link>
+
         {/* Module grid */}
         <div className="text-xs font-bold tracking-widest uppercase text-gold-muted mb-3.5">Modules</div>
         <div className="grid grid-cols-3 gap-4">

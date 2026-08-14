@@ -214,6 +214,8 @@ export default function OnboardingClient() {
   const [hire, setHire] = useState('');
   const [view, setView] = useState<'dashboard' | 'guides' | 'intake' | 'workflow'>('dashboard');
   const [addingWf, setAddingWf] = useState(false);
+  const [wfHire, setWfHire] = useState(''); // which hire's progress to light up on the workflow
+  useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && ['dashboard', 'workflow', 'guides', 'intake'].includes(t)) setView(t as any); } catch { /* ignore */ } }, []);
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
@@ -1566,35 +1568,93 @@ export default function OnboardingClient() {
       )}
 
       {view === 'intake' && <IntakeLinks />}
-      {view === 'workflow' && (
+      {view === 'workflow' && (() => {
+        const STAGE_WF: Record<string, number> = { '': 0, undecided: 0, offer_sent: 4, offer_viewed: 4, offer_accepted: 5, onboarding: 10, complete: 14 };
+        const sel = people.find(p => String(p.id) === wfHire) || null;
+        const reached = sel ? (sel.status === 'Complete' ? 14 : (STAGE_WF[stageOf(sel)] ?? 0)) : 0;
+        const stageLabel = sel ? (STAGES.find(s => s.key === stageOf(sel))?.label ?? 'Not started') : '';
+        return (
         <div className="flex-1 overflow-auto px-8 py-6">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-start justify-between gap-3 flex-wrap mb-5">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
               <div>
                 <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Hiring &amp; onboarding workflow</h2>
-                <p className="text-sm text-text-muted mt-0.5">The standard journey every new hire follows. Use it as a reference, or add the steps to the onboarding checklist.</p>
+                <p className="text-sm text-text-muted mt-0.5">The standard journey every new hire follows. Pick a hire to light up their progress, or add the steps to the onboarding checklist.</p>
               </div>
               <button onClick={addWorkflowToChecklist} disabled={addingWf} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50 shrink-0">{addingWf ? 'Adding…' : '＋ Add steps to checklist'}</button>
             </div>
-            <div>
-              {WORKFLOW.map((s, i) => (
-                <div key={s.n}>
-                  <div className={`bg-white border rounded-card px-4 py-3 flex items-start gap-3 ${s.conditional ? 'border-dashed border-[#e0c48a] bg-[#fbf7ee]' : 'border-border'}`}>
-                    <span className={`shrink-0 w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center ${s.conditional ? 'bg-[#c9a24a]' : 'bg-[#1b2a3d]'}`}>{s.n}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-text-primary text-[15px]">{s.title}{s.conditional && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a] align-middle uppercase tracking-wide">conditional</span>}</div>
-                      <div className="text-[12px] text-text-muted mt-0.5">{s.sub}</div>
-                    </div>
-                    <span className="shrink-0 text-[11px] font-semibold text-text-muted">{s.owner}</span>
-                  </div>
-                  {i < WORKFLOW.length - 1 && <div className="pl-[26px]"><div className="w-px h-3.5 bg-[#d0c7b5]" /></div>}
-                </div>
-              ))}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Show progress for</span>
+              <select value={wfHire} onChange={e => setWfHire(e.target.value)} className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+                <option value="">— Standard workflow (no hire) —</option>
+                {people.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+              </select>
+              {sel && <span className="text-xs text-text-muted">Currently at: <b className="text-text-secondary">{stageLabel}</b></span>}
+              {sel && (
+                <span className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#2f7d5b]" />Done</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#c9a24a]" />Current</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#c3bbab]" />Upcoming</span>
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-text-muted mt-4 italic">Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
+            <div className="bg-white border border-border rounded-card p-4 overflow-x-auto">
+              {(() => {
+                const boxW = 300, boxH = 52, rowH = 84, leftX = 30, cx = leftX + boxW / 2;
+                const decision = { title: 'Alex’s instruction', sub: 'Meet the partners?', decision: true } as any;
+                const branch = WORKFLOW.find(s => s.n === 3)!;
+                const col: any[] = [];
+                for (const s of WORKFLOW) { if (s.n === 3) continue; col.push(s); if (s.n === 2) col.push(decision); }
+                const decIdx = col.findIndex(c => c.decision);
+                const yTop = (i: number) => 10 + i * rowH;
+                const brX = 420, brW = 260, brCx = brX + brW / 2, brY = yTop(decIdx);
+                const width = brX + brW + 10, height = yTop(col.length - 1) + boxH + 12;
+                // Per-hire status of each box: done / current / upcoming (or plain when no hire selected).
+                const statusOf = (item: any): 'plain' | 'done' | 'current' | 'upcoming' => {
+                  if (!sel) return 'plain';
+                  if (item.decision) return reached >= 4 ? 'done' : reached >= 3 ? 'current' : 'upcoming';
+                  if (item.conditional) return reached >= 4 ? 'done' : 'upcoming';
+                  const n = item.n as number;
+                  if (n < reached) return 'done';
+                  if (n === reached) return 'current';
+                  return 'upcoming';
+                };
+                const box = (x: number, y: number, w: number, item: any) => {
+                  const st = statusOf(item);
+                  let fill: string, stroke: string, circle: string, tFill = '#1b2a3d', sFill = '#8a8474';
+                  if (st === 'plain') { const gold = item.decision || item.conditional; fill = gold ? '#fbf7ee' : '#f4faf6'; stroke = gold ? '#e0c48a' : '#cfe4d8'; circle = item.conditional ? '#c9a24a' : '#1b2a3d'; }
+                  else if (st === 'done') { fill = '#eef5f1'; stroke = '#9ccbb2'; circle = '#2f7d5b'; }
+                  else if (st === 'current') { fill = '#fff7e6'; stroke = '#c9a24a'; circle = '#c9a24a'; }
+                  else { fill = '#f6f4f0'; stroke = '#e6ddcd'; circle = '#c3bbab'; tFill = '#9a9384'; sFill = '#b3ab9c'; }
+                  const hasNum = !!item.n, tx = x + (hasNum ? 44 : 16), sw = st === 'current' ? 2 : 1;
+                  return (
+                    <g key={`${x}-${y}-${item.title}`}>
+                      <rect x={x} y={y} width={w} height={boxH} rx={10} fill={fill} stroke={stroke} strokeWidth={sw} strokeDasharray={item.conditional ? '5 4' : undefined} />
+                      {hasNum && <><circle cx={x + 24} cy={y + boxH / 2} r={12} fill={circle} />{st === 'done' ? <text x={x + 24} y={y + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">✓</text> : <text x={x + 24} y={y + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{item.n}</text>}</>}
+                      <text x={tx} y={y + 22} fontSize="12.5" fontWeight="700" fill={tFill}>{item.title}</text>
+                      <text x={tx} y={y + 38} fontSize="10.5" fill={sFill}>{item.sub}</text>
+                    </g>
+                  );
+                };
+                return (
+                  <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ maxWidth: width, minWidth: 560, display: 'block', margin: '0 auto' }}>
+                    <defs><marker id="wf-arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#aeb6c0" /></marker></defs>
+                    {col.slice(0, -1).map((_, i) => (
+                      <line key={`c${i}`} x1={cx} y1={yTop(i) + boxH} x2={cx} y2={yTop(i + 1)} stroke="#aeb6c0" strokeWidth={1.5} markerEnd="url(#wf-arrow)" />
+                    ))}
+                    <line x1={leftX + boxW} y1={brY + boxH / 2} x2={brX} y2={brY + boxH / 2} stroke="#aeb6c0" strokeWidth={1.5} markerEnd="url(#wf-arrow)" />
+                    <polyline points={`${brCx},${brY + boxH} ${brCx},${brY + boxH + 16} ${cx},${brY + boxH + 16}`} fill="none" stroke="#aeb6c0" strokeWidth={1.5} />
+                    {col.map((item, i) => box(leftX, yTop(i), boxW, item))}
+                    {box(brX, brY, brW, branch)}
+                  </svg>
+                );
+              })()}
+            </div>
+            <p className="text-[11px] text-text-muted mt-3 italic">{sel ? 'Highlighting reflects the hire’s current onboarding stage. ' : ''}Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
           </div>
         </div>
-      )}
+        );
+      })()}
       {view === 'dashboard' && Dashboard()}
 
       {view === 'guides' && !showNewHire && isComposed && composedDef && (
