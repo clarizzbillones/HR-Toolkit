@@ -3,7 +3,7 @@
 // offboarding "Accounts to close" checklist. Ramp is included so charges Ryan
 // finds can be reconciled back to a named system here.
 export const FIRM_SYSTEMS = [
-  'Microsoft 365', 'Dropbox', 'Dashlane', 'Clio', 'Donna',
+  'Microsoft 365', 'Dropbox', 'Dashlane', 'Clio', 'Donna', 'Briefcatch',
   'Dialpad', 'Zoom', 'Signitic', 'Logikcull', 'PACER', 'Ramp',
 ] as const;
 
@@ -12,6 +12,7 @@ export const SYSTEM_HINTS: Record<string, string> = {
   'Microsoft 365': 'Email, calendar, OneDrive',
   'Dashlane': 'Shared password vault',
   'Dropbox': 'File storage',
+  'Briefcatch': 'Legal writing / editing',
   'Ramp': 'Corporate cards & spend',
 };
 
