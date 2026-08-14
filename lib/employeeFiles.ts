@@ -101,7 +101,7 @@ export async function syncReviewsToEmployeeFile(employeeId: string, profileId?: 
     for (const h of history) if (h?.date) lines.push(`Reviewed ${String(h.date).slice(0, 10)}${h.notes ? ` — ${h.notes}` : ''}`);
 
     let rdocs: any[] = [];
-    try { rdocs = await sql`SELECT which, name, data FROM review_docs WHERE employee_id = ${emp.id}` as any[]; } catch { /* no table */ }
+    try { rdocs = await sql`SELECT which, name, data, doc_date FROM review_docs WHERE employee_id = ${emp.id}` as any[]; } catch { /* no table */ }
     rdocs = rdocs.filter(rd => rd.data);
 
     // Nothing to file yet — don't create an empty entry.
@@ -134,9 +134,9 @@ export async function syncReviewsToEmployeeFile(employeeId: string, profileId?: 
       const dref = `reviews-doc:${emp.id}:${rd.which}`;
       const [ex] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profId} AND source_ref = ${dref} LIMIT 1` as any[];
       if (ex) continue;
-      const label = rd.which === '6mo' ? '6-month review document' : rd.which === '1yr' ? '1-year review document' : `Review document (${rd.which})`;
+      const label = rd.which === '6mo' ? '6-month review document' : rd.which === '1yr' ? '1-year review document' : (rd.name ? `Review document — ${rd.name}` : 'Review document');
       await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-        VALUES (${cuid()}, ${profId}, 'Performance Review', ${label}, ${summaryDate}, ${''}, ${''}, ${''}, ${''}, ${rd.name ?? 'review.pdf'}, ${rd.data}, ${dref})`;
+        VALUES (${cuid()}, ${profId}, 'Performance Review', ${label}, ${rd.doc_date ?? summaryDate}, ${''}, ${''}, ${''}, ${''}, ${rd.name ?? 'review.pdf'}, ${rd.data}, ${dref})`;
       attached++;
     }
     const message = attached

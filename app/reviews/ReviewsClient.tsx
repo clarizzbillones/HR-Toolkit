@@ -853,33 +853,34 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
   // Editable status: '' = auto (use the derived status), else a manual override.
   const [statusOv, setStatusOv] = useState(employee.review_status_override ?? '');
   const [busy, setBusy] = useState(false);
-  const [docs, setDocs] = useState<{ '6mo': string | null; '1yr': string | null }>({ '6mo': null, '1yr': null });
-  const [uploading, setUploading] = useState<'6mo' | '1yr' | null>(null);
+  const [docs, setDocs] = useState<{ which: string; name: string; doc_date: string | null }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [docDate, setDocDate] = useState(employee.last_review_date?.slice(0, 10) || new Date().toISOString().slice(0, 10));
   const fileRef = useRef<HTMLInputElement>(null);
-  const targetRef = useRef<'6mo' | '1yr'>('6mo');
 
   useEffect(() => {
-    fetch(`/api/reviews/docs?id=${employee.id}&meta=1`).then(r => r.json())
-      .then(d => setDocs(d.meta ?? { '6mo': null, '1yr': null })).catch(() => {});
+    fetch(`/api/reviews/docs?id=${employee.id}&list=1`).then(r => r.json())
+      .then(d => setDocs(d.docs ?? [])).catch(() => {});
   }, [employee.id]);
 
-  function pickFile(target: '6mo' | '1yr') { targetRef.current = target; fileRef.current?.click(); }
   async function uploadDoc(file: File) {
-    const target = targetRef.current;
-    setUploading(target);
+    setUploading(true);
     try {
-      const fd = new FormData(); fd.append('id', employee.id); fd.append('which', target); fd.append('file', file);
+      const fd = new FormData(); fd.append('id', employee.id); fd.append('file', file); if (docDate) fd.append('doc_date', docDate);
       const res = await fetch('/api/reviews/docs', { method: 'POST', body: fd });
       const d = await res.json();
       if (!res.ok) { alert(d.error ?? 'Upload failed'); return; }
-      setDocs(prev => ({ ...prev, [target]: d.name }));
+      setDocs(prev => [{ which: d.which, name: d.name, doc_date: d.doc_date ?? docDate }, ...prev]);
+      // Uploading a review document logs the review on that date (updates the
+      // last review date so the next review reschedules).
+      if (docDate && (!lastRev || docDate > lastRev)) setLastRev(docDate);
     } catch { alert('Upload failed'); }
-    setUploading(null);
+    setUploading(false);
   }
-  async function removeDoc(target: '6mo' | '1yr') {
+  async function removeDoc(which: string) {
     if (!confirm('Remove this document?')) return;
-    setDocs(prev => ({ ...prev, [target]: null }));
-    await fetch('/api/reviews/docs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: employee.id, which: target }) });
+    setDocs(prev => prev.filter(x => x.which !== which));
+    await fetch('/api/reviews/docs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: employee.id, which }) });
   }
 
   async function save() {
@@ -957,27 +958,32 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
           <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls,.png,.jpg,.jpeg" className="hidden"
             onChange={e => { if (e.target.files?.[0]) { uploadDoc(e.target.files[0]); e.target.value = ''; } }} />
 
-          {/* Review documents */}
-          {([['6-Month Review Document', '6mo', '#2f7d5b'], ['1-Year Review Document', '1yr', '#3f6b8a']] as [string, '6mo' | '1yr', string][]).map(([label, which, color]) => (
-            <div key={which}>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color }}>{label}</label>
-                {!readOnly && (
-                <button onClick={() => pickFile(which)} disabled={uploading !== null}
-                  className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{uploading === which ? 'Uploading…' : (docs[which] ? '↑ Replace' : '↑ Upload document')}</button>
-                )}
-              </div>
-              {docs[which] ? (
-                <div className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
-                  <span className="flex-1 truncate">📄 {docs[which]}</span>
-                  <a href={`/api/reviews/docs?id=${employee.id}&which=${which}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#3f6b8a] hover:underline">View / download</a>
-                  {!readOnly && <button onClick={() => removeDoc(which)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>}
+          {/* Review documents — upload as many as you like, each with its date */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Review documents</label>
+              {!readOnly && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-text-muted">Review date</span>
+                  <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)} title="The review date recorded with the document you upload" className="border border-border-light rounded-ctrl px-2 py-1 text-xs focus:outline-none focus:border-ink" />
+                  <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{uploading ? 'Uploading…' : '↑ Upload document'}</button>
                 </div>
-              ) : (
-                <div className="border border-dashed border-border-light rounded-ctrl px-3 py-2 text-xs text-text-muted">No document uploaded yet.</div>
               )}
             </div>
-          ))}
+            {docs.length === 0 ? (
+              <div className="border border-dashed border-border-light rounded-ctrl px-3 py-2 text-xs text-text-muted">No documents uploaded yet.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {docs.map(d => (
+                  <div key={d.which} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
+                    <span className="flex-1 truncate">📄 {d.name}{d.doc_date && <span className="text-text-muted"> · {new Date(d.doc_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}</span>
+                    <a href={`/api/reviews/docs?id=${employee.id}&which=${encodeURIComponent(d.which)}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#3f6b8a] hover:underline">View</a>
+                    {!readOnly && <button onClick={() => removeDoc(d.which)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Optional notes */}
           <div>

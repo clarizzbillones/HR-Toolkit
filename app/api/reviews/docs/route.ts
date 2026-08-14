@@ -14,9 +14,11 @@ async function ensureTable() {
     created_at timestamptz DEFAULT now(),
     UNIQUE (employee_id, which)
   )`;
+  await sql`ALTER TABLE review_docs ADD COLUMN IF NOT EXISTS doc_date text`;
 }
 
-// GET ?id=&meta=1  -> { '6mo': name|null, '1yr': name|null }
+// GET ?id=&list=1  -> { docs: [{ which, name, doc_date }] } (newest first)
+// GET ?id=&meta=1  -> { '6mo': name|null, '1yr': name|null } (legacy)
 // GET ?id=&which=  -> streams the stored file inline
 export async function GET(req: Request) {
   await ensureTable();
@@ -24,6 +26,10 @@ export async function GET(req: Request) {
   const id = url.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
+  if (url.searchParams.get('list')) {
+    const rows = await sql`SELECT which, name, doc_date FROM review_docs WHERE employee_id = ${id} ORDER BY doc_date DESC NULLS LAST, created_at DESC`;
+    return NextResponse.json({ docs: rows });
+  }
   if (url.searchParams.get('meta')) {
     const rows = await sql`SELECT which, name FROM review_docs WHERE employee_id = ${id}`;
     const meta: Record<string, string | null> = { '6mo': null, '1yr': null };
@@ -46,17 +52,20 @@ export async function POST(req: Request) {
   await ensureTable();
   const form = await req.formData();
   const id = form.get('id') as string;
-  const which = form.get('which') as string;
+  // `which` optional — a fresh unique id per upload lets an employee have many
+  // dated review documents (not just one 6-month / 1-year slot).
+  const which = (form.get('which') as string) || `doc-${cuid()}`;
+  const docDate = (form.get('doc_date') as string) || null;
   const file = form.get('file') as File | null;
-  if (!id || !which || !file) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+  if (!id || !file) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   const buf = Buffer.from(await file.arrayBuffer());
   const dataUrl = `data:${file.type || 'application/octet-stream'};base64,${buf.toString('base64')}`;
-  await sql`INSERT INTO review_docs (id, employee_id, which, name, data)
-    VALUES (${cuid()}, ${id}, ${which}, ${file.name}, ${dataUrl})
-    ON CONFLICT (employee_id, which) DO UPDATE SET name = ${file.name}, data = ${dataUrl}, created_at = now()`;
-  // Auto-attach the uploaded review PDF to the employee's Employee File.
+  await sql`INSERT INTO review_docs (id, employee_id, which, name, data, doc_date)
+    VALUES (${cuid()}, ${id}, ${which}, ${file.name}, ${dataUrl}, ${docDate})
+    ON CONFLICT (employee_id, which) DO UPDATE SET name = ${file.name}, data = ${dataUrl}, doc_date = ${docDate}, created_at = now()`;
+  // Auto-attach the uploaded review document to the employee's Employee File.
   try { await syncReviewsToEmployeeFile(id); } catch { /* best-effort */ }
-  return NextResponse.json({ name: file.name });
+  return NextResponse.json({ which, name: file.name, doc_date: docDate });
 }
 
 export async function DELETE(req: Request) {
