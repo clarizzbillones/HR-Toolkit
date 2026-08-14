@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type UIEvent as ReactUIEvent } from 'react';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
+import IntakeLinks from './IntakeLinks';
 
 interface Item {
   id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel' | 'blockhidden';
@@ -191,7 +192,7 @@ export default function OnboardingClient() {
   function enterDraft() { setSnapshot(items.map(i => ({ ...i }))); setDraftMode(true); setEditing(null); }
   function exitDraft() { if (snapshot) setItems(snapshot); setSnapshot(null); setDraftMode(false); setEditing(null); showToast('Reverted to the saved template'); }
   const [hire, setHire] = useState('');
-  const [view, setView] = useState<'dashboard' | 'guides'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'guides' | 'intake'>('dashboard');
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
@@ -1336,13 +1337,13 @@ export default function OnboardingClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Onboarding</h1>
-          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : 'Edit, add, or remove anything, then send it'}</p>
+          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : 'Edit, add, or remove anything, then send it'}</p>
         </div>
         <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 ml-4">
-          {(['dashboard', 'guides'] as const).map(v => (
+          {(['dashboard', 'guides', 'intake'] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${view === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>
-              {v === 'dashboard' ? 'Dashboard' : 'Guide Templates'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'guides' ? 'Guide Templates' : 'Intake Links'}
             </button>
           ))}
         </div>
@@ -1527,6 +1528,7 @@ export default function OnboardingClient() {
         </div>
       )}
 
+      {view === 'intake' && <IntakeLinks />}
       {view === 'dashboard' && Dashboard()}
 
       {view === 'guides' && !showNewHire && isComposed && composedDef && (
