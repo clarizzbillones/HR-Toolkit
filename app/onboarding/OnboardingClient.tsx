@@ -119,6 +119,25 @@ const WORKFLOW: { n: number; title: string; sub: string; owner: string; conditio
   { n: 13, title: '1st weekly check-in', sub: 'Catie, HR, and Caitlin', owner: 'Catie · HR · Caitlin' },
   { n: 14, title: 'Succeeding check-ins', sub: 'Scheduled by Caitlin', owner: 'Caitlin' },
 ];
+// Bridge between the coarse Hiring-Journey stage and the 14-step workflow, so the
+// Dashboard stage pills and the Workflow chart stay in sync.
+// Milestone steps to mark done when a stage is selected (additive — never wipes
+// detailed onboarding progress). Step 3 (partner calls) is optional, so excluded.
+const WF_MILESTONE: Record<string, number[]> = {
+  undecided: [1],
+  offer_sent: [1, 2, 4],
+  offer_viewed: [1, 2, 4],
+  offer_accepted: [1, 2, 4, 5],
+  onboarding: [1, 2, 4, 5],
+};
+// The hiring-journey stage implied by the furthest completed workflow step.
+function stageFromMaxStep(maxN: number): string {
+  if (maxN >= 6) return 'onboarding';
+  if (maxN >= 5) return 'offer_accepted';
+  if (maxN >= 4) return 'offer_sent';
+  if (maxN >= 1) return 'undecided';
+  return '';
+}
 
 // Category tags for the person. Re-hires / transfers often skip the standard
 // guide and are tracked with their own plan/to-do list instead.
@@ -667,7 +686,18 @@ export default function OnboardingClient() {
     if (key === 'complete') { completeOnboardee(person); return; }
     // Click the current stage again to clear it back to none / not started.
     const next = stageOf(person) === key ? '' : key;
-    await patchOnboardee(person.id, { stage: next, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}) });
+    // Keep the Workflow chart in sync: mark this stage's milestone steps done in
+    // the hire's checklist (additive) so both views move together.
+    const clTitles = new Set(tasksFor().map((t: any) => String(t.title ?? '').trim()));
+    const prog = parseProg(person.progress);
+    const milestones = WF_MILESTONE[next] ?? [];
+    const newProg: Record<string, any> = { ...prog }; let progChanged = false;
+    for (const s of WORKFLOW) { if (clTitles.has(s.title) && milestones.includes(s.n) && !newProg[s.title]) { newProg[s.title] = true; progChanged = true; } }
+    const body: Record<string, any> = { id: person.id, stage: next };
+    if (person.status === 'Complete') body.status = 'In Progress';
+    if (progChanged) body.progress = newProg;
+    setPeople(prev => prev.map(p => p.id === person.id ? { ...p, stage: next, ...(person.status === 'Complete' ? { status: 'In Progress' } : {}), ...(progChanged ? { progress: JSON.stringify(newProg) } : {}) } : p));
+    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }
   const [newTodo, setNewTodo] = useState('');
   function saveTodos(person: any, todos: Todo[]) { patchOnboardee(person.id, { todos }); }
@@ -687,8 +717,15 @@ export default function OnboardingClient() {
   }
   async function toggleTask(person: any, title: string, val: boolean) {
     const prog = { ...parseProg(person.progress), [title]: val };
-    setPeople(prev => prev.map(p => p.id === person.id ? { ...p, progress: JSON.stringify(prog) } : p));
-    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, progress: prog }) });
+    const body: Record<string, any> = { id: person.id, progress: prog };
+    // If this is a workflow step, keep the Hiring Journey stage in sync so the
+    // Dashboard stepper moves with it (never auto-completes — that's explicit).
+    if (WORKFLOW.some(s => s.title === title) && person.status !== 'Complete') {
+      const maxN = WORKFLOW.reduce((m, s) => (prog[s.title] ? Math.max(m, s.n) : m), 0);
+      body.stage = stageFromMaxStep(maxN);
+    }
+    setPeople(prev => prev.map(p => p.id === person.id ? { ...p, progress: JSON.stringify(prog), ...(body.stage !== undefined ? { stage: body.stage } : {}) } : p));
+    await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }
   async function completeOnboardee(person: any) {
     if (!confirm(`Mark ${person.name} as hired? Their info is added to the Staffing directory and they move to the Hired tab.`)) return;
