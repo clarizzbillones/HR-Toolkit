@@ -1597,6 +1597,8 @@ export default function OnboardingClient() {
                 {people.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
               </select>
               {sel && <span className="text-xs text-text-muted">Currently at: <b className="text-text-secondary">{stageLabel}</b></span>}
+              {sel && hasChecklist && currentStep && <button onClick={() => toggleTask(sel, currentStep.title, true)} className="bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-[#276a4d]">✓ Complete “{currentStep.title}” →</button>}
+              {sel && hasChecklist && !currentStep && sel.status !== 'Complete' && <button onClick={() => completeOnboardee(sel)} className="bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">✓ Mark onboarding complete</button>}
               {sel && (
                 <span className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#2f7d5b]" />Done</span>
@@ -1640,8 +1642,10 @@ export default function OnboardingClient() {
                   else if (st === 'current') { fill = '#fff7e6'; stroke = '#c9a24a'; circle = '#c9a24a'; }
                   else { fill = '#f6f4f0'; stroke = '#e6ddcd'; circle = '#c3bbab'; tFill = '#9a9384'; sFill = '#b3ab9c'; }
                   const hasNum = !!item.n, tx = x + (hasNum ? 44 : 16), sw = st === 'current' ? 2 : 1;
+                  const clickable = !!sel && hasChecklist && hasNum && clTitles.has(item.title);
                   return (
-                    <g key={`${x}-${y}-${item.title}`}>
+                    <g key={`${x}-${y}-${item.title}`} onClick={clickable ? () => toggleTask(sel, item.title, !prog[item.title]) : undefined} style={clickable ? { cursor: 'pointer' } : undefined}>
+                      {clickable && <title>{prog[item.title] ? 'Click to mark not done' : 'Click to mark done'}</title>}
                       <rect x={x} y={y} width={w} height={boxH} rx={10} fill={fill} stroke={stroke} strokeWidth={sw} strokeDasharray={item.conditional ? '5 4' : undefined} />
                       {hasNum && <><circle cx={x + 24} cy={y + boxH / 2} r={12} fill={circle} />{st === 'done' ? <text x={x + 24} y={y + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">✓</text> : <text x={x + 24} y={y + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{item.n}</text>}</>}
                       <text x={tx} y={y + 22} fontSize="12.5" fontWeight="700" fill={tFill}>{item.title}</text>
@@ -1663,7 +1667,7 @@ export default function OnboardingClient() {
                 );
               })()}
             </div>
-            <p className="text-[11px] text-text-muted mt-3 italic">{sel ? (hasChecklist ? 'Highlighting reflects the steps checked in this hire’s onboarding checklist. ' : 'Highlighting reflects the hire’s onboarding stage — click “Add steps to checklist” for exact step-by-step tracking. ') : ''}Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
+            <p className="text-[11px] text-text-muted mt-3 italic">{sel ? (hasChecklist ? 'Click any step to mark it done for this hire, or use “Complete … →” to advance to the next one. ' : 'Highlighting reflects the hire’s onboarding stage — click “Add steps to checklist” to enable click-to-advance step tracking. ') : ''}Stage 3 (Partner 1:1 calls) is conditional — it only happens if the hire is asked to meet the partners, and the flow continues either way.</p>
           </div>
         </div>
         );
