@@ -20,6 +20,15 @@ async function getStats() {
     ORDER BY cutoff ASC, run_date ASC LIMIT 1`;
   const [{ n: empCount }] = await sql`SELECT COUNT(*)::int as n FROM employees`;
   const [{ n: reviewsDone }] = await sql`SELECT COUNT(*)::int as n FROM employees WHERE review_6mo_status = 'Complete'`;
+  // Active headcount split by worker type, from the Staffing directory (the only
+  // source that tracks Employee vs Contractor). Falls back to the employees count.
+  let headEmployees = empCount ?? 0, headContractors = 0;
+  try {
+    const rows = await sql`SELECT COALESCE(NULLIF(TRIM(worker_type), ''), 'Employee') AS wt, COUNT(*)::int AS n FROM staff_directory GROUP BY 1` as any[];
+    let emp = 0, con = 0;
+    for (const r of rows) { if (/contract/i.test(String(r.wt))) con += r.n; else emp += r.n; }
+    if (emp + con > 0) { headEmployees = emp; headContractors = con; }
+  } catch { /* staffing table not created yet */ }
   let onboarding = 0;
   try { const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM onboardees WHERE status <> 'Complete'`; onboarding = n ?? 0; } catch { /* table not created yet */ }
 
@@ -79,6 +88,9 @@ async function getStats() {
     nextPayrollDate: nextPayroll?.run_date ?? null,
     payrollSchedule,
     empCount: empCount ?? 0,
+    headEmployees,
+    headContractors,
+    headTotal: headEmployees + headContractors,
     reviewsDone: reviewsDone ?? 0,
     onboarding,
     birthdays,

@@ -14,6 +14,9 @@ interface Props {
   nextPayrollDate: string | null;
   payrollSchedule: string | null;
   empCount: number;
+  headEmployees: number;
+  headContractors: number;
+  headTotal: number;
   reviewsDone: number;
   onboarding: number;
   birthdays: { name: string; dob: string }[];
@@ -126,7 +129,7 @@ export default function DashboardClient(props: Props) {
       <header className="flex items-center px-8 py-5 bg-white border-b border-border flex-shrink-0">
         <div>
           <h1 className="font-spectral text-[24px] font-semibold text-text-primary">{greeting(userName)}</h1>
-          <p className="text-sm text-text-muted mt-0.5">{today} · {props.empCount} employees</p>
+          <p className="text-sm text-text-muted mt-0.5">{today} · {props.headEmployees} employee{props.headEmployees === 1 ? '' : 's'} · {props.headContractors} contractor{props.headContractors === 1 ? '' : 's'} · <span className="font-semibold text-text-secondary">{props.headTotal} total headcount</span></p>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-1.5">
