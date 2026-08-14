@@ -68,9 +68,28 @@ const UPLOADS: Record<IntakeRole, string[]> = {
   contractor: ['Signed W-9', 'Certificate of Insurance (COI)', 'Signed contract / SOW'],
 };
 
+// Fields that must always be included (needed to create the records).
+export const REQUIRED_FIELDS = ['full_legal_name'];
+
 export function isIntakeRole(v: any): v is IntakeRole { return INTAKE_ROLES.some(r => r.key === v); }
 export function intakeFields(role: IntakeRole): IntakeField[] { return [...COMMON, ...(BY_ROLE[role] ?? []), ...TAIL]; }
 export function intakeUploads(role: IntakeRole): string[] { return [...COMMON_UPLOADS, ...(UPLOADS[role] ?? [])]; }
+
+// Narrow a role's full form to only the fields / uploads the sender chose.
+// `include == null` (no selection stored) means "everything" — older links and
+// the default. full_legal_name is always kept.
+export function filterFields(role: IntakeRole, include?: string[] | null): IntakeField[] {
+  const all = intakeFields(role);
+  if (!include) return all;
+  const set = new Set([...include, ...REQUIRED_FIELDS]);
+  return all.filter(f => set.has(f.id));
+}
+export function filterUploads(role: IntakeRole, include?: string[] | null): string[] {
+  const all = intakeUploads(role);
+  if (!include) return all;
+  const set = new Set(include);
+  return all.filter(u => set.has(u));
+}
 export function roleLabel(role: string): string { return INTAKE_ROLES.find(r => r.key === role)?.label ?? role; }
 export function roleMeta(role: string) { return INTAKE_ROLES.find(r => r.key === role) ?? INTAKE_ROLES[0]; }
 

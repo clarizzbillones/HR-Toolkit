@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
-import { intakeFields, intakeUploads, isIntakeRole, roleLabel, roleMeta, fieldLabel, type IntakeRole } from '@/lib/onboardingIntake';
+import { intakeFields, intakeUploads, filterFields, filterUploads, isIntakeRole, roleLabel, roleMeta, REQUIRED_FIELDS, type IntakeRole } from '@/lib/onboardingIntake';
 
 // Per-hire intake: HR creates a tokenized link (create/list/delete require a
 // session); the fill-in page + submit are public, guarded by the token.
@@ -18,6 +18,8 @@ async function ensure() {
     onboardee_id TEXT, profile_id TEXT, created_by TEXT,
     submitted_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE onboarding_intakes ADD COLUMN IF NOT EXISTS include_fields TEXT`;
+  await sql`ALTER TABLE onboarding_intakes ADD COLUMN IF NOT EXISTS include_uploads TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS onboarding_intake_files (
     id TEXT PRIMARY KEY, intake_id TEXT NOT NULL, name TEXT, kind TEXT,
     data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -44,10 +46,12 @@ async function ensureOnboardees() {
 }
 
 const parseAns = (v: any): Record<string, any> => { try { const a = typeof v === 'string' ? JSON.parse(v) : v; return a && typeof a === 'object' ? a : {}; } catch { return {}; } };
+const parseArr = (v: any): string[] | null => { try { const a = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(a) ? a.map(String) : null; } catch { return null; } };
 const origin = (req: Request) => process.env.NEXTAUTH_URL || `${req.headers.get('x-forwarded-proto') ?? 'https'}://${req.headers.get('host')}`;
 const publicRow = (r: any) => ({
   role: r.role, roleLabel: roleLabel(r.role), name: r.name ?? '', status: r.status,
-  fields: intakeFields(r.role as IntakeRole), uploads: intakeUploads(r.role as IntakeRole),
+  fields: filterFields(r.role as IntakeRole, parseArr(r.include_fields)),
+  uploads: filterUploads(r.role as IntakeRole, parseArr(r.include_uploads)),
 });
 
 export async function GET(req: Request) {
@@ -181,9 +185,15 @@ export async function POST(req: Request) {
           VALUES (${onboardeeId}, ${name}, ${email}, ${meta.titleHint}, ${meta.workerType}, 'In Progress', 'onboarding', 'New hire', ${'Awaiting onboarding intake form'})`;
       }
     } catch { /* best-effort */ }
+    // Optional per-link selection of which questions / documents to gather.
+    const allIds = intakeFields(b.role).map(f => f.id);
+    const inclF = Array.isArray(b.fields) ? Array.from(new Set([...b.fields.map(String).filter((x: string) => allIds.includes(x)), ...REQUIRED_FIELDS])) : null;
+    const allUploads = intakeUploads(b.role);
+    const inclU = Array.isArray(b.uploads) ? b.uploads.map(String).filter((x: string) => allUploads.includes(x)) : null;
+
     const id = cuid(); const token = cuid() + cuid();
-    await sql`INSERT INTO onboarding_intakes (id, token, role, name, email, status, onboardee_id, created_by)
-      VALUES (${id}, ${token}, ${b.role}, ${name}, ${email}, 'Sent', ${onboardeeId}, ${(session.user as any).email ?? null})`;
+    await sql`INSERT INTO onboarding_intakes (id, token, role, name, email, status, onboardee_id, created_by, include_fields, include_uploads)
+      VALUES (${id}, ${token}, ${b.role}, ${name}, ${email}, 'Sent', ${onboardeeId}, ${(session.user as any).email ?? null}, ${inclF ? JSON.stringify(inclF) : null}, ${inclU ? JSON.stringify(inclU) : null})`;
     const url = `${origin(req)}/onboarding/intake/${token}`;
     const [row] = await sql`SELECT id, token, role, name, email, status, onboardee_id, created_at FROM onboarding_intakes WHERE id = ${id}` as any[];
     return NextResponse.json({ row, url }, { status: 201 });

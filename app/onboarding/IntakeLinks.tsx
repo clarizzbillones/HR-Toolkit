@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
-import { INTAKE_ROLES, roleLabel } from '@/lib/onboardingIntake';
+import { INTAKE_ROLES, roleLabel, intakeFields, intakeUploads, REQUIRED_FIELDS, type IntakeRole } from '@/lib/onboardingIntake';
 
 interface Intake {
   id: string; token: string; role: string; name: string | null; email: string | null;
@@ -17,6 +17,19 @@ export default function IntakeLinks() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ role: 'attorney', name: '', email: '' });
   const [creating, setCreating] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [includeFields, setIncludeFields] = useState<string[]>(() => intakeFields('attorney').map(f => f.id));
+  const [includeUploads, setIncludeUploads] = useState<string[]>(() => [...intakeUploads('attorney')]);
+
+  const roleFields = intakeFields(form.role as IntakeRole);
+  const roleUploads = intakeUploads(form.role as IntakeRole);
+  function changeRole(role: string) {
+    setForm({ ...form, role });
+    setIncludeFields(intakeFields(role as IntakeRole).map(f => f.id));
+    setIncludeUploads([...intakeUploads(role as IntakeRole)]);
+  }
+  const toggleF = (id: string) => { if (REQUIRED_FIELDS.includes(id)) return; setIncludeFields(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleU = (l: string) => setIncludeUploads(p => p.includes(l) ? p.filter(x => x !== l) : [...p, l]);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const linkFor = (t: string) => `${origin}/onboarding/intake/${t}`;
@@ -33,7 +46,7 @@ export default function IntakeLinks() {
     if (!form.name.trim()) { showToast('Enter the hire’s name first'); return; }
     setCreating(true);
     try {
-      const res = await fetch('/api/onboarding/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...form }) });
+      const res = await fetch('/api/onboarding/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...form, fields: includeFields, uploads: includeUploads }) });
       const d = await res.json();
       if (!res.ok) { showToast(d.error || 'Could not create link'); return; }
       setRows(prev => [d.row, ...prev]);
@@ -62,21 +75,53 @@ export default function IntakeLinks() {
           {readOnly ? (
             <div className="text-sm text-text-muted">You have view-only access here.</div>
           ) : (
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Role / form</label>
-                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className={input + ' bg-white'}>
-                  {INTAKE_ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-                </select>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Role / form</label>
+                  <select value={form.role} onChange={e => changeRole(e.target.value)} className={input + ' bg-white'}>
+                    {INTAKE_ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Name <span className="text-litred-alt">*</span></label>
+                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Future hire’s name" className={input + ' w-52'} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Email <span className="font-normal normal-case text-text-faint">(optional)</span></label>
+                  <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" className={input + ' w-56'} />
+                </div>
+                <button type="button" onClick={() => setShowCustomize(s => !s)} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">{showCustomize ? '▾' : '▸'} Customize questions ({includeFields.length + includeUploads.length})</button>
               </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Name <span className="text-litred-alt">*</span></label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && create()} placeholder="Future hire’s name" className={input + ' w-52'} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Email <span className="font-normal normal-case text-text-faint">(optional)</span></label>
-                <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" className={input + ' w-56'} />
-              </div>
+
+              {showCustomize && (
+                <div className="border border-border-light rounded-ctrl p-4 bg-canvas grid sm:grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2">Questions to ask <span className="text-text-faint">({includeFields.length}/{roleFields.length})</span></div>
+                    <div className="space-y-1.5 max-h-72 overflow-auto pr-1">
+                      {roleFields.map(f => { const locked = REQUIRED_FIELDS.includes(f.id); return (
+                        <label key={f.id} className={`flex items-center gap-2 text-sm ${locked ? 'text-text-muted' : 'cursor-pointer'}`}>
+                          <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d]" checked={includeFields.includes(f.id)} disabled={locked} onChange={() => toggleF(f.id)} />
+                          <span>{f.label}{locked && <span className="text-text-faint"> · always included</span>}</span>
+                        </label>
+                      ); })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2">Documents to request <span className="text-text-faint">({includeUploads.length}/{roleUploads.length})</span></div>
+                    <div className="space-y-1.5">
+                      {roleUploads.map(u => (
+                        <label key={u} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d]" checked={includeUploads.includes(u)} onChange={() => toggleU(u)} />
+                          <span>{u}</span>
+                        </label>
+                      ))}
+                      {roleUploads.length === 0 && <div className="text-sm text-text-faint">No documents for this role.</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button onClick={create} disabled={creating} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{creating ? 'Creating…' : '＋ Create & copy link'}</button>
             </div>
           )}
