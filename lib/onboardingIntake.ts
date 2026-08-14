@@ -20,7 +20,6 @@ export interface IntakeField {
 // Fields everyone fills in (all three forms).
 const COMMON: IntakeField[] = [
   { id: 'full_legal_name', label: 'Full legal name', type: 'text', required: true },
-  { id: 'preferred_name', label: 'Preferred name', type: 'text' },
   { id: 'personal_email', label: 'Personal email', type: 'email', required: true },
   { id: 'phone', label: 'Mobile phone', type: 'tel', required: true },
   { id: 'home_address', label: 'Home mailing address', type: 'longtext' },
@@ -63,8 +62,8 @@ const TAIL: IntakeField[] = [
 // Documents everyone should upload, plus role-specific ones.
 const COMMON_UPLOADS = ['Driver’s license', 'Passport'];
 const UPLOADS: Record<IntakeRole, string[]> = {
-  attorney: ['Bar card / license', 'Court admission certificates (if not listed above)', 'Signed offer letter', 'Direct deposit form or voided check'],
-  support: ['Signed offer letter', 'Direct deposit form or voided check'],
+  attorney: ['Bar card / license', 'Court admission certificates (if not listed above)'],
+  support: [],
   contractor: ['Signed W-9', 'Certificate of Insurance (COI)', 'Signed contract / SOW'],
 };
 
