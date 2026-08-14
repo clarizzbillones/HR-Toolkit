@@ -133,7 +133,10 @@ export function computeReview(hireDate: string | null, lastReview: string | null
     cycle,
     tenure: cycle != null ? (cycle * 0.5).toFixed(1) + ' yr' : '—',
     days,
-    status: statusFor(days),
+    // A logged review reads as "Complete" until the next one enters the
+    // actionable window (~6 weeks out); then it moves through Send forms →
+    // Forms due → Review week → Overdue as the date approaches.
+    status: (lastReview && statusFor(days) === 'Scheduled') ? 'Complete' : statusFor(days),
   };
 }
 
