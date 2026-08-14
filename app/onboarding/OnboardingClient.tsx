@@ -216,9 +216,9 @@ export default function OnboardingClient() {
   const [addingWf, setAddingWf] = useState(false);
   const [wfHire, setWfHire] = useState(''); // which hire's progress to light up on the workflow
   useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && ['dashboard', 'workflow', 'guides', 'intake'].includes(t)) setView(t as any); } catch { /* ignore */ } }, []);
+  const [people, setPeople] = useState<any[]>([]);
   // Once a hire is marked complete (hired), drop them from the workflow picker.
   useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
-  const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
   // W-8BEN (international contractor tax form) status for the selected person.
