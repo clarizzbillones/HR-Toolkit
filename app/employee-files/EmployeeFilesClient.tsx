@@ -135,6 +135,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const d = await res.json();
     showToast(res.ok && d.emailed ? `Tools survey emailed to ${selected.email}` : (d.error || 'Could not email the survey'));
   }
+  async function testToolsSurvey() {
+    const email = window.prompt('Send a test Tools & Access survey to which email?');
+    if (!email || !email.trim()) return;
+    const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', email: email.trim() }) });
+    const d = await res.json();
+    showToast(res.ok && d.emailed ? `Test survey emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
+  }
   const [bulkBusy, setBulkBusy] = useState(false);
   async function bulkToolsSurvey() {
     if (!confirm('Email the Tools & Access survey to every active employee who has an email on file?')) return;
@@ -495,6 +502,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
+          {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
           {!readOnly && <button onClick={bulkToolsSurvey} disabled={bulkBusy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Email the Tools & Access survey to every active employee with an email on file">{bulkBusy ? 'Sending…' : '✉ Tools survey to all'}</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>

@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { FIRM_SYSTEMS, SYSTEM_HINTS } from '@/lib/firmSystems';
 import { sendMailAsApp } from '@/lib/graph';
 
@@ -80,9 +79,11 @@ export async function POST(req: Request) {
 
     try {
       await ensureAccounts();
-      const profile = row.profile_id
-        ? (await sql`SELECT * FROM employee_profiles WHERE id = ${row.profile_id}` as any[])[0]
-        : (name ? await findOrCreateProfileByName(name) : null);
+      // Surveys are for existing employees — match a profile, but never create a
+      // new one (so test submissions don't pollute Employee Files).
+      let profile: any = null;
+      if (row.profile_id) [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${row.profile_id}` as any[];
+      else if (name) [profile] = await sql`SELECT * FROM employee_profiles WHERE lower(name) = ${name.toLowerCase()} LIMIT 1` as any[];
       if (profile) {
         const email = String(profile.email ?? '').trim();
         // Sync each tool into Accounts & Access.
@@ -137,6 +138,18 @@ export async function POST(req: Request) {
     }
     const [row] = await sql`SELECT id, token, name, email, status, created_at FROM tools_surveys WHERE id = ${id}` as any[];
     return NextResponse.json({ row, url, emailed }, { status: 201 });
+  }
+
+  // Send a test survey email to a chosen address (no employee record touched).
+  if (b.action === 'send-test') {
+    const email = String(b.email ?? '').trim();
+    if (!email) return NextResponse.json({ error: 'Enter an email to send the test to' }, { status: 400 });
+    const id = cuid(); const token = cuid() + cuid();
+    await sql`INSERT INTO tools_surveys (id, token, name, email, profile_id, status, created_by) VALUES (${id}, ${token}, ${'Tools survey (test)'}, ${email}, ${null}, 'Sent', ${(session.user as any).email ?? null})`;
+    const url = `${origin(req)}/tools-survey/${token}`;
+    const r = await sendMailAsApp(SENDER, email, 'Litson PLLC — Tools & Access survey (test)', surveyEmail('there', url));
+    if (!r.ok) return NextResponse.json({ error: r.error || 'Could not send the test email', url }, { status: 502 });
+    return NextResponse.json({ ok: true, emailed: true, url });
   }
 
   // Email the survey to every active employee who has an email on file.
