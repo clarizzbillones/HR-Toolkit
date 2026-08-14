@@ -216,6 +216,8 @@ export default function OnboardingClient() {
   const [addingWf, setAddingWf] = useState(false);
   const [wfHire, setWfHire] = useState(''); // which hire's progress to light up on the workflow
   useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && ['dashboard', 'workflow', 'guides', 'intake'].includes(t)) setView(t as any); } catch { /* ignore */ } }, []);
+  // Once a hire is marked complete (hired), drop them from the workflow picker.
+  useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
   const [people, setPeople] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
@@ -1594,7 +1596,7 @@ export default function OnboardingClient() {
               <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Show progress for</span>
               <select value={wfHire} onChange={e => setWfHire(e.target.value)} className="border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
                 <option value="">— Standard workflow (no hire) —</option>
-                {people.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                {people.filter(p => p.status !== 'Complete').map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
               </select>
               {sel && <span className="text-xs text-text-muted">Currently at: <b className="text-text-secondary">{stageLabel}</b></span>}
               {sel && hasChecklist && currentStep && <button onClick={() => toggleTask(sel, currentStep.title, true)} className="bg-[#2f7d5b] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:bg-[#276a4d]">✓ Complete “{currentStep.title}” →</button>}
