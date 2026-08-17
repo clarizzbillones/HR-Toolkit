@@ -706,7 +706,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 const pend = tracked.filter(p => !p.completed).length;
                 return (
                   <div className="mt-5">
-                    <div className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Self &amp; peer reviews · {tracked.length - pend}/{tracked.length} complete</div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Self &amp; peer reviews · {tracked.length - pend}/{tracked.length} complete</span>
+                      {pend > 0 && <button onClick={() => sendReminderNow(invite.employee)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">🔔 Send reminder to {pend} pending</button>}
+                    </div>
                     <div className="space-y-1.5">
                       {tracked.map(p => (
                         <div key={p.id} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
