@@ -3,7 +3,10 @@ import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type Keyb
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 import IntakeLinks from './IntakeLinks';
+import OnboardingDoc from './OnboardingDoc';
 import { FIRM_SYSTEMS } from '@/lib/firmSystems';
+import { parseDoc as parseOnbDoc, type OnboardingDoc as OnbDoc } from '@/lib/onboardingDoc';
+import { useAccess } from '@/components/AccessProvider';
 
 interface Item {
   id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel' | 'blockhidden';
@@ -248,6 +251,11 @@ export default function OnboardingClient() {
   useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
+  // Catie's onboarding document — collapsible per hire. Restricted viewers are
+  // read-only unless granted edit rights on Onboarding.
+  const [showDoc, setShowDoc] = useState(true);
+  const { me } = useAccess();
+  const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding');
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
@@ -689,6 +697,16 @@ export default function OnboardingClient() {
   async function patchOnboardee(id: string, fields: Record<string, any>) {
     setPeople(prev => prev.map(p => p.id === id ? { ...p, ...fields } : p));
     await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...fields }) });
+  }
+  // Save Catie's onboarding document. The server files the signed PDF to the
+  // Employee File on full sign-off, then returns the refreshed record.
+  async function patchDoc(id: string, doc: OnbDoc) {
+    setPeople(prev => prev.map(p => p.id === id ? { ...p, doc } : p));
+    try {
+      const res = await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, doc }) });
+      const d = await res.json();
+      if (d.row) setPeople(prev => prev.map(p => p.id === id ? d.row : p));
+    } catch { showToast('Save failed'); }
   }
   async function setStage(person: any, key: string) {
     if (key === 'complete') { completeOnboardee(person); return; }
@@ -1885,6 +1903,18 @@ export default function OnboardingClient() {
               const { done, total, pct } = progressOf(person);
               const allDone = total > 0 && done === total;
               return (
+                <>
+                {/* Catie's onboarding document — HR → Ops → IT, assign + deadline, sign-off */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2 gap-3">
+                    <div>
+                      <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
+                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' (View only — ask HR for edit access.)' : ''}</p>
+                    </div>
+                    <button onClick={() => setShowDoc(v => !v)} className="shrink-0 text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">{showDoc ? 'Hide' : 'Show'}</button>
+                  </div>
+                  {showDoc && <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />}
+                </div>
                 <div className="bg-white border border-border rounded-card overflow-hidden">
                   <div className="px-5 py-4 border-b border-border flex items-start gap-3">
                     <div className="flex-1">
@@ -2078,6 +2108,7 @@ export default function OnboardingClient() {
                     )}
                   </div>
                 </div>
+                </>
               );
             })()}
           </div>
