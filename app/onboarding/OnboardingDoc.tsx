@@ -18,9 +18,13 @@ function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</
 // Catie's streamlined onboarding document: HR → Ops → IT, each task assigned to
 // a person with a deadline, who then initials + dates it, then Catie signs off
 // each section. Mirrors the offboarding document.
-export default function OnboardingDoc({ rec, readOnly, onSave }: {
-  rec: RecLite; readOnly?: boolean; onSave: (doc: Doc) => void;
+export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }: {
+  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean; onSave: (doc: Doc) => void;
 }) {
+  // When lockAssignment is on (granted editors who aren't full-access admins),
+  // the "Assigned to" and "Deadline" are set by an admin up front and can't be
+  // changed — they can only mark their part done (initials / date / notes).
+  const assignRO = readOnly || lockAssignment;
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
@@ -49,13 +53,13 @@ export default function OnboardingDoc({ rec, readOnly, onSave }: {
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Initials</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#2f7d5b]">Date done</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Notes</span>
-        <select disabled={readOnly} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
-          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+        <select disabled={assignRO} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
           <option value="">Assign to…</option>
           {ONBOARDING_ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <input disabled={readOnly} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
-          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] [color-scheme:light]" />
+        <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />
         <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="—"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
         <input disabled={readOnly} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)} title="Date completed"
@@ -148,6 +152,11 @@ export default function OnboardingDoc({ rec, readOnly, onSave }: {
             ? '✓ Signed off by Catie — complete. The signed document has been filed to this hire’s Employee File (HR Hub) automatically.'
             : 'Not complete until Catie reviews and signs off all three sections below. On sign-off, the signed PDF is filed to the Employee File automatically.'}
         </div>
+        {lockAssignment && !readOnly && (
+          <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
+            HR assigns each task and its deadline. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. The Assigned&nbsp;to and Deadline are set by HR and locked.
+          </div>
+        )}
       </div>
 
       {/* Section 1 — HR */}
@@ -183,17 +192,17 @@ export default function OnboardingDoc({ rec, readOnly, onSave }: {
               <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
                 <div className="flex items-start gap-2">
                   <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-                  <input disabled={readOnly} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
-                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none" />
+                  <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
+                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
                   {!complete && a.cell.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(a.cell.deadline)}</span>}
-                  {!readOnly && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
+                  {!assignRO && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
                 </div>
                 {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
                 <CellFields get={() => doc.accounts[i].cell} set={(p, commit) => { apply(d => { d.accounts[i].cell = { ...d.accounts[i].cell, ...p }; }); if (commit) persist(); }} />
               </div>
             );
           })}
-          {!readOnly && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
+          {!assignRO && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
         </div>
       </Section>
 

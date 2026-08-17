@@ -265,9 +265,9 @@ export default function OnboardingClient() {
   const canSeeModule = !me?.restricted || (me?.sections ?? []).includes('/onboarding');
   const canSeeDoc = !me?.restricted || (me?.sections ?? []).includes('/onboarding-doc');
   const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding-doc');
-  // Reset the per-hire tab when switching hires. The effective tab (below) falls
-  // back to whatever the viewer is allowed to see.
-  useEffect(() => { setDetailTab('main'); }, [selected]);
+  // Clicking a hire opens their Onboarding document directly. The effective tab
+  // (below) falls back to Profile & checklist for anyone without doc access.
+  useEffect(() => { setDetailTab(canSeeDoc ? 'doc' : 'main'); }, [selected, canSeeDoc]);
   // Document-only viewers (no module grant) are pinned to the Dashboard, where
   // they pick a hire and open the document.
   useEffect(() => { if (!canSeeModule && view !== 'dashboard') setView('dashboard'); }, [canSeeModule, view]);
@@ -1945,7 +1945,7 @@ export default function OnboardingClient() {
                     <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
                     <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
                   </div>
-                  <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />
+                  <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} lockAssignment={!!me?.restricted} onSave={d => patchDoc(person.id, d)} />
                 </div>
                 ) : (
                 <div className="bg-white border border-border rounded-card overflow-hidden">
