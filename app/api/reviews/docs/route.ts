@@ -63,11 +63,19 @@ export async function POST(req: Request) {
   await sql`INSERT INTO review_docs (id, employee_id, which, name, data, doc_date)
     VALUES (${cuid()}, ${id}, ${which}, ${file.name}, ${dataUrl}, ${docDate})
     ON CONFLICT (employee_id, which) DO UPDATE SET name = ${file.name}, data = ${dataUrl}, doc_date = ${docDate}, created_at = now()`;
-  // Uploading a dated document logs the review: advance the last review date
-  // (forward only) and clear overrides so the next review auto-plans +6 months
-  // and the status reads Complete.
+  // A past/today-dated document logs a completed review: advance the last review
+  // date (forward only), clearing overrides so the next review auto-plans +6mo.
+  // A FUTURE-dated document instead schedules the next review on that date —
+  // the review isn't done, so it reads "Not started" until then.
   if (docDate) {
-    try { await sql`UPDATE employees SET last_review_date = ${docDate}, next_review_override = NULL, review_status_override = NULL WHERE id = ${id} AND (last_review_date IS NULL OR last_review_date <= ${docDate})`; } catch { /* older schema */ }
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      if (docDate <= today) {
+        await sql`UPDATE employees SET last_review_date = ${docDate}, next_review_override = NULL, review_status_override = NULL WHERE id = ${id} AND (last_review_date IS NULL OR last_review_date <= ${docDate})`;
+      } else {
+        await sql`UPDATE employees SET next_review_override = ${docDate}, review_status_override = NULL WHERE id = ${id}`;
+      }
+    } catch { /* older schema */ }
   }
   // Auto-attach the uploaded review document to the employee's Employee File.
   try { await syncReviewsToEmployeeFile(id); } catch { /* best-effort */ }

@@ -896,10 +896,12 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
       const d = await res.json();
       if (!res.ok) { alert(d.error ?? 'Upload failed'); return; }
       setDocs(prev => [{ which: d.which, name: d.name, doc_date: d.doc_date ?? docDate }, ...prev]);
-      // Uploading a review document logs the review on that date: set the last
-      // review date and clear overrides so the next review auto-plans +6 months
-      // and the status reads Complete.
-      if (docDate && (!lastRev || docDate > lastRev)) { setLastRev(docDate); setNextRev(''); setStatusOv(''); }
+      // Past/today date → log a completed review (advance last review, auto +6mo).
+      // Future date → schedule the next review on that date (reads Not started).
+      if (docDate) {
+        if (docDate <= today) { if (!lastRev || docDate > lastRev) setLastRev(docDate); setNextRev(''); setStatusOv(''); }
+        else { setNextRev(docDate); setStatusOv(''); }
+      }
     } catch { alert('Upload failed'); }
     setUploading(false);
   }

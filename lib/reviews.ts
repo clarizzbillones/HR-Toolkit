@@ -133,11 +133,19 @@ export function computeReview(hireDate: string | null, lastReview: string | null
     cycle,
     tenure: cycle != null ? (cycle * 0.5).toFixed(1) + ' yr' : '—',
     days,
-    // A logged review reads as "Complete" until the next one enters the
-    // actionable window (~6 weeks out); then it moves through Send forms →
-    // Forms due → Review week → Overdue as the date approaches.
-    status: (lastReview && statusFor(days) === 'Scheduled') ? 'Complete' : statusFor(days),
+    status: statusForCycle(statusFor(days), lastReview, today),
   };
+}
+
+// When nothing is due yet (statusFor === 'Scheduled'), decide between:
+//  • 'Complete'   — a review was just logged (last review within the last 30
+//                   days, in the past) → shows as done for that cycle, then
+//  • 'Not started'— the upcoming review (a future/next date) hasn't begun.
+// Any actionable status (Send forms/Forms due/Review week/Overdue) passes through.
+function statusForCycle(base: ReviewStatus | null, lastReview: string | null, today: string): ReviewStatus | null {
+  if (base !== 'Scheduled') return base;
+  const since = lastReview ? daysBetween(lastReview, today) : null; // today − lastReview
+  return (since != null && since >= 0 && since <= 30) ? 'Complete' : 'Not started';
 }
 
 // review_history entry: one completed review.
