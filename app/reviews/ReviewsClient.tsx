@@ -390,9 +390,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >👁 Preview email</button>
-            <button onClick={openReminders}
-              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >🔔 Reminders</button>
             <button onClick={() => setShowInvite(true)}
               className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
             >✉ Send review invites</button>
@@ -792,6 +789,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           readOnly={readOnly}
           onClose={() => setDetail(null)}
           onDelete={() => deleteEmployee(detail)}
+          showToast={showToast}
           onSave={async (fields) => {
             const updated = await patchEmployee(detail.id, fields);
             if (updated) setDetail(updated);
@@ -828,7 +826,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 }
 
 // ---- Detail drawer component ----
-function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, onClose, onSave, onDelete }: {
+function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, onClose, onSave, onDelete, showToast }: {
   employee: Employee;
   resolvedHire: string;
   today: string;
@@ -837,6 +835,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
   onClose: () => void;
   onSave: (fields: Record<string, string | null>) => Promise<void>;
   onDelete: () => void;
+  showToast: (m: string) => void;
 }) {
   const [name, setName] = useState(employee.name);
   const [role, setRole] = useState(employee.role);
@@ -882,6 +881,42 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
     if (!confirm('Remove this document?')) return;
     setDocs(prev => prev.filter(x => x.which !== which));
     await fetch('/api/reviews/docs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: employee.id, which }) });
+  }
+
+  // Two views tied to this person:
+  //  • parts — self + peer assessments FOR this employee (they're the reviewee)
+  //  • owed  — reviews this person owes as a peer reviewer for someone else
+  // A name only leaves the pending list when marked complete, which also stops
+  // the reminder system from emailing them.
+  type Part = { id: string; employee: string; participant_name: string | null; participant_email: string; participant_type: string | null; completed: boolean };
+  const [parts, setParts] = useState<Part[]>([]);
+  const [owed, setOwed] = useState<Part[]>([]);
+  const [remBusy, setRemBusy] = useState(false);
+  async function loadParts() {
+    try {
+      const d = await (await fetch('/api/reviews/invites')).json();
+      const all: Part[] = d.rows ?? d.invites ?? [];
+      const key = employee.name.trim().toLowerCase();
+      setParts(all.filter(p => String(p.employee ?? '').trim().toLowerCase() === key));
+      setOwed(all.filter(p => String(p.participant_name ?? '').trim().toLowerCase() === key && String(p.employee ?? '').trim().toLowerCase() !== key));
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadParts(); }, [employee.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function markPart(p: Part, completed: boolean) {
+    setParts(prev => prev.map(x => x.id === p.id ? { ...x, completed } : x));
+    setOwed(prev => prev.map(x => x.id === p.id ? { ...x, completed } : x));
+    await fetch('/api/reviews/invites', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, completed }) });
+  }
+  async function sendReminder() {
+    setRemBusy(true);
+    try {
+      const res = await fetch('/api/reviews/invite-remind', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee: employee.name }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error ?? 'Could not send reminder'); return; }
+      showToast(d.sent ? `Reminder sent to ${d.sent} pending` : 'No pending participants to remind');
+      loadParts();
+    } catch { showToast('Could not send reminder'); }
+    finally { setRemBusy(false); }
   }
 
   async function save() {
@@ -985,6 +1020,47 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
               </div>
             )}
           </div>
+
+          {/* Self & peer assessments */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Self &amp; peer assessments</label>
+              {parts.length > 0 && (
+                <button onClick={sendReminder} disabled={remBusy || !parts.some(p => !p.completed)} className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{remBusy ? 'Sending…' : '🔔 Send reminder to pending'}</button>
+              )}
+            </div>
+            {parts.length === 0 ? (
+              <div className="border border-dashed border-border-light rounded-ctrl px-3 py-2 text-xs text-text-muted">No reviewers assigned yet. Use <b>✉ Send review invites</b> to add the self-assessment and peer reviewers.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {parts.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${p.participant_type === 'self' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{p.participant_type === 'self' ? 'Self' : 'Peer'}</span>
+                    <span className="flex-1 truncate">{p.participant_name || p.participant_email}</span>
+                    <button onClick={() => markPart(p, !p.completed)} title="Toggle complete / pending"
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Reviews this person owes as a peer reviewer */}
+          {owed.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1.5">{employee.name.split(' ')[0]} is a reviewer for</label>
+              <div className="space-y-1.5">
+                {owed.map(p => (
+                  <div key={p.id} className={`flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm ${p.completed ? 'opacity-60' : ''}`}>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 bg-[#eef2f7] text-[#3f5a76]">Peer</span>
+                    <span className="flex-1 truncate">Review of <b>{p.employee}</b></span>
+                    <button onClick={() => markPart(p, !p.completed)} title="Mark this reviewer's assessment complete (stops their reminders)"
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Optional notes */}
           <div>
