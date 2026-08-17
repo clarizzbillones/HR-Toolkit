@@ -57,14 +57,17 @@ const STATUS_PILL: Record<ReviewStatus, string> = {
   'Overdue': 'bg-[#fdeaea] text-[#b0412f]',
   'Review week': 'bg-[#f7efe1] text-[#b07d2a]',
   'Forms due': 'bg-[#faf3e6] text-[#c19653]',
+  // Send forms = first action (blue).
   'Send forms': 'bg-[#e9f0f5] text-[#3f6b8a]',
-  // Scheduled = far out, nothing due yet → cool blue-slate (clearly not pink,
-  // and not green so it never gets confused with Complete).
-  'Scheduled': 'bg-[#e6ecf3] text-[#42587a]',
+  // Scheduled = far out, nothing due yet → neutral grey so it's clearly distinct
+  // from the blue "Send forms" action state (and never confused with Complete).
+  'Scheduled': 'bg-[#ececee] text-[#6b7280]',
   // Complete = the only green pill.
   'Complete': 'bg-[#e6f3ec] text-[#1f6b4a]',
   'Not started': 'bg-[#f1ece3] text-[#8b8478]',
 };
+// participant_type is stored as its label ("Self-assessment" / "Peer reviewer").
+const isSelfType = (t: any) => /self/i.test(String(t ?? ''));
 
 // Open the connected dashboard link directly. We don't append a path because
 // the external dashboard's routing is unknown (guessing a path caused 404s).
@@ -189,6 +192,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       ],
     });
     setShowInvite(true);
+    // Load already-tracked participants so their pending/complete status shows.
+    fetch('/api/reviews/invites').then(r => r.json()).then(d => setInvites(d.rows ?? [])).catch(() => {});
   }
 
   useEffect(() => {
@@ -692,6 +697,30 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <button onClick={() => setInvite(v => ({ ...v, participants: [...v.participants, { ...blankParticipant }] }))}
                   className="mt-2 text-sm font-semibold text-text-muted hover:text-ink">+ Add participant</button>
               </div>
+
+              {/* Tracked so far — pending / completed self & peer reviews */}
+              {(() => {
+                const key = invite.employee.trim().toLowerCase();
+                const tracked = invites.filter(p => String(p.employee ?? '').trim().toLowerCase() === key);
+                if (!tracked.length) return null;
+                const pend = tracked.filter(p => !p.completed).length;
+                return (
+                  <div className="mt-5">
+                    <div className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Self &amp; peer reviews · {tracked.length - pend}/{tracked.length} complete</div>
+                    <div className="space-y-1.5">
+                      {tracked.map(p => (
+                        <div key={p.id} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
+                          <span className="flex-1 truncate">{p.participant_name || p.participant_email}</span>
+                          <button onClick={() => toggleInviteDone(p.id, !p.completed)} title="Toggle complete / pending — completed stops reminders"
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
+                          <button onClick={() => removeInvite(p.id)} title="Remove" className="text-xs text-litred-alt hover:underline shrink-0">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2 justify-end items-center">
               <span className="text-xs text-text-muted mr-auto">A copy is CC'd to you.</span>
@@ -1035,7 +1064,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
               <div className="space-y-1.5">
                 {parts.map(p => (
                   <div key={p.id} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${p.participant_type === 'self' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{p.participant_type === 'self' ? 'Self' : 'Peer'}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
                     <span className="flex-1 truncate">{p.participant_name || p.participant_email}</span>
                     <button onClick={() => markPart(p, !p.completed)} title="Toggle complete / pending"
                       className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
