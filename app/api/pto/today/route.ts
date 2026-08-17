@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const debug = url.searchParams.get('debug') === '1';
 
   const ptoRows = await sql`
-    SELECT employee, type, days FROM pto_entries
+    SELECT employee, type, days, start_date, end_date FROM pto_entries
     WHERE start_date <= ${today} AND end_date >= ${today}
       AND status = 'Approved'
   `;
@@ -40,7 +40,10 @@ export async function GET(req: Request) {
       debugExcluded.push({ source: 'db', employee: r.employee, type: r.type, reason: 'excluded type' });
       continue;
     }
-    const days = Number(r.days) || 0;
+    // Mirror the PTO dashboard (mergePto): fall back to the working-day span when
+    // the entry has no explicit `days` value, so a single-day PTO logged without
+    // a day count still counts as out today.
+    const days = Number(r.days) || workingDays(String(r.start_date).slice(0, 10), String(r.end_date).slice(0, 10));
     if (days < 1) {
       debugExcluded.push({ source: 'db', employee: r.employee, type: r.type, reason: `days=${days} < 1` });
       continue;
@@ -55,11 +58,9 @@ export async function GET(req: Request) {
       debugExcluded.push({ source: 'cal', employee: c.name, type: c.tag, reason: 'excluded tag' });
       continue;
     }
-    // Only count calendar events explicitly tagged as OOO or PTO — skip ambiguous "Other" entries
-    if (c.tag === 'Other') {
-      debugExcluded.push({ source: 'cal', employee: c.name, type: c.tag, reason: 'tag=Other (ambiguous)', });
-      continue;
-    }
+    // Keep tag==='Other' entries — the PTO dashboard (mergePto) counts them, so
+    // dropping them here made the dashboard/EOD show fewer people than the PTO
+    // page. Non-PTO calendar items are still filtered out by title below.
     if (EXCLUDED_TITLE.test(c.title)) {
       debugExcluded.push({ source: 'cal', employee: c.name, type: c.tag, reason: `excluded title: ${c.title}` });
       continue;
