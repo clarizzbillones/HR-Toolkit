@@ -35,8 +35,10 @@ async function getStats() {
   // This-month birthdays & work anniversaries from the Staffing directory
   let birthdays: { name: string; dob: string }[] = [];
   let anniversaries: { name: string; years: number; date: string }[] = [];
+  let allStaff: { name: string; dob: string | null; start_date: string | null }[] = [];
   try {
     const staff = await sql`SELECT name, dob, start_date FROM staff_directory` as any[];
+    allStaff = staff.map(s => ({ name: s.name, dob: s.dob, start_date: s.start_date }));
     const now = new Date(); const cm = now.getMonth() + 1; const cy = now.getFullYear();
     const monthOf = (s: string) => { if (!s) return 0; const t = String(s).trim(); if (/^\d{4}-\d{2}/.test(t)) return parseInt(t.slice(5, 7)); const p = t.split('/'); return p.length ? parseInt(p[0]) : 0; };
     const startMY = (s: string) => { const t = String(s ?? '').trim(); if (/^\d{4}-\d{2}/.test(t)) return { m: parseInt(t.slice(5, 7)), y: parseInt(t.slice(0, 4)) }; const p = t.split('/'); return p.length >= 3 ? { m: parseInt(p[0]), y: parseInt(p[2]) } : { m: 0, y: 0 }; };
@@ -95,6 +97,7 @@ async function getStats() {
     onboarding,
     birthdays,
     anniversaries,
+    allStaff,
     deadlines: deadlines.slice(0, 8),
   };
 }

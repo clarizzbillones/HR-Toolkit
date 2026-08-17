@@ -21,8 +21,25 @@ interface Props {
   onboarding: number;
   birthdays: { name: string; dob: string }[];
   anniversaries: { name: string; years: number; date: string }[];
+  allStaff: { name: string; dob: string | null; start_date: string | null }[];
   deadlines: { label: string; date: string; days: number; kind: string }[];
 }
+
+// Birthdays / work anniversaries for a given month (1-12) and year, derived
+// from the full staff list — so the Dashboard can re-compute them for whatever
+// month the date picker lands on, not just the current one.
+function monthOf(s: string | null) { if (!s) return 0; const t = String(s).trim(); if (/^\d{4}-\d{2}/.test(t)) return parseInt(t.slice(5, 7)); const p = t.split('/'); return p.length ? parseInt(p[0]) : 0; }
+function startMY(s: string | null) { const t = String(s ?? '').trim(); if (/^\d{4}-\d{2}/.test(t)) return { m: parseInt(t.slice(5, 7)), y: parseInt(t.slice(0, 4)) }; const p = t.split('/'); return p.length >= 3 ? { m: parseInt(p[0]), y: parseInt(p[2]) } : { m: 0, y: 0 }; }
+function dayOf(s: string | null) { const t = String(s ?? '').trim(); if (/^\d{4}-\d{2}-\d{2}/.test(t)) return parseInt(t.slice(8, 10)); const p = t.split('/'); return p.length >= 2 ? parseInt(p[1]) : 0; }
+function birthdaysForMonth(staff: Props['allStaff'], month: number) {
+  return staff.filter(e => e.dob && monthOf(e.dob) === month).map(e => ({ name: e.name, dob: e.dob as string })).sort((a, b) => dayOf(a.dob) - dayOf(b.dob));
+}
+function anniversariesForMonth(staff: Props['allStaff'], month: number, year: number) {
+  return staff.map(e => ({ ...startMY(e.start_date), name: e.name, date: e.start_date }))
+    .filter(e => e.m === month && e.y && e.y < year).map(e => ({ name: e.name, years: year - e.y, date: e.date as string }))
+    .sort((a, b) => dayOf(a.date) - dayOf(b.date));
+}
+const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 function fmtDate(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -113,6 +130,13 @@ export default function DashboardClient(props: Props) {
   const [overrideDate, setOverrideDate] = useState('');
 
   const activeDate = overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  // Birthdays & anniversaries follow the month the date picker is on. With no
+  // override this is the current month (matching the server-side default).
+  const selMonth = parseInt(activeDate.slice(5, 7));
+  const selYear = parseInt(activeDate.slice(0, 4));
+  const birthdays = birthdaysForMonth(props.allStaff, selMonth);
+  const anniversaries = anniversariesForMonth(props.allStaff, selMonth, selYear);
+  const monthLabel = MONTH_NAMES[selMonth] || 'this month';
 
   useEffect(() => {
     fetch(`/api/pto/today?date=${activeDate}`).then(r => r.json()).then(d => {
@@ -194,35 +218,35 @@ export default function DashboardClient(props: Props) {
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white border border-border rounded-card p-5" style={{ borderTop: '3px solid #c9a24a' }}>
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-bold tracking-widest uppercase text-[#8a6d3b]">🎂 Birthdays this month</div>
+              <div className="text-xs font-bold tracking-widest uppercase text-[#8a6d3b]">🎂 Birthdays in {monthLabel}</div>
               <a href="/reports" className="text-xs font-semibold text-[#8a6d3b] hover:underline">Monthly pack ↗</a>
             </div>
-            {props.birthdays.length ? (
+            {birthdays.length ? (
               <div className="flex flex-wrap gap-2">
-                {props.birthdays.map((b, i) => (
+                {birthdays.map((b, i) => (
                   <div key={i} className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
                     <span className="font-semibold text-text-primary">{b.name}</span>
                     <span className="text-text-muted text-xs ml-1.5">{b.dob}</span>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-text-muted">None this month.</p>}
+            ) : <p className="text-sm text-text-muted">None in {monthLabel}.</p>}
           </div>
           <div className="bg-white border border-border rounded-card p-5" style={{ borderTop: '3px solid #8a6d3b' }}>
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-bold tracking-widest uppercase text-[#6b5427]">🎉 Work anniversaries this month</div>
+              <div className="text-xs font-bold tracking-widest uppercase text-[#6b5427]">🎉 Work anniversaries in {monthLabel}</div>
               <a href="/reports" className="text-xs font-semibold text-[#6b5427] hover:underline">Monthly pack ↗</a>
             </div>
-            {props.anniversaries.length ? (
+            {anniversaries.length ? (
               <div className="flex flex-wrap gap-2">
-                {props.anniversaries.map((a, i) => (
+                {anniversaries.map((a, i) => (
                   <div key={i} className="border border-border-light rounded-ctrl px-3 py-1.5 text-sm">
                     <span className="font-semibold text-text-primary">{a.name}</span>
                     <span className="text-text-muted text-xs ml-1.5">{a.years} {a.years === 1 ? 'yr' : 'yrs'} · {a.date}</span>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-text-muted">None this month.</p>}
+            ) : <p className="text-sm text-text-muted">None in {monthLabel}.</p>}
           </div>
         </div>
 
