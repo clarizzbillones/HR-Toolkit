@@ -256,8 +256,12 @@ export default function OnboardingClient() {
   // Onboarding section. Full-access admins can always edit it.
   const [detailTab, setDetailTab] = useState<'main' | 'doc'>('main');
   const { me } = useAccess();
-  const canSeeDoc = !me?.restricted;
-  const docReadOnly = false;
+  // The onboarding document is visible to full-access admins, and to restricted
+  // viewers explicitly granted EDIT rights on Onboarding (same grant mechanism
+  // as Offboarding). Plain view-only onboarding viewers never see it — so you
+  // decide exactly who gets the document by giving them "✎ Can edit".
+  const canSeeDoc = !me?.restricted || (me?.editSections ?? []).includes('/onboarding');
+  const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding');
   // Always land on the profile/checklist page when switching hires; the document
   // lives on its own tab (admins only).
   useEffect(() => { setDetailTab('main'); }, [selected]);
