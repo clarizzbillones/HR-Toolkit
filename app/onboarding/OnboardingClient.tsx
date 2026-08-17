@@ -251,11 +251,13 @@ export default function OnboardingClient() {
   useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
-  // Catie's onboarding document — collapsible per hire. Restricted viewers are
-  // read-only unless granted edit rights on Onboarding.
+  // Catie's onboarding document — collapsible per hire. It is visible ONLY to
+  // full-access admins; restricted viewers never see it, even if granted the
+  // Onboarding section. Full-access admins can always edit it.
   const [showDoc, setShowDoc] = useState(true);
   const { me } = useAccess();
-  const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding');
+  const canSeeDoc = !me?.restricted;
+  const docReadOnly = false;
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
@@ -1904,17 +1906,20 @@ export default function OnboardingClient() {
               const allDone = total > 0 && done === total;
               return (
                 <>
-                {/* Catie's onboarding document — HR → Ops → IT, assign + deadline, sign-off */}
+                {/* Catie's onboarding document — HR → Ops → IT, assign + deadline,
+                    sign-off. Full-access admins only; hidden from restricted viewers. */}
+                {canSeeDoc && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2 gap-3">
                     <div>
                       <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
-                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' (View only — ask HR for edit access.)' : ''}</p>
+                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.</p>
                     </div>
                     <button onClick={() => setShowDoc(v => !v)} className="shrink-0 text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">{showDoc ? 'Hide' : 'Show'}</button>
                   </div>
                   {showDoc && <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />}
                 </div>
+                )}
                 <div className="bg-white border border-border rounded-card overflow-hidden">
                   <div className="px-5 py-4 border-b border-border flex items-start gap-3">
                     <div className="flex-1">
