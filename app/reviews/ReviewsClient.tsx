@@ -392,12 +392,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           </div>
           {!readOnly && (
           <div className="flex items-center gap-2.5">
-            <button onClick={() => window.open('/api/reviews/remind?preview=1', '_blank')}
-              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >👁 Preview email</button>
-            <button onClick={() => setShowInvite(true)}
-              className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
-            >✉ Send review invites</button>
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
