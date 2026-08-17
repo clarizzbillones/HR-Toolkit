@@ -254,10 +254,13 @@ export default function OnboardingClient() {
   // Catie's onboarding document — collapsible per hire. It is visible ONLY to
   // full-access admins; restricted viewers never see it, even if granted the
   // Onboarding section. Full-access admins can always edit it.
-  const [showDoc, setShowDoc] = useState(true);
+  const [detailTab, setDetailTab] = useState<'main' | 'doc'>('main');
   const { me } = useAccess();
   const canSeeDoc = !me?.restricted;
   const docReadOnly = false;
+  // Always land on the profile/checklist page when switching hires; the document
+  // lives on its own tab (admins only).
+  useEffect(() => { setDetailTab('main'); }, [selected]);
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
@@ -1906,20 +1909,26 @@ export default function OnboardingClient() {
               const allDone = total > 0 && done === total;
               return (
                 <>
-                {/* Catie's onboarding document — HR → Ops → IT, assign + deadline,
-                    sign-off. Full-access admins only; hidden from restricted viewers. */}
+                {/* Tab switcher — the onboarding document lives on its own page,
+                    visible to full-access admins only (hidden from restricted viewers). */}
                 {canSeeDoc && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2 gap-3">
-                    <div>
-                      <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
-                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.</p>
-                    </div>
-                    <button onClick={() => setShowDoc(v => !v)} className="shrink-0 text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">{showDoc ? 'Hide' : 'Show'}</button>
+                  <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 mb-4 w-fit">
+                    {([['main', 'Profile & checklist'], ['doc', 'Onboarding document']] as const).map(([v, label]) => (
+                      <button key={v} onClick={() => setDetailTab(v)}
+                        className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${detailTab === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>{label}</button>
+                    ))}
                   </div>
-                  {showDoc && <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />}
-                </div>
                 )}
+
+                {canSeeDoc && detailTab === 'doc' ? (
+                <div>
+                  <div className="mb-3">
+                    <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
+                    <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically. This page is visible to full-access admins only.</p>
+                  </div>
+                  <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />
+                </div>
+                ) : (
                 <div className="bg-white border border-border rounded-card overflow-hidden">
                   <div className="px-5 py-4 border-b border-border flex items-start gap-3">
                     <div className="flex-1">
@@ -2113,6 +2122,7 @@ export default function OnboardingClient() {
                     )}
                   </div>
                 </div>
+                )}
                 </>
               );
             })()}
