@@ -16,8 +16,14 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
   // HR-admin-only sections are blocked for anyone who isn't an HR admin.
   // The owner/access-admin always qualifies (never lock the owner out).
   const hrBlocked = HR_ADMIN_SECTIONS.includes(sec) && !(me?.isHrAdmin || me?.isAdmin);
-  const denied = hrBlocked || (restricted && !me!.sections.includes(sec));
-  const target = restricted ? me!.sections[0] : (hrBlocked ? '/' : undefined);
+  // The Onboarding Document is a sub-permission that lives inside /onboarding —
+  // holding it grants access to the onboarding route too.
+  const secs = me?.sections ?? [];
+  const allowed = secs.includes(sec) || (sec === '/onboarding' && secs.includes('/onboarding-doc'));
+  const denied = hrBlocked || (restricted && !allowed);
+  // Never send anyone to the pseudo-route; map it to the real onboarding page.
+  const firstReal = secs.map(s => s === '/onboarding-doc' ? '/onboarding' : s)[0];
+  const target = restricted ? firstReal : (hrBlocked ? '/' : undefined);
 
   useEffect(() => {
     if (denied && target && sec !== target) router.replace(target);

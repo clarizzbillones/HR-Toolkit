@@ -254,17 +254,23 @@ export default function OnboardingClient() {
   // Catie's onboarding document — collapsible per hire. It is visible ONLY to
   // full-access admins; restricted viewers never see it, even if granted the
   // Onboarding section. Full-access admins can always edit it.
-  const [detailTab, setDetailTab] = useState<'main' | 'doc'>('main');
+  const [detailTab, setDetailTab] = useState<'doc' | 'main'>('main');
   const { me } = useAccess();
-  // The onboarding document is visible to full-access admins, and to restricted
-  // viewers explicitly granted EDIT rights on Onboarding (same grant mechanism
-  // as Offboarding). Plain view-only onboarding viewers never see it — so you
-  // decide exactly who gets the document by giving them "✎ Can edit".
-  const canSeeDoc = !me?.restricted || (me?.editSections ?? []).includes('/onboarding');
-  const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding');
-  // Always land on the profile/checklist page when switching hires; the document
-  // lives on its own tab (admins only).
+  // Two independent permissions:
+  //  • Onboarding ('/onboarding')          → the module: dashboard, checklist,
+  //    workflow, guides, intake.
+  //  • Onboarding Document ('/onboarding-doc') → Catie's HR→Ops→IT document, view
+  //    or edit, granted separately in Access Control.
+  // Full-access admins have both.
+  const canSeeModule = !me?.restricted || (me?.sections ?? []).includes('/onboarding');
+  const canSeeDoc = !me?.restricted || (me?.sections ?? []).includes('/onboarding-doc');
+  const docReadOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/onboarding-doc');
+  // Reset the per-hire tab when switching hires. The effective tab (below) falls
+  // back to whatever the viewer is allowed to see.
   useEffect(() => { setDetailTab('main'); }, [selected]);
+  // Document-only viewers (no module grant) are pinned to the Dashboard, where
+  // they pick a hire and open the document.
+  useEffect(() => { if (!canSeeModule && view !== 'dashboard') setView('dashboard'); }, [canSeeModule, view]);
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
@@ -1460,6 +1466,7 @@ export default function OnboardingClient() {
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Onboarding</h1>
           <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : view === 'workflow' ? 'The standard hiring & onboarding journey, interview to first check-ins' : 'Edit, add, or remove anything, then send it'}</p>
         </div>
+        {canSeeModule && (
         <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 ml-4">
           {(['dashboard', 'workflow', 'guides', 'intake'] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
@@ -1468,6 +1475,7 @@ export default function OnboardingClient() {
             </button>
           ))}
         </div>
+        )}
         {view === 'guides' && (
           <div className="ml-auto flex items-center gap-2.5">
             <input value={hire} onChange={e => setHire(e.target.value)} placeholder="New hire name (optional)"
@@ -1485,7 +1493,7 @@ export default function OnboardingClient() {
             <button onClick={printGuide} className="bg-ink text-white text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-ink-dark">🖨 PDF</button>
           </div>
         )}
-        {view === 'dashboard' && (
+        {view === 'dashboard' && canSeeModule && (
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setShowReport(true)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="A shareable status summary you can screenshot or download">📄 Status report</button>
             <button onClick={() => { setShowAdd(true); setNewForm({ ...blankNew, guide: guides[0] ?? 'General' }); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add new hire</button>
@@ -1911,24 +1919,31 @@ export default function OnboardingClient() {
               const prog = parseProg(person.progress);
               const { done, total, pct } = progressOf(person);
               const allDone = total > 0 && done === total;
+              // Per-hire tabs — the Onboarding document is listed first. Each is
+              // shown only if the viewer has that permission.
+              const detailTabs = [
+                ...(canSeeDoc ? [['doc', 'Onboarding document'] as const] : []),
+                ...(canSeeModule ? [['main', 'Profile & checklist'] as const] : []),
+              ];
+              const effTab: 'doc' | 'main' = detailTabs.some(([v]) => v === detailTab) ? detailTab : (detailTabs[0]?.[0] ?? 'main');
               return (
                 <>
-                {/* Tab switcher — the onboarding document lives on its own page,
-                    visible to full-access admins only (hidden from restricted viewers). */}
-                {canSeeDoc && (
+                {/* Tab switcher — Onboarding document first, then Profile & checklist.
+                    The document is gated by the Onboarding Document permission. */}
+                {detailTabs.length > 1 && (
                   <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 mb-4 w-fit">
-                    {([['main', 'Profile & checklist'], ['doc', 'Onboarding document']] as const).map(([v, label]) => (
+                    {detailTabs.map(([v, label]) => (
                       <button key={v} onClick={() => setDetailTab(v)}
-                        className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${detailTab === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>{label}</button>
+                        className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${effTab === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>{label}</button>
                     ))}
                   </div>
                 )}
 
-                {canSeeDoc && detailTab === 'doc' ? (
+                {canSeeDoc && effTab === 'doc' ? (
                 <div>
                   <div className="mb-3">
                     <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
-                    <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically. This page is visible to full-access admins only.</p>
+                    <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
                   </div>
                   <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} onSave={d => patchDoc(person.id, d)} />
                 </div>

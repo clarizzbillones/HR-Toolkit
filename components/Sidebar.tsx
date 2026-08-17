@@ -72,7 +72,8 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const orderedItems = (order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems)
     // Hide restricted-user sections, and hide HR-admin-only sections from anyone
     // who isn't an HR admin (even full-access users).
-    .filter(i => (!restricted || me!.sections.includes(i.href)) && (!HR_ADMIN_SECTIONS.includes(i.href) || hrAdmin));
+    // The Onboarding Document sub-permission also unlocks the Onboarding nav item.
+    .filter(i => (!restricted || me!.sections.includes(i.href) || (i.href === '/onboarding' && me!.sections.includes('/onboarding-doc'))) && (!HR_ADMIN_SECTIONS.includes(i.href) || hrAdmin));
   function onDrop(targetHref: string) {
     if (!dragHref || dragHref === targetHref) { setDragHref(null); return; }
     const next = [...order];
