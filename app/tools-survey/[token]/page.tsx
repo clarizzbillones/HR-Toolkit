@@ -14,23 +14,26 @@ export default function ToolsSurveyPage({ params }: { params: { token: string } 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
     fetch(`/api/tools-survey?token=${encodeURIComponent(token)}`).then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else { setRow(d.row); if (d.row?.status === 'Completed') { setDone(true); setAnswers(d.row.answers || {}); } } })
+      .then(d => { if (d.error) setError(d.error); else { setRow(d.row); if (d.row?.email) setEmail(d.row.email); if (d.row?.status === 'Completed') { setDone(true); setAnswers(d.row.answers || {}); } } })
       .catch(() => setError('Could not load this form.')).finally(() => setLoading(false));
   }, [token]);
 
   async function submit() {
     setError('');
+    const em = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setError('Please enter your email so we can link your answers to your accounts.'); return; }
     const tools: Tool[] = row?.tools ?? [];
     const missing = tools.filter(t => !answers[t.name]);
     if (missing.length) { setError(`Please answer for: ${missing.map(t => t.name).join(', ')}`); return; }
     setBusy(true);
     try {
-      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', token, answers }) });
+      const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', token, answers, email: em }) });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Could not submit.'); if (d.done) setDone(true); return; }
       setDone(true);
@@ -56,6 +59,12 @@ export default function ToolsSurveyPage({ params }: { params: { token: string } 
         ) : (
           <div style={{ background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 22 }}>
             <p style={{ marginTop: 0, color: '#555' }}>Hi {String(row?.name || '').split(' ')[0]}, for each tool below, tell us whether you use it, have access but don’t use it, or have no access. If you have access — even if you never use it — please mark that so our records are complete.</p>
+            <div style={{ borderTop: '1px solid #eee3d0', paddingTop: 14, marginBottom: 4 }}>
+              <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', fontSize: 14, marginBottom: 6 }}>Your work email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@litson.co" autoComplete="email"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, color: '#1b2a3d', outline: 'none' }} />
+              <div style={{ fontSize: 12, color: '#8a8474', marginTop: 6 }}>We use this to link your answers to your accounts. No password or login needed.</div>
+            </div>
             {(row?.tools ?? []).map((t: Tool) => (
               <div key={t.name} style={{ borderTop: '1px solid #eee3d0', padding: '12px 0' }}>
                 <div style={{ fontWeight: 600, color: '#1b2a3d', fontSize: 15 }}>{t.name}{t.hint && <span style={{ fontWeight: 400, color: '#8a8474', fontSize: 13 }}> — {t.hint}</span>}</div>

@@ -50,9 +50,9 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const token = u.searchParams.get('token');
   if (token) {
-    const [row] = await sql`SELECT name, status, answers FROM tools_surveys WHERE token = ${token}` as any[];
+    const [row] = await sql`SELECT name, email, status, answers FROM tools_surveys WHERE token = ${token}` as any[];
     if (!row) return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 404 });
-    return NextResponse.json({ row: { name: row.name ?? '', status: row.status, tools: tools(), answers: row.status === 'Completed' ? parseAns(row.answers) : {} } });
+    return NextResponse.json({ row: { name: row.name ?? '', email: row.email ?? '', status: row.status, tools: tools(), answers: row.status === 'Completed' ? parseAns(row.answers) : {} } });
   }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -76,16 +76,22 @@ export async function POST(req: Request) {
     if (row.status === 'Completed') return NextResponse.json({ error: 'This survey was already submitted.', done: true }, { status: 409 });
     const answers: Record<string, string> = (b.answers && typeof b.answers === 'object') ? b.answers : {};
     const name = String(row.name || '').trim();
+    // The email the respondent enters on the form links their answers to their
+    // Accounts & Access (matches their profile and becomes the account login).
+    const respEmail = String(b.email ?? '').trim();
 
     try {
       await ensureAccounts();
       // Surveys are for existing employees — match a profile, but never create a
-      // new one (so test submissions don't pollute Employee Files).
+      // new one (so test submissions don't pollute Employee Files). Try the
+      // linked profile, then the name, then the email the respondent entered.
       let profile: any = null;
       if (row.profile_id) [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${row.profile_id}` as any[];
-      else if (name) [profile] = await sql`SELECT * FROM employee_profiles WHERE lower(name) = ${name.toLowerCase()} LIMIT 1` as any[];
+      if (!profile && name) [profile] = await sql`SELECT * FROM employee_profiles WHERE lower(name) = ${name.toLowerCase()} LIMIT 1` as any[];
+      if (!profile && respEmail) [profile] = await sql`SELECT * FROM employee_profiles WHERE lower(email) = ${respEmail.toLowerCase()} LIMIT 1` as any[];
       if (profile) {
-        const email = String(profile.email ?? '').trim();
+        // Prefer the email they entered; fall back to the one on file.
+        const email = respEmail || String(profile.email ?? '').trim();
         // Sync each tool into Accounts & Access.
         for (const t of FIRM_SYSTEMS) {
           const ans = answers[t]; // 'use' | 'access' | 'no'
@@ -113,7 +119,7 @@ export async function POST(req: Request) {
       }
     } catch { /* best-effort */ }
 
-    await sql`UPDATE tools_surveys SET answers = ${JSON.stringify(answers)}, status = 'Completed', submitted_at = NOW() WHERE id = ${row.id}`;
+    await sql`UPDATE tools_surveys SET answers = ${JSON.stringify(answers)}, email = COALESCE(NULLIF(${respEmail}, ''), email), status = 'Completed', submitted_at = NOW() WHERE id = ${row.id}`;
     return NextResponse.json({ ok: true });
   }
 
