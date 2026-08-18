@@ -738,6 +738,22 @@ export default function OnboardingClient() {
     try { await fetch('/api/onboarding/doc-template', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: tpl }) }); }
     catch { showToast('Could not save template'); }
   }
+  // Email each assigned person the open tasks assigned to them (resolved only
+  // from Access Control, so no one is emailed by mistake).
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  async function notifyAssignees(id: string, kind: 'onboarding') {
+    setNotifyBusy(true);
+    try {
+      const res = await fetch(`/api/${kind}/notify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not notify'); return; }
+      if (d.message) { showToast(d.message); return; }
+      const sentTxt = d.sent?.length ? `Notified ${d.sent.map((x: any) => x.name).join(', ')}` : 'No one emailed';
+      const skipTxt = d.skipped?.length ? ` · no email for ${d.skipped.join(', ')} (add them in Access Control)` : '';
+      showToast(sentTxt + skipTxt);
+    } catch { showToast('Could not notify'); }
+    finally { setNotifyBusy(false); }
+  }
   async function setStage(person: any, key: string) {
     if (key === 'complete') { completeOnboardee(person); return; }
     // Click the current stage again to clear it back to none / not started.
@@ -1956,9 +1972,12 @@ export default function OnboardingClient() {
 
                 {canSeeDoc && effTab === 'doc' ? (
                 <div>
-                  <div className="mb-3">
-                    <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
-                    <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
+                  <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
+                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
+                    </div>
+                    {!me?.restricted && <button onClick={() => notifyAssignees(person.id, 'onboarding')} disabled={notifyBusy} title="Email each assigned person the open tasks assigned to them (only people set up in Access Control)" className="shrink-0 bg-white border border-border-light text-[#3f6b8a] text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify assignees'}</button>}
                   </div>
                   <OnboardingDoc
                     rec={{ ...person, doc: reconcileDoc(parseOnbDoc(person.doc), docTemplate) }}

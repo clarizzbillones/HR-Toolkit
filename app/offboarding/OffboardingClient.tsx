@@ -67,6 +67,20 @@ export default function OffboardingClient() {
     window.addEventListener('hr-nav', h);
     return () => window.removeEventListener('hr-nav', h);
   }, []);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  async function notifyAssignees(id: string) {
+    setNotifyBusy(true);
+    try {
+      const res = await fetch('/api/offboarding/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not notify'); return; }
+      if (d.message) { showToast(d.message); return; }
+      const sentTxt = d.sent?.length ? `Notified ${d.sent.map((x: any) => x.name).join(', ')}` : 'No one emailed';
+      const skipTxt = d.skipped?.length ? ` · no email for ${d.skipped.join(', ')} (add them in Access Control)` : '';
+      showToast(sentTxt + skipTxt);
+    } catch { showToast('Could not notify'); }
+    finally { setNotifyBusy(false); }
+  }
   async function load() {
     setLoading(true);
     try {
@@ -288,6 +302,7 @@ export default function OffboardingClient() {
             {!readOnly && (rec.offboarded
               ? <button onClick={() => markOffboarded(rec, false)} className="text-sm font-semibold text-text-secondary border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">↩ Restore to active</button>
               : <button onClick={() => markOffboarded(rec, true)} className="bg-[#4a5a6d] text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-[#3c4a5a]" title="Mark offboarded and move to the Offboarded lists in Staffing & Employee Files">✓ Move to Offboarded</button>)}
+            {!restricted && effView === 'document' && <button onClick={() => notifyAssignees(rec.id)} disabled={notifyBusy} title="Email each assigned person the open tasks assigned to them (only people set up in Access Control)" className="bg-white border border-border-light text-[#3f6b8a] text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify'}</button>}
             <button onClick={() => (docView === 'document' ? printOffDoc(rec) : printDoc(rec))} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark" title={docView === 'document' ? 'Print Catie’s signed offboarding document' : 'Print the compliance checklist'}>⤓ Print / PDF</button>
             {!readOnly && <button onClick={() => remove(rec)} className="text-sm font-semibold text-litred-alt border border-border-light px-3 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
           </div>
