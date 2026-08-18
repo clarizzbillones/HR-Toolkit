@@ -89,6 +89,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [dashUrl, setDashUrl] = useState('');
   const [linkedUrl, setLinkedUrl] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
+  // Optional signed review document attached when logging a completed review.
+  const [logFile, setLogFile] = useState<File | null>(null);
   const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
@@ -303,9 +305,17 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       if (existing) {
         const history = [...parseHistory(existing.review_history), { date: form.date, peer_reviewers: [], notes: form.notes }];
         await patchEmployee(existing.id, { last_review_date: form.date, review_history: JSON.stringify(history), next_review_override: null });
+        // Attach the signed review document (if any) dated to the review.
+        if (logFile) {
+          try {
+            const fd = new FormData(); fd.append('id', existing.id); fd.append('file', logFile); fd.append('doc_date', form.date);
+            await fetch('/api/reviews/docs', { method: 'POST', body: fd });
+          } catch { /* best-effort — the review is still logged */ }
+        }
         setShowSchedule(false);
-        showToast(`Logged ${form.name}'s review — next review rescheduled automatically`);
+        showToast(`Logged ${form.name}'s review${logFile ? ' with document' : ''} — next review rescheduled automatically`);
         setForm({ name: '', role: '', dept: 'Operations', date: '', notes: '' });
+        setLogFile(null);
       }
     } finally {
       setSaving(false);
@@ -593,7 +603,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowSchedule(false)}>
           <div className="bg-white rounded-card p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
             <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-1">Log a completed review</h2>
-            <p className="text-xs text-text-muted mb-4">Enter the date the review actually happened. The next review reschedules automatically off the hire date.</p>
+            <p className="text-xs text-text-muted mb-4">Enter the date the review actually happened and, optionally, attach the signed review document — it files to the employee’s Employee File with that date. The next review reschedules automatically.</p>
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee</label>
@@ -614,9 +624,15 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
                   className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
               </div>
+              <div>
+                <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review document <span className="font-normal normal-case">(optional)</span></label>
+                <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={e => setLogFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm text-text-secondary file:mr-3 file:rounded-ctrl file:border file:border-border-light file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink hover:file:bg-canvas" />
+                {logFile && <p className="text-[11px] text-text-muted mt-1">📄 {logFile.name} — filed to the employee’s file, dated {form.date || 'the review date'}.</p>}
+              </div>
             </div>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowSchedule(false)}
+              <button onClick={() => { setShowSchedule(false); setLogFile(null); }}
                 className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-surface-hover transition-colors">
                 Cancel
               </button>
