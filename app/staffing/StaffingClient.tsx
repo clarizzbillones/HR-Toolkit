@@ -140,7 +140,22 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [vendorOrder, setVendorOrder] = useState<string[]>([]);
   const [cellEdit, setCellEdit] = useState<{ table: TabKey; id: string; colId: string } | null>(null);
   const [cellVal, setCellVal] = useState('');
-  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); setOffOrder(d.offOrder ?? []); setVendorOrder(d.vendorOrder ?? []); }).catch(() => {}); }, []);
+  const [colLabels, setColLabels] = useState<Record<string, string>>({});
+  useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); setOffOrder(d.offOrder ?? []); setVendorOrder(d.vendorOrder ?? []); setColLabels(d.labels ?? {}); }).catch(() => {}); }, []);
+  // Rename a column header (built-in or custom). Stored as a display-label
+  // override keyed by column id; blank restores the default label.
+  async function renameHeader(id: string, current: string) {
+    const next = window.prompt('Rename this column header:', current);
+    if (next == null) return;
+    const label = next.trim();
+    const updated = { ...colLabels };
+    if (label) updated[id] = label; else delete updated[id];
+    setColLabels(updated);
+    try { await fetch('/api/staffing/columns', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ labels: updated }) }); }
+    catch { showToast('Could not save header'); }
+  }
+  // Apply any saved label override to a column's default label.
+  const withLabels = (cols: { id: string; label: string; custom: boolean; key?: string }[]) => cols.map(c => ({ ...c, label: colLabels[c.id] ?? c.label }));
   // Clicking "Staffing" in the sidebar closes any open edit dialog.
   useEffect(() => {
     const h = (e: Event) => { if ((e as CustomEvent).detail === '/staffing') { setEditStaff(null); setEditV(null); setCellEdit(null); } };
@@ -159,12 +174,12 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     if (pinnedFirstId) out.sort((a, b) => (a.id === pinnedFirstId ? -1 : b.id === pinnedFirstId ? 1 : 0));
     return out;
   }
-  const empCols = buildOrdered([
+  const empCols = withLabels(buildOrdered([
     ...EMP_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })),
     ...customCols.map(n => ({ id: n, label: n, custom: true })),
-  ], colOrder, 'name');
-  const offCols = buildOrdered(OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), offOrder, 'name');
-  const venCols = buildOrdered(VENDOR_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), vendorOrder);
+  ], colOrder, 'name'));
+  const offCols = withLabels(buildOrdered(OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), offOrder, 'name'));
+  const venCols = withLabels(buildOrdered(VENDOR_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key as string })), vendorOrder));
 
   const [dragCol, setDragCol] = useState<string | null>(null);
   type OrderField = 'order' | 'offOrder' | 'vendorOrder';
@@ -406,7 +421,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap sticky top-0 ${sticky ? 'left-0 z-30' : 'z-20'} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
               style={{ color: active.text, background: active.soft, ...(sticky ? { boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
               {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
-              {c.label}
+              <span onDoubleClick={() => renameHeader(c.id, c.label)} title="Double-click to rename this column" className="cursor-text align-middle">{c.label}</span>
+              <button onClick={() => renameHeader(c.id, c.label)} title="Rename column header" className="ml-1 text-text-muted hover:text-ink opacity-0 group-hover/col:opacity-100 align-middle">✎</button>
               {movable && (
                 <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
                   <button onClick={() => move(c.id, -1)} disabled={i <= firstMovable} title="Move left" className="text-text-muted hover:text-ink disabled:opacity-25">◀</button>
