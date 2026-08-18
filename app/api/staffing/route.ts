@@ -1,6 +1,23 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { staffToProfile } from '@/lib/employeeProfile';
+
+// Mirror a Staffing row's shared fields (email, phone, position, start date,
+// DOB, travel/personal columns, name) into the matching Employee File profile,
+// so an edit in Staffing shows up in Employee Files. Matched by name (the same
+// key Employee Files uses); updates an existing profile only — never creates
+// one. Best-effort: a sync failure never blocks the Staffing save.
+async function syncProfileFromStaff(oldName: string | null, staffRow: any) {
+  try {
+    const matchName = String(oldName || staffRow?.name || '').trim();
+    if (!matchName) return;
+    const [prof] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${matchName.toLowerCase()} LIMIT 1` as any[];
+    if (!prof) return; // no Employee File yet — nothing to mirror into
+    const updates: Record<string, any> = { ...staffToProfile(staffRow), name: staffRow.name };
+    await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${prof.id}`;
+  } catch { /* best-effort */ }
+}
 
 const FIELDS = ['name','worker_type','position','dialpad','personal_phone','email','address','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','american','weight','extra'] as const;
 
@@ -63,9 +80,12 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   const sets = FIELDS.filter(f => f in body);
   if (!sets.length) return NextResponse.json({ error: 'No fields' }, { status: 400 });
+  // Capture the current name first so a name change still matches the profile.
+  const [prev] = await sql`SELECT name FROM staff_directory WHERE id = ${id}` as any[];
   const updates = Object.fromEntries(sets.map(f => [f, body[f] === '' ? null : body[f]]));
   await sql`UPDATE staff_directory SET ${sql(updates)} WHERE id = ${id}`;
   const [row] = await sql`SELECT * FROM staff_directory WHERE id = ${id}`;
+  await syncProfileFromStaff(prev?.name ?? null, row);
   return NextResponse.json({ row });
 }
 
