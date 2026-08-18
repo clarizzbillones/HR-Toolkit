@@ -129,6 +129,16 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
   const [offboarded, setOffboarded] = useState<Staff[]>(initialOffboarded);
   const [search, setSearch] = useState('');
+  // Click-to-sort and per-column filters, driven from the headers.
+  const [sortCol, setSortCol] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [showFilters, setShowFilters] = useState(false);
+  function toggleSort(id: string) {
+    if (sortCol !== id) { setSortCol(id); setSortDir('asc'); }
+    else if (sortDir === 'asc') setSortDir('desc');
+    else { setSortCol(''); setSortDir('asc'); }
+  }
   const [uploading, setUploading] = useState(false);
   const [editStaff, setEditStaff] = useState<{ data: Partial<Staff>; kind: 'employees' | 'offboarded' } | null>(null);
   const [editV, setEditV] = useState<Partial<Vendor> | null>(null);
@@ -280,9 +290,32 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const alpha = (x: string, y: string) => { const a = x.trim(), b = y.trim(); if (!a && !b) return 0; if (!a) return 1; if (!b) return -1; return a.localeCompare(b, undefined, { sensitivity: 'base' }); };
   const byName = (a: any, b: any) => alpha(a.name ?? '', b.name ?? '');
   const byEntity = (a: any, b: any) => alpha((a.entity ?? a.name) ?? '', (b.entity ?? b.name) ?? '');
-  const fStaff = rows.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byName);
-  const fOff = offboarded.filter(r => !search || (r.name ?? '').toLowerCase().includes(s) || (r.position ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byName);
-  const fVen = vendors.filter(r => !search || (r.entity ?? '').toLowerCase().includes(s) || (r.name ?? '').toLowerCase().includes(s) || (r.email ?? '').toLowerCase().includes(s)).sort(byEntity);
+  // A column's value for a row (built-in field or custom `extra` value).
+  const colValue = (r: any, col: UCol) => String(col.custom ? extraVal(r, col.id) : (r[col.key!] ?? ''));
+  // Apply the header filters and click-to-sort; falls back to the default sort.
+  function applyView<T>(list: T[], cols: UCol[], defaultCmp: (a: T, b: T) => number): T[] {
+    let out = list;
+    const active = Object.entries(filters).filter(([, v]) => String(v).trim());
+    if (active.length) out = out.filter((r: any) => active.every(([cid, val]) => {
+      const col = cols.find(c => c.id === cid); if (!col) return true;
+      return colValue(r, col).toLowerCase().includes(String(val).toLowerCase());
+    }));
+    const col = sortCol ? cols.find(c => c.id === sortCol) : null;
+    if (!col) return [...out].sort(defaultCmp);
+    const numLike = (v: string) => v.trim() !== '' && /^[\s$0-9.,%-]+$/.test(v);
+    return [...out].sort((a: any, b: any) => {
+      const av = colValue(a, col), bv = colValue(b, col);
+      let cmp: number;
+      if (!av.trim() && bv.trim()) cmp = 1; else if (!bv.trim() && av.trim()) cmp = -1;
+      else if (numLike(av) && numLike(bv)) cmp = parseFloat(av.replace(/[^0-9.-]/g, '')) - parseFloat(bv.replace(/[^0-9.-]/g, ''));
+      else cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' });
+      return sortDir === 'desc' ? -cmp : cmp;
+    });
+  }
+  const searchHit = (r: any, keys: string[]) => !search || keys.some(k => String(r[k] ?? '').toLowerCase().includes(s));
+  const fStaff = applyView(rows.filter(r => searchHit(r, ['name', 'position', 'email'])), empCols, byName);
+  const fOff = applyView(offboarded.filter(r => searchHit(r, ['name', 'position', 'email'])), offCols, byName);
+  const fVen = applyView(vendors.filter(r => searchHit(r, ['entity', 'name', 'email'])), venCols, byEntity);
   // Split the roster into 1099 contractors vs W-2 employees for the header count.
   const contractorCount = rows.filter(r => /contractor|1099/i.test(r.worker_type ?? '')).length;
   const employeeCount = rows.length - contractorCount;
@@ -406,6 +439,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     const move = makeMove(field, columns, pinnedFirstId), drop = makeDrop(field, columns, pinnedFirstId);
     const firstMovable = pinnedFirstId ? 1 : 0;
     return (
+      <>
       <tr>
         {columns.map((c, i) => {
           const movable = reorderable && c.id !== pinnedFirstId;
@@ -421,7 +455,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               className={`text-left px-4 py-3 text-xs font-bold uppercase tracking-wider group/col whitespace-nowrap sticky top-0 ${sticky ? 'left-0 z-30' : 'z-20'} ${movable ? 'cursor-grab' : ''} ${dragCol === c.id ? 'opacity-40' : ''}`}
               style={{ color: active.text, background: active.soft, ...(sticky ? { boxShadow: '2px 0 0 #e6e0d5' } : {}) }}>
               {movable && <span className="mr-1 text-text-faint opacity-0 group-hover/col:opacity-100 select-none">⠿</span>}
-              <span onDoubleClick={() => renameHeader(c.id, c.label)} title="Double-click to rename this column" className="cursor-text align-middle">{c.label}</span>
+              <button onClick={() => toggleSort(c.id)} title="Click to sort by this column" className="cursor-pointer align-middle hover:opacity-70">{c.label}{sortCol === c.id ? <span className="ml-0.5">{sortDir === 'asc' ? '▲' : '▼'}</span> : <span className="ml-0.5 opacity-0 group-hover/col:opacity-30">↕</span>}</button>
               <button onClick={() => renameHeader(c.id, c.label)} title="Rename column header" className="ml-1 text-text-muted hover:text-ink opacity-0 group-hover/col:opacity-100 align-middle">✎</button>
               {movable && (
                 <span className="ml-1.5 opacity-0 group-hover/col:opacity-100">
@@ -437,6 +471,21 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
           ? <th className="px-2 py-3 sticky top-0 z-20" style={{ background: active.soft }}><button onClick={onAddColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
           : <th className="px-4 py-3 sticky top-0 z-20" style={{ background: active.soft }} />}
       </tr>
+      {showFilters && (
+        <tr>
+          {columns.map(c => {
+            const sticky = !!pinnedFirstId && c.id === pinnedFirstId;
+            return (
+              <th key={c.id} className={`px-2 pb-2 pt-0 sticky top-[42px] ${sticky ? 'left-0 z-30' : 'z-20'}`} style={{ background: active.soft }}>
+                <input value={filters[c.id] ?? ''} onChange={e => setFilters(f => ({ ...f, [c.id]: e.target.value }))}
+                  placeholder="Filter…" className="w-full min-w-[80px] border border-border-light rounded-ctrl px-2 py-1 text-xs font-normal normal-case bg-white focus:outline-none focus:border-ink" />
+              </th>
+            );
+          })}
+          <th className="px-2 pb-2 pt-0 sticky top-[42px] z-20" style={{ background: active.soft }} />
+        </tr>
+      )}
+      </>
     );
   }
   function StaffTable({ columns, data, kind }: { columns: UCol[]; data: Staff[]; kind: 'employees' | 'offboarded' }) {
@@ -482,6 +531,10 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
           <div className="ml-auto flex items-center gap-2.5">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
               className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink w-48" />
+            <button onClick={() => setShowFilters(v => !v)} title="Filter each column from its header"
+              className={`text-sm font-semibold px-4 py-2 rounded-ctrl border ${showFilters ? 'bg-[#eef5f1] border-[#cfe4d8] text-[#2f7d5b]' : 'bg-white border-border-light text-ink hover:bg-canvas'}`}>
+              ⧩ Filters{(() => { const n = Object.values(filters).filter(v => String(v).trim()).length; return n ? ` (${n})` : ''; })()}
+            </button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
               onChange={e => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = ''; } }} />
             <button onClick={() => fileRef.current?.click()} disabled={uploading}
