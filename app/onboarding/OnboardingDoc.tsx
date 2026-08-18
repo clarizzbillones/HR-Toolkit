@@ -93,7 +93,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
           </div>
           {!complete && c.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(c.deadline)}</span>}
         </div>
-        <CellFields get={get} set={set} />
+        {CellFields({ get, set })}
       </div>
     );
   }
@@ -117,7 +117,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
                 {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); saveStructure(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
               </div>
               {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
-              <CellFields get={() => doc[listKey][i].cell} set={(p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); }} />
+              {CellFields({ get: () => doc[listKey][i].cell, set: (p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); } })}
             </div>
           );
         })}
@@ -201,7 +201,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
 
       {/* Section 1 — HR */}
       <Section heading={hr.heading} blurb={hr.blurb}>
-        <RowSection listKey="hr" addLabel="+ Add HR task" placeholder="Task name" />
+        {RowSection({ listKey: 'hr', addLabel: '+ Add HR task', placeholder: 'Task name' })}
         {/* Benefits quick reference */}
         <div className="mt-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Benefits quick reference</div>
@@ -219,21 +219,21 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
       {/* Section 2 — Ops */}
       <Section heading="Section 2 — Ops" blurb="Accounts to open for the new hire. Complete after HR; IT will not act until this section is signed off.">
         <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts to open</div>
-        <RowSection listKey="accounts" addLabel="+ Add account" placeholder="Account / system name" />
+        {RowSection({ listKey: 'accounts', addLabel: '+ Add account', placeholder: 'Account / system name' })}
       </Section>
 
       {/* Section 3 — IT */}
       <Section heading={it.heading} blurb={it.blurb}>
-        <RowSection listKey="it" addLabel="+ Add IT task" placeholder="Task name" />
+        {RowSection({ listKey: 'it', addLabel: '+ Add IT task', placeholder: 'Task name' })}
       </Section>
 
       {/* Sign-Off */}
       <Section heading="Sign-Off — Catie" blurb="Onboarding is complete only once all three sections are signed off.">
         <div className="space-y-2">
           {([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
-            <TaskRow key={key} label={label}
-              get={() => doc.signoff[key] ?? {}}
-              set={(p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); }} />
+            <div key={key}>{TaskRow({ label,
+              get: () => doc.signoff[key] ?? {},
+              set: (p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); } })}</div>
           ))}
         </div>
       </Section>
