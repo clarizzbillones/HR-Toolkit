@@ -27,6 +27,9 @@ async function ensure() {
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS accounts_locked BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS docs_locked BOOLEAN NOT NULL DEFAULT FALSE`;
+  // Mirror of Staffing's custom columns (JSON map keyed by column name), so
+  // fields like "Personal Email" carry into the Employee File.
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS extra TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS employee_files (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, category TEXT, title TEXT, doc_date TEXT,
     summary TEXT, what_we_did TEXT, next_steps TEXT, author TEXT,

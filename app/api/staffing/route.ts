@@ -2,17 +2,22 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { staffToProfile } from '@/lib/employeeProfile';
+import { normName } from '@/lib/employeeFiles';
 
-// Mirror a Staffing row's shared fields (email, phone, position, start date,
-// DOB, travel/personal columns, name) into the matching Employee File profile,
-// so an edit in Staffing shows up in Employee Files. Matched by name (the same
-// key Employee Files uses); updates an existing profile only — never creates
-// one. Best-effort: a sync failure never blocks the Staffing save.
+// Mirror a Staffing row's fields — built-in AND custom columns (e.g. "Personal
+// Email", carried in `extra`) plus address and name — into the matching
+// Employee File profile, so any edit in Staffing shows up in Employee Files.
+// Matched by name with robust normalization; updates an existing profile only —
+// never creates one. Best-effort: a sync failure never blocks the Staffing save.
 async function syncProfileFromStaff(oldName: string | null, staffRow: any) {
   try {
-    const matchName = String(oldName || staffRow?.name || '').trim();
-    if (!matchName) return;
-    const [prof] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${matchName.toLowerCase()} LIMIT 1` as any[];
+    const key = normName(oldName || staffRow?.name || '');
+    if (!key) return;
+    // Make sure the mirror columns exist before writing them.
+    await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS extra TEXT`;
+    await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS address TEXT`;
+    const profs = await sql`SELECT id, name FROM employee_profiles` as any[];
+    const prof = profs.find(p => normName(p.name) === key);
     if (!prof) return; // no Employee File yet — nothing to mirror into
     const updates: Record<string, any> = { ...staffToProfile(staffRow), name: staffRow.name };
     await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${prof.id}`;

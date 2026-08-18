@@ -11,6 +11,11 @@ interface Profile {
   favorite_color?: string | null; favorite_treat?: string | null; ktn?: string | null;
   marriott?: string | null; delta?: string | null; southwest?: string | null; american?: string | null;
   weight?: string | null; worker_type?: string | null; accounts_locked?: boolean; docs_locked?: boolean;
+  extra?: string | null;
+}
+// Parse the `extra` JSON (custom Staffing columns) into non-empty [label, value] pairs.
+function extraPairs(raw: any): [string, string][] {
+  try { const o = typeof raw === 'string' ? JSON.parse(raw) : raw; if (!o || typeof o !== 'object') return []; return Object.entries(o).map(([k, v]) => [String(k), String(v ?? '')] as [string, string]).filter(([, v]) => v.trim()); } catch { return []; }
 }
 // Extra profile fields, grouped for the edit form + read-only display.
 const EXTRA_GROUPS: { heading: string; fields: [string, keyof Profile][] }[] = [
@@ -422,6 +427,16 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+                      {extraPairs(selected.extra).length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-1">More from Staffing</div>
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                            {extraPairs(selected.extra).map(([l, v]) => (
+                              <div key={l}><span className="text-text-muted">{l}:</span> {v}</div>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {!readOnly && (

@@ -29,6 +29,9 @@ async function ensureFiles() {
     id TEXT PRIMARY KEY, name TEXT NOT NULL, photo TEXT, position TEXT, department TEXT,
     email TEXT, phone TEXT, start_date TEXT, details TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  // address + travel/personal columns and the custom-columns mirror the sync writes.
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS address TEXT`;
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS extra TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS employee_files (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, category TEXT, title TEXT, doc_date TEXT,
     summary TEXT, what_we_did TEXT, next_steps TEXT, author TEXT,
