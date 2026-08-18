@@ -100,6 +100,22 @@ export async function POST(req: Request) {
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
     return NextResponse.json({ profile });
   }
+  // Set a person's worker type (Employee/Contractor). Writes it to Staffing (the
+  // source of truth for the Employees/Contractors split) and the profile.
+  if (b.action === 'set-worker-type' && b.id) {
+    const wt = /contract/i.test(String(b.worker_type ?? '')) ? 'Contractor' : 'Employee';
+    const [prof] = await sql`SELECT name FROM employee_profiles WHERE id = ${b.id}` as any[];
+    await sql`UPDATE employee_profiles SET worker_type = ${wt} WHERE id = ${b.id}`;
+    if (prof) {
+      try {
+        const staff = await sql`SELECT id, name FROM staff_directory` as any[];
+        const key = normName(prof.name);
+        const match = staff.find(s => normName(s.name) === key);
+        if (match) await sql`UPDATE staff_directory SET worker_type = ${wt} WHERE id = ${match.id}`;
+      } catch { /* best-effort */ }
+    }
+    return NextResponse.json({ ok: true, worker_type: wt });
+  }
 
   // Resync one profile from Staffing and report what matched — so a name
   // mismatch (why an edited Staffing email wouldn't flow through) is visible.

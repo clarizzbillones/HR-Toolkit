@@ -313,6 +313,18 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     if (selected) bumpCount(selected.id, -1);
   }
   function bumpCount(id: string, delta: number) { setProfiles(p => p.map(x => x.id === id ? { ...x, doc_count: (x.doc_count ?? 0) + delta } : x)); }
+  // Flip a person between Employee and Contractor. Writes the worker type to
+  // Staffing (the source of truth for the split) and the profile, so they move
+  // to the right tab.
+  async function setWorkerType(p: Profile) {
+    const wt = /contract/i.test(String(p.worker_type ?? '')) ? 'Employee' : 'Contractor';
+    setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, worker_type: wt } : x));
+    try {
+      const res = await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-worker-type', id: p.id, worker_type: wt }) });
+      if (!res.ok) throw new Error();
+      showToast(`${p.name} → ${wt}`);
+    } catch { showToast('Could not update — reverting'); setProfiles(prev => prev.map(x => x.id === p.id ? { ...x, worker_type: p.worker_type } : x)); }
+  }
 
   // Read the attached document with AI and pre-fill title / date / summary.
   async function autoRead() {
@@ -636,7 +648,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map(p => (
-              <button key={p.id} onClick={() => openProfile(p)} className="bg-white border border-border rounded-card p-5 text-center shadow-sm hover:shadow-md hover:border-border-light transition-all">
+              <div key={p.id} onClick={() => openProfile(p)} className="bg-white border border-border rounded-card p-5 text-center shadow-sm hover:shadow-md hover:border-border-light transition-all cursor-pointer">
                 {p.photo
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={p.photo} alt={p.name} className="w-20 h-20 rounded-full object-cover border border-border-light mx-auto" />
@@ -645,7 +657,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 {p.position && <div className="text-xs text-text-muted truncate">{p.position}</div>}
                 <div className="text-[11px] text-text-muted mt-2">{p.doc_count ?? 0} document{(p.doc_count ?? 0) === 1 ? '' : 's'}</div>
                 {surveyStatus[p.id] && <div className={`mt-1.5 inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${surveyStatus[p.id] === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`} title="Tools & Access survey">{surveyStatus[p.id] === 'Completed' ? '✓ Tools submitted' : 'Survey sent'}</div>}
-              </button>
+                {!readOnly && tab !== 'offboarded' && (
+                  <div className="mt-2">
+                    <button onClick={e => { e.stopPropagation(); setWorkerType(p); }} title="Switch between Employee and Contractor"
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border-light text-text-secondary hover:bg-canvas">
+                      {/contract/i.test(String(p.worker_type ?? '')) ? '⇄ Make employee' : '⇄ Make contractor'}
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
