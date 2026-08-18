@@ -114,6 +114,58 @@ export function newRow(label = ''): DocRow { return { id: rid(), label, cell: {}
 // Backwards-compatible alias.
 export const newAccount = newRow;
 
+// ---- Shared document template ---------------------------------------------
+// The ROW STRUCTURE (labels/hints per section) is shared by every hire, so
+// editing rows updates one template. Each hire keeps their own per-row cells
+// (assignee/deadline/initials/date/notes), matched by row id.
+// `assignees` are EXTRA names added beyond the built-in ONBOARDING_ASSIGNEES,
+// shared across all hires' documents.
+export interface DocTemplate { hr: DocItem[]; accounts: DocItem[]; it: DocItem[]; assignees: string[] }
+
+export function defaultTemplate(): DocTemplate {
+  const items = (key: 'hr' | 'it') => (ONB_DOC_SECTIONS.find(s => s.key === key)?.items ?? []).map(i => ({ id: i.id, label: i.label, hint: i.hint }));
+  return {
+    hr: items('hr'),
+    accounts: ONB_DEFAULT_ACCOUNTS.map((a, idx) => ({ id: `acct-def-${idx}`, label: a.label, hint: a.hint })),
+    it: items('it'),
+    assignees: [],
+  };
+}
+
+export function parseTemplate(v: any): DocTemplate {
+  let d: any = v;
+  try { if (typeof v === 'string') d = JSON.parse(v); } catch { d = null; }
+  if (!d || typeof d !== 'object') return defaultTemplate();
+  const base = defaultTemplate();
+  const arr = (x: any, fb: DocItem[]): DocItem[] => Array.isArray(x) ? x.map((i: any) => ({ id: String(i?.id ?? rid()), label: String(i?.label ?? ''), hint: i?.hint })) : fb;
+  const names = Array.isArray(d.assignees) ? Array.from(new Set(d.assignees.map((s: any) => String(s).trim()).filter(Boolean))) as string[] : [];
+  return { hr: arr(d.hr, base.hr), accounts: arr(d.accounts, base.accounts), it: arr(d.it, base.it), assignees: names };
+}
+
+// All selectable assignee names for the document: the built-in set plus any the
+// firm has added to the template.
+export function allAssignees(tpl: DocTemplate | null | undefined): string[] {
+  const extra = (tpl?.assignees ?? []).filter(n => !ONBOARDING_ASSIGNEES.includes(n as any));
+  return [...ONBOARDING_ASSIGNEES, ...extra];
+}
+
+// Extract the shared template rows (structure) from a hire's document. Assignee
+// names live only on the template, so callers merge those in separately.
+export function templateFromDoc(doc: OnboardingDoc): Omit<DocTemplate, 'assignees'> {
+  const strip = (rows: DocRow[]) => rows.map(r => ({ id: r.id, label: r.label, hint: r.hint }));
+  return { hr: strip(doc.hr), accounts: strip(doc.accounts), it: strip(doc.it) };
+}
+
+// Rebuild a hire's document rows from the shared template, keeping their cells
+// (matched by row id). Template is authoritative for the row set + labels/hints;
+// the hire keeps their own cell data.
+export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
+  const cells: Record<string, Cell> = {};
+  for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) cells[r.id] = r.cell;
+  const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? {} }));
+  return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff };
+}
+
 const cellDone = (c: Cell | undefined) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
 
 // Progress across all task rows (HR + Ops accounts + IT).

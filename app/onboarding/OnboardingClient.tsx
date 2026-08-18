@@ -5,7 +5,7 @@ import { useToast } from '@/components/Toast';
 import IntakeLinks from './IntakeLinks';
 import OnboardingDoc from './OnboardingDoc';
 import { FIRM_SYSTEMS } from '@/lib/firmSystems';
-import { parseDoc as parseOnbDoc, type OnboardingDoc as OnbDoc } from '@/lib/onboardingDoc';
+import { parseDoc as parseOnbDoc, reconcile as reconcileDoc, allAssignees, defaultTemplate, type OnboardingDoc as OnbDoc, type DocTemplate as OnbTemplate } from '@/lib/onboardingDoc';
 import { useAccess } from '@/components/AccessProvider';
 
 interface Item {
@@ -728,6 +728,15 @@ export default function OnboardingClient() {
       const d = await res.json();
       if (d.row) setPeople(prev => prev.map(p => p.id === id ? d.row : p));
     } catch { showToast('Save failed'); }
+  }
+  // Shared onboarding-document template (row structure + custom assignee names)
+  // — the same rows for every hire.
+  const [docTemplate, setDocTemplate] = useState<OnbTemplate>(defaultTemplate());
+  useEffect(() => { fetch('/api/onboarding/doc-template').then(r => r.json()).then(d => { if (d.template) setDocTemplate(d.template); }).catch(() => {}); }, []);
+  async function saveDocTemplate(tpl: OnbTemplate) {
+    setDocTemplate(tpl);
+    try { await fetch('/api/onboarding/doc-template', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: tpl }) }); }
+    catch { showToast('Could not save template'); }
   }
   async function setStage(person: any, key: string) {
     if (key === 'complete') { completeOnboardee(person); return; }
@@ -1951,7 +1960,14 @@ export default function OnboardingClient() {
                     <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
                     <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
                   </div>
-                  <OnboardingDoc rec={{ ...person, doc: parseOnbDoc(person.doc) }} readOnly={docReadOnly} lockAssignment={!!me?.restricted} onSave={d => patchDoc(person.id, d)} />
+                  <OnboardingDoc
+                    rec={{ ...person, doc: reconcileDoc(parseOnbDoc(person.doc), docTemplate) }}
+                    readOnly={docReadOnly}
+                    lockAssignment={!!me?.restricted}
+                    assignees={allAssignees(docTemplate)}
+                    onAddAssignee={name => { const n = name.trim(); if (n && !allAssignees(docTemplate).includes(n)) saveDocTemplate({ ...docTemplate, assignees: [...docTemplate.assignees, n] }); }}
+                    onTemplateSave={rows => saveDocTemplate({ ...rows, assignees: docTemplate.assignees })}
+                    onSave={d => patchDoc(person.id, d)} />
                 </div>
                 ) : (
                 <div className="bg-white border border-border rounded-card overflow-hidden">

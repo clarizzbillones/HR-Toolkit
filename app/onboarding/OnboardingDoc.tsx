@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ONB_DOC_SECTIONS, ONB_BENEFITS_REF, ONBOARDING_ASSIGNEES,
-  docProgress, docSignedOff, newAccount,
-  type OnboardingDoc as Doc, type Cell,
+  docProgress, docSignedOff, newAccount, templateFromDoc,
+  type OnboardingDoc as Doc, type Cell, type DocTemplate,
 } from '@/lib/onboardingDoc';
+
+const ASSIGNEE_LIST_ID = 'onb-assignees';
 
 interface RecLite { id: string; name: string; position: string | null; start_date: string | null; doc: Doc }
 
@@ -18,13 +20,18 @@ function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</
 // Catie's streamlined onboarding document: HR → Ops → IT, each task assigned to
 // a person with a deadline, who then initials + dates it, then Catie signs off
 // each section. Mirrors the offboarding document.
-export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }: {
-  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean; onSave: (doc: Doc) => void;
+export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onTemplateSave, onSave }: {
+  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean;
+  assignees?: string[];
+  onAddAssignee?: (name: string) => void;
+  onTemplateSave?: (rows: Omit<DocTemplate, 'assignees'>) => void;
+  onSave: (doc: Doc) => void;
 }) {
   // When lockAssignment is on (granted editors who aren't full-access admins),
   // the "Assigned to" and "Deadline" are set by an admin up front and can't be
   // changed — they can only mark their part done (initials / date / notes).
   const assignRO = readOnly || lockAssignment;
+  const assigneeList = assignees && assignees.length ? assignees : [...ONBOARDING_ASSIGNEES];
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
@@ -35,6 +42,9 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
     mut(next); ref.current = next; setDoc(next); return next;
   }
   const persist = () => onSave(ref.current);
+  // Structural edits (rename / add / remove a row) update the SHARED template so
+  // every hire's document stays the same; cell edits stay on this hire.
+  const saveStructure = () => { persist(); onTemplateSave?.(templateFromDoc(ref.current)); };
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
 
   const { done: dn, total } = docProgress(doc);
@@ -53,11 +63,10 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Initials</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#2f7d5b]">Date done</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Notes</span>
-        <select disabled={assignRO} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
-          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
-          <option value="">Assign to…</option>
-          {ONBOARDING_ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+        <input list={ASSIGNEE_LIST_ID} disabled={assignRO} value={c.assignee ?? ''} placeholder="Assign to…"
+          onChange={e => set({ assignee: e.target.value }, false)}
+          onBlur={() => { persist(); const v = (get().assignee ?? '').trim(); if (v && !assigneeList.includes(v)) onAddAssignee?.(v); }}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary" />
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />
         <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="—"
@@ -102,17 +111,17 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
             <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
               <div className="flex items-start gap-2">
                 <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-                <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={persist}
+                <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={saveStructure}
                   placeholder={placeholder} className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
                 {!complete && a.cell.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(a.cell.deadline)}</span>}
-                {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); persist(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
+                {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); saveStructure(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
               </div>
               {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
               <CellFields get={() => doc[listKey][i].cell} set={(p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); }} />
             </div>
           );
         })}
-        {!assignRO && <button onClick={() => { apply(d => { d[listKey].push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">{addLabel}</button>}
+        {!assignRO && <button onClick={() => { apply(d => { d[listKey].push(newAccount()); }); saveStructure(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">{addLabel}</button>}
       </div>
     );
   }
@@ -164,6 +173,9 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
 
   return (
     <div className="space-y-5">
+      {/* Assignee suggestions — built-in names plus any the firm has added. Type a
+          new name in any "Assign to" box to add it for everyone. */}
+      <datalist id={ASSIGNEE_LIST_ID}>{assigneeList.map(a => <option key={a} value={a} />)}</datalist>
       {/* Progress + sign-off banner */}
       <div className="bg-white border border-border rounded-card p-5">
         <div className="flex items-center justify-between gap-2 mb-2">
