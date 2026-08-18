@@ -159,7 +159,11 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
     const key = String(profile.name ?? '').trim().toLowerCase();
     if (!key) return out;
 
-    // 1) Staffing — fill any blank profile field (never overwrites existing).
+    // 1) Staffing is the source of truth for the directory fields (email, phone,
+    //    position, start date, DOB, travel/personal columns). Update the profile
+    //    whenever Staffing has a value that differs — so an edit in Staffing (e.g.
+    //    a new email) shows up here on open. A blank in Staffing never wipes an
+    //    existing profile value (so profile-only data is preserved).
     try {
       const [srow] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
       if (srow) {
@@ -168,7 +172,7 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
         for (const [k, v] of Object.entries(src)) {
           const sv = v == null ? '' : String(v).trim();
           const cur = profile[k] == null ? '' : String(profile[k]).trim();
-          if (sv && !cur) updates[k] = sv;
+          if (sv && sv !== cur) updates[k] = sv;
         }
         if (Object.keys(updates).length) { await sql`UPDATE employee_profiles SET ${sql(updates)} WHERE id = ${profileId}`; out.staffingFilled = true; }
       }
