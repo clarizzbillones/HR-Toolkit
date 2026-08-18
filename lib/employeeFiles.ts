@@ -156,16 +156,17 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
     await ensureFiles();
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${profileId}` as any[];
     if (!profile) return out;
-    const key = String(profile.name ?? '').trim().toLowerCase();
+    const key = String(profile.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!key) return out;
 
     // 1) Staffing is the source of truth for the directory fields (email, phone,
     //    position, start date, DOB, travel/personal columns). Update the profile
     //    whenever Staffing has a value that differs — so an edit in Staffing (e.g.
     //    a new email) shows up here on open. A blank in Staffing never wipes an
-    //    existing profile value (so profile-only data is preserved).
+    //    existing profile value (so profile-only data is preserved). Name match
+    //    is whitespace-tolerant (collapses double spaces).
     try {
-      const [srow] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
+      const [srow] = await sql`SELECT * FROM staff_directory WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[];
       if (srow) {
         const src = staffToProfile(srow);
         const updates: Record<string, any> = {};

@@ -80,6 +80,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ profiles, created });
   }
 
+  // Resync one profile from Staffing and report what matched — so a name
+  // mismatch (why an edited Staffing email wouldn't flow through) is visible.
+  if (b.action === 'resync-report' && b.id) {
+    try { await syncAllForProfile(b.id); } catch { /* best-effort */ }
+    const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
+    const key = String(profile?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    let srow: any = null, offMatch: any = null;
+    try { [srow] = await sql`SELECT name, email FROM staff_directory WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[]; } catch { /* ignore */ }
+    if (!srow) { try { [offMatch] = await sql`SELECT name, email FROM offboarded_staff WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[]; } catch { /* ignore */ } }
+    return NextResponse.json({
+      profile, matched: !!srow,
+      staffingName: srow?.name ?? null, staffingEmail: srow?.email ?? null,
+      offboardedMatch: offMatch ? { name: offMatch.name, email: offMatch.email } : null,
+    });
+  }
+
   if (!b.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   const id = cuid();
   const row: Record<string, any> = {

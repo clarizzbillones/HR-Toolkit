@@ -97,6 +97,18 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setAccounts(a.accounts ?? []);
   }
 
+  // Resync this profile from Staffing and report what matched — makes a name
+  // mismatch obvious (the usual reason a Staffing email edit doesn't appear).
+  async function resyncFromStaffing() {
+    if (!selected) return;
+    const res = await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resync-report', id: selected.id }) });
+    const d = await res.json();
+    if (d.profile) setSelected(d.profile);
+    if (d.matched) showToast(`Synced from Staffing (${d.staffingName}). Email is now ${d.staffingEmail || '—'}.`);
+    else if (d.offboardedMatch) showToast(`“${selected.name}” is in Offboarded staff, not active Staffing. Restore them or fix the name to sync.`);
+    else showToast(`No Staffing record matches “${selected.name}”. Check the name is spelled exactly the same in Staffing.`);
+  }
+
   // ---- Accounts & Access ----
   async function addAccount() {
     if (!selected) return;
@@ -370,8 +382,9 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         </div>
                       )}
                       {!readOnly && (
-                        <div className="flex gap-2 mt-4">
+                        <div className="flex gap-2 mt-4 flex-wrap">
                           <button onClick={() => setEditingProfile(true)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">Edit profile</button>
+                          <button onClick={resyncFromStaffing} title="Pull the latest email, phone, position, etc. from Staffing (and report if the name doesn't match)" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">↻ Resync from Staffing</button>
                           <button onClick={deleteProfile} className="text-xs font-semibold text-litred-alt border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </div>
                       )}
