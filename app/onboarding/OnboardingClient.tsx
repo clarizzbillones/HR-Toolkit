@@ -1296,7 +1296,8 @@ export default function OnboardingClient() {
   function printDoc(innerHtml: string, name: string, label: string) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson — New Hire Onboarding Guide</title>
+    const docTitle = `${label ? label + ' — ' : ''}Litson Onboarding Guide`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
       <style>@page{size:A4;margin:14mm} body{font-family:${SANS}} h2{break-after:avoid} tr,td,th{break-inside:avoid}</style></head>
       <body style="margin:0;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <div style="background:linear-gradient(120deg,#1b2a3d,#26405c);padding:24px 32px;border-bottom:4px solid #c9a24a;color:#fff">
