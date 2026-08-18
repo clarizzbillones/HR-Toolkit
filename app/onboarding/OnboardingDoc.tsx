@@ -6,7 +6,6 @@ import {
   type OnboardingDoc as Doc, type Cell, type DocTemplate,
 } from '@/lib/onboardingDoc';
 
-const ASSIGNEE_LIST_ID = 'onb-assignees';
 
 interface RecLite { id: string; name: string; position: string | null; start_date: string | null; doc: Doc }
 
@@ -63,10 +62,18 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Initials</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#2f7d5b]">Date done</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Notes</span>
-        <input list={ASSIGNEE_LIST_ID} disabled={assignRO} value={c.assignee ?? ''} placeholder="Assign to…"
-          onChange={e => set({ assignee: e.target.value }, false)}
-          onBlur={() => { persist(); const v = (get().assignee ?? '').trim(); if (v && !assigneeList.includes(v)) onAddAssignee?.(v); }}
-          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary" />
+        <select disabled={assignRO} value={c.assignee ?? ''}
+          onChange={e => {
+            const v = e.target.value;
+            if (v === '__add__') { const name = window.prompt('Add an assignee name:')?.trim(); if (name) { onAddAssignee?.(name); set({ assignee: name }, true); } return; }
+            set({ assignee: v }, true);
+          }}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
+          <option value="">Assign to…</option>
+          {c.assignee && !assigneeList.includes(c.assignee) && <option value={c.assignee}>{c.assignee}</option>}
+          {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
+          {!assignRO && <option value="__add__">➕ Add name…</option>}
+        </select>
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />
         <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="—"
@@ -173,9 +180,6 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
 
   return (
     <div className="space-y-5">
-      {/* Assignee suggestions — built-in names plus any the firm has added. Type a
-          new name in any "Assign to" box to add it for everyone. */}
-      <datalist id={ASSIGNEE_LIST_ID}>{assigneeList.map(a => <option key={a} value={a} />)}</datalist>
       {/* Progress + sign-off banner */}
       <div className="bg-white border border-border rounded-card p-5">
         <div className="flex items-center justify-between gap-2 mb-2">
