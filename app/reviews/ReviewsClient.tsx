@@ -488,7 +488,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 </button>
                 )}
                 {!readOnly && (
-                <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: '', notes: '' }); setShowSchedule(true); }}
+                <button onClick={() => { setForm({ name: upNext.e.name, role: displayRole(upNext.e), dept: upNext.e.dept, date: (upNext.c.next ?? '').slice(0, 10), notes: '' }); setLogFile(null); setShowSchedule(true); }}
                   className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-white/20 transition-colors">
                   Log completed
                 </button>
