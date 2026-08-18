@@ -302,7 +302,6 @@ export default function OffboardingClient() {
             {!readOnly && (rec.offboarded
               ? <button onClick={() => markOffboarded(rec, false)} className="text-sm font-semibold text-text-secondary border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">↩ Restore to active</button>
               : <button onClick={() => markOffboarded(rec, true)} className="bg-[#4a5a6d] text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-[#3c4a5a]" title="Mark offboarded and move to the Offboarded lists in Staffing & Employee Files">✓ Move to Offboarded</button>)}
-            {!restricted && effView === 'document' && <button onClick={() => notifyAssignees(rec.id)} disabled={notifyBusy} title="Email each assigned person the open tasks assigned to them (only people set up in Access Control)" className="bg-white border border-border-light text-[#3f6b8a] text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify'}</button>}
             <button onClick={() => (docView === 'document' ? printOffDoc(rec) : printDoc(rec))} className="bg-ink text-white text-sm font-semibold px-3.5 py-2 rounded-ctrl hover:bg-ink-dark" title={docView === 'document' ? 'Print Catie’s signed offboarding document' : 'Print the compliance checklist'}>⤓ Print / PDF</button>
             {!readOnly && <button onClick={() => remove(rec)} className="text-sm font-semibold text-litred-alt border border-border-light px-3 py-2 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
           </div>
@@ -370,7 +369,15 @@ export default function OffboardingClient() {
             {/* Checklist */}
             <div className="space-y-5">
               {effView === 'document' && (
+                <>
                 <OffboardingDoc rec={rec as any} readOnly={docReadOnly} lockAssignment={restricted} onSave={d => patch(rec.id, { doc: d } as any)} />
+                {!restricted && (
+                  <div className="flex items-center justify-end gap-3 flex-wrap">
+                    <span className="text-[11px] text-text-muted">Email each assigned person their open tasks (only people set up in Access Control).</span>
+                    <button onClick={() => notifyAssignees(rec.id)} disabled={notifyBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify assignees'}</button>
+                  </div>
+                )}
+                </>
               )}
               {effView === 'compliance' && canSeeModule && OFFBOARDING_CHECKLIST.map(sec => {
                 const sectionOff = !!sec.severance && !rec.offer_severance;

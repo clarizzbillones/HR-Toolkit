@@ -1972,12 +1972,9 @@ export default function OnboardingClient() {
 
                 {canSeeDoc && effTab === 'doc' ? (
                 <div>
-                  <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
-                      <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
-                    </div>
-                    {!me?.restricted && <button onClick={() => notifyAssignees(person.id, 'onboarding')} disabled={notifyBusy} title="Email each assigned person the open tasks assigned to them (only people set up in Access Control)" className="shrink-0 bg-white border border-border-light text-[#3f6b8a] text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify assignees'}</button>}
+                  <div className="mb-3">
+                    <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
+                    <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
                   </div>
                   <OnboardingDoc
                     rec={{ ...person, doc: reconcileDoc(parseOnbDoc(person.doc), docTemplate) }}
@@ -1987,6 +1984,12 @@ export default function OnboardingClient() {
                     onAddAssignee={name => { const n = name.trim(); if (n && !allAssignees(docTemplate).includes(n)) saveDocTemplate({ ...docTemplate, assignees: [...docTemplate.assignees, n] }); }}
                     onTemplateSave={rows => saveDocTemplate({ ...rows, assignees: docTemplate.assignees })}
                     onSave={d => patchDoc(person.id, d)} />
+                  {!me?.restricted && (
+                    <div className="mt-4 flex items-center justify-end gap-3 flex-wrap">
+                      <span className="text-[11px] text-text-muted">Email each assigned person their open tasks (only people set up in Access Control).</span>
+                      <button onClick={() => notifyAssignees(person.id, 'onboarding')} disabled={notifyBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify assignees'}</button>
+                    </div>
+                  )}
                 </div>
                 ) : (
                 <div className="bg-white border border-border rounded-card overflow-hidden">
