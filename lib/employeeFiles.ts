@@ -6,6 +6,14 @@ import { sql, cuid } from '@/lib/db';
 import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
 import { staffToProfile } from '@/lib/employeeProfile';
 
+// Robust name key for matching Staffing ↔ Employee File profiles: unicode-
+// normalize, replace any run of non-letter/number characters (spaces, hidden
+// characters, punctuation) with a single space, trim, lowercase. So "Damon
+// Taaffe", "Damon  Taaffe " and "damon taaffe" all match.
+export function normName(s: any): string {
+  return String(s ?? '').normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
+}
+
 // Drop the light inline markdown we use in notes so the summary text reads
 // cleanly in the Employee File card (which renders plain text).
 export function stripMd(s: any): string {
@@ -156,7 +164,7 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
     await ensureFiles();
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${profileId}` as any[];
     if (!profile) return out;
-    const key = String(profile.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const key = normName(profile.name);
     if (!key) return out;
 
     // 1) Staffing is the source of truth for the directory fields (email, phone,
@@ -164,9 +172,12 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
     //    whenever Staffing has a value that differs — so an edit in Staffing (e.g.
     //    a new email) shows up here on open. A blank in Staffing never wipes an
     //    existing profile value (so profile-only data is preserved). Name match
-    //    is whitespace-tolerant (collapses double spaces).
+    //    is done in JS with robust normalization (trims, collapses whitespace,
+    //    ignores punctuation and hidden characters) so identical-looking names
+    //    always match.
     try {
-      const [srow] = await sql`SELECT * FROM staff_directory WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[];
+      const staffRows = await sql`SELECT * FROM staff_directory` as any[];
+      const srow = staffRows.find(r => normName(r.name) === key);
       if (srow) {
         const src = staffToProfile(srow);
         const updates: Record<string, any> = {};

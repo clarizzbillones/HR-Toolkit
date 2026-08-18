@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { EXTRA_COLS, staffToProfile } from '@/lib/employeeProfile';
-import { syncAllForProfile } from '@/lib/employeeFiles';
+import { syncAllForProfile, normName } from '@/lib/employeeFiles';
 
 // Employee Files is HR-admin-only; enforce it on every request.
 async function requireHrAdmin() {
@@ -82,17 +82,43 @@ export async function POST(req: Request) {
 
   // Resync one profile from Staffing and report what matched — so a name
   // mismatch (why an edited Staffing email wouldn't flow through) is visible.
+  // Pass `linkName` to first rename the profile to that Staffing name (fixing a
+  // spelling mismatch), then sync.
   if (b.action === 'resync-report' && b.id) {
+    if (b.linkName && String(b.linkName).trim()) {
+      await sql`UPDATE employee_profiles SET name = ${String(b.linkName).trim()} WHERE id = ${b.id}`;
+    }
     try { await syncAllForProfile(b.id); } catch { /* best-effort */ }
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
-    const key = String(profile?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-    let srow: any = null, offMatch: any = null;
-    try { [srow] = await sql`SELECT name, email FROM staff_directory WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[]; } catch { /* ignore */ }
-    if (!srow) { try { [offMatch] = await sql`SELECT name, email FROM offboarded_staff WHERE lower(regexp_replace(name, '\s+', ' ', 'g')) = ${key} LIMIT 1` as any[]; } catch { /* ignore */ } }
+    const key = normName(profile?.name);
+    const staffAll = await sql`SELECT name, email FROM staff_directory` as any[];
+    const srow = staffAll.find(r => normName(r.name) === key) ?? null;
+    let offMatch: any = null;
+    if (!srow) { try { const offAll = await sql`SELECT name, email FROM offboarded_staff` as any[]; offMatch = offAll.find(r => normName(r.name) === key) ?? null; } catch { /* ignore */ } }
+    // No exact match — offer the closest Staffing names (typo-tolerant), so a
+    // spelling difference like "Taffe" vs "Taaffe" can be linked in one click.
+    let candidates: { name: string; email: string | null }[] = [];
+    if (!srow) {
+      const lev = (a: string, bb: string) => {
+        const m = a.length, n = bb.length; if (!m) return n; if (!n) return m;
+        const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+        for (let j = 1; j <= n; j++) d[0][j] = j;
+        for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+          d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === bb[j - 1] ? 0 : 1));
+        return d[m][n];
+      };
+      candidates = staffAll
+        .map(r => ({ name: r.name as string, email: (r.email ?? null) as string | null, d: lev(key, normName(r.name)) }))
+        .filter(r => r.d <= 3)
+        .sort((a, b2) => a.d - b2.d)
+        .slice(0, 3)
+        .map(({ name, email }) => ({ name, email }));
+    }
     return NextResponse.json({
       profile, matched: !!srow,
       staffingName: srow?.name ?? null, staffingEmail: srow?.email ?? null,
       offboardedMatch: offMatch ? { name: offMatch.name, email: offMatch.email } : null,
+      candidates,
     });
   }
 
