@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { COACHING_TYPES, coachingDraft, coachingDocHtml } from '@/lib/coachingDoc';
@@ -36,6 +36,12 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
   const [editId, setEditId] = useState<string | null>(null);
   const [filter, setFilter] = useState('All');
   const [viewRow, setViewRow] = useState<Row | null>(null);
+  // Clicking "Coaching" in the sidebar closes any open view/edit dialog.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/coaching') { setViewRow(null); setEditId(null); setShowForm(false); } };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
 
   const posOf = (name: string) => staff.find(s => s.name === name)?.position ?? '';
   const emailOf = (name: string) => staff.find(s => s.name === name)?.email ?? '';

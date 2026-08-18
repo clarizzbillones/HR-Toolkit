@@ -314,7 +314,8 @@ export default function OffersClient() {
     }
 
     // Bold the position, salary and start date wherever they appear in the body.
-    const salFmt = form.salary ? `$${Number(form.salary).toLocaleString('en-US')}` : '';
+    const salNum = Number(String(form.salary ?? '').replace(/[^0-9.]/g, ''));
+    const salFmt = form.salary ? `$${Number.isFinite(salNum) ? salNum.toLocaleString('en-US') : String(form.salary).trim()}` : '';
     const startFmt = form.startDate
       ? new Date(form.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       : '';

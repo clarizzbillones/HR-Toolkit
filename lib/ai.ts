@@ -58,7 +58,10 @@ export function localOffer(p: OfferParams): string {
   const last = nameParts.slice(1).join(' ');
   const salTitle = (p.salutationTitle ?? '').trim();
   const salutation = salTitle && last ? `${salTitle} ${last}` : nameParts[0];
-  const sal = Number(p.salary).toLocaleString('en-US');
+  // Accept amounts typed with commas/currency (e.g. "3,000" or "$3,000") — strip
+  // non-numerics before formatting so we never render "$NaN".
+  const salNum = Number(String(p.salary ?? '').replace(/[^0-9.]/g, ''));
+  const sal = Number.isFinite(salNum) && String(p.salary ?? '').trim() !== '' ? salNum.toLocaleString('en-US') : String(p.salary ?? '').trim();
   const loc = p.location || (p.employeeType === 'contractor' ? 'Remote' : 'Nashville, TN');
   const startDisplay = p.startDate
     ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })

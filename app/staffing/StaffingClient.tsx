@@ -141,6 +141,12 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const [cellEdit, setCellEdit] = useState<{ table: TabKey; id: string; colId: string } | null>(null);
   const [cellVal, setCellVal] = useState('');
   useEffect(() => { fetch('/api/staffing/columns').then(r => r.json()).then(d => { setCustomCols(d.columns ?? []); setColOrder(d.order ?? []); setOffOrder(d.offOrder ?? []); setVendorOrder(d.vendorOrder ?? []); }).catch(() => {}); }, []);
+  // Clicking "Staffing" in the sidebar closes any open edit dialog.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/staffing') { setEditStaff(null); setEditV(null); setCellEdit(null); } };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
 
   // A displayed column: fixed (has key) or custom (stored in `extra`).
   type UCol = { id: string; label: string; custom: boolean; key?: string };

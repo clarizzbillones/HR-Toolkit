@@ -47,6 +47,12 @@ export default function TripsClient({ initialTrips }: { initialTrips: Trip[] }) 
       if (data.trips_url) { setLinkedUrl(data.trips_url); setDashUrl(data.trips_url); }
     }).catch(() => {});
   }, []);
+  // Clicking "Trip Help Desk" in the sidebar returns to the default report view.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/trips') setActiveTab('report'); };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
 
   async function connectDash() {
     if (!dashUrl) return;
