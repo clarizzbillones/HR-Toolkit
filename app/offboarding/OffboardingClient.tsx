@@ -31,9 +31,22 @@ function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</
 
 export default function OffboardingClient() {
   const { showToast } = useToast();
-  // Restricted viewers are read-only — unless they were granted edit rights on
-  // Offboarding (so Catie / Caitlin / IT can add their initials).
-  const { me } = useAccess(); const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/offboarding');
+  // Two permission levels:
+  //  • Offboarding ('/offboarding')          → the whole module: checklist,
+  //    delete, mark-offboarded, exit interview, notes, add.
+  //  • Offboarding Document ('/offboarding-doc') → ONLY Catie's HR→Ops→IT
+  //    document. Granted with edit, they can fill it in and nothing else.
+  const { me } = useAccess();
+  const restricted = !!me?.restricted;
+  const editS = me?.editSections ?? [];
+  const secs = me?.sections ?? [];
+  // Can see the full module (checklist, exit interview, delete, notes, add).
+  const canSeeModule = !restricted || secs.includes('/offboarding');
+  // Module edits (checklist, delete, mark-offboarded, exit, notes) — this is the
+  // legacy `readOnly` used across the module UI.
+  const readOnly = restricted && !editS.includes('/offboarding');
+  // The document is editable with EITHER Offboarding-edit or Offboarding-Document.
+  const docReadOnly = restricted && !editS.includes('/offboarding') && !editS.includes('/offboarding-doc');
   const [rows, setRows] = useState<Rec[]>([]);
   const [employees, setEmployees] = useState<Emp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,6 +258,9 @@ export default function OffboardingClient() {
   // ---- Detail view ----
   if (selected) {
     const rec = selected;
+    // Document-only editors never see the compliance checklist — pin them to the
+    // document view.
+    const effView = canSeeModule ? docView : 'document';
     const { done, total } = activeProgress(rec);
     const pct = total ? Math.round((done / total) * 100) : 0;
     const status = offboardingStatus(rec);
@@ -322,7 +338,9 @@ export default function OffboardingClient() {
               )}
             </div>
 
-            {/* View toggle: Catie's signed document vs the compliance checklist */}
+            {/* View toggle: Catie's signed document vs the compliance checklist.
+                Hidden for document-only editors (they only get the document). */}
+            {canSeeModule && (
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5">
                 {([['document', 'Offboarding document'], ['compliance', 'Compliance checklist']] as const).map(([v, label]) => (
@@ -332,13 +350,14 @@ export default function OffboardingClient() {
               </div>
               {docView === 'document' && <span className="text-[11px] text-text-muted">Catie’s streamlined process — assign each task, initial &amp; date, then Catie signs off.</span>}
             </div>
+            )}
 
             {/* Checklist */}
             <div className="space-y-5">
-              {docView === 'document' && (
-                <OffboardingDoc rec={rec as any} readOnly={readOnly} onSave={d => patch(rec.id, { doc: d } as any)} />
+              {effView === 'document' && (
+                <OffboardingDoc rec={rec as any} readOnly={docReadOnly} onSave={d => patch(rec.id, { doc: d } as any)} />
               )}
-              {docView === 'compliance' && OFFBOARDING_CHECKLIST.map(sec => {
+              {effView === 'compliance' && canSeeModule && OFFBOARDING_CHECKLIST.map(sec => {
                 const sectionOff = !!sec.severance && !rec.offer_severance;
                 const activeItems = sec.items.filter(it => !isItemExcluded(rec, sec, it));
                 const secDone = activeItems.filter(it => rec.checklist[it.id]).length;
@@ -377,7 +396,8 @@ export default function OffboardingClient() {
                 );
               })}
 
-              {/* Exit interview */}
+              {/* Exit interview — module only (document-only editors don't see it) */}
+              {canSeeModule && (
               <div className="bg-white border border-border rounded-card p-5">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-gold-muted">Exit interview</label>
@@ -411,12 +431,15 @@ export default function OffboardingClient() {
                   </div>
                 )}
               </div>
+              )}
 
-              {/* Notes */}
+              {/* Notes — module only */}
+              {canSeeModule && (
               <div className="bg-white border border-border rounded-card p-5">
                 <label className="block text-xs font-bold uppercase tracking-widest text-gold-muted mb-2">Notes</label>
                 <textarea disabled={readOnly} value={rec.notes ?? ''} onChange={e => patch(rec.id, { notes: e.target.value })} rows={4} className={input + ' resize-y'} placeholder="Anything to note about this separation…" />
               </div>
+              )}
             </div>
           </div>
         </div>

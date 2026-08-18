@@ -19,6 +19,7 @@ export const SECTIONS: { key: string; label: string }[] = [
   { key: '/onboarding', label: 'Onboarding' },
   { key: '/onboarding-doc', label: 'Onboarding Document' },
   { key: '/offboarding', label: 'Offboarding' },
+  { key: '/offboarding-doc', label: 'Offboarding Document' },
   { key: '/reports', label: 'Reports' },
   { key: '/design', label: 'Graphic Design' },
 ];

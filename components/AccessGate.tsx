@@ -19,10 +19,12 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
   // The Onboarding Document is a sub-permission that lives inside /onboarding —
   // holding it grants access to the onboarding route too.
   const secs = me?.sections ?? [];
-  const allowed = secs.includes(sec) || (sec === '/onboarding' && secs.includes('/onboarding-doc'));
+  const allowed = secs.includes(sec)
+    || (sec === '/onboarding' && secs.includes('/onboarding-doc'))
+    || (sec === '/offboarding' && secs.includes('/offboarding-doc'));
   const denied = hrBlocked || (restricted && !allowed);
-  // Never send anyone to the pseudo-route; map it to the real onboarding page.
-  const firstReal = secs.map(s => s === '/onboarding-doc' ? '/onboarding' : s)[0];
+  // Never send anyone to a pseudo-route; map it to the real page.
+  const firstReal = secs.map(s => s === '/onboarding-doc' ? '/onboarding' : s === '/offboarding-doc' ? '/offboarding' : s)[0];
   const target = restricted ? firstReal : (hrBlocked ? '/' : undefined);
 
   useEffect(() => {

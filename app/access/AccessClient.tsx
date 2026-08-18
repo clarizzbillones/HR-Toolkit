@@ -132,7 +132,7 @@ export default function AccessClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex items-center gap-4 flex-wrap flex-shrink-0">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Access Control</h1>
-          <p className="text-sm text-text-muted mt-0.5">Check the tabs a person can open. Each is <b>view-only</b> until you switch it to <b className="text-[#b07d2a]">✎ Can edit</b> — which lets them fill in and change entries (e.g. add their initials, date &amp; notes). <b>Onboarding Document</b> is its own permission — check it (view or edit) to give someone Catie’s onboarding document without opening up the rest of Onboarding. Everyone not listed keeps full access.</p>
+          <p className="text-sm text-text-muted mt-0.5">Check the tabs a person can open. Each is <b>view-only</b> until you switch it to <b className="text-[#b07d2a]">✎ Can edit</b> — which lets them fill in and change entries (e.g. add their initials, date &amp; notes). <b>Onboarding Document</b> and <b>Offboarding Document</b> are their own permissions — check one (view or edit) to give someone just that document (they can fill it in) without opening up the rest of Onboarding/Offboarding, the checklist, exit interview, or the ability to delete anyone. Everyone not listed keeps full access.</p>
         </div>
         <button onClick={() => setEditing({ ...blank })} className="ml-auto bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">＋ Add viewer</button>
       </header>
