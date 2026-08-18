@@ -569,8 +569,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       <div className="flex-1 min-h-0 px-8 py-6 flex flex-col">
         <div className="bg-white border rounded-card overflow-hidden flex flex-col flex-1 min-h-0" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
           <div className="overflow-auto flex-1 min-h-0">
-            {tab === 'employees' && <StaffTable columns={empCols} data={fStaff} kind="employees" />}
-            {tab === 'offboarded' && <StaffTable columns={offCols} data={fOff} kind="offboarded" />}
+            {tab === 'employees' && StaffTable({ columns: empCols, data: fStaff, kind: 'employees' })}
+            {tab === 'offboarded' && StaffTable({ columns: offCols, data: fOff, kind: 'offboarded' })}
             {tab === 'vendors' && (
               <table className="w-full text-sm whitespace-nowrap">
                 <thead style={{ background: active.soft }}>
