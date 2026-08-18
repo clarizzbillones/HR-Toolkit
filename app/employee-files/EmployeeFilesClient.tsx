@@ -167,6 +167,9 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveySel, setSurveySel] = useState<Set<string>>(new Set());
+  // Filter the survey recipient list by response status so you can see who's
+  // still pending at a glance. 'pending' = survey sent but not yet submitted.
+  const [surveyFilter, setSurveyFilter] = useState<'all' | 'pending' | 'submitted' | 'notsent'>('all');
   const sendableEmployees = () => profiles.filter(p => !p.offboarded && String(p.email ?? '').trim());
   function openSurveyModal() {
     // Default to everyone who has an email and hasn't submitted yet.
@@ -609,34 +612,64 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       {showSurvey && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowSurvey(false)}>
           <div className="bg-white rounded-card w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-text-primary">Send Tools &amp; Access survey</div>
-                <div className="text-xs text-text-muted mt-0.5">Choose who receives it — <b>{surveySel.size}</b> selected.</div>
-              </div>
-              <button onClick={() => setShowSurvey(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
-            </div>
-            <div className="px-5 py-2 border-b border-border-light flex items-center gap-4 text-[11px] font-semibold">
-              <button onClick={() => setSurveySel(new Set(sendableEmployees().map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select all</button>
-              <button onClick={() => setSurveySel(new Set(sendableEmployees().filter(p => surveyStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
-              <button onClick={() => setSurveySel(new Set())} className="text-text-muted hover:underline">Clear</button>
-            </div>
-            <div className="flex-1 overflow-auto p-3 space-y-0.5">
-              {profiles.filter(p => !p.offboarded).map(p => {
-                const email = String(p.email ?? '').trim();
+            {(() => {
+              const everyone = profiles.filter(p => !p.offboarded);
+              const nPending = everyone.filter(p => surveyStatus[p.id] === 'Sent').length;
+              const nSubmitted = everyone.filter(p => surveyStatus[p.id] === 'Completed').length;
+              const nNotSent = everyone.filter(p => !surveyStatus[p.id]).length;
+              const shown = everyone.filter(p => {
                 const st = surveyStatus[p.id];
-                return (
-                  <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
-                    <input type="checkbox" disabled={!email} checked={surveySel.has(p.id)} onChange={() => toggleSurveySel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
-                    <span className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-text-primary">{p.name}</span>
-                      <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
-                    </span>
-                    {st && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : 'Sent'}</span>}
-                  </label>
-                );
-              })}
-            </div>
+                if (surveyFilter === 'pending') return st === 'Sent';
+                if (surveyFilter === 'submitted') return st === 'Completed';
+                if (surveyFilter === 'notsent') return !st;
+                return true;
+              });
+              const chip = (key: typeof surveyFilter, label: string, n: number, cls: string) => (
+                <button onClick={() => setSurveyFilter(key)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${surveyFilter === key ? cls : 'bg-white border-border-light text-text-muted hover:text-text-primary'}`}>{label} <b>{n}</b></button>
+              );
+              return (
+                <>
+                  <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-text-primary">Tools &amp; Access survey</div>
+                      <div className="text-xs text-text-muted mt-0.5">{nPending} awaiting response · {nSubmitted} submitted · {nNotSent} not sent. <b>{surveySel.size}</b> selected to send.</div>
+                    </div>
+                    <button onClick={() => setShowSurvey(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+                  </div>
+                  <div className="px-5 py-2 border-b border-border-light flex items-center gap-1.5 flex-wrap">
+                    {chip('all', 'All', everyone.length, 'bg-[#eef2f7] border-[#c9d6e3] text-[#3f5a76]')}
+                    {chip('pending', '⏳ Awaiting response', nPending, 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]')}
+                    {chip('submitted', '✓ Submitted', nSubmitted, 'bg-[#eef5f1] border-[#cfe4d8] text-[#2f7d5b]')}
+                    {chip('notsent', 'Not sent', nNotSent, 'bg-[#f3f0ea] border-border-light text-text-muted')}
+                  </div>
+                  <div className="px-5 py-2 border-b border-border-light flex items-center gap-4 text-[11px] font-semibold">
+                    <button onClick={() => setSurveySel(new Set(shown.filter(p => String(p.email ?? '').trim()).map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select shown</button>
+                    <button onClick={() => setSurveySel(new Set(sendableEmployees().filter(p => surveyStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
+                    <button onClick={() => setSurveySel(new Set())} className="text-text-muted hover:underline">Clear</button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-3 space-y-0.5">
+                    {shown.length === 0 && <p className="text-sm text-text-muted text-center py-6">No one in this group.</p>}
+                    {shown.map(p => {
+                      const email = String(p.email ?? '').trim();
+                      const st = surveyStatus[p.id];
+                      return (
+                        <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
+                          <input type="checkbox" disabled={!email} checked={surveySel.has(p.id)} onChange={() => toggleSurveySel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
+                          <span className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-text-primary">{p.name}</span>
+                            <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
+                          </span>
+                          {st
+                            ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : '⏳ Awaiting'}</span>
+                            : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
             <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
               <button onClick={() => setShowSurvey(false)} className="text-sm text-text-muted px-3">Cancel</button>
               <button onClick={sendSurveySelected} disabled={bulkBusy || surveySel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{bulkBusy ? 'Sending…' : `✉ Send to ${surveySel.size}`}</button>
