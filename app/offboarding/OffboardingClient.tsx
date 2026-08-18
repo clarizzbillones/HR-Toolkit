@@ -355,7 +355,7 @@ export default function OffboardingClient() {
             {/* Checklist */}
             <div className="space-y-5">
               {effView === 'document' && (
-                <OffboardingDoc rec={rec as any} readOnly={docReadOnly} onSave={d => patch(rec.id, { doc: d } as any)} />
+                <OffboardingDoc rec={rec as any} readOnly={docReadOnly} lockAssignment={restricted} onSave={d => patch(rec.id, { doc: d } as any)} />
               )}
               {effView === 'compliance' && canSeeModule && OFFBOARDING_CHECKLIST.map(sec => {
                 const sectionOff = !!sec.severance && !rec.offer_severance;

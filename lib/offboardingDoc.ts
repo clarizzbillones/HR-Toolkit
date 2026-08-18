@@ -5,7 +5,7 @@
 // Nothing is "complete" until all three sign-off rows are initialed & dated.
 
 // People a task can be assigned to (and who add their initials).
-export const OFFBOARDING_ASSIGNEES = ['Catie', 'Clarizz', 'Caitlin', 'Alex', 'Matt'] as const;
+export const OFFBOARDING_ASSIGNEES = ['Catie', 'Clarizz', 'Caitlin', 'Alex', 'Matthew'] as const;
 
 export interface DocItem { id: string; label: string; hint?: string }
 export interface DocSection { key: 'hr' | 'ops' | 'it'; heading: string; blurb: string; items: DocItem[] }

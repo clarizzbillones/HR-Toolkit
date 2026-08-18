@@ -6,7 +6,7 @@
 // Catie signs off each section; nothing is complete until all three are signed.
 
 // People a task can be assigned to (and who add their initials).
-export const ONBOARDING_ASSIGNEES = ['Catie', 'Clarizz', 'Caitlin', 'Alex', 'Matt'] as const;
+export const ONBOARDING_ASSIGNEES = ['Catie', 'Clarizz', 'Caitlin', 'Alex', 'Matthew'] as const;
 
 export interface DocItem { id: string; label: string; hint?: string }
 export interface DocSection { key: 'hr' | 'ops' | 'it'; heading: string; blurb: string; items: DocItem[] }

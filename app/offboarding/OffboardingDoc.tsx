@@ -10,9 +10,13 @@ interface RecLite { id: string; name: string; position: string | null; separatio
 
 // Catie's streamlined offboarding document: HR → Ops → IT, each task assigned to
 // a person who initials + dates it, then Catie signs off each section.
-export default function OffboardingDoc({ rec, readOnly, onSave }: {
-  rec: RecLite; readOnly?: boolean; onSave: (doc: Doc) => void;
+export default function OffboardingDoc({ rec, readOnly, lockAssignment, onSave }: {
+  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean; onSave: (doc: Doc) => void;
 }) {
+  // When lockAssignment is on (anyone who isn't a full-access admin), assigning
+  // tasks and adding/removing accounts are locked — they can only fill in their
+  // part (initials / date / notes). Full-access admins (Catie/Clarizz) can do all.
+  const assignRO = readOnly || lockAssignment;
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
@@ -35,9 +39,10 @@ export default function OffboardingDoc({ rec, readOnly, onSave }: {
     const c = get();
     return (
       <div className="grid grid-cols-2 sm:grid-cols-[130px_70px_140px_1fr] gap-2 mt-2">
-        <select disabled={readOnly} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
-          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink">
+        <select disabled={assignRO} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
           <option value="">Assign to…</option>
+          {c.assignee && !OFFBOARDING_ASSIGNEES.includes(c.assignee as any) && <option value={c.assignee}>{c.assignee}</option>}
           {OFFBOARDING_ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
@@ -70,8 +75,8 @@ export default function OffboardingDoc({ rec, readOnly, onSave }: {
   const opsField = (label: string, key: keyof Doc['ops']) => (
     <div>
       <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">{label}</label>
-      <input disabled={readOnly} value={doc.ops[key] ?? ''} onChange={e => apply(d => { d.ops[key] = e.target.value; })} onBlur={persist}
-        className="w-full border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink" />
+      <input disabled={assignRO} value={doc.ops[key] ?? ''} onChange={e => apply(d => { d.ops[key] = e.target.value; })} onBlur={persist}
+        className="w-full border border-border-light rounded-ctrl px-2.5 py-2 text-sm focus:outline-none focus:border-ink disabled:bg-[#f6f4f0]" />
     </div>
   );
 
@@ -92,6 +97,11 @@ export default function OffboardingDoc({ rec, readOnly, onSave }: {
             ? '✓ Signed off by Catie — complete. The employee has been moved to Offboarded and the signed document filed to their Employee File (HR Hub) automatically.'
             : 'Not complete until Catie reviews and signs off all three sections below. On sign-off, the employee is moved to Offboarded and the signed PDF is filed automatically.'}
         </div>
+        {lockAssignment && !readOnly && (
+          <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
+            HR assigns each task and adds accounts. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. Assigning tasks and adding/removing accounts are done by a full-access admin.
+          </div>
+        )}
       </div>
 
       {/* Section 1 — HR */}
@@ -133,16 +143,16 @@ export default function OffboardingDoc({ rec, readOnly, onSave }: {
               <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
                 <div className="flex items-start gap-2">
                   <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-                  <input disabled={readOnly} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
-                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none" />
-                  {!readOnly && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
+                  <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
+                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
+                  {!assignRO && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
                 </div>
                 {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
                 <CellFields get={() => doc.accounts[i].cell} set={(p, commit) => { apply(d => { d.accounts[i].cell = { ...d.accounts[i].cell, ...p }; }); if (commit) persist(); }} />
               </div>
             );
           })}
-          {!readOnly && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
+          {!assignRO && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
         </div>
       </Section>
 
