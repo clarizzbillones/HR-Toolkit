@@ -1296,7 +1296,11 @@ export default function OnboardingClient() {
   function printDoc(innerHtml: string, name: string, label: string) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-    const docTitle = `${label ? label + ' — ' : ''}Litson Onboarding Guide`;
+    // Saved-PDF name: "Paige Nutini — Attorney Benefits Package" when a hire and
+    // guide are known; falls back gracefully otherwise.
+    const docTitle = name.trim() && label ? `${name.trim()} — ${label}`
+      : label ? `${label} — Litson Onboarding Guide`
+      : 'Litson Onboarding Guide';
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
       <style>@page{size:A4;margin:14mm} body{font-family:${SANS}} h2{break-after:avoid} tr,td,th{break-inside:avoid}</style></head>
       <body style="margin:0;color:#2a2a2a;-webkit-print-color-adjust:exact;print-color-adjust:exact">
