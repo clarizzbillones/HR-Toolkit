@@ -89,6 +89,34 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
     );
   }
 
+  // An editable list of rows for a section — rename the label, remove a row, add
+  // rows, and fill each cell. Structural edits (rename/add/remove) are locked
+  // for granted editors (assignRO); they can still fill in initials/date/notes.
+  function RowSection({ listKey, addLabel, placeholder }: { listKey: 'hr' | 'accounts' | 'it'; addLabel: string; placeholder: string }) {
+    const rows = doc[listKey];
+    return (
+      <div className="space-y-2">
+        {rows.map((a, i) => {
+          const complete = done(a.cell);
+          return (
+            <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
+              <div className="flex items-start gap-2">
+                <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
+                <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={persist}
+                  placeholder={placeholder} className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
+                {!complete && a.cell.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(a.cell.deadline)}</span>}
+                {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); persist(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
+              </div>
+              {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
+              <CellFields get={() => doc[listKey][i].cell} set={(p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); }} />
+            </div>
+          );
+        })}
+        {!assignRO && <button onClick={() => { apply(d => { d[listKey].push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">{addLabel}</button>}
+      </div>
+    );
+  }
+
   const hr = ONB_DOC_SECTIONS.find(s => s.key === 'hr')!;
   const it = ONB_DOC_SECTIONS.find(s => s.key === 'it')!;
 
@@ -123,10 +151,10 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
   <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
     ${meta('Employee name', rec.name)}${meta('Position / Title', rec.position || '')}${meta('Start date', fmtDate(rec.start_date))}
   </div>
-  ${sectionHead(hr.heading, hr.blurb)}${table(hr.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}${benefits}
+  ${sectionHead(hr.heading, hr.blurb)}${table(d.hr.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}${benefits}
   ${sectionHead('Section 2 — Ops', 'Accounts to open for the new hire. Complete after HR; IT will not act until this section is signed off.')}
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts to open</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
-  ${sectionHead(it.heading, it.blurb)}${table(it.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}
+  ${sectionHead(it.heading, it.blurb)}${table(d.it.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}
   ${signoff}
   <div style="margin-top:18px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Onboarding is complete only once Catie has signed off all three sections. The signed document files automatically to the employee's Employee File (HR Hub).</div>
 </div>
@@ -161,13 +189,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
 
       {/* Section 1 — HR */}
       <Section heading={hr.heading} blurb={hr.blurb}>
-        <div className="space-y-2">
-          {hr.items.map(itm => (
-            <TaskRow key={itm.id} label={itm.label} hint={itm.hint}
-              get={() => doc.items[itm.id] ?? {}}
-              set={(p, commit) => { apply(d => { d.items[itm.id] = { ...(d.items[itm.id] ?? {}), ...p }; }); if (commit) persist(); }} />
-          ))}
-        </div>
+        <RowSection listKey="hr" addLabel="+ Add HR task" placeholder="Task name" />
         {/* Benefits quick reference */}
         <div className="mt-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Benefits quick reference</div>
@@ -185,36 +207,12 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, onSave }:
       {/* Section 2 — Ops */}
       <Section heading="Section 2 — Ops" blurb="Accounts to open for the new hire. Complete after HR; IT will not act until this section is signed off.">
         <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts to open</div>
-        <div className="space-y-2">
-          {doc.accounts.map((a, i) => {
-            const complete = done(a.cell);
-            return (
-              <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
-                <div className="flex items-start gap-2">
-                  <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-                  <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
-                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
-                  {!complete && a.cell.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(a.cell.deadline)}</span>}
-                  {!assignRO && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
-                </div>
-                {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
-                <CellFields get={() => doc.accounts[i].cell} set={(p, commit) => { apply(d => { d.accounts[i].cell = { ...d.accounts[i].cell, ...p }; }); if (commit) persist(); }} />
-              </div>
-            );
-          })}
-          {!assignRO && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
-        </div>
+        <RowSection listKey="accounts" addLabel="+ Add account" placeholder="Account / system name" />
       </Section>
 
       {/* Section 3 — IT */}
       <Section heading={it.heading} blurb={it.blurb}>
-        <div className="space-y-2">
-          {it.items.map(itm => (
-            <TaskRow key={itm.id} label={itm.label} hint={itm.hint}
-              get={() => doc.items[itm.id] ?? {}}
-              set={(p, commit) => { apply(d => { d.items[itm.id] = { ...(d.items[itm.id] ?? {}), ...p }; }); if (commit) persist(); }} />
-          ))}
-        </div>
+        <RowSection listKey="it" addLabel="+ Add IT task" placeholder="Task name" />
       </Section>
 
       {/* Sign-Off */}

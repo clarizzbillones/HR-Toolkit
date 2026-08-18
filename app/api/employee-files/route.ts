@@ -53,11 +53,14 @@ export async function GET(req: Request) {
     const docs = await sql`SELECT * FROM employee_files WHERE profile_id = ${id} ORDER BY doc_date DESC NULLS LAST, created_at DESC`;
     return NextResponse.json({ profile, docs: (docs as any[]).map(stripDoc) });
   }
-  // List: profiles without photo blobs would be nicer, but photos are small;
-  // include a doc count for the tiles.
-  const profiles = await sql`
-    SELECT p.*, (SELECT COUNT(*)::int FROM employee_files f WHERE f.profile_id = p.id) AS doc_count
-    FROM employee_profiles p ORDER BY p.name ASC`;
+  // List: profiles with a doc count for the tiles. The Employees/Contractors
+  // split follows Staffing's worker type, so overlay the current Staffing value
+  // (matched by name) onto each profile.
+  const rows = await sql`
+    SELECT p.*, (SELECT COUNT(*)::int FROM employee_files f WHERE f.profile_id = p.id) AS doc_count,
+      (SELECT s.worker_type FROM staff_directory s WHERE lower(s.name) = lower(p.name) AND COALESCE(NULLIF(TRIM(s.worker_type), ''), '') <> '' LIMIT 1) AS staff_worker_type
+    FROM employee_profiles p ORDER BY p.name ASC` as any[];
+  const profiles = rows.map(({ staff_worker_type, ...p }) => ({ ...p, worker_type: staff_worker_type ?? p.worker_type }));
   return NextResponse.json({ profiles });
 }
 

@@ -5,7 +5,7 @@
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import { parseSignatories, fmtLong } from './coachingDoc';
 import { DOC_SECTIONS, BENEFITS_REF, type OffboardingDoc, type Cell } from './offboardingDoc';
-import { ONB_DOC_SECTIONS, ONB_BENEFITS_REF, type OnboardingDoc, type Cell as OnbCell } from './onboardingDoc';
+import { ONB_BENEFITS_REF, type OnboardingDoc, type Cell as OnbCell } from './onboardingDoc';
 
 const GREEN = rgb(0.18, 0.49, 0.36);
 
@@ -299,11 +299,8 @@ export async function onboardingDocPdfDataUrl(rec: any): Promise<string> {
   };
   const heading = (t: string) => { d.gap(4); d.para(t, { font: bold, size: 13 }); d.gap(4); };
 
-  const hr = ONB_DOC_SECTIONS.find(s => s.key === 'hr')!;
-  const it = ONB_DOC_SECTIONS.find(s => s.key === 'it')!;
-
   heading('Section 1 - HR');
-  for (const i of hr.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  for (const r of doc.hr) taskRow(r.label, r.hint, r.cell);
   d.gap(2); d.para('BENEFITS QUICK REFERENCE', { font: bold, size: 8, color: MUTED });
   for (const b of ONB_BENEFITS_REF) d.para(`${b.benefit} - ${b.begins}. ${b.notes}`, { bullet: true, indent: 14, size: 9.5 });
   d.rule();
@@ -314,7 +311,7 @@ export async function onboardingDocPdfDataUrl(rec: any): Promise<string> {
   d.rule();
 
   heading('Section 3 - IT');
-  for (const i of it.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  for (const r of doc.it) taskRow(r.label, r.hint, r.cell);
   d.rule();
 
   heading('Sign-Off - Catie');
