@@ -290,8 +290,12 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const alpha = (x: string, y: string) => { const a = x.trim(), b = y.trim(); if (!a && !b) return 0; if (!a) return 1; if (!b) return -1; return a.localeCompare(b, undefined, { sensitivity: 'base' }); };
   const byName = (a: any, b: any) => alpha(a.name ?? '', b.name ?? '');
   const byEntity = (a: any, b: any) => alpha((a.entity ?? a.name) ?? '', (b.entity ?? b.name) ?? '');
-  // A column's value for a row (built-in field or custom `extra` value).
-  const colValue = (r: any, col: UCol) => String(col.custom ? extraVal(r, col.id) : (r[col.key!] ?? ''));
+  // A column's value for a row — matches what's displayed, so filtering/sorting
+  // the Type column treats a blank as "Employee" (its shown default).
+  const colValue = (r: any, col: UCol) => {
+    if (!col.custom && col.key === 'worker_type') return String(r.worker_type || 'Employee');
+    return String(col.custom ? extraVal(r, col.id) : (r[col.key!] ?? ''));
+  };
   // Apply the header filters and click-to-sort; falls back to the default sort.
   function applyView<T>(list: T[], cols: UCol[], defaultCmp: (a: T, b: T) => number): T[] {
     let out = list;
