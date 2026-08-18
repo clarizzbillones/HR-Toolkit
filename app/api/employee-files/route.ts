@@ -26,6 +26,7 @@ async function ensure() {
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
   await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS accounts_locked BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS docs_locked BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`CREATE TABLE IF NOT EXISTS employee_files (
     id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, category TEXT, title TEXT, doc_date TEXT,
     summary TEXT, what_we_did TEXT, next_steps TEXT, author TEXT,
@@ -85,6 +86,11 @@ export async function POST(req: Request) {
   // edits or deletions). Partial update — does not touch other profile fields.
   if (b.action === 'set-accounts-lock' && b.id) {
     await sql`UPDATE employee_profiles SET accounts_locked = ${!!b.locked} WHERE id = ${b.id}`;
+    const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
+    return NextResponse.json({ profile });
+  }
+  if (b.action === 'set-docs-lock' && b.id) {
+    await sql`UPDATE employee_profiles SET docs_locked = ${!!b.locked} WHERE id = ${b.id}`;
     const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${b.id}` as any[];
     return NextResponse.json({ profile });
   }

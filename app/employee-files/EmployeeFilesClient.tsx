@@ -10,7 +10,7 @@ interface Profile {
   address?: string | null; salary?: string | null; dob?: string | null;
   favorite_color?: string | null; favorite_treat?: string | null; ktn?: string | null;
   marriott?: string | null; delta?: string | null; southwest?: string | null; american?: string | null;
-  weight?: string | null; worker_type?: string | null; accounts_locked?: boolean;
+  weight?: string | null; worker_type?: string | null; accounts_locked?: boolean; docs_locked?: boolean;
 }
 // Extra profile fields, grouped for the edit form + read-only display.
 const EXTRA_GROUPS: { heading: string; fields: [string, keyof Profile][] }[] = [
@@ -77,12 +77,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [editDocId, setEditDocId] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
 
-  const [tab, setTab] = useState<'active' | 'offboarded'>('active');
+  const [tab, setTab] = useState<'employees' | 'contractors' | 'offboarded'>('employees');
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const s = search.toLowerCase();
+  const isContractor = (p: Profile) => /contract/i.test(String(p.worker_type ?? ''));
   const offCount = profiles.filter(p => p.offboarded).length;
+  const empCount = profiles.filter(p => !p.offboarded && !isContractor(p)).length;
+  const conCount = profiles.filter(p => !p.offboarded && isContractor(p)).length;
   const filtered = profiles
-    .filter(p => (tab === 'offboarded' ? p.offboarded : !p.offboarded))
+    .filter(p => tab === 'offboarded' ? p.offboarded : tab === 'contractors' ? (!p.offboarded && isContractor(p)) : (!p.offboarded && !isContractor(p)))
     .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s));
 
   async function openProfile(p: Profile) {
@@ -126,6 +129,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     try {
       await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-accounts-lock', id: selected.id, locked }) });
       showToast(locked ? '🔒 Accounts locked — no edits' : '🔓 Accounts unlocked');
+    } catch { showToast('Could not update lock'); }
+  }
+  async function toggleDocsLock() {
+    if (!selected) return;
+    const locked = !selected.docs_locked;
+    setSelected(p => p ? { ...p, docs_locked: locked } : p);
+    try {
+      await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-docs-lock', id: selected.id, locked }) });
+      showToast(locked ? '🔒 Documents locked — no edits' : '🔓 Documents unlocked');
     } catch { showToast('Could not update lock'); }
   }
 
@@ -329,8 +341,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
   // ---- Detail view ----
   if (selected) {
-    // Accounts are read-only when the viewer is restricted OR the list is locked.
+    // Accounts / documents are read-only when the viewer is restricted OR that
+    // section is locked (guards against accidental edits & deletes).
     const acctRO = readOnly || !!selected.accounts_locked;
+    const docsRO = readOnly || !!selected.docs_locked;
     return (
       <div className="flex flex-col h-full overflow-hidden">
         <header className="px-8 py-4 bg-white border-b border-border flex-shrink-0 flex items-center gap-3">
@@ -484,8 +498,12 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                     <span className="inline-flex items-center gap-1 text-[11px] text-text-muted" title="Staffing details, Coaching forms, and Performance Reviews are pulled in automatically whenever this file is opened — no need to click anything.">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#2f7d5b]" />Auto-synced from Staffing · Coaching · Reviews
                     </span>
+                    <button onClick={toggleDocsLock} title={selected.docs_locked ? 'Locked — click to unlock and allow edits' : 'Lock these documents so nothing can be edited or deleted by accident'}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-ctrl border ${selected.docs_locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]' : 'border-border-light text-text-secondary hover:bg-canvas'}`}>
+                      {selected.docs_locked ? '🔒 Locked' : '🔓 Lock'}
+                    </button>
                     <button onClick={() => refreshNow()} disabled={syncing} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas disabled:opacity-50">{syncing ? 'Refreshing…' : '↻ Refresh now'}</button>
-                    <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark ml-1">+ Add entry</button>
+                    {!docsRO && <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark ml-1">+ Add entry</button>}
                   </div>
                 )}
               </div>
@@ -548,12 +566,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${CAT_COLOR[d.category] ?? CAT_COLOR.Other}`}>{d.category}</span>
                         {d.doc_date && <span className="text-xs text-text-muted">{fmtDate(d.doc_date)}</span>}
                         {d.title && <span className="text-sm font-semibold text-text-primary">{d.title}</span>}
-                        {!readOnly && (
+                        {!docsRO && (
                           <div className="ml-auto flex gap-2">
                             <button onClick={() => startEditDoc(d)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                             <button onClick={() => deleteDoc(d)} className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                           </div>
                         )}
+                        {readOnly ? null : docsRO && <span className="ml-auto text-text-faint text-xs" title="Locked">🔒</span>}
                       </div>
                       {d.summary && <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap">{d.summary}</p>}
                       {d.what_we_did && <p className="text-sm mt-2"><span className="font-semibold text-text-primary">What we did:</span> <span className="text-text-secondary">{d.what_we_did}</span></p>}
@@ -579,7 +598,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Employee Files</h1>
-          <p className="text-sm text-text-muted mt-0.5">{profiles.length} employee{profiles.length === 1 ? '' : 's'}</p>
+          <p className="text-sm text-text-muted mt-0.5">{empCount} employee{empCount === 1 ? '' : 's'} · {conCount} contractor{conCount === 1 ? '' : 's'}{offCount ? ` · ${offCount} offboarded` : ''}</p>
         </div>
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
@@ -591,14 +610,14 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       </header>
 
       <div className="px-8 pt-4 bg-white border-b border-border flex-shrink-0 flex gap-1">
-        {([['active', `Active (${profiles.length - offCount})`], ['offboarded', `Offboarded (${offCount})`]] as const).map(([k, l]) => (
+        {([['employees', `Employees (${empCount})`], ['contractors', `Contractors (${conCount})`], ['offboarded', `Offboarded (${offCount})`]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 ${tab === k ? 'border-gold text-text-primary' : 'border-transparent text-text-muted hover:text-text-secondary'}`}>{l}</button>
         ))}
       </div>
 
       <div className="flex-1 overflow-auto p-8">
         {filtered.length === 0 ? (
-          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">{tab === 'offboarded' ? 'No offboarded employees yet. Complete an offboarding and click “Move to Offboarded”.' : <>No employees yet.{!readOnly && ' Click “⇪ Sync from Staffing” to create a tile for everyone, or “Add employee” for one.'}</>}</div>
+          <div className="text-sm text-text-muted border border-dashed border-border-light rounded-card p-10 text-center max-w-md mx-auto">{tab === 'offboarded' ? 'No offboarded employees yet. Complete an offboarding and click “Move to Offboarded”.' : tab === 'contractors' ? 'No contractors here. Contractors are people whose Worker type is “Contractor” (set in their profile or Staffing).' : <>No employees yet.{!readOnly && ' Click “⇪ Sync from Staffing” to create a tile for everyone, or “Add employee” for one.'}</>}</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map(p => (
