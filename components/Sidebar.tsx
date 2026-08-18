@@ -123,6 +123,9 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
               key={item.href}
               href={item.href}
               draggable
+              // Signal a nav click so a section already open on this route can
+              // reset its drill-in view (e.g. Employee Files back to the list).
+              onClick={() => { try { window.dispatchEvent(new CustomEvent('hr-nav', { detail: item.href })); } catch { /* ignore */ } }}
               onDragStart={() => setDragHref(item.href)}
               onDragOver={e => e.preventDefault()}
               onDrop={() => onDrop(item.href)}

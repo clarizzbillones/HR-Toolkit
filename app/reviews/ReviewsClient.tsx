@@ -92,6 +92,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [form, setForm] = useState({ name: '', role: '', dept: 'Operations', date: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
+  // Clicking "Performance Reviews" in the sidebar closes the open detail drawer.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/reviews') setDetail(null); };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
   const [showEmbed, setShowEmbed] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);

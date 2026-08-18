@@ -48,6 +48,12 @@ export default function OffboardingClient() {
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
   useEffect(() => { void load(); }, []);
+  // Clicking "Offboarding" in the sidebar while a record is open returns to the list.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/offboarding') setSelId(null); };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
   async function load() {
     setLoading(true);
     try {

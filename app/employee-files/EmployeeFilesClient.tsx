@@ -10,7 +10,7 @@ interface Profile {
   address?: string | null; salary?: string | null; dob?: string | null;
   favorite_color?: string | null; favorite_treat?: string | null; ktn?: string | null;
   marriott?: string | null; delta?: string | null; southwest?: string | null; american?: string | null;
-  weight?: string | null; worker_type?: string | null;
+  weight?: string | null; worker_type?: string | null; accounts_locked?: boolean;
 }
 // Extra profile fields, grouped for the edit form + read-only display.
 const EXTRA_GROUPS: { heading: string; fields: [string, keyof Profile][] }[] = [
@@ -117,6 +117,18 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     showToast(`No Staffing record matches “${selected.name}”. Check the name is spelled exactly the same in Staffing.`);
   }
 
+  // Lock/unlock the Accounts & Access list so it can't be edited or deleted by
+  // accident. Persisted per employee.
+  async function toggleAccountsLock() {
+    if (!selected) return;
+    const locked = !selected.accounts_locked;
+    setSelected(p => p ? { ...p, accounts_locked: locked } : p);
+    try {
+      await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-accounts-lock', id: selected.id, locked }) });
+      showToast(locked ? '🔒 Accounts locked — no edits' : '🔓 Accounts unlocked');
+    } catch { showToast('Could not update lock'); }
+  }
+
   // ---- Accounts & Access ----
   async function addAccount() {
     if (!selected) return;
@@ -176,6 +188,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     } catch { /* ignore */ }
   }
   useEffect(() => { loadSurveyStatus(); }, []);
+  // Clicking "Employee Files" in the sidebar while a profile is open returns to
+  // the list (the route doesn't change, so we reset here).
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/employee-files') setSelected(null); };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
 
   async function testToolsSurvey() {
     const email = window.prompt('Send a test Tools & Access survey to which email?');
@@ -310,6 +329,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
   // ---- Detail view ----
   if (selected) {
+    // Accounts are read-only when the viewer is restricted OR the list is locked.
+    const acctRO = readOnly || !!selected.accounts_locked;
     return (
       <div className="flex flex-col h-full overflow-hidden">
         <header className="px-8 py-4 bg-white border-b border-border flex-shrink-0 flex items-center gap-3">
@@ -411,17 +432,21 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={toggleAccountsLock} title={selected.accounts_locked ? 'Locked — click to unlock and allow edits' : 'Lock this list so nothing can be edited or deleted by accident'}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-ctrl border ${selected.accounts_locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]' : 'border-border-light text-text-secondary hover:bg-canvas'}`}>
+                      {selected.accounts_locked ? '🔒 Locked' : '🔓 Lock'}
+                    </button>
                     {selected.email && <button onClick={emailToolsSurvey} title={`Email the Tools & Access survey to ${selected.email}`} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">✉ Email survey</button>}
                     <button onClick={createToolsSurvey} title="Create a no-login link the employee fills out; their answers update this list & file to their Employee File" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⧉ Copy survey link</button>
-                    {accounts.length > 0 && <button onClick={seedStandardAccounts} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">+ Standard systems</button>}
-                    <button onClick={addAccount} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add account</button>
+                    {!selected.accounts_locked && accounts.length > 0 && <button onClick={seedStandardAccounts} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">+ Standard systems</button>}
+                    {!selected.accounts_locked && <button onClick={addAccount} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">+ Add account</button>}
                   </div>
                 )}
               </div>
               <div className="bg-white border border-border rounded-card overflow-hidden mb-2">
                 {accounts.length === 0 ? (
                   <div className="px-5 py-8 text-center text-sm text-text-muted">
-                    No accounts listed yet.{!readOnly && <> Start with <button onClick={seedStandardAccounts} className="text-[#3f6b8a] font-semibold hover:underline">the standard firm systems</button>, then adjust per person.</>}
+                    No accounts listed yet.{!acctRO && <> Start with <button onClick={seedStandardAccounts} className="text-[#3f6b8a] font-semibold hover:underline">the standard firm systems</button>, then adjust per person.</>}
                   </div>
                 ) : (
                   <>
@@ -431,16 +456,16 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                     <div className="divide-y divide-[#f1ece3]">
                       {accounts.map(a => (
                         <div key={a.id} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1fr_128px_1.6fr_26px] gap-2 px-4 py-2 items-center">
-                          <input list="firm-systems" disabled={readOnly} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
-                          <select disabled={readOnly} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer ${ACCT_LEVEL_COLOR[a.access_level || 'Standard user'] || 'bg-[#f1ece3] text-[#8b8478] border-border-light'}`}>
+                          <input list="firm-systems" disabled={acctRO} value={a.system ?? ''} onChange={e => editAccount(a.id, { system: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="System" className={ACCT_INPUT + ' font-medium text-text-primary'} />
+                          <select disabled={acctRO} value={a.access_level || 'Standard user'} onChange={e => editAccount(a.id, { access_level: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border ${acctRO ? '' : 'cursor-pointer'} ${ACCT_LEVEL_COLOR[a.access_level || 'Standard user'] || 'bg-[#f1ece3] text-[#8b8478] border-border-light'}`}>
                             {(a.access_level && !ACCESS_LEVELS.includes(a.access_level as any) ? [a.access_level] : []).map(v => <option key={v} value={v}>{v}</option>)}
                             {ACCESS_LEVELS.map(v => <option key={v} value={v}>{v}</option>)}
                           </select>
-                          <select disabled={readOnly} value={a.status || 'Active'} onChange={e => editAccount(a.id, { status: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer ${ACCT_STATUS_COLOR[a.status] || ACCT_STATUS_COLOR['Active']}`}>
+                          <select disabled={acctRO} value={a.status || 'Active'} onChange={e => editAccount(a.id, { status: e.target.value }, true)} className={`text-xs font-semibold px-2 py-1 rounded-full border ${acctRO ? '' : 'cursor-pointer'} ${ACCT_STATUS_COLOR[a.status] || ACCT_STATUS_COLOR['Active']}`}>
                             {ACCOUNT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
-                          <input disabled={readOnly} value={a.notes ?? ''} onChange={e => editAccount(a.id, { notes: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="Notes" className={ACCT_INPUT} />
-                          {!readOnly ? <button onClick={() => removeAccount(a.id)} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm justify-self-center">✕</button> : <span />}
+                          <input disabled={acctRO} value={a.notes ?? ''} onChange={e => editAccount(a.id, { notes: e.target.value }, false)} onBlur={() => commitAccount(a)} placeholder="Notes" className={ACCT_INPUT} />
+                          {!acctRO ? <button onClick={() => removeAccount(a.id)} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm justify-self-center">✕</button> : <span className="justify-self-center text-text-faint text-xs" title="Locked">🔒</span>}
                         </div>
                       ))}
                     </div>

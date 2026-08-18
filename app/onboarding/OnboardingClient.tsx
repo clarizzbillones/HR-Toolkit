@@ -271,6 +271,12 @@ export default function OnboardingClient() {
   // Document-only viewers (no module grant) are pinned to the Dashboard, where
   // they pick a hire and open the document.
   useEffect(() => { if (!canSeeModule && view !== 'dashboard') setView('dashboard'); }, [canSeeModule, view]);
+  // Clicking "Onboarding" in the sidebar while a hire is open returns to the list.
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent).detail === '/onboarding') setSelected(null); };
+    window.addEventListener('hr-nav', h);
+    return () => window.removeEventListener('hr-nav', h);
+  }, []);
   // W-8BEN (international contractor tax form) status for the selected person.
   const [w8Rec, setW8Rec] = useState<any>(null);
   const [w8Busy, setW8Busy] = useState(false);
