@@ -63,6 +63,19 @@ export default function IntakeLinks() {
     setRows(prev => prev.filter(r => r.id !== id));
     await fetch(`/api/onboarding/intake?id=${id}`, { method: 'DELETE' });
   }
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  async function sendReminder(r: Intake) {
+    let email = r.email ?? '';
+    if (!email) { email = (window.prompt(`Email the onboarding form to ${r.name || 'this hire'} — enter their email:`) ?? '').trim(); if (!email) return; }
+    setRemindingId(r.id);
+    try {
+      const res = await fetch('/api/onboarding/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', id: r.id, email, reminder: true }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send reminder'); return; }
+      if (!r.email) setRows(prev => prev.map(x => x.id === r.id ? { ...x, email } : x));
+      showToast(`Reminder emailed to ${email}`);
+    } finally { setRemindingId(null); }
+  }
 
   const input = 'border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
@@ -157,6 +170,7 @@ export default function IntakeLinks() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {!readOnly && !done && <button onClick={() => sendReminder(r)} disabled={remindingId === r.id} title={r.email ? `Email the form to ${r.email}` : 'Email the form (you’ll enter their address)'} className="text-xs font-semibold text-[#3f6b8a] hover:underline mr-3 disabled:opacity-50">{remindingId === r.id ? 'Sending…' : '🔔 Send reminder'}</button>}
                       {!readOnly && <button onClick={() => remove(r.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete</button>}
                     </td>
                   </tr>

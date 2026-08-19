@@ -6,6 +6,23 @@ import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { intakeFields, intakeUploads, filterFields, filterUploads, isIntakeRole, roleLabel, roleMeta, REQUIRED_FIELDS, type IntakeRole } from '@/lib/onboardingIntake';
+import { sendMailAsApp } from '@/lib/graph';
+
+const INTAKE_SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
+const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function intakeEmail(name: string, url: string, reminder: boolean): string {
+  const first = esc(String(name || '').split(' ')[0] || 'there');
+  return `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px">
+    <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
+      <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+    </div>
+    <p>Hi ${first},</p>
+    <p>${reminder ? 'A quick reminder to complete your' : 'Welcome to Litson PLLC! Please complete your'} onboarding form — it takes a few minutes and lets us set everything up before your first day. You can fill in your details and upload any requested documents; no login is needed.</p>
+    <p style="margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">Open your onboarding form</a></p>
+    <p style="font-size:12px;color:#666">Or paste this link into your browser:<br>${esc(url)}</p>
+  </div>`;
+}
 
 // Per-hire intake: HR creates a tokenized link (create/list/delete require a
 // session); the fill-in page + submit are public, guarded by the token.
@@ -197,6 +214,21 @@ export async function POST(req: Request) {
     const url = `${origin(req)}/onboarding/intake/${token}`;
     const [row] = await sql`SELECT id, token, role, name, email, status, onboardee_id, created_at FROM onboarding_intakes WHERE id = ${id}` as any[];
     return NextResponse.json({ row, url }, { status: 201 });
+  }
+
+  // Email (or re-email) the intake link to the hire.
+  if (b.action === 'send') {
+    if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    const [row] = await sql`SELECT id, token, name, email, status FROM onboarding_intakes WHERE id = ${b.id}` as any[];
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const to = String(b.email ?? row.email ?? '').trim();
+    if (!to) return NextResponse.json({ error: 'No email on file for this hire — add one, or copy the link instead.' }, { status: 400 });
+    const url = `${origin(req)}/onboarding/intake/${row.token}`;
+    const r = await sendMailAsApp(INTAKE_SENDER, to, 'Litson PLLC — Your onboarding form', intakeEmail(row.name || '', url, !!b.reminder));
+    if (!r.ok) return NextResponse.json({ error: r.error || 'Could not send the email', url }, { status: 502 });
+    // Persist the email if it was newly provided.
+    if (b.email && b.email !== row.email) await sql`UPDATE onboarding_intakes SET email = ${to} WHERE id = ${b.id}`;
+    return NextResponse.json({ ok: true, emailed: true });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
