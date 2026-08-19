@@ -19,10 +19,11 @@ function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</
 // Catie's streamlined onboarding document: HR → Ops → IT, each task assigned to
 // a person with a deadline, who then initials + dates it, then Catie signs off
 // each section. Mirrors the offboarding document.
-export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onTemplateSave, onSave }: {
+export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onRemoveAssignee, onTemplateSave, onSave }: {
   rec: RecLite; readOnly?: boolean; lockAssignment?: boolean;
   assignees?: string[];
   onAddAssignee?: (name: string) => void;
+  onRemoveAssignee?: (name: string) => void;
   onTemplateSave?: (rows: Omit<DocTemplate, 'assignees'>) => void;
   onSave: (doc: Doc) => void;
 }) {
@@ -31,6 +32,8 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   // changed — they can only mark their part done (initials / date / notes).
   const assignRO = readOnly || lockAssignment;
   const assigneeList = assignees && assignees.length ? assignees : [...ONBOARDING_ASSIGNEES];
+  // Names the firm has added (removable); the built-in team can't be removed.
+  const removableNames = assigneeList.filter(a => !ONBOARDING_ASSIGNEES.includes(a as any));
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
@@ -66,6 +69,12 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
           onChange={e => {
             const v = e.target.value;
             if (v === '__add__') { const name = window.prompt('Add an assignee name:')?.trim(); if (name) { onAddAssignee?.(name); set({ assignee: name }, true); } return; }
+            if (v === '__remove__') {
+              const name = window.prompt(`Remove which name from the list?\n\nRemovable: ${removableNames.join(', ')}\n\n(The built-in team — Catie, Clarizz, Caitlin, Alex, Matthew — can't be removed.)`)?.trim();
+              if (name && removableNames.includes(name)) onRemoveAssignee?.(name);
+              else if (name) window.alert(`"${name}" isn't a removable name.`);
+              return;
+            }
             set({ assignee: v }, true);
           }}
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
@@ -73,6 +82,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
           {c.assignee && !assigneeList.includes(c.assignee) && <option value={c.assignee}>{c.assignee}</option>}
           {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
           {!assignRO && <option value="__add__">➕ Add name…</option>}
+          {!assignRO && removableNames.length > 0 && <option value="__remove__">✕ Remove a name…</option>}
         </select>
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />

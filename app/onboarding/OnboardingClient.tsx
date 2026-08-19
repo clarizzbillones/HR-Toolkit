@@ -1987,6 +1987,7 @@ export default function OnboardingClient() {
                     lockAssignment={!!me?.restricted}
                     assignees={allAssignees(docTemplate)}
                     onAddAssignee={name => { const n = name.trim(); if (n && !allAssignees(docTemplate).includes(n)) saveDocTemplate({ ...docTemplate, assignees: [...docTemplate.assignees, n] }); }}
+                    onRemoveAssignee={name => saveDocTemplate({ ...docTemplate, assignees: docTemplate.assignees.filter(n => n !== name) })}
                     onTemplateSave={rows => saveDocTemplate({ ...rows, assignees: docTemplate.assignees })}
                     onSave={d => patchDoc(person.id, d)} />
                   {!me?.restricted && (
