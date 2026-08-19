@@ -69,12 +69,6 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
           onChange={e => {
             const v = e.target.value;
             if (v === '__add__') { const name = window.prompt('Add an assignee name:')?.trim(); if (name) { onAddAssignee?.(name); set({ assignee: name }, true); } return; }
-            if (v === '__remove__') {
-              const name = window.prompt(`Remove which name from the list?\n\nRemovable: ${removableNames.join(', ')}\n\n(The built-in team — Catie, Clarizz, Caitlin, Alex, Matthew — can't be removed.)`)?.trim();
-              if (name && removableNames.includes(name)) onRemoveAssignee?.(name);
-              else if (name) window.alert(`"${name}" isn't a removable name.`);
-              return;
-            }
             set({ assignee: v }, true);
           }}
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
@@ -82,7 +76,6 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
           {c.assignee && !assigneeList.includes(c.assignee) && <option value={c.assignee}>{c.assignee}</option>}
           {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
           {!assignRO && <option value="__add__">➕ Add name…</option>}
-          {!assignRO && removableNames.length > 0 && <option value="__remove__">✕ Remove a name…</option>}
         </select>
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />
@@ -209,6 +202,20 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         {lockAssignment && !readOnly && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
             HR assigns each task and its deadline. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. The Assigned&nbsp;to and Deadline are set by HR and locked.
+          </div>
+        )}
+        {/* Manage the shared assignee names — add, or remove added names with ✕ */}
+        {!assignRO && (
+          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted mr-1">Assignee names</span>
+            {removableNames.map(n => (
+              <span key={n} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec] rounded-full pl-2.5 pr-1 py-0.5">
+                {n}
+                <button onClick={() => { if (window.confirm(`Remove "${n}" from the assignee list for every hire?`)) onRemoveAssignee?.(n); }} title={`Remove ${n}`} className="w-4 h-4 leading-none rounded-full text-[#3f5a76]/60 hover:text-white hover:bg-litred-alt">✕</button>
+              </span>
+            ))}
+            {removableNames.length === 0 && <span className="text-[11px] text-text-faint">built-in team only</span>}
+            <button onClick={() => { const name = window.prompt('Add an assignee name:')?.trim(); if (name) onAddAssignee?.(name); }} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline ml-1">➕ Add name</button>
           </div>
         )}
       </div>
