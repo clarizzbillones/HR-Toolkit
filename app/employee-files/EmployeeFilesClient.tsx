@@ -91,7 +91,9 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const conCount = profiles.filter(p => !p.offboarded && isContractor(p)).length;
   const filtered = profiles
     .filter(p => tab === 'offboarded' ? p.offboarded : tab === 'contractors' ? (!p.offboarded && isContractor(p)) : (!p.offboarded && !isContractor(p)))
-    .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s));
+    .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s))
+    // Alphabetical by name (case-insensitive), regardless of DB collation.
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }));
 
   async function openProfile(p: Profile) {
     setSelected(p); setEditingProfile(false); setShowDocForm(false); setEditDocId(null);
