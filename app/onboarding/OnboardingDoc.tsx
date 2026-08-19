@@ -48,6 +48,17 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   // every hire's document stays the same; cell edits stay on this hire.
   const saveStructure = () => { persist(); onTemplateSave?.(templateFromDoc(ref.current)); };
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
+  // Remove a name from the shared list AND clear it off this hire's tasks so it
+  // fully disappears (no stale "Matt" left on any row).
+  function removeAssignee(n: string) {
+    if (!window.confirm(`Remove "${n}" from the assignee list for every hire?`)) return;
+    apply(d => {
+      for (const key of ['hr', 'accounts', 'it'] as const) for (const r of d[key]) if (r.cell.assignee === n) r.cell.assignee = '';
+      for (const k of ['hr', 'ops', 'it'] as const) if ((d.signoff as any)[k]?.assignee === n) (d.signoff as any)[k].assignee = '';
+    });
+    persist();
+    onRemoveAssignee?.(n);
+  }
 
   const { done: dn, total } = docProgress(doc);
   const pct = total ? Math.round((dn / total) * 100) : 0;
@@ -211,7 +222,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
             {removableNames.map(n => (
               <span key={n} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec] rounded-full pl-2.5 pr-1 py-0.5">
                 {n}
-                <button onClick={() => { if (window.confirm(`Remove "${n}" from the assignee list for every hire?`)) onRemoveAssignee?.(n); }} title={`Remove ${n}`} className="w-4 h-4 leading-none rounded-full text-[#3f5a76]/60 hover:text-white hover:bg-litred-alt">✕</button>
+                <button onClick={() => removeAssignee(n)} title={`Remove ${n}`} className="w-4 h-4 leading-none rounded-full text-[#3f5a76]/60 hover:text-white hover:bg-litred-alt">✕</button>
               </span>
             ))}
             {removableNames.length === 0 && <span className="text-[11px] text-text-faint">built-in team only</span>}
