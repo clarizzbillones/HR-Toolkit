@@ -10,13 +10,19 @@ interface RecLite { id: string; name: string; position: string | null; separatio
 
 // Catie's streamlined offboarding document: HR → Ops → IT, each task assigned to
 // a person who initials + dates it, then Catie signs off each section.
-export default function OffboardingDoc({ rec, readOnly, lockAssignment, onSave }: {
-  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean; onSave: (doc: Doc) => void;
+export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onRemoveAssignee, onSave }: {
+  rec: RecLite; readOnly?: boolean; lockAssignment?: boolean;
+  assignees?: string[];
+  onAddAssignee?: (name: string) => void;
+  onRemoveAssignee?: (name: string) => void;
+  onSave: (doc: Doc) => void;
 }) {
   // When lockAssignment is on (anyone who isn't a full-access admin), assigning
   // tasks and adding/removing accounts are locked — they can only fill in their
   // part (initials / date / notes). Full-access admins (Catie/Clarizz) can do all.
   const assignRO = readOnly || lockAssignment;
+  const assigneeList = assignees && assignees.length ? assignees : [...OFFBOARDING_ASSIGNEES];
+  const removableNames = assigneeList.filter(a => !OFFBOARDING_ASSIGNEES.includes(a as any));
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
@@ -28,6 +34,17 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, onSave }
   }
   const persist = () => onSave(ref.current);
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
+  // Remove a name from the shared list AND clear it off this record's tasks.
+  function removeAssignee(n: string) {
+    if (!window.confirm(`Remove "${n}" from the assignee list for every offboarding?`)) return;
+    apply(d => {
+      for (const it of Object.values(d.items)) if (it && it.assignee === n) it.assignee = '';
+      for (const a of d.accounts) if (a.cell.assignee === n) a.cell.assignee = '';
+      for (const k of ['hr', 'ops', 'it'] as const) if ((d.signoff as any)[k]?.assignee === n) (d.signoff as any)[k].assignee = '';
+    });
+    persist();
+    onRemoveAssignee?.(n);
+  }
 
   const { done: dn, total } = docProgress(doc);
   const pct = total ? Math.round((dn / total) * 100) : 0;
@@ -39,11 +56,17 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, onSave }
     const c = get();
     return (
       <div className="grid grid-cols-2 sm:grid-cols-[130px_70px_140px_1fr] gap-2 mt-2">
-        <select disabled={assignRO} value={c.assignee ?? ''} onChange={e => set({ assignee: e.target.value }, true)}
+        <select disabled={assignRO} value={c.assignee ?? ''}
+          onChange={e => {
+            const v = e.target.value;
+            if (v === '__add__') { const name = window.prompt('Add an assignee name:')?.trim(); if (name) { onAddAssignee?.(name); set({ assignee: name }, true); } return; }
+            set({ assignee: v }, true);
+          }}
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary">
           <option value="">Assign to…</option>
-          {c.assignee && !OFFBOARDING_ASSIGNEES.includes(c.assignee as any) && <option value={c.assignee}>{c.assignee}</option>}
-          {OFFBOARDING_ASSIGNEES.map(a => <option key={a} value={a}>{a}</option>)}
+          {c.assignee && !assigneeList.includes(c.assignee) && <option value={c.assignee}>{c.assignee}</option>}
+          {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
+          {!assignRO && <option value="__add__">➕ Add name…</option>}
         </select>
         <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
@@ -100,6 +123,20 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, onSave }
         {lockAssignment && !readOnly && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
             HR assigns each task and adds accounts. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. Assigning tasks and adding/removing accounts are done by a full-access admin.
+          </div>
+        )}
+        {/* Manage assignee names — add, or remove added names with ✕ */}
+        {!assignRO && (
+          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted mr-1">Assignee names</span>
+            {removableNames.map(n => (
+              <span key={n} className="inline-flex items-center gap-1 text-[11px] font-semibold bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec] rounded-full pl-2.5 pr-1 py-0.5">
+                {n}
+                <button onClick={() => removeAssignee(n)} title={`Remove ${n}`} className="w-4 h-4 leading-none rounded-full text-[#3f5a76]/60 hover:text-white hover:bg-litred-alt">✕</button>
+              </span>
+            ))}
+            {removableNames.length === 0 && <span className="text-[11px] text-text-faint">built-in team only</span>}
+            <button onClick={() => { const name = window.prompt('Add an assignee name:')?.trim(); if (name) onAddAssignee?.(name); }} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline ml-1">➕ Add name</button>
           </div>
         )}
       </div>

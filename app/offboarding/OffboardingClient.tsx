@@ -8,7 +8,7 @@ import {
 } from '@/lib/offboarding';
 import { EXIT_QUESTIONS as EXIT_Q } from '@/lib/exitInterview';
 import OffboardingDoc from './OffboardingDoc';
-import { DOC_SECTIONS, BENEFITS_REF, type OffboardingDoc as Doc } from '@/lib/offboardingDoc';
+import { DOC_SECTIONS, BENEFITS_REF, OFFBOARDING_ASSIGNEES, type OffboardingDoc as Doc } from '@/lib/offboardingDoc';
 
 interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
@@ -47,6 +47,15 @@ export default function OffboardingClient() {
   const readOnly = restricted && !editS.includes('/offboarding');
   // The document is editable with EITHER Offboarding-edit or Offboarding-Document.
   const docReadOnly = restricted && !editS.includes('/offboarding') && !editS.includes('/offboarding-doc');
+  // Shared custom assignee names for the offboarding document.
+  const [offAssignees, setOffAssignees] = useState<string[]>([]);
+  useEffect(() => { fetch('/api/offboarding/assignees').then(r => r.json()).then(d => { if (Array.isArray(d.assignees)) setOffAssignees(d.assignees); }).catch(() => {}); }, []);
+  async function saveOffAssignees(list: string[]) {
+    setOffAssignees(list);
+    try { await fetch('/api/offboarding/assignees', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assignees: list }) }); }
+    catch { showToast('Could not save names'); }
+  }
+  const offAssigneeList = [...OFFBOARDING_ASSIGNEES, ...offAssignees.filter(n => !(OFFBOARDING_ASSIGNEES as readonly string[]).includes(n))];
   const [rows, setRows] = useState<Rec[]>([]);
   const [employees, setEmployees] = useState<Emp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -370,7 +379,11 @@ export default function OffboardingClient() {
             <div className="space-y-5">
               {effView === 'document' && (
                 <>
-                <OffboardingDoc rec={rec as any} readOnly={docReadOnly} lockAssignment={restricted} onSave={d => patch(rec.id, { doc: d } as any)} />
+                <OffboardingDoc rec={rec as any} readOnly={docReadOnly} lockAssignment={restricted}
+                  assignees={offAssigneeList}
+                  onAddAssignee={name => { const n = name.trim(); if (n && !offAssigneeList.includes(n)) saveOffAssignees([...offAssignees, n]); }}
+                  onRemoveAssignee={name => saveOffAssignees(offAssignees.filter(n => n !== name))}
+                  onSave={d => patch(rec.id, { doc: d } as any)} />
                 {!restricted && (
                   <div className="flex items-center justify-end gap-3 flex-wrap">
                     <span className="text-[11px] text-text-muted">Email each assigned person their open tasks (only people set up in Access Control).</span>
