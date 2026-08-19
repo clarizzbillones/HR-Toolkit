@@ -435,11 +435,21 @@ export default function OnboardingClient() {
     const payload = (isComposed && composedDef)
       ? { action: 'duplicate-composed', to: name, sources: composedDef.sources, exclude: composedDef.exclude }
       : { action: 'duplicate', from: guide, to: name };
+    const src = guide;
     const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const { items: newItems } = await res.json();
     if (Array.isArray(newItems)) setItems(newItems);
     setGuide(name);
-    showToast(`Duplicated “${guide}” → “${name}” (independent copy)`);
+    // Place the new tab right after the one it was copied from, so it's easy to
+    // find (otherwise a brand-new guide lands at the end of the tab row).
+    try {
+      const base = applyOrder(Array.from(new Set([...guides, name])), guideOrder).filter(g => g !== name);
+      const at = base.indexOf(src);
+      base.splice(at < 0 ? base.length : at + 1, 0, name);
+      setGuideOrder(base);
+      localStorage.setItem('hrkit.ob.guideOrder', JSON.stringify(base));
+    } catch { /* ignore ordering */ }
+    showToast(`Created a new tab “${name}” (copy of “${src}”) — you’re viewing it now, right after “${src}”.`);
   }
   async function renameGuide() {
     const name = prompt(`Rename the “${guide}” guide (tab) to:`, guide)?.trim();
