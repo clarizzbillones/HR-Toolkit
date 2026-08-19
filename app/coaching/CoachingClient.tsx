@@ -80,11 +80,6 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
     // Refresh the standard draft only if the coach hasn't edited it away.
     setForm(p => ({ ...p, coaching_type: type, notes: (!p.notes.trim() || COACHING_TYPES.some(t => p.notes === coachingDraft(t))) ? coachingDraft(type) : p.notes }));
   }
-  function addSignatory() { setForm(p => ({ ...p, signatories: [...p.signatories, { name: '', position: '', role: 'Reviewer' }] })); }
-  function setSignatory(i: number, name: string) {
-    setForm(p => ({ ...p, signatories: p.signatories.map((s, j) => j === i ? { ...s, name, position: posOf(name) || s.position, email: emailOf(name) || (s as any).email } : s) }));
-  }
-  function removeSignatory(i: number) { setForm(p => ({ ...p, signatories: p.signatories.filter((_, j) => j !== i) })); }
 
   function startEdit(r: Row) {
     let sig: Signatory[] = [];
@@ -113,22 +108,7 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
     return row ?? null;
   }
 
-  async function saveDraft() { const r = await save(); if (r) { showToast('Draft saved'); resetForm(); } }
-
-  async function submitForSignature() {
-    const saved = await save();
-    if (!saved) return;
-    const res = await fetch('/api/coaching', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: saved.id, action: 'send' }) });
-    const d = await res.json();
-    if (d.row) setRows(p => p.map(x => x.id === saved.id ? d.row : x));
-    if (d.emailed) showToast(`Sent to ${d.recipients > 1 ? `${d.recipients} signatories` : 'the signatory'} to sign`);
-    else {
-      // Fall back to a copyable link if email isn't configured / no address on file.
-      try { await navigator.clipboard.writeText(d.signUrl); } catch { /* ignore */ }
-      window.prompt(d.emailError ? `${d.emailError}\n\nShare this signing link:` : 'Signing link (copied):', d.signUrl);
-    }
-    resetForm();
-  }
+  async function saveForm() { const r = await save(); if (r) { showToast('Coaching form saved'); resetForm(); } }
 
   async function remove(r: Row) {
     if (!confirm(`Delete this coaching form for ${r.employee || 'this employee'}?`)) return;
@@ -232,32 +212,8 @@ export default function CoachingClient({ initialRows, staff }: { initialRows: Ro
                 <textarea value={form.action_items} onChange={e => set('action_items', e.target.value)} rows={3} className={input + ' resize-y'} />
               </div>
 
-              <div className="col-span-2">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-text-secondary">Signatories</label>
-                  <button onClick={addSignatory} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">+ Add signatory</button>
-                </div>
-                {form.signatories.length === 0 && <p className="text-[11px] text-text-muted">No signatories added.</p>}
-                <div className="space-y-2">
-                  {form.signatories.map((s, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <select value={s.name} onChange={e => setSignatory(i, e.target.value)} className={input + ' bg-white flex-1'}>
-                        <option value="">Select name…</option>
-                        {names.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                      <select value={s.role ?? 'Reviewer'} onChange={e => setForm(p => ({ ...p, signatories: p.signatories.map((x, j) => j === i ? { ...x, role: e.target.value } : x) }))} className={input + ' bg-white w-28 shrink-0'}>
-                        {['Reviewer', 'Reviewee'].map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <input value={s.position} onChange={e => setForm(p => ({ ...p, signatories: p.signatories.map((x, j) => j === i ? { ...x, position: e.target.value } : x) }))} placeholder="Position" className={input + ' flex-1'} />
-                      <button onClick={() => removeSignatory(i)} className="text-text-muted hover:text-litred-alt text-sm px-1">✕</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               <div className="col-span-2 flex items-center gap-2 flex-wrap pt-1">
-                <button onClick={submitForSignature} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Submit &amp; send for signature</button>
-                <button onClick={saveDraft} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Save draft</button>
+                <button onClick={saveForm} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editId ? 'Save changes' : 'Save form'}</button>
                 <button onClick={resetForm} className="text-sm text-text-muted px-3">Cancel</button>
               </div>
             </div>

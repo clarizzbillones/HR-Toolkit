@@ -59,13 +59,6 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, allSigned: true });
 }
 
-async function sendReceipt(signed: any, sigs: Signatory[]) {
-  try {
-    const emails = [signed.employee_email, signed.coach_email, ...sigs.map(s => s.email), HR_CC]
-      .filter(Boolean).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i) as string[];
-    if (emails.length) {
-      const html = coachingReceiptHtml(signed);
-      await sendMailAsApp(SENDER, emails[0], `Signed coaching form — ${signed.employee}`, html, emails.slice(1));
-    }
-  } catch { /* best-effort */ }
-}
+// Coaching forms no longer email a receipt — not to the reviewer, not to the
+// reviewee. The signed form is still filed to the Employee File (no email).
+async function sendReceipt(_signed: any, _sigs: Signatory[]) { /* intentionally no-op */ }
