@@ -443,6 +443,32 @@ export async function POST(req: Request) {
     const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
     return NextResponse.json({ items });
   }
+  // Duplicate from an explicit list of items supplied by the client (exactly
+  // what's on screen). This is the reliable path used by the "Duplicate" button:
+  // it works the same for plain guides and combined guides, and always lands
+  // real content under the new name so the new tab is guaranteed to appear.
+  if (body.action === 'duplicate-items') {
+    const to = (body.to ?? '').toString().trim();
+    const rows: any[] = Array.isArray(body.items) ? body.items : [];
+    if (!to) return NextResponse.json({ error: 'Missing name for the copy' }, { status: 400 });
+    const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = ${to} AND kind <> 'meta'`;
+    if (n > 0) return NextResponse.json({ error: `A guide named "${to}" already exists` }, { status: 409 });
+    const counter: Record<string, number> = {};
+    for (const r of rows) {
+      const kind = ['section', 'schedule', 'sop', 'tool', 'table'].includes(r.kind) ? r.kind : 'section';
+      const so = (counter[kind] = (counter[kind] ?? -1) + 1);
+      await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, done, sort_order)
+        VALUES (${cuid()}, ${to}, ${kind}, ${r.title ?? ''}, ${r.body ?? null}, ${r.day ?? null}, ${r.assignee ?? null}, ${r.location ?? null}, ${r.url ?? null}, ${r.owner ?? null}, false, ${so})`;
+    }
+    // Nothing to copy? Still make the tab real with a starter section so the
+    // duplicate is visible and immediately editable.
+    if (!rows.length) {
+      await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, sort_order)
+        VALUES (${cuid()}, ${to}, 'section', 'Overview', '', 0)`;
+    }
+    const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
+    return NextResponse.json({ items });
+  }
   const guide = (body.guide ?? 'General').toString();
   const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task', 'blocklabel', 'blockhidden'].includes(body.kind) ? body.kind : 'section';
   const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${guide} AND kind = ${kind}`;

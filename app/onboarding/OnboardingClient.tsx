@@ -432,14 +432,29 @@ export default function OnboardingClient() {
     const name = prompt(`Duplicate “${guide}” as:`, `${guide} (copy)`)?.trim();
     if (!name) return;
     if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
-    const payload = (isComposed && composedDef)
-      ? { action: 'duplicate-composed', to: name, sources: composedDef.sources, exclude: composedDef.exclude }
-      : { action: 'duplicate', from: guide, to: name };
     const src = guide;
+    // Copy exactly what's on screen (works for plain and combined guides alike)
+    // so the new tab always lands with real, editable content. `gItems` already
+    // has the merged/visible blocks for a combined guide; tasks live on the
+    // shared checklist, not per guide, so we drop them here.
+    const payload = {
+      action: 'duplicate-items',
+      to: name,
+      items: gItems
+        .filter(i => ['section', 'schedule', 'sop', 'tool', 'table'].includes(i.kind))
+        .map(i => ({ kind: i.kind, title: i.title, body: i.body, day: i.day, assignee: i.assignee, location: i.location, url: i.url, owner: i.owner })),
+    };
     const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const { items: newItems } = await res.json();
-    if (Array.isArray(newItems)) setItems(newItems);
+    const data = await res.json().catch(() => ({} as any));
+    if (!res.ok) { showToast(data.error || 'Could not duplicate this guide — please try again.'); return; }
+    const newItems: Item[] = Array.isArray(data.items) ? data.items : [];
+    // Guard: only switch to the copy once we can see it in the fresh item list,
+    // otherwise the view would bounce back to the first guide and look like
+    // "nothing happened".
+    if (!newItems.some(i => i.guide === name)) { showToast('The copy could not be created — please try again.'); return; }
+    setItems(newItems);
     setGuide(name);
+    setView('guides');
     // Place the new tab right after the one it was copied from, so it's easy to
     // find (otherwise a brand-new guide lands at the end of the tab row).
     try {

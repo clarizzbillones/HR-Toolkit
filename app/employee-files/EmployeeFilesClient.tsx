@@ -92,8 +92,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const filtered = profiles
     .filter(p => tab === 'offboarded' ? p.offboarded : tab === 'contractors' ? (!p.offboarded && isContractor(p)) : (!p.offboarded && !isContractor(p)))
     .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s))
-    // Alphabetical by name (case-insensitive), regardless of DB collation.
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }));
+    // Alphabetical by name (case-insensitive, whitespace-trimmed) so a stray
+    // leading space never jumps a name to the front. Applies to every tab and
+    // to anyone newly added or reclassified.
+    .sort((a, b) => (a.name ?? '').trim().localeCompare((b.name ?? '').trim(), undefined, { sensitivity: 'base' }));
 
   async function openProfile(p: Profile) {
     setSelected(p); setEditingProfile(false); setShowDocForm(false); setEditDocId(null);
