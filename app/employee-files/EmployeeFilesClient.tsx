@@ -89,13 +89,17 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const offCount = profiles.filter(p => p.offboarded).length;
   const empCount = profiles.filter(p => !p.offboarded && !isContractor(p)).length;
   const conCount = profiles.filter(p => !p.offboarded && isContractor(p)).length;
+  // Alphabetical sort key: normalize, then drop every non-letter/number
+  // (spaces, punctuation, and hidden zero-width / non-breaking characters that
+  // .trim() leaves behind) from the front so a name like "​Damon" can't
+  // jump ahead of "Amy". Applies to every tab and to anyone newly added or
+  // reclassified.
+  const sortKey = (name?: string | null) =>
+    String(name ?? '').normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
   const filtered = profiles
     .filter(p => tab === 'offboarded' ? p.offboarded : tab === 'contractors' ? (!p.offboarded && isContractor(p)) : (!p.offboarded && !isContractor(p)))
     .filter(p => !s || (p.name ?? '').toLowerCase().includes(s) || (p.position ?? '').toLowerCase().includes(s))
-    // Alphabetical by name (case-insensitive, whitespace-trimmed) so a stray
-    // leading space never jumps a name to the front. Applies to every tab and
-    // to anyone newly added or reclassified.
-    .sort((a, b) => (a.name ?? '').trim().localeCompare((b.name ?? '').trim(), undefined, { sensitivity: 'base' }));
+    .sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name), undefined, { sensitivity: 'base' }));
 
   async function openProfile(p: Profile) {
     setSelected(p); setEditingProfile(false); setShowDocForm(false); setEditDocId(null);
