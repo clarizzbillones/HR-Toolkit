@@ -48,6 +48,9 @@ export const ONB_DEFAULT_ACCOUNTS: { label: string; hint?: string }[] = [
   { label: 'Signitic' },
   { label: 'Logikcull' },
   { label: 'PACER / ECF' },
+  { label: 'Westlaw', hint: 'Legal research' },
+  { label: 'Tybera', hint: 'Court e-filing' },
+  { label: 'Davidson County Court e-filing', hint: 'Court e-filing (Davidson County, TN) — if they have one, get access and update their info' },
   { label: 'Ramp card issued' },
   { label: 'Claude' },
   { label: 'Adobe' },
@@ -140,6 +143,18 @@ export function parseTemplate(v: any): DocTemplate {
   const arr = (x: any, fb: DocItem[]): DocItem[] => Array.isArray(x) ? x.map((i: any) => ({ id: String(i?.id ?? rid()), label: String(i?.label ?? ''), hint: i?.hint })) : fb;
   const names = Array.isArray(d.assignees) ? Array.from(new Set(d.assignees.map((s: any) => String(s).trim()).filter(Boolean))) as string[] : [];
   return { hr: arr(d.hr, base.hr), accounts: arr(d.accounts, base.accounts), it: arr(d.it, base.it), assignees: names };
+}
+
+// Ensure specific account rows exist in a template's accounts list. Idempotent
+// and case-insensitive by label, so rolling out a new firm tool to an
+// already-saved template never duplicates or disturbs existing rows/cells.
+// Returns the (possibly) extended template and whether anything was added.
+export function ensureTemplateAccounts(tpl: DocTemplate, required: { label: string; hint?: string }[]): { tpl: DocTemplate; changed: boolean } {
+  const have = new Set(tpl.accounts.map(a => a.label.trim().toLowerCase()));
+  const toAdd = required.filter(r => !have.has(r.label.trim().toLowerCase()));
+  if (!toAdd.length) return { tpl, changed: false };
+  const added: DocItem[] = toAdd.map(r => ({ id: `acct-add-${r.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, label: r.label, hint: r.hint }));
+  return { tpl: { ...tpl, accounts: [...tpl.accounts, ...added] }, changed: true };
 }
 
 // All selectable assignee names for the document: the built-in set plus any the

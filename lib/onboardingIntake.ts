@@ -37,6 +37,8 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
   attorney: [
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
+    { id: 'state_bar_logins', label: 'State bar portal login(s)', type: 'longtext', hint: 'For each state bar you’re admitted to, share your online portal login so HR can pay your bar fees and track your license. Include the state, portal username, and password.' },
+    { id: 'other_court_logins', label: 'Other court e-filing login(s)', type: 'longtext', hint: 'If you have logins for any other court e-filing systems not already covered (beyond PACER, Tybera, and Davidson County), please share them here so Caitlin can set up access. Include the court/system, username, and password.' },
     { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
     { id: 'practice_areas', label: 'Primary practice areas', type: 'text' },

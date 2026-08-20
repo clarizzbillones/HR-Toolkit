@@ -4,7 +4,8 @@
 // finds can be reconciled back to a named system here.
 export const FIRM_SYSTEMS = [
   'Microsoft 365', 'Dialpad', 'Dashlane', 'Clio', 'Dropbox', 'Zoom', 'Ajax',
-  'Donna', 'Westlaw', 'PACER / ECF', 'ADP', 'Claude', 'Fathom',
+  'Donna', 'Westlaw', 'PACER / ECF', 'Tybera', 'Davidson County Court e-filing',
+  'ADP', 'Claude', 'Fathom',
   'Briefcatch & Reality Check', 'Logikcull', 'Adobe', 'Signitic', 'Verizon admin',
 ] as const;
 
@@ -18,6 +19,8 @@ export const SYSTEM_HINTS: Record<string, string> = {
   'Donna': 'Internal AI assistant',
   'Westlaw': 'Legal research',
   'PACER / ECF': 'Court e-filing',
+  'Tybera': 'Court e-filing',
+  'Davidson County Court e-filing': 'Court e-filing (Davidson County, TN) — if they have one, we need access and to update their info',
   'ADP': 'Payroll / HR',
   'Claude': 'AI assistant',
   'Fathom': 'AI meeting notes',

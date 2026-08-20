@@ -98,6 +98,8 @@ export const OFFBOARDING_CHECKLIST: ChecklistSection[] = [
       { id: 'systems-8', label: 'Logikcull: remove or deactivate user access.' },
       { id: 'systems-9', label: 'CourtDrive: have a paralegal remove access.' },
       { id: 'systems-10', label: 'Westlaw & StateNet: contact the platform admins to remove access; HR confirms corrected pricing / subscription after removal.' },
+      { id: 'systems-12', label: 'Tybera e-filing: remove the user’s access.' },
+      { id: 'systems-13', label: 'Davidson County Court e-filing: remove the user’s access if they had one.' },
       { id: 'systems-11', label: 'Confirm the former employee can no longer sign in to any firm system (final access audit).' },
     ],
   },
