@@ -844,8 +844,13 @@ export default function OnboardingClient() {
     await fetch('/api/onboardees', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
   }
 
-  // Distinct building-block guides, General first
-  const guides = Array.from(new Set(items.map(i => i.guide))).filter(g => g !== CHECKLIST_GUIDE).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
+  // Distinct building-block guides, General first. Derive only from real CONTENT
+  // rows — never from metadata rows (blockhidden / blocklabel). A combined guide
+  // (e.g. "Paige Nutini") isn't a real guide, but "Remove section" stores a
+  // blockhidden row under its name; counting those here would spawn a phantom
+  // duplicate tab for the combined guide.
+  const GUIDE_CONTENT_KINDS = ['section', 'schedule', 'sop', 'tool', 'table'];
+  const guides = Array.from(new Set(items.filter(i => GUIDE_CONTENT_KINDS.includes(i.kind)).map(i => i.guide))).filter(g => g !== CHECKLIST_GUIDE).sort((a, b) => (a === 'General' ? -1 : b === 'General' ? 1 : a.localeCompare(b)));
   const composedNames = composed.map(c => c.name);
   const composedDef = composed.find(c => c.name === guide);
   const isComposed = !!composedDef;
@@ -1403,7 +1408,10 @@ export default function OnboardingClient() {
     const saved = blockOrders[g];
     const arr = (saved && saved.length ? saved : DEFAULT_BLOCK_ORDER).filter(k => DEFAULT_BLOCK_ORDER.includes(k));
     for (const k of DEFAULT_BLOCK_ORDER) if (!arr.includes(k)) arr.push(k);
-    return arr.filter(k => shown[k]);
+    // Honor "Remove section" on combined guides too — hiddenBlocks is keyed by
+    // the combined guide's name, so a removed block hides across every source
+    // group in the combined view (and can be restored from the chips below).
+    return arr.filter(k => shown[k] && !hiddenBlocks.has(k));
   }
   async function moveBlock(k: string, dir: -1 | 1) {
     const vis = visibleBlocks.slice();
@@ -1856,6 +1864,14 @@ export default function OnboardingClient() {
                 </div>
               );
             })}
+            {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted border-t border-border-light pt-3">
+                <span className="font-semibold">Removed sections:</span>
+                {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).map(k => (
+                  <button key={k} onClick={() => restoreBlock(k)} className="font-semibold text-[#3f6b8a] hover:underline border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas">↩ Restore {BLOCK_LABELS[k]}</button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
