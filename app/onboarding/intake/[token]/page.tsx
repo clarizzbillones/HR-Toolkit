@@ -40,6 +40,7 @@ export default function IntakePage({ params }: { params: { token: string } }) {
     setError('');
     // Every question is required; document uploads are not.
     const missing = (row?.fields ?? []).filter((f: Field) => {
+      if (f.type === 'info') return false;   // instruction blocks aren't answered
       const v = answers[f.id];
       if (Array.isArray(v)) return !v.some(x => String(x).trim());
       return !String(v ?? '').trim();
@@ -82,7 +83,14 @@ export default function IntakePage({ params }: { params: { token: string } }) {
           <div style={{ background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 22 }}>
             <p style={{ marginTop: 0, color: '#555' }}>Welcome! Please complete your onboarding details below and upload the requested documents. This goes straight to our HR team — it usually takes about 10 minutes.</p>
 
-            {(row?.fields ?? []).map((f: Field) => (
+            {(row?.fields ?? []).map((f: Field) => f.type === 'info' ? (
+              // Instruction / task block — no input, just tells the hire to do
+              // something (e.g. share logins in Dashlane).
+              <div key={f.id} style={{ marginBottom: 15, background: '#fbf7ee', border: '1px solid #e6ddcd', borderLeft: '3px solid #c9a24a', borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ fontWeight: 700, color: '#1b2a3d', fontSize: 14 }}>{f.label}</div>
+                {f.hint && <div style={{ fontSize: 13, color: '#6b6152', marginTop: 5, lineHeight: 1.5 }}>{f.hint}</div>}
+              </div>
+            ) : (
               <div key={f.id} style={{ marginBottom: 15 }}>
                 <label style={{ display: 'block', fontWeight: 600, color: '#1b2a3d', marginBottom: 5, fontSize: 14 }}>{f.label}</label>
                 {f.type === 'list' ? (

@@ -13,7 +13,10 @@ export const INTAKE_ROLES: { key: IntakeRole; label: string; workerType: string;
 
 export interface IntakeField {
   id: string; label: string;
-  type: 'text' | 'email' | 'tel' | 'date' | 'longtext' | 'select' | 'list';
+  // 'info' renders as an instruction/task block with no input — used to tell the
+  // new hire to do something (e.g. share credentials in Dashlane) rather than
+  // collect data. It is never required and produces no stored answer.
+  type: 'text' | 'email' | 'tel' | 'date' | 'longtext' | 'select' | 'list' | 'info';
   required?: boolean; options?: string[]; hint?: string;
 }
 
@@ -38,9 +41,7 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
     { id: 'state_bar_logins', label: 'State bar portal login(s)', type: 'longtext', hint: 'List each state bar you’re admitted to and its portal username, so HR can pay your bar fees and track your license. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
-    { id: 'efiling_logins', label: 'PACER, Tybera & Davidson County Court e-filing login(s)', type: 'longtext', hint: 'List your PACER, Tybera, and Davidson County Court e-filing usernames here for our records. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
-    { id: 'other_court_logins', label: 'Other court e-filing login(s)', type: 'longtext', hint: 'List any other court e-filing systems you have logins for (beyond PACER, Tybera, and Davidson County) and their usernames, so Caitlin can set up access. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
-    { id: 'westlaw_login', label: 'Westlaw login', type: 'longtext', hint: 'If you have your own Westlaw (legal research) login, list the username here for our records. Please do NOT type the password here — share it securely in Dashlane (shared to Simran) instead.' },
+    { id: 'legal_logins_task', label: '🔐 Action needed — share your research & e-filing logins in Dashlane', type: 'info', hint: 'Please share your logins for Westlaw and every court e-filing system you use — PACER, Tybera, Davidson County Court, and any other courts — securely in Dashlane. Share them to Simran and Caitlin. No need to type any usernames or passwords on this form.' },
     { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
     { id: 'practice_areas', label: 'Primary practice areas', type: 'text' },
