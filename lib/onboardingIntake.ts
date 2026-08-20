@@ -38,7 +38,7 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
     { id: 'state_bar_logins', label: 'State bar portal login(s)', type: 'longtext', hint: 'List each state bar you’re admitted to and its portal username, so HR can pay your bar fees and track your license. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
-    { id: 'efiling_logins', label: 'PACER & Tybera login(s)', type: 'longtext', hint: 'List your PACER and Tybera e-filing usernames here for our records. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
+    { id: 'efiling_logins', label: 'PACER, Tybera & Davidson County Court e-filing login(s)', type: 'longtext', hint: 'List your PACER, Tybera, and Davidson County Court e-filing usernames here for our records. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
     { id: 'other_court_logins', label: 'Other court e-filing login(s)', type: 'longtext', hint: 'List any other court e-filing systems you have logins for (beyond PACER, Tybera, and Davidson County) and their usernames, so Caitlin can set up access. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
     { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
