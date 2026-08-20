@@ -40,7 +40,6 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
   attorney: [
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
-    { id: 'legal_logins_task', label: '🔐 Action needed — share your bar, research & e-filing logins in Dashlane', type: 'info', hint: 'Please share your logins for your state bar portal(s), Westlaw, and every court e-filing system you use — PACER, Tybera, Davidson County Court, and any other courts — securely in Dashlane. Share them to Simran and Caitlin so we can pay your bar fees, track your license, and set up your access. No need to type any usernames or passwords on this form.' },
     { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
     { id: 'practice_areas', label: 'Primary practice areas', type: 'text' },
@@ -62,6 +61,14 @@ const TAIL: IntakeField[] = [
   { id: 'additional_notes', label: 'Additional notes', type: 'longtext', hint: 'Anything else you’d like us to know.' },
 ];
 
+// Role-specific blocks that come AFTER the tail (very bottom of the form), e.g.
+// a closing action item for attorneys.
+const AFTER_TAIL_BY_ROLE: Partial<Record<IntakeRole, IntakeField[]>> = {
+  attorney: [
+    { id: 'legal_logins_task', label: '🔐 Action needed — share your bar, research & e-filing logins in Dashlane', type: 'info', hint: 'Please share your logins for your state bar portal(s), Westlaw, and every court e-filing system you use — PACER, Tybera, Davidson County Court, and any other courts — securely in Dashlane. Share them to Simran and Caitlin so we can pay your bar fees, track your license, and set up your access. No need to type any usernames or passwords on this form.' },
+  ],
+};
+
 // Documents everyone should upload, plus role-specific ones.
 const COMMON_UPLOADS = ['Driver’s license', 'Passport'];
 const UPLOADS: Record<IntakeRole, string[]> = {
@@ -74,7 +81,7 @@ const UPLOADS: Record<IntakeRole, string[]> = {
 export const REQUIRED_FIELDS = ['full_legal_name'];
 
 export function isIntakeRole(v: any): v is IntakeRole { return INTAKE_ROLES.some(r => r.key === v); }
-export function intakeFields(role: IntakeRole): IntakeField[] { return [...COMMON, ...(BY_ROLE[role] ?? []), ...TAIL]; }
+export function intakeFields(role: IntakeRole): IntakeField[] { return [...COMMON, ...(BY_ROLE[role] ?? []), ...TAIL, ...(AFTER_TAIL_BY_ROLE[role] ?? [])]; }
 export function intakeUploads(role: IntakeRole): string[] { return [...COMMON_UPLOADS, ...(UPLOADS[role] ?? [])]; }
 
 // Narrow a role's full form to only the fields / uploads the sender chose.
