@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
-import { parseTemplate, ensureTemplateAccounts } from '@/lib/onboardingDoc';
+import { parseTemplate, ensureTemplateAccounts, defaultTemplate } from '@/lib/onboardingDoc';
 
 // The shared onboarding-document template (row structure + custom assignee
 // names), stored once on the app_settings singleton and used by every hire's
@@ -25,19 +25,35 @@ const ROLLOUT_ACCOUNTS = [
   { label: 'Davidson County Court e-filing', hint: 'Court e-filing (Davidson County, TN) — if they have one, get access and update their info' },
 ];
 const ROLLOUT_KEY = 'accounts-westlaw-tybera-davidson';
+// One-time replacement of Section 2 — Ops with the firm's tools list (from the
+// guide). Only the accounts list is touched; HR (Section 1), IT (Section 3),
+// and assignee names are left exactly as saved. Runs once so the firm can still
+// edit/remove tools afterward without them snapping back.
+const OPS_TOOLS_KEY = 'ops-tools-list-2026';
 
 async function runMigrations() {
   const [row] = await sql`SELECT onboarding_doc_template, doc_template_migrations FROM app_settings WHERE id = 'singleton'` as any[];
   let done: string[] = [];
   try { done = JSON.parse(row?.doc_template_migrations ?? '[]'); } catch { done = []; }
-  if (done.includes(ROLLOUT_KEY)) return;
-  // Only a template the firm has actually saved needs patching — with none
-  // saved, the defaults already include these accounts.
-  if (row?.onboarding_doc_template) {
-    const { tpl, changed } = ensureTemplateAccounts(parseTemplate(row.onboarding_doc_template), ROLLOUT_ACCOUNTS);
-    if (changed) await sql`UPDATE app_settings SET onboarding_doc_template = ${JSON.stringify(tpl)} WHERE id = 'singleton'`;
+  const saved = row?.onboarding_doc_template ? parseTemplate(row.onboarding_doc_template) : null;
+  let tpl = saved;
+  let changed = false;
+
+  // Legacy rollout: ensure the three e-filing tools exist (kept for installs
+  // that predate the full tools list below).
+  if (!done.includes(ROLLOUT_KEY)) {
+    if (tpl) { const r = ensureTemplateAccounts(tpl, ROLLOUT_ACCOUNTS); tpl = r.tpl; changed = changed || r.changed; }
+    done = [...done, ROLLOUT_KEY];
   }
-  await sql`UPDATE app_settings SET doc_template_migrations = ${JSON.stringify([...done, ROLLOUT_KEY])} WHERE id = 'singleton'`;
+  // Replace Section 2 — Ops with the firm tools list, leaving other sections and
+  // assignee names untouched.
+  if (!done.includes(OPS_TOOLS_KEY)) {
+    if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
+    done = [...done, OPS_TOOLS_KEY];
+  }
+
+  if (changed && tpl) await sql`UPDATE app_settings SET onboarding_doc_template = ${JSON.stringify(tpl)} WHERE id = 'singleton'`;
+  await sql`UPDATE app_settings SET doc_template_migrations = ${JSON.stringify(done)} WHERE id = 'singleton'`;
 }
 
 export async function GET() {

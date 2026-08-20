@@ -37,23 +37,34 @@ export const ONB_DOC_SECTIONS: DocSection[] = [
 ];
 
 // Section 2 — Ops. Accounts to open (editable per hire).
+// Section 2 — Ops "Accounts to open": the firm tools each hire gets set up on,
+// matching the guide's Tools list. Format mirrors the rest of the document
+// (label + optional parenthetical-style hint).
 export const ONB_DEFAULT_ACCOUNTS: { label: string; hint?: string }[] = [
-  { label: 'Microsoft 365 mailbox created', hint: 'New account provisioned, license assigned, and added to relevant distribution lists.' },
-  { label: 'Dropbox / file storage', hint: 'Access granted; added to relevant shared folders.' },
-  { label: 'Dashlane', hint: 'Added to vault; shared credentials provisioned as needed.' },
-  { label: 'Clio' },
-  { label: 'Donna' },
-  { label: 'Dialpad' },
+  { label: 'Dialpad', hint: 'Phone system' },
+  { label: 'Dashlane', hint: 'Password manager' },
+  { label: 'Clio', hint: 'Case management' },
+  { label: 'Dropbox or Box', hint: 'Documents & files' },
   { label: 'Zoom' },
-  { label: 'Signitic' },
-  { label: 'Logikcull' },
-  { label: 'PACER / ECF' },
+  { label: 'Ajax', hint: 'Timekeeping' },
+  { label: 'Donna', hint: 'Internal AI assistant' },
   { label: 'Westlaw', hint: 'Legal research' },
-  { label: 'Tybera', hint: 'Court e-filing' },
-  { label: 'Davidson County Court e-filing', hint: 'Court e-filing (Davidson County, TN) — if they have one, get access and update their info' },
-  { label: 'Ramp card issued' },
-  { label: 'Claude' },
+  { label: 'Courtdrive' },
   { label: 'Adobe' },
+  { label: 'Claude AI', hint: 'AI assistant' },
+  { label: 'Notion - SOPs' },
+  { label: 'Trip Help desk' },
+  { label: 'HR Performance Review' },
+  { label: 'Litson Availability Calendar' },
+  { label: 'ADP Payroll System' },
+  { label: 'Briefcatch', hint: 'Legal writing' },
+  { label: 'Lawline' },
+  { label: 'PACER, Tybera & Davidson County Court e-filing', hint: 'E-filing logins — plus any other court e-filing logins' },
+  { label: 'Microsoft account' },
+  { label: 'Signitic', hint: 'Email signature' },
+  { label: 'Logikcull' },
+  { label: 'Business Uber account' },
+  { label: 'Ramp' },
 ];
 
 // Static benefits quick reference shown under Section 1 (onboarding wording —
@@ -176,8 +187,16 @@ export function templateFromDoc(doc: OnboardingDoc): Omit<DocTemplate, 'assignee
 // the hire keeps their own cell data.
 export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
   const cells: Record<string, Cell> = {};
-  for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) cells[r.id] = r.cell;
-  const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? {} }));
+  const byLabel: Record<string, Cell> = {};
+  const norm = (s: any) => String(s ?? '').trim().toLowerCase();
+  for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) {
+    cells[r.id] = r.cell;
+    const k = norm(r.label);
+    // Fallback keyed by label so a hire's progress survives a template row being
+    // rebuilt with a new id (e.g. when the Ops tools list is replaced).
+    if (k && !(k in byLabel)) byLabel[k] = r.cell;
+  }
+  const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? byLabel[norm(i.label)] ?? {} }));
   return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff };
 }
 
