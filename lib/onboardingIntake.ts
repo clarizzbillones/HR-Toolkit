@@ -40,8 +40,7 @@ const BY_ROLE: Record<IntakeRole, IntakeField[]> = {
   attorney: [
     { id: 'bar_numbers', label: 'Bar number(s) & state(s)', type: 'text', required: true, hint: 'e.g. TX #12345678; NY #4567890' },
     { id: 'bar_admission', label: 'Bar admission date(s)', type: 'text' },
-    { id: 'state_bar_logins', label: 'State bar portal login(s)', type: 'longtext', hint: 'List each state bar you’re admitted to and its portal username, so HR can pay your bar fees and track your license. Please do NOT type passwords here — share the passwords securely in Dashlane (shared to Simran) instead.' },
-    { id: 'legal_logins_task', label: '🔐 Action needed — share your research & e-filing logins in Dashlane', type: 'info', hint: 'Please share your logins for Westlaw and every court e-filing system you use — PACER, Tybera, Davidson County Court, and any other courts — securely in Dashlane. Share them to Simran and Caitlin. No need to type any usernames or passwords on this form.' },
+    { id: 'legal_logins_task', label: '🔐 Action needed — share your bar, research & e-filing logins in Dashlane', type: 'info', hint: 'Please share your logins for your state bar portal(s), Westlaw, and every court e-filing system you use — PACER, Tybera, Davidson County Court, and any other courts — securely in Dashlane. Share them to Simran and Caitlin so HR can pay your bar fees, track your license, and set up your access. No need to type any usernames or passwords on this form.' },
     { id: 'court_admissions', label: 'Court admissions', type: 'list', hint: 'List each court you’re admitted to practice in — add a row for each. Or upload your admissions documents below.' },
     { id: 'law_school', label: 'Law school', type: 'text' },
     { id: 'practice_areas', label: 'Primary practice areas', type: 'text' },
