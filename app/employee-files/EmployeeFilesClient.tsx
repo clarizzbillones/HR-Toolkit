@@ -112,6 +112,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setDocs(d.docs ?? []);
     setAccounts(a.accounts ?? []);
   }
+  // Move to the previous/next person in the current tab's list (same order shown
+  // on the grid — alphabetical, within Employees / Contractors / Offboarded).
+  function goToAdjacent(dir: -1 | 1) {
+    if (!selected) return;
+    const idx = filtered.findIndex(p => p.id === selected.id);
+    if (idx < 0) return;
+    const next = filtered[idx + dir];
+    if (next) openProfile(next);
+  }
 
   // Resync this profile from Staffing and report what matched — makes a name
   // mismatch obvious (the usual reason a Staffing email edit doesn't appear).
@@ -376,6 +385,21 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           <button onClick={() => setSelected(null)} className="text-sm font-semibold text-text-secondary hover:text-ink">← All employees</button>
           <span className="text-text-faint">/</span>
           <span className="text-sm font-semibold text-text-primary">{selected.name}</span>
+          {(() => {
+            const idx = filtered.findIndex(p => p.id === selected.id);
+            const total = filtered.length;
+            if (idx < 0 || total <= 1) return null;
+            const label = tab === 'contractors' ? 'contractors' : tab === 'offboarded' ? 'offboarded' : 'employees';
+            return (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-text-muted mr-1">{idx + 1} of {total} {label}</span>
+                <button onClick={() => goToAdjacent(-1)} disabled={idx <= 0}
+                  className="text-sm font-semibold text-ink border border-border-light rounded-ctrl px-3 py-1.5 hover:bg-canvas disabled:opacity-30 disabled:cursor-default" title="Previous person">← Prev</button>
+                <button onClick={() => goToAdjacent(1)} disabled={idx >= total - 1}
+                  className="text-sm font-semibold text-ink border border-border-light rounded-ctrl px-3 py-1.5 hover:bg-canvas disabled:opacity-30 disabled:cursor-default" title="Next person">Next →</button>
+              </div>
+            );
+          })()}
         </header>
         <div className="flex-1 overflow-auto p-8">
           <div className="max-w-3xl space-y-6">
