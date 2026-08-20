@@ -1227,9 +1227,9 @@ export default function OnboardingClient() {
             className="ml-auto text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
             title={`Copy these ${title} (with their links) to another guide`}>⧉ Copy to…</button>
         )}
-        <button onClick={() => hideBlock(kind === 'tool' ? 'tools' : 'sop')}
+        <button onClick={() => hideBlock(blockHideKey(g, kind === 'tool' ? 'tools' : 'sop'))}
           className={`${list.length > 0 ? '' : 'ml-auto'} text-[11px] font-semibold text-litred-alt hover:underline`}
-          title="Remove this whole section from this guide (you can restore it)">✕ Remove section</button>
+          title={isComposed ? 'Remove just this section from this part of the combined guide (restorable)' : 'Remove this whole section from this guide (you can restore it)'}>✕ Remove section</button>
       </div>
       <div className="bg-white border border-border rounded-card p-3 space-y-1">
         {list.map(l => (
@@ -1311,7 +1311,11 @@ export default function OnboardingClient() {
       const list = items.filter(i => i.guide === g && !exclude.includes(i.id)).sort((a, b) => a.sort_order - b.sort_order);
       if (!list.length) return '';
       const label = (headers?.[g] && headers[g].trim()) || `${g} Onboarding`;
-      return sep(label) + innerHtmlFor(list, '', { noGreeting: true, hidden });
+      // Hidden keys are scoped per source (`${g}::${block}`) — translate to the
+      // plain block keys innerHtmlFor expects, for THIS source only, so removing
+      // one source's Tools block doesn't drop the other's.
+      const srcHidden = new Set([...(hidden ?? [])].filter(k => k.startsWith(`${g}::`)).map(k => k.slice(g.length + 2)));
+      return sep(label) + innerHtmlFor(list, '', { noGreeting: true, hidden: srcHidden });
     }).join('');
     return greetHtml + body;
   }
@@ -1356,14 +1360,21 @@ export default function OnboardingClient() {
     const bodyText = (body: string | null) => parseBodyBlocks(body).map(b => b.type === 'text'
       ? b.text
       : [b.headers.join(' | '), ...b.rows.map(r => r.join(' | '))].join('\n')).join('\n\n');
-    // Removed sections (hiddenBlocks) are left out so the copied/emailed guide
-    // matches what's shown on screen and in the PDF.
+    // Removed sections are left out so the copied/emailed guide matches what's on
+    // screen and in the PDF. Hidden keys are plain for a normal guide and scoped
+    // per source (`${g}::${block}`) for a combined guide, so resolve them down to
+    // the specific item ids to drop — a per-source removal only affects its own.
+    const hiddenIds = hiddenItemIds();
+    const sched = schedule.filter(r => !hiddenIds.has(r.id));
+    const tls = tools.filter(l => !hiddenIds.has(l.id));
+    const lnk = links.filter(l => !hiddenIds.has(l.id));
+    const tbls = tables.filter(t => !hiddenIds.has(t.id));
     return `${greeting}\n\n`
       + sections.map(s => `${s.title.toUpperCase()}\n${bodyText(s.body)}`).join('\n\n')
-      + (schedule.length && !hiddenBlocks.has('schedule') ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
-      + (tools.length && !hiddenBlocks.has('tools') ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
-      + (links.length && !hiddenBlocks.has('sop') ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
-      + (tables.length && !hiddenBlocks.has('tables') ? `\n\n` + tables.map(tbl).join('\n\n') : '');
+      + (sched.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + sched.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
+      + (tls.length ? `\n\nTOOLS\n` + tls.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (lnk.length ? `\n\nSOP LINKS\n` + lnk.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (tbls.length ? `\n\n` + tbls.map(tbl).join('\n\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
   function emailGuide() {
@@ -1383,6 +1394,24 @@ export default function OnboardingClient() {
   }
   async function restoreBlock(key: string) {
     for (const it of items.filter(i => i.kind === 'blockhidden' && i.guide === guide && i.day === key)) remove(it.id);
+  }
+  // Resolve removed sections to the concrete item ids to drop (used by the text
+  // Copy/Email export). Normal guides key by block type; combined guides key per
+  // source (`${g}::${block}`), so a per-source removal only drops that source's
+  // items and the other source's same-type block stays.
+  function hiddenItemIds(): Set<string> {
+    const ids = new Set<string>();
+    const KIND_OF: Record<string, Item['kind']> = { schedule: 'schedule', tools: 'tool', sop: 'sop', tables: 'table' };
+    if (isComposed && composedDef) {
+      for (const g of guideSources) for (const bk of Object.keys(KIND_OF)) {
+        if (hiddenBlocks.has(`${g}::${bk}`)) items.filter(i => i.guide === g && i.kind === KIND_OF[bk]).forEach(i => ids.add(i.id));
+      }
+    } else {
+      for (const bk of Object.keys(KIND_OF)) {
+        if (hiddenBlocks.has(bk)) gItems.filter(i => i.kind === KIND_OF[bk]).forEach(i => ids.add(i.id));
+      }
+    }
+    return ids;
   }
   const blockShown: Record<string, boolean> = {
     sections: true,
@@ -1413,11 +1442,16 @@ export default function OnboardingClient() {
     const saved = blockOrders[g];
     const arr = (saved && saved.length ? saved : DEFAULT_BLOCK_ORDER).filter(k => DEFAULT_BLOCK_ORDER.includes(k));
     for (const k of DEFAULT_BLOCK_ORDER) if (!arr.includes(k)) arr.push(k);
-    // Honor "Remove section" on combined guides too — hiddenBlocks is keyed by
-    // the combined guide's name, so a removed block hides across every source
-    // group in the combined view (and can be restored from the chips below).
-    return arr.filter(k => shown[k] && !hiddenBlocks.has(k));
+    // Honor "Remove section" on combined guides PER SOURCE — the hidden key is
+    // scoped as `${sourceGuide}::${block}`, so removing e.g. the Attorney Tools
+    // block leaves the Benefits Tools block untouched. Restorable from the chips
+    // below.
+    return arr.filter(k => shown[k] && !hiddenBlocks.has(`${g}::${k}`));
   }
+  // Key for a removable block. In a combined guide the same block type appears
+  // once per source guide, so scope the hidden key to the source; plain guides
+  // key by block type alone.
+  const blockHideKey = (srcGuide: string, k: string) => isComposed ? `${srcGuide}::${k}` : k;
   async function moveBlock(k: string, dir: -1 | 1) {
     const vis = visibleBlocks.slice();
     const i = vis.indexOf(k), j = i + dir;
@@ -1450,7 +1484,7 @@ export default function OnboardingClient() {
           <span className="w-2.5 h-6 rounded-full bg-[#3f6b8a]" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#3f6b8a]">2-Week Training Schedule</h2>
           <span className="text-[11px] text-text-muted font-normal normal-case tracking-normal">— click any cell to edit</span>
-          <button onClick={() => hideBlock('schedule')} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove this schedule from this guide (restorable)">✕ Remove section</button>
+          <button onClick={() => hideBlock(blockHideKey(srcGuide, 'schedule'))} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove this schedule from this guide (restorable)">✕ Remove section</button>
         </div>
         <div className="bg-white border border-border rounded-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
@@ -1488,7 +1522,7 @@ export default function OnboardingClient() {
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-6 rounded-full bg-[#8a6d3b]" />
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#6b5427]">Tables</h2>
-          <button onClick={() => hideBlock('tables')} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove all tables from this guide (restorable)">✕ Remove section</button>
+          <button onClick={() => hideBlock(blockHideKey(srcGuide, 'tables'))} className="ml-auto text-[11px] font-semibold text-litred-alt hover:underline" title="Remove all tables from this guide (restorable)">✕ Remove section</button>
         </div>
         {tbls.map(t => {
           const d = parseTable(t.body);
@@ -1869,14 +1903,22 @@ export default function OnboardingClient() {
                 </div>
               );
             })}
-            {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted border-t border-border-light pt-3">
-                <span className="font-semibold">Removed sections:</span>
-                {[...hiddenBlocks].filter(k => BLOCK_LABELS[k]).map(k => (
-                  <button key={k} onClick={() => restoreBlock(k)} className="font-semibold text-[#3f6b8a] hover:underline border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas">↩ Restore {BLOCK_LABELS[k]}</button>
-                ))}
-              </div>
-            )}
+            {(() => {
+              // Hidden keys here are per source: `${sourceGuide}::${block}`.
+              const restorable = [...hiddenBlocks]
+                .map(k => { const i = k.indexOf('::'); const src = i >= 0 ? k.slice(0, i) : ''; const bk = i >= 0 ? k.slice(i + 2) : k; return { key: k, src, label: BLOCK_LABELS[bk] }; })
+                .filter(r => r.label);
+              if (!restorable.length) return null;
+              const srcLabel = (g: string) => (composedDef?.headers?.[g] && composedDef.headers[g].trim()) || g;
+              return (
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-text-muted border-t border-border-light pt-3">
+                  <span className="font-semibold">Removed sections:</span>
+                  {restorable.map(r => (
+                    <button key={r.key} onClick={() => restoreBlock(r.key)} className="font-semibold text-[#3f6b8a] hover:underline border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas">↩ Restore {r.src ? `${srcLabel(r.src)} — ` : ''}{r.label}</button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
