@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { sql, cuid } from '@/lib/db';
-import { parseDoc, docSignedOff, emptyDoc } from '@/lib/onboardingDoc';
-import { attachPdfToEmployeeFile } from '@/lib/employeeFiles';
+import { parseDoc, docSignedOff, docComplete, grantedAccounts, emptyDoc } from '@/lib/onboardingDoc';
+import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { onboardingDocPdfDataUrl } from '@/lib/employeePdf';
 
 async function ensureTable() {
@@ -46,6 +46,34 @@ async function ensureStaff() {
 
 // Attach the parsed onboarding document to every returned row.
 function parse(row: any) { return { ...row, doc: parseDoc(row.doc) }; }
+
+// Copy the tools granted in a completed onboarding document onto the hire's
+// Accounts & Access list (idempotent — skips systems already listed, by name).
+// Creates the Employee File profile if it doesn't exist yet.
+async function syncGrantedTools(name: string, doc: any): Promise<number> {
+  const granted = grantedAccounts(doc);
+  if (!granted.length) return 0;
+  const profile = await findOrCreateProfileByName(name);
+  if (!profile) return 0;
+  await sql`CREATE TABLE IF NOT EXISTS employee_accounts (
+    id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, system TEXT, account TEXT,
+    access_level TEXT, status TEXT, source TEXT, notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() )`;
+  const existing = await sql`SELECT lower(system) AS s FROM employee_accounts WHERE profile_id = ${profile.id}` as any[];
+  const have = new Set(existing.map(r => r.s));
+  const [prof] = await sql`SELECT email FROM employee_profiles WHERE id = ${profile.id}` as any[];
+  const email = String(prof?.email ?? '').trim();
+  let added = 0;
+  for (const g of granted) {
+    const key = g.label.toLowerCase();
+    if (have.has(key)) continue;
+    await sql`INSERT INTO employee_accounts (id, profile_id, system, account, access_level, status, source, notes)
+      VALUES (${cuid()}, ${profile.id}, ${g.label}, ${email}, ${'Standard user'}, ${'Active'}, ${'Onboarding'}, ${g.hint ?? ''})`;
+    have.add(key);
+    added++;
+  }
+  return added;
+}
 
 export async function GET() {
   await ensureTable();
@@ -91,9 +119,14 @@ export async function PATCH(req: Request) {
   for (const k of ['name', 'email', 'position', 'worker_type', 'guide', 'start_date', 'dob', 'phone', 'status', 'stage', 'onboarding_date', 'tag', 'note', 'rehire_date'] as const) {
     if (f[k] !== undefined) await sql`UPDATE onboardees SET ${sql(k)} = ${f[k]} WHERE id = ${id}`;
   }
-  // Catie's onboarding document. Detect a full sign-off so we can auto-file the
-  // signed PDF to the new hire's Employee File (creating the profile if needed).
-  const signed = doc && typeof doc === 'object' ? docSignedOff(parseDoc(doc)) : false;
+  // Catie's onboarding document. Two milestones auto-file the PDF to the new
+  // hire's Employee File (creating the profile if needed): a full Catie sign-off,
+  // and — the one HR asked for — every task row's Date-done being filled. On that
+  // full completion we also copy the granted tools onto the hire's Accounts &
+  // Access list.
+  const parsedDoc = doc && typeof doc === 'object' ? parseDoc(doc) : null;
+  const signed = parsedDoc ? docSignedOff(parsedDoc) : false;
+  const completed = parsedDoc ? docComplete(parsedDoc) : false;
   if (doc !== undefined) await sql`UPDATE onboardees SET doc = ${doc ? JSON.stringify(doc) : null} WHERE id = ${id}`;
 
   // On completion, push the person into the Staffing directory
@@ -113,20 +146,26 @@ export async function PATCH(req: Request) {
   }
 
   const [row] = await sql`SELECT * FROM onboardees WHERE id = ${id}` as any[];
-  if (signed) {
-    // (Re)file the signed onboarding PDF so the Employee File always has the
-    // latest version. Best-effort — never block the save.
+  if (signed || completed) {
+    // (Re)file the onboarding PDF so the Employee File always has the latest
+    // version, and — once the document is fully complete — copy the granted
+    // tools onto the hire's Accounts & Access list. Best-effort: never block the
+    // save if filing or syncing hiccups.
     try {
       const parsed = parse(row);
       const dataUrl = await onboardingDocPdfDataUrl(parsed);
       await attachPdfToEmployeeFile({
-        name: row.name, category: 'Onboarding', title: 'Onboarding Checklist (signed)',
+        name: row.name, category: 'Onboarding',
+        title: completed ? 'Onboarding Document (completed)' : 'Onboarding Checklist (signed)',
         docDate: row.start_date ?? null,
         attName: `Onboarding-${String(row.name).replace(/[^\w]+/g, '-')}.pdf`,
         dataUrl, sourceRef: `onboarding:${id}`,
-        summary: 'Signed onboarding document — HR, Ops, and IT complete and signed off by Catie.',
+        summary: completed
+          ? 'Onboarding document complete — every task’s Date-done is filled. Granted tools synced to Accounts & Access.'
+          : 'Signed onboarding document — HR, Ops, and IT complete and signed off by Catie.',
         author: 'Catie',
       });
+      if (completed) await syncGrantedTools(row.name, parsed.doc);
     } catch { /* best-effort */ }
   }
   return NextResponse.json({ row: parse(row) });

@@ -195,3 +195,19 @@ export function docProgress(doc: OnboardingDoc): { done: number; total: number }
 export function docSignedOff(doc: OnboardingDoc): boolean {
   return cellDone(doc.signoff.hr) && cellDone(doc.signoff.ops) && cellDone(doc.signoff.it);
 }
+
+// The document is "done" once EVERY task row (HR + Ops accounts + IT) has its
+// Date-done filled. This is the trigger for auto-filing the document PDF to the
+// Employee File and syncing the granted tools onto the hire's profile.
+export function docComplete(doc: OnboardingDoc): boolean {
+  const rows = [...doc.hr, ...doc.accounts, ...doc.it];
+  return rows.length > 0 && rows.every(r => (r.cell.date ?? '').trim() !== '');
+}
+
+// The tools/accounts that were granted — each Accounts row with a Date-done
+// filled — for syncing onto the hire's Accounts & Access list.
+export function grantedAccounts(doc: OnboardingDoc): { label: string; hint?: string; date?: string }[] {
+  return doc.accounts
+    .filter(r => (r.label ?? '').trim() && (r.cell.date ?? '').trim())
+    .map(r => ({ label: r.label.trim(), hint: r.hint, date: (r.cell.date ?? '').trim() }));
+}
