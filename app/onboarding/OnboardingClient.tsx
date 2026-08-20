@@ -466,11 +466,11 @@ export default function OnboardingClient() {
     } catch { /* ignore ordering */ }
     showToast(`Created a new tab “${name}” (copy of “${src}”) — you’re viewing it now, right after “${src}”.`);
   }
-  async function renameGuide() {
-    const name = prompt(`Rename the “${guide}” guide (tab) to:`, guide)?.trim();
-    if (!name || name === guide) return;
+  async function renameGuide(target: string = guide) {
+    const name = prompt(`Rename the “${target}” guide (tab) to:`, target)?.trim();
+    if (!name || name === target) return;
     if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
-    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename-guide', from: guide, to: name }) });
+    const res = await fetch('/api/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename-guide', from: target, to: name }) });
     const d = await res.json();
     if (!res.ok) { showToast(d.error || 'Rename failed'); return; }
     if (Array.isArray(d.items)) setItems(d.items);
@@ -479,14 +479,14 @@ export default function OnboardingClient() {
   }
   // Rename a combined (composed) guide tab. Carries its removed-section /
   // renamed-header metadata to the new name and keeps you on the renamed tab.
-  async function renameComposed() {
-    const name = prompt(`Rename the “${guide}” combined guide to:`, guide)?.trim();
-    if (!name || name === guide) return;
+  async function renameComposed(target: string = guide) {
+    const name = prompt(`Rename the “${target}” combined guide to:`, target)?.trim();
+    if (!name || name === target) return;
     if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
-    const res = await fetch('/api/onboarding/compose', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: guide, to: name }) });
+    const res = await fetch('/api/onboarding/compose', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: target, to: name }) });
     const d = await res.json();
     if (!res.ok) { showToast(d.error || 'Rename failed'); return; }
-    const old = guide;
+    const old = target;
     setComposed(prev => prev.map(c => c.name === old ? { ...c, name } : c));
     // blockhidden / blocklabel rows are stored under the guide name — move them.
     setItems(prev => prev.map(i => (i.guide === old && (i.kind === 'blockhidden' || i.kind === 'blocklabel')) ? { ...i, guide: name } : i));
@@ -1630,9 +1630,9 @@ export default function OnboardingClient() {
       {view === 'guides' && (
       <div className="px-8 pt-4 bg-white border-b border-border flex items-center gap-2 flex-wrap flex-shrink-0">
         {applyOrder(guides, guideOrder).map(g => (
-          <button key={g} onClick={() => setGuide(g)}
+          <button key={g} onClick={() => setGuide(g)} onDoubleClick={() => renameGuide(g)}
             draggable onDragStart={() => { dragName.current = g; }} onDragOver={e => e.preventDefault()} onDrop={() => dropOnGuide(g)}
-            title="Drag to reorder"
+            title="Click to open · double-click to rename · drag to reorder"
             className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors cursor-grab active:cursor-grabbing ${guide === g ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}>
             {g}
           </button>
@@ -1640,10 +1640,10 @@ export default function OnboardingClient() {
         <button onClick={addGuide} className="text-sm font-semibold px-3 py-2 text-text-muted hover:text-ink">+ New guide</button>
         {composed.length > 0 && <span className="mx-1 text-border-light">|</span>}
         {applyOrder(composed.map(c => c.name), composedOrder).map(name => composed.find(c => c.name === name)!).filter(Boolean).map(c => (
-          <button key={c.name} onClick={() => setGuide(c.name)}
+          <button key={c.name} onClick={() => setGuide(c.name)} onDoubleClick={() => renameComposed(c.name)}
             draggable onDragStart={() => { dragName.current = c.name; }} onDragOver={e => e.preventDefault()} onDrop={() => dropOnComposed(c.name)}
             className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 transition-colors cursor-grab active:cursor-grabbing ${guide === c.name ? 'border-ink text-ink' : 'border-transparent text-text-muted hover:text-text-primary'}`}
-            title={`Combined: ${c.sources.join(' + ')} · drag to reorder`}>
+            title={`Combined: ${c.sources.join(' + ')} · double-click to rename · drag to reorder`}>
             👤 {c.name}
           </button>
         ))}
@@ -1653,7 +1653,7 @@ export default function OnboardingClient() {
             {guide !== 'General' && (
               <button onClick={() => copyGuideFrom('General')} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Copy General guide here</button>
             )}
-            <button onClick={renameGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
+            <button onClick={() => renameGuide()} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
             <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
             {guide !== 'General' && (
               <button onClick={deleteGuide} className="text-xs font-semibold text-litred-alt hover:underline">Delete “{guide}” guide</button>
@@ -1662,7 +1662,7 @@ export default function OnboardingClient() {
         )}
         {isComposed && composedDef && (
           <div className="ml-auto flex items-center gap-3">
-            <button onClick={renameComposed} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
+            <button onClick={() => renameComposed()} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
             <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
             <button onClick={() => editComposed(composedDef)} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⚙ Edit combine</button>
             <button onClick={() => deleteComposed(guide)} className="text-xs font-semibold text-litred-alt hover:underline">Remove “{guide}” combined guide</button>
