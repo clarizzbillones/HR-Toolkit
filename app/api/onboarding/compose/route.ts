@@ -41,6 +41,20 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
+// Rename a composed (combined) guide. Its name IS the `guide` column on the
+// meta row, and its per-guide metadata (removed sections / renamed headers) is
+// stored under the same name, so move all of those to the new name together.
+export async function PATCH(req: Request) {
+  const { from, to } = await req.json();
+  const dest = String(to ?? '').trim();
+  if (!from || !dest || from === dest) return NextResponse.json({ error: 'Bad from/to' }, { status: 400 });
+  const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM onboarding_items WHERE guide = ${dest}` as any[];
+  if (n > 0) return NextResponse.json({ error: `A guide named "${dest}" already exists` }, { status: 409 });
+  await sql`UPDATE onboarding_items SET guide = ${dest} WHERE guide = ${from} AND kind = 'meta' AND title = 'composed'`;
+  await sql`UPDATE onboarding_items SET guide = ${dest} WHERE guide = ${from} AND kind IN ('blockhidden', 'blocklabel')`;
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: Request) {
   const { name } = await req.json();
   if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 });

@@ -477,6 +477,23 @@ export default function OnboardingClient() {
     setGuide(name);
     showToast(`Renamed to “${name}”`);
   }
+  // Rename a combined (composed) guide tab. Carries its removed-section /
+  // renamed-header metadata to the new name and keeps you on the renamed tab.
+  async function renameComposed() {
+    const name = prompt(`Rename the “${guide}” combined guide to:`, guide)?.trim();
+    if (!name || name === guide) return;
+    if (guides.includes(name) || composedNames.includes(name)) { showToast(`“${name}” already exists`); return; }
+    const res = await fetch('/api/onboarding/compose', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: guide, to: name }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Rename failed'); return; }
+    const old = guide;
+    setComposed(prev => prev.map(c => c.name === old ? { ...c, name } : c));
+    // blockhidden / blocklabel rows are stored under the guide name — move them.
+    setItems(prev => prev.map(i => (i.guide === old && (i.kind === 'blockhidden' || i.kind === 'blocklabel')) ? { ...i, guide: name } : i));
+    setComposedOrder(prev => { const next = prev.map(n => n === old ? name : n); try { localStorage.setItem('hrkit.ob.composedOrder', JSON.stringify(next)); } catch { /* ignore */ } return next; });
+    setGuide(name);
+    showToast(`Renamed to “${name}”`);
+  }
   const [blockOrders, setBlockOrders] = useState<Record<string, string[]>>({});
   useEffect(() => { fetch('/api/onboarding/order').then(r => r.json()).then(d => setBlockOrders(d.orders ?? {})).catch(() => {}); }, []);
   useEffect(() => { fetch('/api/onboardees').then(r => r.json()).then(d => setPeople(d.rows ?? [])); }, []);
@@ -1645,6 +1662,7 @@ export default function OnboardingClient() {
         )}
         {isComposed && composedDef && (
           <div className="ml-auto flex items-center gap-3">
+            <button onClick={renameComposed} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">✎ Rename tab</button>
             <button onClick={duplicateGuide} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Duplicate</button>
             <button onClick={() => editComposed(composedDef)} className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">⚙ Edit combine</button>
             <button onClick={() => deleteComposed(guide)} className="text-xs font-semibold text-litred-alt hover:underline">Remove “{guide}” combined guide</button>
