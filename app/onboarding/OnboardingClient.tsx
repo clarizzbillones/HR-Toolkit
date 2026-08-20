@@ -1237,7 +1237,7 @@ export default function OnboardingClient() {
             <input value={l.title} onChange={e => patch(l.id, { title: e.target.value })} className="flex-1 bg-transparent text-sm font-medium text-text-primary rounded px-1 -mx-1 cursor-text hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#c9a24a]" placeholder={placeholder} title="Click to rename" />
             <input value={l.url ?? ''} onChange={e => patch(l.id, { url: e.target.value })} className="w-56 bg-transparent text-sm text-[#3f6b8a] rounded px-1 hover:bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#c9a24a] border-l border-border-light pl-2" placeholder="paste link (optional)" />
             {l.url && <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#3f6b8a] hover:underline">↗</a>}
-            <button onClick={() => remove(l.id)} className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100">✕</button>
+            <button onClick={() => { if (confirm(`Remove “${l.title || 'this item'}” from this section?`)) remove(l.id); }} title="Remove just this item" className="text-sm text-text-muted hover:text-litred-alt shrink-0 px-1">✕</button>
           </div>
         ))}
         <button onClick={() => add(kind, { title: placeholder }, addGuide)} className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add</button>
