@@ -159,6 +159,29 @@ function drawCirclePhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, c
   ctx.stroke();
 }
 
+// A little library of ready-made greetings so you don't have to write one from
+// scratch every time. The first entry in each list is the default shown when
+// you switch event type; "Suggest another" cycles to a different one at random.
+const BIRTHDAY_GREETINGS = [
+  'Wishing you a wonderful birthday and a year ahead full of joy!',
+  'Happy birthday! May your day be filled with laughter, good food, and great company.',
+  'Cheers to you on your special day — wishing you health, happiness, and success in the year ahead!',
+  'Happy birthday! Thank you for all you do — we’re so glad to have you on the team.',
+  'Another year, another reason to celebrate you. Wishing you a fantastic birthday!',
+  'Hope your birthday is as amazing as you are. Enjoy every moment!',
+  'Sending you the warmest birthday wishes — may this year bring you everything you hope for.',
+  'Happy birthday! Here’s to a year full of new adventures and well-deserved wins.',
+];
+const ANNIVERSARY_GREETINGS = [
+  'Thank you for your dedication and all you bring to the firm. Here’s to many more years together!',
+  'Congratulations on your work anniversary! Your hard work and commitment mean the world to us.',
+  'Thank you for being an essential part of our team. We’re grateful for every year you’ve been with us!',
+  'Cheers to another year of your talent, dedication, and great work. Happy work anniversary!',
+  'Your contributions make a real difference every day. Congratulations on your anniversary with us!',
+  'Happy work anniversary! We appreciate everything you do and look forward to many more years ahead.',
+  'Grateful for your loyalty and all the ways you help us grow. Here’s to celebrating you!',
+];
+
 export default function DesignClient({ employees }: { employees: { name: string }[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
@@ -182,11 +205,18 @@ export default function DesignClient({ employees }: { employees: { name: string 
   const filteredNames = name.trim() ? nameOptions.filter(nm => nm.toLowerCase().includes(name.trim().toLowerCase())) : nameOptions;
 
   useEffect(() => {
-    setGreeting(eventType === 'birthday'
-      ? 'Wishing you a wonderful birthday and a year ahead full of joy!'
-      : 'Thank you for your dedication and all you bring to the firm. Here’s to many more years together!');
+    setGreeting(eventType === 'birthday' ? BIRTHDAY_GREETINGS[0] : ANNIVERSARY_GREETINGS[0]);
     if (eventType === 'anniversary') setPhotoUrl(null);
   }, [eventType]);
+
+  // Swap in a different ready-made greeting for the current event type. Picks a
+  // random one that isn't the current text, so each click actually changes it.
+  function suggestGreeting() {
+    const list = eventType === 'birthday' ? BIRTHDAY_GREETINGS : ANNIVERSARY_GREETINGS;
+    const others = list.filter(g => g !== greeting.trim());
+    const pool = others.length ? others : list;
+    setGreeting(pool[Math.floor(Math.random() * pool.length)]);
+  }
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -484,11 +514,19 @@ export default function DesignClient({ employees }: { employees: { name: string 
                 )}
 
                 <div>
-                  <label className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Greeting <span className="font-normal text-text-muted">(below the banner)</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-semibold text-text-primary">
+                      Greeting <span className="font-normal text-text-muted">(below the banner)</span>
+                    </label>
+                    <button type="button" onClick={suggestGreeting}
+                      title="Swap in a different ready-made greeting"
+                      className="text-xs font-semibold text-ink border border-border-light bg-white px-2.5 py-1 rounded-ctrl hover:bg-canvas">
+                      ✨ Suggest another
+                    </button>
+                  </div>
                   <textarea value={greeting} onChange={e => setGreeting(e.target.value)} rows={4}
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-none" />
+                  <p className="text-xs text-text-muted mt-1">Tap “Suggest another” for a different message, or edit the text above.</p>
                 </div>
               </div>
             </div>
