@@ -1248,7 +1248,8 @@ export default function OnboardingClient() {
 
   // Inner HTML for a guide body, from an explicit item list + name. Reused by
   // the on-screen combined view, the PDF export, and the combine-panel preview.
-  function innerHtmlFor(list: Item[], name: string, opts?: { noGreeting?: boolean }) {
+  function innerHtmlFor(list: Item[], name: string, opts?: { noGreeting?: boolean; hidden?: Set<string> }) {
+    const hidden = opts?.hidden ?? new Set<string>();
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const secs = list.filter(i => i.kind === 'section');
     const sched = list.filter(i => i.kind === 'schedule');
@@ -1275,7 +1276,7 @@ export default function OnboardingClient() {
         ${inner}
       </section>`;
     }).join('');
-    const schedHtml = sched.length === 0 ? '' : `
+    const schedHtml = (sched.length === 0 || hidden.has('schedule')) ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #3f6b8a;padding-left:10px;margin:20px 0 6px">2-Week Training Schedule</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px">
         <thead><tr style="background:#e9f0f5">${['Date','Agenda','Assignee','Notes','Location'].map(h => `<th style="text-align:left;padding:5px 8px;color:#3f6b8a;font-size:9px;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
@@ -1284,9 +1285,9 @@ export default function OnboardingClient() {
     const listHtml = (heading: string, l: Item[]) => l.length === 0 ? '' : `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #6b4f8a;padding-left:10px;margin:20px 0 6px">${heading}</h2>
       <ul style="columns:2;font-size:12px;color:#333;padding-left:16px">${l.map(x => `<li style="margin:2px 0">${x.url ? `<a href="${esc(x.url)}" style="color:#3f6b8a">${esc(x.title)}</a>` : esc(x.title)}</li>`).join('')}</ul>`;
-    const toolsHtml = listHtml('Tools', tls);
-    const linksHtml = listHtml('SOP Links', lnk);
-    const tablesHtml = tbls.map(t => { const d = parseTable(t.body); return `
+    const toolsHtml = hidden.has('tools') ? '' : listHtml('Tools', tls);
+    const linksHtml = hidden.has('sop') ? '' : listHtml('SOP Links', lnk);
+    const tablesHtml = hidden.has('tables') ? '' : tbls.map(t => { const d = parseTable(t.body); return `
       <h2 style="font-size:14px;font-weight:700;color:#1b2a3d;border-left:4px solid #8a6d3b;padding-left:10px;margin:20px 0 6px">${esc(t.title)}</h2>
       <table style="width:100%;border-collapse:collapse;font-size:11px;break-inside:avoid">
         <thead><tr style="background:#f0ece4">${d.headers.map(h => `<th style="text-align:left;padding:5px 8px;color:#8a6d3b;font-size:9px;text-transform:uppercase">${esc(h)}</th>`).join('')}</tr></thead>
@@ -1299,7 +1300,7 @@ export default function OnboardingClient() {
 
   // Combined guide: greeting once, then each source guide as its own titled
   // section with a separator + header (custom label, defaulting to the guide name).
-  function combinedInnerHtml(sources: string[], exclude: string[], headers: Record<string, string> | undefined, name: string) {
+  function combinedInnerHtml(sources: string[], exclude: string[], headers: Record<string, string> | undefined, name: string, hidden?: Set<string>) {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const greet = name.trim() ? `Hi ${name.trim()},` : 'Welcome aboard,';
     const greetHtml = `<p style="font-size:13px;color:#1b2a3d;font-weight:600;margin:0 0 16px">${esc(greet)}</p>`;
@@ -1310,16 +1311,18 @@ export default function OnboardingClient() {
       const list = items.filter(i => i.guide === g && !exclude.includes(i.id)).sort((a, b) => a.sort_order - b.sort_order);
       if (!list.length) return '';
       const label = (headers?.[g] && headers[g].trim()) || `${g} Onboarding`;
-      return sep(label) + innerHtmlFor(list, '', { noGreeting: true });
+      return sep(label) + innerHtmlFor(list, '', { noGreeting: true, hidden });
     }).join('');
     return greetHtml + body;
   }
 
   // On-screen combined view: grouped-by-source for composed guides, else flat.
+  // Removed sections (hiddenBlocks) are suppressed so the exported PDF matches
+  // what's shown on screen.
   function guideInnerHtml() {
     return isComposed
-      ? combinedInnerHtml(guideSources, composedDef!.exclude, composedDef!.headers, personName)
-      : innerHtmlFor(gItems, personName);
+      ? combinedInnerHtml(guideSources, composedDef!.exclude, composedDef!.headers, personName, hiddenBlocks)
+      : innerHtmlFor(gItems, personName, { hidden: hiddenBlocks });
   }
 
   // Open a print window for pre-built inner HTML, with a name + header label.
@@ -1353,12 +1356,14 @@ export default function OnboardingClient() {
     const bodyText = (body: string | null) => parseBodyBlocks(body).map(b => b.type === 'text'
       ? b.text
       : [b.headers.join(' | '), ...b.rows.map(r => r.join(' | '))].join('\n')).join('\n\n');
+    // Removed sections (hiddenBlocks) are left out so the copied/emailed guide
+    // matches what's shown on screen and in the PDF.
     return `${greeting}\n\n`
       + sections.map(s => `${s.title.toUpperCase()}\n${bodyText(s.body)}`).join('\n\n')
-      + (schedule.length ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
-      + (tools.length ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
-      + (links.length ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
-      + (tables.length ? `\n\n` + tables.map(tbl).join('\n\n') : '');
+      + (schedule.length && !hiddenBlocks.has('schedule') ? `\n\n2-WEEK TRAINING SCHEDULE\n` + schedule.map(r => `${r.day} — ${r.title}${r.assignee ? ` (${r.assignee})` : ''}${r.location ? ` [${r.location}]` : ''}`).join('\n') : '')
+      + (tools.length && !hiddenBlocks.has('tools') ? `\n\nTOOLS\n` + tools.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (links.length && !hiddenBlocks.has('sop') ? `\n\nSOP LINKS\n` + links.map(l => `- ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n') : '')
+      + (tables.length && !hiddenBlocks.has('tables') ? `\n\n` + tables.map(tbl).join('\n\n') : '');
   }
   function copyEmail() { navigator.clipboard?.writeText(buildText()); showToast('Guide copied — paste into an email'); }
   function emailGuide() {
