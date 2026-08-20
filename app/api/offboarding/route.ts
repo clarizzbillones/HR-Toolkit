@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { defaultExcluded } from '@/lib/offboarding';
 import { parseDoc, docSignedOff, emptyDoc } from '@/lib/offboardingDoc';
-import { attachPdfToEmployeeFile } from '@/lib/employeeFiles';
+import { attachPdfToEmployeeFile, normName } from '@/lib/employeeFiles';
 import { offboardingDocPdfDataUrl } from '@/lib/employeePdf';
 
 // Offboarding tracker: one record per departing employee with a checklist state
@@ -110,7 +110,12 @@ export async function POST(req: Request) {
   // their real systems. Falls back to the standard template otherwise.
   let docJson: string | null = null;
   try {
-    const [prof] = await sql`SELECT id FROM employee_profiles WHERE lower(name) = ${lc(b.name)} LIMIT 1` as any[];
+    // Match the profile with the same normalized-name logic used across the app,
+    // so a stray space / hidden character in a stored name never breaks the
+    // full-circle mirror (the old exact lower(name) match did).
+    const key = normName(b.name);
+    const profs = await sql`SELECT id, name FROM employee_profiles` as any[];
+    const prof = profs.find(p => normName(p.name) === key);
     if (prof) {
       const accts = await sql`SELECT system, access_level FROM employee_accounts WHERE profile_id = ${prof.id} AND lower(coalesce(status,'')) <> 'closed' ORDER BY lower(system) ASC` as any[];
       if (accts.length) {
@@ -133,6 +138,27 @@ export async function PATCH(req: Request) {
   await ensure();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  // Re-pull the employee's current Accounts & Access into "Accounts to close",
+  // for an offboarding created before their tools were listed. Keeps any
+  // close-progress already entered (matched by tool name).
+  if (b.action === 'resync-accounts') {
+    const [rec] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+    if (!rec) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const key = normName(rec.name);
+    const profs = await sql`SELECT id, name FROM employee_profiles` as any[];
+    const prof = profs.find(p => normName(p.name) === key);
+    if (!prof) return NextResponse.json({ error: 'No Employee File found for this person yet.' }, { status: 404 });
+    const accts = await sql`SELECT system, access_level FROM employee_accounts WHERE profile_id = ${prof.id} AND lower(coalesce(status,'')) <> 'closed' ORDER BY lower(system) ASC` as any[];
+    const doc = parseDoc(rec.doc);
+    const byLabel: Record<string, any> = {};
+    for (const a of doc.accounts) { const k = String(a.label ?? '').trim().toLowerCase(); if (k && !(k in byLabel)) byLabel[k] = a.cell; }
+    doc.accounts = accts.map(a => { const label = String(a.system || 'Account'); return { id: gid('acct'), label, hint: a.access_level ? String(a.access_level) : undefined, cell: byLabel[label.trim().toLowerCase()] ?? {} }; });
+    await sql`UPDATE offboarding SET doc = ${JSON.stringify(doc)} WHERE id = ${b.id}`;
+    const [row] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+    return NextResponse.json({ row: parse(row), synced: accts.length });
+  }
+
   const updates: Record<string, any> = {};
   for (const k of ['name', 'position', 'manager', 'separation_date', 'separation_type', 'prepared_by', 'notes', 'dob', 'hire_date'] as const) {
     if (k in b) updates[k] = b[k] ?? null;

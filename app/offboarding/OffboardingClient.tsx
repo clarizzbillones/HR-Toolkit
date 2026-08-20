@@ -147,6 +147,18 @@ export default function OffboardingClient() {
       if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
     } catch { showToast('Save failed'); }
   }
+  // Pull the employee's current Accounts & Access into "Accounts to close",
+  // for an offboarding created before their tools were listed. Keeps any
+  // close-progress already entered.
+  async function resyncAccounts(id: string) {
+    try {
+      const res = await fetch('/api/offboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'resync-accounts' }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not pull tools'); return; }
+      if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
+      showToast(d.synced ? `Pulled ${d.synced} tool${d.synced === 1 ? '' : 's'} from the Employee File` : 'No open tools found on the Employee File');
+    } catch { showToast('Could not pull tools'); }
+  }
   async function toggleItem(rec: Rec, itemId: string) {
     if (readOnly) return;
     const checklist = { ...rec.checklist, [itemId]: !rec.checklist[itemId] };
@@ -386,6 +398,7 @@ export default function OffboardingClient() {
                   onSave={d => patch(rec.id, { doc: d } as any)} />
                 {!restricted && (
                   <div className="flex items-center justify-end gap-3 flex-wrap">
+                    <button onClick={() => resyncAccounts(rec.id)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Refresh “Accounts to close” from this person’s Employee File tools">↻ Pull tools from Employee File</button>
                     <span className="text-[11px] text-text-muted">Email each assigned person their open tasks (only people set up in Access Control).</span>
                     <button onClick={() => notifyAssignees(rec.id)} disabled={notifyBusy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{notifyBusy ? 'Notifying…' : '✉ Save & notify assignees'}</button>
                   </div>
