@@ -35,6 +35,10 @@ const OPS_TOOLS_KEY = 'ops-tools-list-2026';
 // cells onto the wrong tools; this rebuilds the list with stable ids so cells
 // match by tool, not position.
 const OPS_STABLE_IDS_KEY = 'ops-tools-stable-ids-2026';
+// Restore the original Ops rows (keeping hires' entered cells attached) and
+// append the extra guide tools — replacing the earlier version that renamed
+// rows (e.g. dropped "Microsoft 365 mailbox created").
+const OPS_RESTORE_ORIGINALS_KEY = 'ops-tools-restore-originals-2026';
 
 async function runMigrations() {
   const [row] = await sql`SELECT onboarding_doc_template, doc_template_migrations FROM app_settings WHERE id = 'singleton'` as any[];
@@ -61,6 +65,11 @@ async function runMigrations() {
   if (!done.includes(OPS_STABLE_IDS_KEY)) {
     if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
     done = [...done, OPS_STABLE_IDS_KEY];
+  }
+  // Restore the original row labels and append the extra tools.
+  if (!done.includes(OPS_RESTORE_ORIGINALS_KEY)) {
+    if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
+    done = [...done, OPS_RESTORE_ORIGINALS_KEY];
   }
 
   if (changed && tpl) await sql`UPDATE app_settings SET onboarding_doc_template = ${JSON.stringify(tpl)} WHERE id = 'singleton'`;

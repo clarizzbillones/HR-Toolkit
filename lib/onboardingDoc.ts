@@ -37,21 +37,28 @@ export const ONB_DOC_SECTIONS: DocSection[] = [
 ];
 
 // Section 2 — Ops. Accounts to open (editable per hire).
-// Section 2 — Ops "Accounts to open": the firm tools each hire gets set up on,
-// matching the guide's Tools list. Format mirrors the rest of the document
-// (label + optional parenthetical-style hint).
+// Section 2 — Ops "Accounts to open". Keeps the document's original rows (labels
+// + hints, so existing entries stay attached) and then appends the additional
+// firm tools from the guide. Format mirrors the rest of the document.
 export const ONB_DEFAULT_ACCOUNTS: { label: string; hint?: string }[] = [
-  { label: 'Dialpad', hint: 'Phone system' },
-  { label: 'Dashlane', hint: 'Password manager' },
-  { label: 'Clio', hint: 'Case management' },
-  { label: 'Dropbox or Box', hint: 'Documents & files' },
+  // Original rows — labels unchanged so hires' entered cells stay on their tool.
+  { label: 'Microsoft 365 mailbox created', hint: 'New account provisioned, license assigned, and added to relevant distribution lists.' },
+  { label: 'Dropbox / file storage', hint: 'Access granted; added to relevant shared folders.' },
+  { label: 'Dashlane', hint: 'Added to vault; shared credentials provisioned as needed.' },
+  { label: 'Clio' },
+  { label: 'Donna' },
+  { label: 'Dialpad' },
   { label: 'Zoom' },
-  { label: 'Ajax', hint: 'Timekeeping' },
-  { label: 'Donna', hint: 'Internal AI assistant' },
+  { label: 'Signitic' },
+  { label: 'Logikcull' },
+  { label: 'PACER / ECF' },
+  { label: 'Ramp card issued' },
+  { label: 'Claude' },
+  { label: 'Adobe' },
+  { label: 'Ajax' },
+  // Additional tools from the guide.
   { label: 'Westlaw', hint: 'Legal research' },
   { label: 'Courtdrive' },
-  { label: 'Adobe' },
-  { label: 'Claude AI', hint: 'AI assistant' },
   { label: 'Notion - SOPs' },
   { label: 'Trip Help desk' },
   { label: 'HR Performance Review' },
@@ -59,12 +66,9 @@ export const ONB_DEFAULT_ACCOUNTS: { label: string; hint?: string }[] = [
   { label: 'ADP Payroll System' },
   { label: 'Briefcatch', hint: 'Legal writing' },
   { label: 'Lawline' },
-  { label: 'PACER, Tybera & Davidson County Court e-filing', hint: 'E-filing logins — plus any other court e-filing logins' },
-  { label: 'Microsoft account' },
-  { label: 'Signitic', hint: 'Email signature' },
-  { label: 'Logikcull' },
+  { label: 'Tybera', hint: 'Court e-filing' },
+  { label: 'Davidson County Court e-filing', hint: 'Court e-filing (Davidson County, TN)' },
   { label: 'Business Uber account' },
-  { label: 'Ramp' },
 ];
 
 // Static benefits quick reference shown under Section 1 (onboarding wording —
@@ -193,19 +197,16 @@ export function templateFromDoc(doc: OnboardingDoc): Omit<DocTemplate, 'assignee
 // Rebuild a hire's document rows from the shared template, keeping their cells
 // (matched by row id). Template is authoritative for the row set + labels/hints;
 // the hire keeps their own cell data.
-// When a tool was renamed in the tools list, map the OLD label to the NEW one so
-// a hire's already-entered cell (assignee/deadline/initials/date/notes) follows
-// the tool instead of being dropped.
-const ACCT_LABEL_ALIASES: Record<string, string> = {
-  'microsoft 365 mailbox created': 'microsoft account',
-  'microsoft 365': 'microsoft account',
-  'dropbox / file storage': 'dropbox or box',
-  'dropbox': 'dropbox or box',
-  'claude': 'claude ai',
-  'pacer / ecf': 'pacer, tybera & davidson county court e-filing',
-  'pacer': 'pacer, tybera & davidson county court e-filing',
-  'ramp card issued': 'ramp',
-};
+// Groups of labels that mean the same tool (it was shown under different names
+// at different times). A hire's cell is indexed under every name in its group,
+// so their entered data follows the tool no matter which name the template uses.
+const ACCT_LABEL_GROUPS: string[][] = [
+  ['microsoft 365 mailbox created', 'microsoft 365', 'microsoft account'],
+  ['dropbox / file storage', 'dropbox', 'dropbox or box'],
+  ['claude', 'claude ai'],
+  ['ramp card issued', 'ramp'],
+  ['pacer / ecf', 'pacer', 'pacer, tybera & davidson county court e-filing'],
+];
 
 export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
   const cells: Record<string, Cell> = {};
@@ -215,11 +216,11 @@ export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
     cells[r.id] = r.cell;
     const k = norm(r.label);
     // Fallback keyed by label so a hire's progress follows the tool when a
-    // template row is rebuilt with a new id (e.g. the Ops tools list is
-    // replaced) — index by the label and, if it was renamed, by the new name.
+    // template row is rebuilt with a new id (e.g. the Ops tools list changes) —
+    // index by the label and every equivalent name for that tool.
     if (k && !(k in byLabel)) byLabel[k] = r.cell;
-    const alias = ACCT_LABEL_ALIASES[k];
-    if (alias && !(alias in byLabel)) byLabel[alias] = r.cell;
+    const grp = ACCT_LABEL_GROUPS.find(g => g.includes(k));
+    if (grp) for (const alt of grp) if (!(alt in byLabel)) byLabel[alt] = r.cell;
   }
   const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? byLabel[norm(i.label)] ?? {} }));
   return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff };
