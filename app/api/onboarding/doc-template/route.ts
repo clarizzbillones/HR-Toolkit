@@ -30,6 +30,11 @@ const ROLLOUT_KEY = 'accounts-westlaw-tybera-davidson';
 // and assignee names are left exactly as saved. Runs once so the firm can still
 // edit/remove tools afterward without them snapping back.
 const OPS_TOOLS_KEY = 'ops-tools-list-2026';
+// Re-key the Ops accounts to stable, name-derived ids. The first pass used
+// index-based ids that collided with hires' existing rows and shifted their
+// cells onto the wrong tools; this rebuilds the list with stable ids so cells
+// match by tool, not position.
+const OPS_STABLE_IDS_KEY = 'ops-tools-stable-ids-2026';
 
 async function runMigrations() {
   const [row] = await sql`SELECT onboarding_doc_template, doc_template_migrations FROM app_settings WHERE id = 'singleton'` as any[];
@@ -50,6 +55,12 @@ async function runMigrations() {
   if (!done.includes(OPS_TOOLS_KEY)) {
     if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
     done = [...done, OPS_TOOLS_KEY];
+  }
+  // Rebuild the Ops list with stable, name-derived ids (fixes the id collision
+  // that shifted hires' cells onto the wrong tools).
+  if (!done.includes(OPS_STABLE_IDS_KEY)) {
+    if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
+    done = [...done, OPS_STABLE_IDS_KEY];
   }
 
   if (changed && tpl) await sql`UPDATE app_settings SET onboarding_doc_template = ${JSON.stringify(tpl)} WHERE id = 'singleton'`;

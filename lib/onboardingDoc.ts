@@ -96,7 +96,7 @@ const defItems = (key: 'hr' | 'it'): DocRow[] =>
 export function emptyDoc(): OnboardingDoc {
   return {
     hr: defItems('hr'),
-    accounts: ONB_DEFAULT_ACCOUNTS.map(a => ({ id: rid(), label: a.label, hint: a.hint, cell: {} })),
+    accounts: ONB_DEFAULT_ACCOUNTS.map(a => ({ id: acctId(a.label), label: a.label, hint: a.hint, cell: {} })),
     it: defItems('it'),
     signoff: { hr: {}, ops: {}, it: {} },
   };
@@ -136,11 +136,19 @@ export const newAccount = newRow;
 // shared across all hires' documents.
 export interface DocTemplate { hr: DocItem[]; accounts: DocItem[]; it: DocItem[]; assignees: string[] }
 
+// Stable, label-derived id for an account row, so the tools list can be
+// reordered or replaced without a row's id ever landing on a different tool
+// (index-based ids collided and shifted cells onto the wrong tools).
+export function acctId(label: string): string {
+  const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return `acct-${slug || 'row'}`;
+}
+
 export function defaultTemplate(): DocTemplate {
   const items = (key: 'hr' | 'it') => (ONB_DOC_SECTIONS.find(s => s.key === key)?.items ?? []).map(i => ({ id: i.id, label: i.label, hint: i.hint }));
   return {
     hr: items('hr'),
-    accounts: ONB_DEFAULT_ACCOUNTS.map((a, idx) => ({ id: `acct-def-${idx}`, label: a.label, hint: a.hint })),
+    accounts: ONB_DEFAULT_ACCOUNTS.map(a => ({ id: acctId(a.label), label: a.label, hint: a.hint })),
     it: items('it'),
     assignees: [],
   };
@@ -185,6 +193,20 @@ export function templateFromDoc(doc: OnboardingDoc): Omit<DocTemplate, 'assignee
 // Rebuild a hire's document rows from the shared template, keeping their cells
 // (matched by row id). Template is authoritative for the row set + labels/hints;
 // the hire keeps their own cell data.
+// When a tool was renamed in the tools list, map the OLD label to the NEW one so
+// a hire's already-entered cell (assignee/deadline/initials/date/notes) follows
+// the tool instead of being dropped.
+const ACCT_LABEL_ALIASES: Record<string, string> = {
+  'microsoft 365 mailbox created': 'microsoft account',
+  'microsoft 365': 'microsoft account',
+  'dropbox / file storage': 'dropbox or box',
+  'dropbox': 'dropbox or box',
+  'claude': 'claude ai',
+  'pacer / ecf': 'pacer, tybera & davidson county court e-filing',
+  'pacer': 'pacer, tybera & davidson county court e-filing',
+  'ramp card issued': 'ramp',
+};
+
 export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
   const cells: Record<string, Cell> = {};
   const byLabel: Record<string, Cell> = {};
@@ -192,9 +214,12 @@ export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
   for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) {
     cells[r.id] = r.cell;
     const k = norm(r.label);
-    // Fallback keyed by label so a hire's progress survives a template row being
-    // rebuilt with a new id (e.g. when the Ops tools list is replaced).
+    // Fallback keyed by label so a hire's progress follows the tool when a
+    // template row is rebuilt with a new id (e.g. the Ops tools list is
+    // replaced) — index by the label and, if it was renamed, by the new name.
     if (k && !(k in byLabel)) byLabel[k] = r.cell;
+    const alias = ACCT_LABEL_ALIASES[k];
+    if (alias && !(alias in byLabel)) byLabel[alias] = r.cell;
   }
   const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? byLabel[norm(i.label)] ?? {} }));
   return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff };
