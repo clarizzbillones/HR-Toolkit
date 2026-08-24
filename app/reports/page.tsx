@@ -42,13 +42,15 @@ export default async function ReportsPage() {
   // cents away on insert (e.g. 100219.26 -> 100219). Widen any that are still an
   // integer type to double precision so amounts keep their cents. Guarded by the
   // current type so it only rewrites a table that actually needs it.
-  const isIntType = async (table: string) => {
+  const needsWiden = async (table: string) => {
     const [col] = await sql`SELECT data_type FROM information_schema.columns WHERE table_name = ${table} AND column_name = 'amount'` as any[];
-    return !!col && ['integer', 'bigint', 'smallint'].includes(col.data_type);
+    // Anything not already double precision can round cents (integer/bigint, or
+    // numeric with scale 0). Upgrade once; afterwards it's a no-op.
+    return !!col && col.data_type !== 'double precision';
   };
-  if (await isIntType('cashout_ledger')) await sql`ALTER TABLE cashout_ledger ALTER COLUMN amount TYPE double precision USING amount::double precision`;
-  if (await isIntType('reimbursements')) await sql`ALTER TABLE reimbursements ALTER COLUMN amount TYPE double precision USING amount::double precision`;
-  if (await isIntType('insurance_invoices')) await sql`ALTER TABLE insurance_invoices ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+  if (await needsWiden('cashout_ledger')) await sql`ALTER TABLE cashout_ledger ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+  if (await needsWiden('reimbursements')) await sql`ALTER TABLE reimbursements ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+  if (await needsWiden('insurance_invoices')) await sql`ALTER TABLE insurance_invoices ALTER COLUMN amount TYPE double precision USING amount::double precision`;
   const [{ c }] = await sql`SELECT COUNT(*)::int AS c FROM cashout_ledger WHERE date = '2026-06-01' AND note = 'Zack distribution'`;
   if (!c) {
     for (const [date, payee, category, amount, note] of CASHOUT_SEED) {

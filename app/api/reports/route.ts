@@ -15,7 +15,10 @@ function stripAttachment(rows: any[]): any[] {
 async function ensureDecimalAmount(table: 'cashout_ledger' | 'reimbursements' | 'insurance_invoices') {
   try {
     const [col] = await sql`SELECT data_type FROM information_schema.columns WHERE table_name = ${table} AND column_name = 'amount'` as any[];
-    if (!col || !['integer', 'bigint', 'smallint'].includes(col.data_type)) return;
+    // Anything that isn't already double precision might round cents away
+    // (integer/bigint, or numeric with scale 0). Upgrade it once; afterwards the
+    // type is 'double precision' and this is a no-op.
+    if (!col || col.data_type === 'double precision') return;
     if (table === 'cashout_ledger') await sql`ALTER TABLE cashout_ledger ALTER COLUMN amount TYPE double precision USING amount::double precision`;
     else if (table === 'reimbursements') await sql`ALTER TABLE reimbursements ALTER COLUMN amount TYPE double precision USING amount::double precision`;
     else await sql`ALTER TABLE insurance_invoices ALTER COLUMN amount TYPE double precision USING amount::double precision`;
