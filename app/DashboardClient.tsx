@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import EodModal from '@/components/EodModal';
 import MyTasks from '@/components/MyTasks';
+import { useAccess } from '@/components/AccessProvider';
 
 interface Props {
   pendingCount: number;
@@ -125,6 +126,11 @@ const modules = [
 
 export default function DashboardClient(props: Props) {
   const { data: session } = useSession();
+  const { me } = useAccess();
+  // Restricted viewers (e.g. document editors granted only Dashboard) see a
+  // stripped dashboard: just their assigned open-task list, none of the
+  // firm-wide KPIs, birthdays, modules, or EOD report.
+  const restricted = !!me?.restricted;
   const [showEod, setShowEod] = useState(false);
   const [ptoToday, setPtoToday] = useState<number>(props.ptoToday);
   const [ptoNames, setPtoNames] = useState<string[]>([]);
@@ -156,6 +162,7 @@ export default function DashboardClient(props: Props) {
           <h1 className="font-spectral text-[24px] font-semibold text-text-primary">{greeting(userName)}</h1>
           <p className="text-sm text-text-muted mt-0.5">{today} · {props.headEmployees} employee{props.headEmployees === 1 ? '' : 's'} · {props.headContractors} contractor{props.headContractors === 1 ? '' : 's'} · <span className="font-semibold text-text-secondary">{props.headTotal} total headcount</span></p>
         </div>
+        {!restricted && (
         <div className="ml-auto flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-text-muted font-semibold">Date</span>
@@ -173,11 +180,12 @@ export default function DashboardClient(props: Props) {
             Generate EOD Report
           </button>
         </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-auto p-8">
         {/* KPI strip — boxes flash red when a deadline is almost missed (≤3 days / overdue) */}
-        {(() => {
+        {!restricted && (() => {
           const payrollDays = props.payrollDaysLeft;
           const payrollUrgent = payrollDays !== null && payrollDays <= 3;
           const reviewDeadline = props.deadlines.filter(d => d.kind === 'review').map(d => d.days).sort((a, b) => a - b)[0];
@@ -215,9 +223,12 @@ export default function DashboardClient(props: Props) {
           );
         })()}
 
-        {/* Tasks assigned to the viewer from onboarding/offboarding documents */}
-        <MyTasks />
+        {/* Tasks assigned to the viewer from onboarding/offboarding documents.
+            For a restricted viewer this is the whole dashboard, so keep the
+            panel (with its empty state) visible even when they have none. */}
+        <MyTasks alwaysShow={restricted} />
 
+        {!restricted && (<>
         {/* Upcoming birthdays & anniversaries (this month) */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white border border-border rounded-card p-5" style={{ borderTop: '3px solid #c9a24a' }}>
@@ -320,6 +331,7 @@ export default function DashboardClient(props: Props) {
             Compile Report →
           </div>
         </button>
+        </>)}
       </div>
 
       {showEod && <EodModal onClose={() => setShowEod(false)} />}

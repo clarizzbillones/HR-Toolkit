@@ -6,14 +6,25 @@ interface Task { source: 'onboarding' | 'offboarding'; personId: string; personN
 
 // Dashboard panel: the onboarding/offboarding document tasks assigned to the
 // person viewing it, not yet done. Clicking a task opens that person's document.
-export default function MyTasks() {
+export default function MyTasks({ alwaysShow = false }: { alwaysShow?: boolean }) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   useEffect(() => {
     fetch('/api/my-tasks').then(r => r.json()).then(d => setTasks(d.tasks ?? [])).catch(() => setTasks([]));
   }, []);
 
-  // Don't take up space until we know there's something to show.
-  if (!tasks || tasks.length === 0) return null;
+  if (!tasks) return null; // still loading
+  // Normally the panel only appears when there's something to show. When it's a
+  // restricted viewer's whole dashboard (alwaysShow), keep it with an empty
+  // state so they never see a blank page.
+  if (tasks.length === 0) {
+    if (!alwaysShow) return null;
+    return (
+      <div className="bg-white border border-border rounded-card p-5 mb-6">
+        <h2 className="text-base font-bold text-text-primary">My assigned tasks</h2>
+        <p className="text-sm text-text-muted mt-1">You’re all caught up — no onboarding or offboarding tasks are assigned to you right now.</p>
+      </div>
+    );
+  }
 
   const href = (t: Task) => t.source === 'onboarding'
     ? `/onboarding?person=${encodeURIComponent(t.personId)}`
