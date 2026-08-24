@@ -20,11 +20,16 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   // When lockAssignment is on (anyone who isn't a full-access admin), assigning
   // tasks and adding/removing/reordering rows are locked — they can only fill in
   // their part (initials / date / notes).
-  const assignRO = readOnly || lockAssignment;
-  const assigneeList = assignees && assignees.length ? assignees : [...OFFBOARDING_ASSIGNEES];
-  const removableNames = assigneeList.filter(a => !OFFBOARDING_ASSIGNEES.includes(a as any));
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
+  // A locked document freezes the structure and assignments (rows, assignees,
+  // ops decisions) so they can't change by accident — but assigned people can
+  // still mark their part done. Catie (full access) can unlock to change anything.
+  const locked = !!doc.locked;
+  const cellRO = readOnly;                                    // initials / date / notes — always open (unless view-only)
+  const assignRO = readOnly || lockAssignment || locked;     // assignee + structural edits
+  const assigneeList = assignees && assignees.length ? assignees : [...OFFBOARDING_ASSIGNEES];
+  const removableNames = assigneeList.filter(a => !OFFBOARDING_ASSIGNEES.includes(a as any));
   useEffect(() => { setDoc(rec.doc); ref.current = rec.doc; }, [rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply(mut: (d: Doc) => void): Doc {
@@ -43,6 +48,7 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     persist();
     onRemoveAssignee?.(n);
   }
+  function toggleLock() { apply(d => { d.locked = !d.locked; }); persist(); }
 
   const { done: dn, total } = docProgress(doc);
   const pct = total ? Math.round((dn / total) * 100) : 0;
@@ -93,11 +99,11 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
           {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
           {!assignRO && <option value="__add__">➕ Add name…</option>}
         </select>
-        <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
+        <input disabled={cellRO} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
-        <input disabled={readOnly} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)}
+        <input disabled={cellRO} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)}
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />
-        <input disabled={readOnly} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={persist} placeholder="Notes"
+        <input disabled={cellRO} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={persist} placeholder="Notes"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />
       </div>
     );
@@ -166,6 +172,12 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     <div className="space-y-5">
       {/* Progress + sign-off banner */}
       <div className="bg-white border border-border rounded-card p-5">
+        {!readOnly && !lockAssignment && (
+          <div className="flex justify-end mb-2">
+            <button onClick={toggleLock} title={locked ? 'Unlock to change assignments' : 'Lock to prevent accidental changes to rows/assignees'}
+              className={`text-[11px] font-semibold border px-2.5 py-1 rounded-ctrl ${locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a] hover:bg-[#f2e6cf]' : 'text-ink border-border-light hover:bg-canvas'}`}>{locked ? '🔒 Locked' : '🔓 Lock'}</button>
+          </div>
+        )}
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="font-semibold text-text-secondary">{dn} of {total} tasks initialed &amp; dated</span>
           <span className="text-text-muted">{pct}%</span>
@@ -176,7 +188,12 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
             ? '✓ Signed off by Catie — complete. The employee has been moved to Offboarded and the signed document filed to their Employee File (HR Hub) automatically.'
             : 'Not complete until Catie reviews and signs off all three sections below. On sign-off, the employee is moved to Offboarded and the signed PDF is filed automatically.'}
         </div>
-        {lockAssignment && !readOnly && (
+        {locked && (
+          <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#f7efe1] text-[#8a6d3b] border border-[#e0c48a]">
+            🔒 <b>Locked</b> — the rows, assignees, and Ops decisions are frozen to prevent accidental changes. Assigned people can still mark their part done (<b>initials</b>, <b>date</b>, <b>notes</b>).{!readOnly && !lockAssignment ? ' Click 🔒 Locked above to unlock and change assignments.' : ''}
+          </div>
+        )}
+        {lockAssignment && !readOnly && !locked && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
             HR assigns each task and manages the rows. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. Assigning tasks and adding/removing/reordering rows are done by a full-access admin.
           </div>

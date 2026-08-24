@@ -72,6 +72,7 @@ export interface OffboardingDoc {
   accounts: DocRow[];  // Section 2 — Tools (accounts to close)
   it: DocRow[];        // Section 3 — IT
   signoff: { hr: Cell; ops: Cell; it: Cell };
+  locked?: boolean;    // when true, structure/assignments are frozen (accident guard)
 }
 
 let _n = 0;
@@ -112,6 +113,7 @@ export function parseDoc(v: any): OffboardingDoc {
     signoff: {
       hr: d.signoff?.hr ?? {}, ops: d.signoff?.ops ?? {}, it: d.signoff?.it ?? {},
     },
+    locked: !!d.locked,
   };
 }
 
