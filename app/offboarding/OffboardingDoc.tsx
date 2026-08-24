@@ -272,6 +272,11 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
           {!assignRO && <button onClick={addStandardTools} title="Add any standard closing tools (Westlaw, Tybera, court e-filing, Lawline, Courtdrive, …) not already listed" className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">+ Add standard tools</button>}
         </div>
         {RowSection({ listKey: 'accounts', addLabel: '+ Add tool / account', placeholder: 'Account / system name' })}
+        {!assignRO && (
+          <button onClick={addStandardTools} className="mt-2 w-full border-2 border-dashed border-[#c9b48a] bg-[#fbf7ee] rounded-ctrl py-2 text-sm font-semibold text-[#8a6d3b] hover:bg-[#f6efe0]">
+            + Add standard tools (Westlaw, Tybera, court e-filing, Lawline, Courtdrive…)
+          </button>
+        )}
       </Section>
 
       {/* Section 3 — IT */}
