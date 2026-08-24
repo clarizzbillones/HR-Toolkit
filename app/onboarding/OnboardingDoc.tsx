@@ -60,6 +60,18 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
     onRemoveAssignee?.(n);
   }
 
+  // Reset this hire's document to a blank copy of the shared structure — same
+  // rows/sections/tools, but every entry (assignee, deadline, initials, date,
+  // notes, and the sign-off) cleared. Used to mirror one hire onto another.
+  function clearEntries() {
+    if (!window.confirm(`Clear ALL entries on ${rec.name}'s onboarding document — assignees, deadlines, initials, dates, and notes? The rows stay; only the filled-in data is reset.`)) return;
+    apply(d => {
+      for (const key of ['hr', 'accounts', 'it'] as const) for (const r of d[key]) r.cell = {};
+      d.signoff = { hr: {}, ops: {}, it: {} };
+    });
+    persist();
+  }
+
   const { done: dn, total } = docProgress(doc);
   const pct = total ? Math.round((dn / total) * 100) : 0;
   const signed = docSignedOff(doc);
@@ -240,7 +252,10 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
       <div className="bg-white border border-border rounded-card p-5">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding document · Pre-Onboarding → 1st Day → IT</div>
-          <button onClick={printDoc} className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
+          <div className="flex items-center gap-2">
+            {!assignRO && <button onClick={clearEntries} title="Reset this hire's document to a blank copy of the shared structure (rows stay, entries cleared)" className="text-[11px] font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">↺ Clear all entries</button>}
+            <button onClick={printDoc} className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
+          </div>
         </div>
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="font-semibold text-text-secondary">{dn} of {total} tasks initialed & dated</span>
