@@ -115,7 +115,7 @@ export default function AccessClient() {
     await fetch('/api/access', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
     showToast('Removed');
   }
-  const secLabel = (k: string) => SECTIONS.find(s => s.key === k)?.label ?? k;
+  const secLabel = (k: string) => k === '/' ? 'Dashboard — My Tasks' : (SECTIONS.find(s => s.key === k)?.label ?? k);
   const tabLabel = (k: string) => REPORT_TABS.find(t => t.key === k)?.label ?? k;
 
   if (forbidden) {
@@ -201,10 +201,11 @@ export default function AccessClient() {
                   const viewing = editing.sections.includes(s.key);
                   const canEdit = editing.editSections.includes(s.key);
                   return (
-                    <label key={s.key} className="flex items-center gap-2 text-sm bg-white border border-border-light rounded-ctrl px-3 py-2 cursor-pointer hover:border-ink">
+                    <label key={s.key} title={s.key === '/' ? 'Gives this person a Dashboard showing ONLY the onboarding/offboarding tasks assigned to them — no firm-wide KPIs, birthdays, or modules.' : undefined}
+                      className="flex items-center gap-2 text-sm bg-white border border-border-light rounded-ctrl px-3 py-2 cursor-pointer hover:border-ink">
                       <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d] shrink-0" checked={viewing}
                         onChange={() => setEditing({ ...editing, sections: toggle(editing.sections, s.key), editSections: editing.editSections.filter(k => k !== s.key) })} />
-                      <span className="truncate">{s.label}</span>
+                      <span className="truncate">{s.key === '/' ? 'Dashboard — My Tasks' : s.label}</span>
                       {viewing && (
                         <button type="button" onClick={e => { e.preventDefault(); setEditing({ ...editing, editSections: toggle(editing.editSections, s.key) }); }}
                           title={canEdit ? 'Can edit — they can add & change entries (initials, dates, notes). Click to make view-only.' : 'View-only — they can see but not change anything. Click to let them add & change entries.'}
