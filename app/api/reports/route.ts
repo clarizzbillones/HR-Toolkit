@@ -9,6 +9,19 @@ function stripAttachment(rows: any[]): any[] {
   return (rows ?? []).map(({ attachment_data, ...r }: any) => ({ ...r, has_attachment: !!attachment_data }));
 }
 
+// Older deploys created these amount columns as INTEGER, so Postgres rounded
+// cents away on write (100219.26 -> 100219). Widen to double precision at write
+// time if it's still an integer type, so saved amounts keep their cents.
+async function ensureDecimalAmount(table: 'cashout_ledger' | 'reimbursements' | 'insurance_invoices') {
+  try {
+    const [col] = await sql`SELECT data_type FROM information_schema.columns WHERE table_name = ${table} AND column_name = 'amount'` as any[];
+    if (!col || !['integer', 'bigint', 'smallint'].includes(col.data_type)) return;
+    if (table === 'cashout_ledger') await sql`ALTER TABLE cashout_ledger ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+    else if (table === 'reimbursements') await sql`ALTER TABLE reimbursements ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+    else await sql`ALTER TABLE insurance_invoices ALTER COLUMN amount TYPE double precision USING amount::double precision`;
+  } catch { /* best-effort */ }
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const tab = url.searchParams.get('tab') ?? 'monthly';
@@ -78,6 +91,7 @@ export async function POST(req: Request) {
     const { carrier, invoiceType, amount, deadline, coveragePeriod, enrolledCount } = body;
     await sql`ALTER TABLE insurance_invoices ADD COLUMN IF NOT EXISTS attachment_name TEXT`;
     await sql`ALTER TABLE insurance_invoices ADD COLUMN IF NOT EXISTS attachment_data TEXT`;
+    await ensureDecimalAmount('insurance_invoices');
     const id = cuid();
     await sql`INSERT INTO insurance_invoices (id,carrier,invoice_type,amount,deadline,coverage_period,enrolled_count,attachment_name,attachment_data) VALUES (${id},${carrier},${invoiceType ?? null},${amount},${deadline},${coveragePeriod ?? null},${enrolledCount ?? null},${attName},${attData})`;
     const [invoice] = await sql`SELECT * FROM insurance_invoices WHERE id = ${id}`;
@@ -88,6 +102,7 @@ export async function POST(req: Request) {
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS attachment_name TEXT`;
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS attachment_data TEXT`;
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS category TEXT`;
+    await ensureDecimalAmount('reimbursements');
     const id = cuid();
     await sql`INSERT INTO reimbursements (id,employee,purpose,category,amount,payout_date,attachment_name,attachment_data) VALUES (${id},${employee},${purpose},${category ?? null},${amount},${payoutDate ?? null},${attName},${attData})`;
     const [row] = await sql`SELECT * FROM reimbursements WHERE id = ${id}`;
@@ -99,6 +114,7 @@ export async function POST(req: Request) {
     await sql`ALTER TABLE cashout_ledger ADD COLUMN IF NOT EXISTS method TEXT`;
     await sql`ALTER TABLE cashout_ledger ADD COLUMN IF NOT EXISTS attachment_name TEXT`;
     await sql`ALTER TABLE cashout_ledger ADD COLUMN IF NOT EXISTS attachment_data TEXT`;
+    await ensureDecimalAmount('cashout_ledger');
     const id = cuid();
     await sql`INSERT INTO cashout_ledger (id,date,payee,category,amount,status,note,method,attachment_name,attachment_data) VALUES (${id},${date},${payee},${category},${amount},${status ?? 'Pending'},${note ?? null},${method ?? 'ACH'},${attName},${attData})`;
     const [row] = await sql`SELECT * FROM cashout_ledger WHERE id = ${id}`;
@@ -118,6 +134,7 @@ export async function PATCH(req: Request) {
   if (tab === 'reimbursements') {
     const { employee, purpose, amount, payoutDate, category } = body;
     await sql`ALTER TABLE reimbursements ADD COLUMN IF NOT EXISTS category TEXT`;
+    await ensureDecimalAmount('reimbursements');
     await sql`
       UPDATE reimbursements SET
         employee = ${employee ?? ''},
@@ -132,6 +149,7 @@ export async function PATCH(req: Request) {
   }
   if (tab === 'cashout') {
     const { date, payee, category, amount, status, note, method } = body;
+    await ensureDecimalAmount('cashout_ledger');
     await sql`
       UPDATE cashout_ledger SET
         date = ${date ?? null},
