@@ -104,14 +104,14 @@ export const OFFBOARDING_CHECKLIST: ChecklistSection[] = [
     ],
   },
   {
-    key: 'payroll', heading: 'Final pay & benefits (Gusto)', chapter: 'Offboarding Guide',
+    key: 'payroll', heading: 'Final pay & benefits (ADP)', chapter: 'Offboarding Guide',
     items: [
-      { id: 'payroll-1', label: 'Gusto: dismiss the employee (People → Work → Dismiss); enter the last working day and mark voluntary or involuntary.' },
+      { id: 'payroll-1', label: 'ADP: dismiss the employee (People → Work → Dismiss); enter the last working day and mark voluntary or involuntary.' },
       { id: 'payroll-2', label: 'Process final pay (pending hours, reimbursements, bonuses) and severance if applicable, per state pay laws — before dismissal.' },
       { id: 'payroll-3', label: 'Add the employee’s personal email for W-2 access.' },
-      { id: 'payroll-4', label: 'Complete the Gusto Offboarding tab: final pay, benefits updates, and account deactivation.' },
-      { id: 'payroll-5', label: 'Insurance (Guardian & BCBST): coverage runs through month-end — no manual termination needed; confirm Gusto sent the State Continuation email (3–5 business days).' },
-      { id: 'payroll-6', label: 'Save the Gusto State Continuation email confirmation in the employee’s offboarding folder.' },
+      { id: 'payroll-4', label: 'Complete the ADP Offboarding tab: final pay, benefits updates, and account deactivation.' },
+      { id: 'payroll-5', label: 'Insurance (Guardian & BCBST): coverage runs through month-end — no manual termination needed; confirm ADP sent the State Continuation email (3–5 business days).' },
+      { id: 'payroll-6', label: 'Save the ADP State Continuation email confirmation in the employee’s offboarding folder.' },
     ],
   },
   {

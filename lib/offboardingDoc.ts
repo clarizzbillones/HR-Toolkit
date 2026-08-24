@@ -51,6 +51,8 @@ export const DEFAULT_ACCOUNTS: { label: string; hint?: string }[] = [
   { label: 'Westlaw', hint: 'Legal research — contact platform admin to remove access' },
   { label: 'Tybera', hint: 'Court e-filing — remove access' },
   { label: 'Davidson County Court e-filing', hint: 'Court e-filing (Davidson County, TN) — remove access if they had one' },
+  { label: 'Lawline', hint: 'CLE — remove access' },
+  { label: 'Courtdrive', hint: 'Remove access' },
 ];
 
 // Static benefits quick reference shown under Section 1.
