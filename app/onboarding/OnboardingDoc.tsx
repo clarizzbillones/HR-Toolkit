@@ -30,12 +30,16 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   // When lockAssignment is on (granted editors who aren't full-access admins),
   // the "Assigned to" and "Deadline" are set by an admin up front and can't be
   // changed — they can only mark their part done (initials / date / notes).
-  const assignRO = readOnly || lockAssignment;
+  const [doc, setDoc] = useState<Doc>(rec.doc);
+  const ref = useRef<Doc>(rec.doc);
+  // A locked document is fully read-only (an accident guard a full-access admin
+  // toggles). It disables cell edits, structural edits, and Clear all entries.
+  const locked = !!doc.locked;
+  const cellRO = readOnly || locked;                          // initials / date / notes
+  const assignRO = readOnly || lockAssignment || locked;      // assignee + structural edits
   const assigneeList = assignees && assignees.length ? assignees : [...ONBOARDING_ASSIGNEES];
   // Names the firm has added (removable); the built-in team can't be removed.
   const removableNames = assigneeList.filter(a => !ONBOARDING_ASSIGNEES.includes(a as any));
-  const [doc, setDoc] = useState<Doc>(rec.doc);
-  const ref = useRef<Doc>(rec.doc);
   // Re-init only when switching to a different record (not on every save round-trip).
   useEffect(() => { setDoc(rec.doc); ref.current = rec.doc; }, [rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,6 +62,12 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
     });
     persist();
     onRemoveAssignee?.(n);
+  }
+
+  // Lock / unlock the whole document (per hire) to prevent accidental edits.
+  function toggleLock() {
+    apply(d => { d.locked = !d.locked; });
+    persist();
   }
 
   // Reset this hire's document to a blank copy of the shared structure — same
@@ -133,11 +143,11 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         </select>
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#fdf9f1] disabled:bg-[#f6f4f0] [color-scheme:light]" />
-        <input disabled={readOnly} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="—"
+        <input disabled={cellRO} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="—"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
-        <input disabled={readOnly} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)} title="Date completed"
+        <input disabled={cellRO} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)} title="Date completed"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-[#f6faf7] [color-scheme:light]" />
-        <input disabled={readOnly} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={persist} placeholder="Notes"
+        <input disabled={cellRO} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={persist} placeholder="Notes"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />
       </div>
     );
@@ -253,6 +263,10 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding document · Pre-Onboarding → 1st Day → IT</div>
           <div className="flex items-center gap-2">
+            {!readOnly && !lockAssignment && (
+              <button onClick={toggleLock} title={locked ? 'Unlock to allow edits' : 'Lock this document to prevent accidental edits'}
+                className={`text-[11px] font-semibold border px-2.5 py-1 rounded-ctrl ${locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a] hover:bg-[#f2e6cf]' : 'text-ink border-border-light hover:bg-canvas'}`}>{locked ? '🔒 Locked' : '🔓 Lock'}</button>
+            )}
             {!assignRO && <button onClick={clearEntries} title="Reset this hire's document to a blank copy of the shared structure (rows stay, entries cleared)" className="text-[11px] font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">↺ Clear all entries</button>}
             <button onClick={printDoc} className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
           </div>
@@ -267,7 +281,12 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
             ? '✓ Signed off by Catie — complete. The signed document has been filed to this hire’s Employee File (HR Hub) automatically.'
             : 'Not complete until Catie reviews and signs off all three sections below. On sign-off, the signed PDF is filed to the Employee File automatically.'}
         </div>
-        {lockAssignment && !readOnly && (
+        {locked && (
+          <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#f7efe1] text-[#8a6d3b] border border-[#e0c48a]">
+            🔒 This document is <b>locked</b> — all fields are read-only to prevent accidental changes.{!readOnly && !lockAssignment ? ' Click 🔒 Locked above to unlock.' : ''}
+          </div>
+        )}
+        {lockAssignment && !readOnly && !locked && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
             HR assigns each task and its deadline. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. The Assigned&nbsp;to and Deadline are set by HR and locked.
           </div>

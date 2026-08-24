@@ -89,6 +89,7 @@ export interface OnboardingDoc {
   accounts: DocRow[];  // Section 2 — Ops accounts
   it: DocRow[];        // Section 3 — IT rows
   signoff: { hr: Cell; ops: Cell; it: Cell };
+  locked?: boolean;    // when true, the whole document is read-only (accident guard)
 }
 
 let _n = 0;
@@ -125,6 +126,7 @@ export function parseDoc(v: any): OnboardingDoc {
     accounts: Array.isArray(d.accounts) && d.accounts.length ? d.accounts.map(normRow) : base.accounts,
     it: fromArrayOr(d.it, base.it),
     signoff: { hr: d.signoff?.hr ?? {}, ops: d.signoff?.ops ?? {}, it: d.signoff?.it ?? {} },
+    locked: !!d.locked,
   };
 }
 
@@ -223,7 +225,7 @@ export function reconcile(doc: OnboardingDoc, tpl: DocTemplate): OnboardingDoc {
     if (grp) for (const alt of grp) if (!(alt in byLabel)) byLabel[alt] = r.cell;
   }
   const build = (items: DocItem[]): DocRow[] => items.map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: cells[i.id] ?? byLabel[norm(i.label)] ?? {} }));
-  return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff };
+  return { hr: build(tpl.hr), accounts: build(tpl.accounts), it: build(tpl.it), signoff: doc.signoff, locked: doc.locked };
 }
 
 const cellDone = (c: Cell | undefined) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());

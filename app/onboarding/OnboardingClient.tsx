@@ -2087,7 +2087,7 @@ export default function OnboardingClient() {
                 {canSeeDoc && effTab === 'doc' ? (
                 <div>
                   <div className="mb-3">
-                    <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· HR → Ops → IT</span></h3>
+                    <h3 className="font-spectral text-[17px] font-semibold text-text-primary">Onboarding document <span className="text-[11px] font-semibold text-text-faint">· Pre-Onboarding → 1st Day → IT</span></h3>
                     <p className="text-[11px] text-text-muted">Assign each task &amp; deadline, initial &amp; date as done, then Catie signs off — the signed PDF files to the Employee File automatically.{docReadOnly ? ' View only.' : ''}</p>
                   </div>
                   <OnboardingDoc
