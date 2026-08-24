@@ -250,6 +250,9 @@ export default function OnboardingClient() {
   // Once a hire is marked complete (hired), drop them from the workflow picker.
   useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
   const [selected, setSelected] = useState<string | null>(null);
+  // Deep-link: /onboarding?person=<id> opens that hire's document (used by the
+  // dashboard "My assigned tasks" panel).
+  useEffect(() => { try { const p = new URLSearchParams(window.location.search).get('person'); if (p) { setView('dashboard'); setSelected(p); } } catch { /* ignore */ } }, []);
   const [dashTab, setDashTab] = useState<'active' | 'hired'>('active');
   // Catie's onboarding document — collapsible per hire. It is visible ONLY to
   // full-access admins; restricted viewers never see it, even if granted the

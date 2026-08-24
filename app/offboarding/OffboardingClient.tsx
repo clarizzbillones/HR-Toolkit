@@ -70,6 +70,9 @@ export default function OffboardingClient() {
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
   useEffect(() => { void load(); }, []);
+  // Deep-link: /offboarding?person=<id> opens that record's document (used by
+  // the dashboard "My assigned tasks" panel).
+  useEffect(() => { try { const p = new URLSearchParams(window.location.search).get('person'); if (p) { setDocView('document'); setSelId(p); } } catch { /* ignore */ } }, []);
   // Clicking "Offboarding" in the sidebar while a record is open returns to the list.
   useEffect(() => {
     const h = (e: Event) => { if ((e as CustomEvent).detail === '/offboarding') setSelId(null); };

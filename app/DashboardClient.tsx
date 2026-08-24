@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import EodModal from '@/components/EodModal';
+import MyTasks from '@/components/MyTasks';
 
 interface Props {
   pendingCount: number;
@@ -213,6 +214,9 @@ export default function DashboardClient(props: Props) {
         </div>
           );
         })()}
+
+        {/* Tasks assigned to the viewer from onboarding/offboarding documents */}
+        <MyTasks />
 
         {/* Upcoming birthdays & anniversaries (this month) */}
         <div className="grid grid-cols-2 gap-4 mb-6">
