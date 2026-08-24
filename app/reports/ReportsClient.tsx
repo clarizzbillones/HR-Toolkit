@@ -1060,7 +1060,7 @@ function InsuranceTab() {
 
   async function add() {
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
-    const res = await fetch('/api/reports?tab=insurance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), enrolledCount: form.enrolledCount ? Number(form.enrolledCount) : null, ...attachment }) });
+    const res = await fetch('/api/reports?tab=insurance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: num(form.amount), enrolledCount: form.enrolledCount ? Number(form.enrolledCount) : null, ...attachment }) });
     const { invoice } = await res.json();
     setInvoices(p => [...p, invoice]);
     setForm({ carrier: '', invoiceType: '', amount: '', deadline: '', coveragePeriod: '', enrolledCount: '' });
@@ -1088,7 +1088,7 @@ function InsuranceTab() {
           {([['Carrier','carrier'],['Invoice Type','invoiceType'],['Amount ($)','amount'],['Deadline','deadline'],['Coverage Period','coveragePeriod'],['Enrolled Count','enrolledCount']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
-              <input type={k === 'deadline' ? 'date' : k === 'amount' || k === 'enrolledCount' ? 'number' : 'text'} value={form[k]}
+              <input type={k === 'deadline' ? 'date' : k === 'enrolledCount' ? 'number' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined} placeholder={k === 'amount' ? 'e.g. 100219.26' : undefined} value={form[k]}
                 onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
@@ -1161,7 +1161,7 @@ function ReimbursementsTab() {
 
   async function save() {
     if (editId) {
-      const res = await fetch('/api/reports?tab=reimbursements', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: Number(form.amount) }) });
+      const res = await fetch('/api/reports?tab=reimbursements', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: num(form.amount) }) });
       const { row } = await res.json();
       if (row) setRows(p => p.map(x => x.id === editId ? { ...x, ...row } : x));
       resetForm();
@@ -1169,7 +1169,7 @@ function ReimbursementsTab() {
       return;
     }
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
-    const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
+    const res = await fetch('/api/reports?tab=reimbursements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: num(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
     resetForm();
@@ -1219,7 +1219,7 @@ function ReimbursementsTab() {
           {([['Amount ($)','amount'],['Payout Date','payoutDate']] as [string, keyof typeof form][]).map(([l, k]) => (
             <div key={k}>
               <label className="block text-xs font-semibold text-text-secondary mb-1">{l}</label>
-              <input type={k === 'payoutDate' ? 'date' : k === 'amount' ? 'number' : 'text'} value={form[k]}
+              <input type={k === 'payoutDate' ? 'date' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined} placeholder={k === 'amount' ? 'e.g. 100219.26' : undefined} value={form[k]}
                 onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
@@ -1311,7 +1311,7 @@ function CashOutTab() {
 
   async function save() {
     if (editId) {
-      const res = await fetch('/api/reports?tab=cashout', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: Number(form.amount) }) });
+      const res = await fetch('/api/reports?tab=cashout', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...form, amount: num(form.amount) }) });
       const { row } = await res.json();
       if (row) setRows(p => p.map(x => x.id === editId ? { ...x, ...row } : x));
       resetForm();
@@ -1319,7 +1319,7 @@ function CashOutTab() {
       return;
     }
     const attachment = attach ? { attachmentName: attach.name, attachmentData: await fileToDataUrl(attach) } : {};
-    const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), ...attachment }) });
+    const res = await fetch('/api/reports?tab=cashout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: num(form.amount), ...attachment }) });
     const { row } = await res.json();
     setRows(p => [row, ...p]);
     resetForm();
@@ -1361,7 +1361,9 @@ function CashOutTab() {
                   {['Pending','Paid'].map(s => <option key={s}>{s}</option>)}
                 </select>
               ) : (
-                <input type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} value={form[k]}
+                <input type={k === 'date' ? 'date' : 'text'} inputMode={k === 'amount' ? 'decimal' : undefined}
+                  placeholder={k === 'amount' ? 'e.g. 100219.26' : undefined}
+                  value={form[k]}
                   onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
                   className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
               )}
