@@ -258,8 +258,6 @@ export default function OffboardingClient() {
       <td style="padding:6px 7px;font-size:11px;color:#555">${esc(c?.notes || '')}</td>
     </tr>`;
     const table = (rows: string) => `<table style="width:100%;border-collapse:collapse;margin-top:6px"><thead>${th(['Item', 'Assigned To', 'Initial', 'Date', 'Notes'])}</thead><tbody>${rows}</tbody></table>`;
-    const hr = DOC_SECTIONS.find(s => s.key === 'hr')!;
-    const it = DOC_SECTIONS.find(s => s.key === 'it')!;
     const sectionHead = (h: string, blurb: string) => `<div style="font-size:13px;font-weight:700;color:#1b2a3d;margin-top:18px">${esc(h)}</div><div style="font-size:11px;color:#8a8474">${esc(blurb)}</div>`;
     const benefits = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:12px">Benefits quick reference</div>
       <table style="width:100%;border-collapse:collapse;margin-top:4px"><thead>${th(['Benefit', 'Coverage ends', 'Notes'])}</thead><tbody>${BENEFITS_REF.map(b => `<tr style="border-bottom:1px solid #f1ece3"><td style="padding:5px 7px;font-size:12px;font-weight:600">${esc(b.benefit)}</td><td style="padding:5px 7px;font-size:12px">${esc(b.ends)}</td><td style="padding:5px 7px;font-size:11px;color:#555">${esc(b.notes)}</td></tr>`).join('')}</tbody></table>`;
@@ -269,7 +267,7 @@ export default function OffboardingClient() {
       <div><b>Electronic file ownership transferred to:</b> ${esc(d.ops.fileOwner || '—')}</div>
       <div><b>Exceptions or holds:</b> ${esc(d.ops.exceptions || '—')}</div></div>`;
     const signoff = `<div style="font-size:13px;font-weight:700;color:#1b2a3d;margin-top:18px">Sign-Off — Catie</div>
-      ${table([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']].map(([k, l]) => cellRow(l, undefined, (d.signoff as any)[k])).join(''))}`;
+      ${table([['hr', 'Pre-Offboarding — Section 1 complete'], ['ops', 'Tools — Section 2 complete'], ['it', 'IT — Section 3 complete']].map(([k, l]) => cellRow(l, undefined, (d.signoff as any)[k])).join(''))}`;
     const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offboarding Document — ${esc(rec.name)}</title>
 <style>@page{size:letter;margin:0.5in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:22px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d}table{page-break-inside:auto}tr{page-break-inside:avoid}</style></head><body>
@@ -277,15 +275,15 @@ export default function OffboardingClient() {
   <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px">
     <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON PLLC</div>
     <div style="font-size:19px;font-weight:700;color:#fff;margin-top:8px">Employee Offboarding Checklist</div>
-    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: HR first, then Ops, then IT. Each item is signed off with initials and a date as it's completed.</div>
+    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: Pre-Offboarding first, then Tools, then IT. Each item is signed off with initials and a date as it's completed.</div>
   </div>
   <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
     ${meta('Employee name', rec.name)}${meta('Position / Title', rec.position || '')}${meta('Last day of employment', fmtDate(rec.separation_date))}
   </div>
-  ${sectionHead(hr.heading, hr.blurb)}${table(hr.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}${benefits}
-  ${sectionHead('Section 2 — Ops', 'Access, mailbox, and account decisions. Complete after HR; IT will not act until this section is signed off.')}${opsInfo}
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts to close</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
-  ${sectionHead(it.heading, it.blurb)}${table(it.items.map(i => cellRow(i.label, i.hint, d.items[i.id])).join(''))}
+  ${sectionHead('Section 1 — Pre-Offboarding', 'Employment status, benefits, and departure logistics.')}${table(d.hr.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}${benefits}
+  ${sectionHead('Section 2 — Tools', 'Access, mailbox, and account/tool decisions. Complete after Section 1; IT will not act until this section is signed off.')}${opsInfo}
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts / tools to close</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
+  ${sectionHead('Section 3 — IT', 'Final technical shutdown and confirmation. Complete only after Sections 1 and 2 are signed off.')}${table(d.it.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}
   ${signoff}
   <div style="margin-top:18px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Offboarding is complete only once Catie has signed off all three sections. File the completed document in the employee's Employee File (HR Hub).</div>
 </div>

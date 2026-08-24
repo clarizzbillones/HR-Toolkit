@@ -62,53 +62,68 @@ export const BENEFITS_REF: { benefit: string; ends: string; notes: string }[] = 
 ];
 
 export interface Cell { assignee?: string; initial?: string; date?: string; notes?: string }
-export interface DocAccount { id: string; label: string; hint?: string; cell: Cell }
+// Every section is now an editable list of rows (so rows can be renamed, added,
+// removed, reordered, and moved between sections), mirroring the onboarding doc.
+export interface DocRow { id: string; label: string; hint?: string; cell: Cell }
+export type DocAccount = DocRow; // backwards-compatible alias
 export interface OffboardingDoc {
   ops: { accessCutoff?: string; mailbox?: string; fileOwner?: string; exceptions?: string };
-  items: Record<string, Cell>;   // keyed by DocItem id
-  accounts: DocAccount[];
+  hr: DocRow[];        // Section 1 — Pre-Offboarding
+  accounts: DocRow[];  // Section 2 — Tools (accounts to close)
+  it: DocRow[];        // Section 3 — IT
   signoff: { hr: Cell; ops: Cell; it: Cell };
 }
 
 let _n = 0;
 function accId() { return `acct-${Date.now().toString(36)}-${(_n++).toString(36)}`; }
 
+const defItems = (key: 'hr' | 'it'): DocRow[] =>
+  (DOC_SECTIONS.find(s => s.key === key)?.items ?? []).map(i => ({ id: i.id, label: i.label, hint: i.hint, cell: {} }));
+
 export function emptyDoc(): OffboardingDoc {
   return {
     ops: {},
-    items: {},
+    hr: defItems('hr'),
     accounts: DEFAULT_ACCOUNTS.map(a => ({ id: accId(), label: a.label, hint: a.hint, cell: {} })),
+    it: defItems('it'),
     signoff: { hr: {}, ops: {}, it: {} },
   };
 }
 
-// Coerce whatever is stored into a valid doc (fills defaults for older records).
+function normRow(a: any): DocRow {
+  return { id: String(a?.id ?? accId()), label: String(a?.label ?? ''), hint: a?.hint, cell: (a?.cell && typeof a.cell === 'object') ? a.cell : {} };
+}
+
+// Coerce whatever is stored into a valid doc. Migrates the older shape (fixed
+// HR/IT item cells stored in an `items` map) into the editable row arrays.
 export function parseDoc(v: any): OffboardingDoc {
   let d: any = v;
   try { if (typeof v === 'string') d = JSON.parse(v); } catch { d = null; }
   if (!d || typeof d !== 'object') return emptyDoc();
   const base = emptyDoc();
+  const items = d.items && typeof d.items === 'object' ? d.items : null;
+  const fromArrayOr = (arr: any, defaults: DocRow[]): DocRow[] =>
+    Array.isArray(arr) ? arr.map(normRow) : defaults.map(r => ({ ...r, cell: (items && items[r.id]) ? items[r.id] : {} }));
   return {
     ops: { ...base.ops, ...(d.ops && typeof d.ops === 'object' ? d.ops : {}) },
-    items: d.items && typeof d.items === 'object' ? d.items : {},
-    accounts: Array.isArray(d.accounts) && d.accounts.length
-      ? d.accounts.map((a: any) => ({ id: String(a.id ?? accId()), label: String(a.label ?? ''), hint: a.hint, cell: (a.cell && typeof a.cell === 'object') ? a.cell : {} }))
-      : base.accounts,
+    hr: fromArrayOr(d.hr, base.hr),
+    accounts: Array.isArray(d.accounts) && d.accounts.length ? d.accounts.map(normRow) : base.accounts,
+    it: fromArrayOr(d.it, base.it),
     signoff: {
       hr: d.signoff?.hr ?? {}, ops: d.signoff?.ops ?? {}, it: d.signoff?.it ?? {},
     },
   };
 }
 
-export function newAccount(label = ''): DocAccount { return { id: accId(), label, cell: {} }; }
+export function newRow(label = ''): DocRow { return { id: accId(), label, cell: {} }; }
+export const newAccount = newRow; // backwards-compatible alias
 
 const cellDone = (c: Cell | undefined) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
 
-// Progress across all task rows (HR items + Ops accounts + IT items).
+// Progress across all task rows (Pre-Offboarding + Tools + IT).
 export function docProgress(doc: OffboardingDoc): { done: number; total: number } {
   let done = 0, total = 0;
-  for (const s of DOC_SECTIONS) for (const it of s.items) { total++; if (cellDone(doc.items[it.id])) done++; }
-  for (const a of doc.accounts) { total++; if (cellDone(a.cell)) done++; }
+  for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) { total++; if (cellDone(r.cell)) done++; }
   return { done, total };
 }
 

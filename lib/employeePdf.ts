@@ -4,7 +4,7 @@
 
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import { parseSignatories, fmtLong } from './coachingDoc';
-import { DOC_SECTIONS, BENEFITS_REF, type OffboardingDoc, type Cell } from './offboardingDoc';
+import { BENEFITS_REF, type OffboardingDoc, type Cell } from './offboardingDoc';
 import { ONB_BENEFITS_REF, type OnboardingDoc, type Cell as OnbCell } from './onboardingDoc';
 
 const GREEN = rgb(0.18, 0.49, 0.36);
@@ -244,31 +244,28 @@ export async function offboardingDocPdfDataUrl(rec: any): Promise<string> {
   };
   const heading = (t: string) => { d.gap(4); d.para(t, { font: bold, size: 13 }); d.gap(4); };
 
-  const hr = DOC_SECTIONS.find(s => s.key === 'hr')!;
-  const it = DOC_SECTIONS.find(s => s.key === 'it')!;
-
-  heading('Section 1 - HR');
-  for (const i of hr.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  heading('Section 1 - Pre-Offboarding');
+  for (const r of doc.hr) taskRow(r.label, r.hint, r.cell);
   d.gap(2); d.para('BENEFITS QUICK REFERENCE', { font: bold, size: 8, color: MUTED });
   for (const b of BENEFITS_REF) d.para(`${b.benefit} - ${b.ends}. ${b.notes}`, { bullet: true, indent: 14, size: 9.5 });
   d.rule();
 
-  heading('Section 2 - Ops');
+  heading('Section 2 - Tools');
   d.para(`Access cutoff date: ${doc.ops.accessCutoff || '—'}`, { size: 10.5 });
   d.para(`Mailbox disposition: ${doc.ops.mailbox || '—'}`, { size: 10.5 });
   d.para(`Electronic file ownership transferred to: ${doc.ops.fileOwner || '—'}`, { size: 10.5 });
   d.para(`Exceptions or holds: ${doc.ops.exceptions || '—'}`, { size: 10.5 });
-  d.gap(4); d.para('ACCOUNTS TO CLOSE', { font: bold, size: 8, color: MUTED }); d.gap(2);
+  d.gap(4); d.para('ACCOUNTS / TOOLS TO CLOSE', { font: bold, size: 8, color: MUTED }); d.gap(2);
   for (const a of doc.accounts) taskRow(a.label, a.hint, a.cell);
   d.rule();
 
   heading('Section 3 - IT');
-  for (const i of it.items) taskRow(i.label, i.hint, doc.items[i.id]);
+  for (const r of doc.it) taskRow(r.label, r.hint, r.cell);
   d.rule();
 
   heading('Sign-Off - Catie');
-  taskRow('HR - Section 1 complete', undefined, doc.signoff.hr);
-  taskRow('Ops - Section 2 complete', undefined, doc.signoff.ops);
+  taskRow('Pre-Offboarding - Section 1 complete', undefined, doc.signoff.hr);
+  taskRow('Tools - Section 2 complete', undefined, doc.signoff.ops);
   taskRow('IT - Section 3 complete', undefined, doc.signoff.it);
   return dataUrl(await d.bytes());
 }

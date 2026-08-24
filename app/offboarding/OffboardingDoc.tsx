@@ -1,15 +1,15 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {
-  DOC_SECTIONS, BENEFITS_REF, OFFBOARDING_ASSIGNEES,
-  docProgress, docSignedOff, newAccount,
+  BENEFITS_REF, OFFBOARDING_ASSIGNEES,
+  docProgress, docSignedOff, newRow,
   type OffboardingDoc as Doc, type Cell,
 } from '@/lib/offboardingDoc';
 
 interface RecLite { id: string; name: string; position: string | null; separation_date: string | null; doc: Doc }
 
-// Catie's streamlined offboarding document: HR → Ops → IT, each task assigned to
-// a person who initials + dates it, then Catie signs off each section.
+// Catie's streamlined offboarding document: Pre-Offboarding → Tools → IT, each
+// task assigned to a person who initials + dates it, then Catie signs off.
 export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onRemoveAssignee, onSave }: {
   rec: RecLite; readOnly?: boolean; lockAssignment?: boolean;
   assignees?: string[];
@@ -18,14 +18,13 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   onSave: (doc: Doc) => void;
 }) {
   // When lockAssignment is on (anyone who isn't a full-access admin), assigning
-  // tasks and adding/removing accounts are locked — they can only fill in their
-  // part (initials / date / notes). Full-access admins (Catie/Clarizz) can do all.
+  // tasks and adding/removing/reordering rows are locked — they can only fill in
+  // their part (initials / date / notes).
   const assignRO = readOnly || lockAssignment;
   const assigneeList = assignees && assignees.length ? assignees : [...OFFBOARDING_ASSIGNEES];
   const removableNames = assigneeList.filter(a => !OFFBOARDING_ASSIGNEES.includes(a as any));
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
-  // Re-init only when switching to a different record (not on every save round-trip).
   useEffect(() => { setDoc(rec.doc); ref.current = rec.doc; }, [rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function apply(mut: (d: Doc) => void): Doc {
@@ -34,12 +33,11 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   }
   const persist = () => onSave(ref.current);
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
-  // Remove a name from the shared list AND clear it off this record's tasks.
+
   function removeAssignee(n: string) {
     if (!window.confirm(`Remove "${n}" from the assignee list for every offboarding?`)) return;
     apply(d => {
-      for (const it of Object.values(d.items)) if (it && it.assignee === n) it.assignee = '';
-      for (const a of d.accounts) if (a.cell.assignee === n) a.cell.assignee = '';
+      for (const key of ['hr', 'accounts', 'it'] as const) for (const r of d[key]) if (r.cell.assignee === n) r.cell.assignee = '';
       for (const k of ['hr', 'ops', 'it'] as const) if ((d.signoff as any)[k]?.assignee === n) (d.signoff as any)[k].assignee = '';
     });
     persist();
@@ -50,8 +48,35 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   const pct = total ? Math.round((dn / total) * 100) : 0;
   const signed = docSignedOff(doc);
 
-  // One editable cell (Assigned To / Initial / Date / Notes). Text fields save
-  // on blur; selects/dates save immediately.
+  // Drag-and-drop reorder within a section.
+  const dragRow = useRef<{ key: 'hr' | 'accounts' | 'it'; i: number } | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  function moveRow(listKey: 'hr' | 'accounts' | 'it', from: number, to: number) {
+    if (from === to) return;
+    apply(d => { const arr = d[listKey]; const [m] = arr.splice(from, 1); arr.splice(to, 0, m); });
+    persist();
+  }
+  // Bulk-select rows (across sections) and move them to another section.
+  const [selIds, setSelIds] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) => setSelIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const SECTION_MOVE: { key: 'hr' | 'accounts' | 'it'; label: string }[] = [
+    { key: 'hr', label: 'Pre-Offboarding' }, { key: 'accounts', label: 'Tools' }, { key: 'it', label: 'IT' },
+  ];
+  function moveSelectedTo(target: 'hr' | 'accounts' | 'it') {
+    if (!selIds.size) return;
+    apply(d => {
+      const moving: any[] = [];
+      for (const key of ['hr', 'accounts', 'it'] as const) {
+        if (key === target) continue;
+        d[key] = d[key].filter(r => { if (selIds.has(r.id)) { moving.push(r); return false; } return true; });
+      }
+      d[target].push(...moving);
+    });
+    persist();
+    setSelIds(new Set());
+  }
+
+  // One editable cell (Assigned To / Initial / Date / Notes).
   function CellFields({ get, set }: { get: () => Cell; set: (patch: Partial<Cell>, commit: boolean) => void }) {
     const c = get();
     return (
@@ -78,19 +103,53 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     );
   }
 
-  // A titled task row with its cell.
-  function TaskRow({ label, hint, get, set }: { label: string; hint?: string; get: () => Cell; set: (p: Partial<Cell>, commit: boolean) => void; }) {
+  // A read-only titled task row with its cell (used for the sign-off rows).
+  function TaskRow({ label, get, set }: { label: string; get: () => Cell; set: (p: Partial<Cell>, commit: boolean) => void; }) {
     const complete = done(get());
     return (
       <div className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
         <div className="flex items-start gap-2">
           <span className={`mt-0.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-text-primary">{label}</div>
-            {hint && <div className="text-[11px] text-text-muted mt-0.5">{hint}</div>}
-          </div>
+          <div className="flex-1 min-w-0"><div className="text-sm font-medium text-text-primary">{label}</div></div>
         </div>
-        <CellFields get={get} set={set} />
+        {CellFields({ get, set })}
+      </div>
+    );
+  }
+
+  // An editable list of rows for a section — rename, remove, add, reorder (drag),
+  // bulk-select, and fill each cell. Structural edits are locked for assignRO.
+  function RowSection({ listKey, addLabel, placeholder }: { listKey: 'hr' | 'accounts' | 'it'; addLabel: string; placeholder: string }) {
+    const rows = doc[listKey];
+    return (
+      <div className="space-y-2">
+        {rows.map((a, i) => {
+          const complete = done(a.cell);
+          return (
+            <div key={a.id}
+              onDragOver={assignRO ? undefined : (e => { e.preventDefault(); if (dragOver !== `${listKey}:${i}`) setDragOver(`${listKey}:${i}`); })}
+              onDrop={assignRO ? undefined : (() => { const s = dragRow.current; dragRow.current = null; setDragOver(null); if (s && s.key === listKey) moveRow(listKey, s.i, i); })}
+              className={`rounded-ctrl border px-3 py-2.5 ${dragOver === `${listKey}:${i}` ? 'border-ink ring-1 ring-[#c9a24a]' : complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
+              <div className="flex items-start gap-2">
+                {!assignRO && (
+                  <input type="checkbox" checked={selIds.has(a.id)} onChange={() => toggleSel(a.id)} title="Select to move between sections"
+                    className="mt-1.5 w-4 h-4 accent-[#1b2a3d] shrink-0" />
+                )}
+                {!assignRO && (
+                  <span draggable onDragStart={() => { dragRow.current = { key: listKey, i }; }} onDragEnd={() => { dragRow.current = null; setDragOver(null); }}
+                    title="Drag to reorder" className="mt-1 cursor-grab active:cursor-grabbing select-none text-text-faint hover:text-text-muted text-sm">⠿</span>
+                )}
+                <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
+                <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={persist}
+                  placeholder={placeholder} className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
+                {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); persist(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
+              </div>
+              {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
+              {CellFields({ get: () => doc[listKey][i].cell, set: (p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); } })}
+            </div>
+          );
+        })}
+        {!assignRO && <button onClick={() => { apply(d => { d[listKey].push(newRow()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">{addLabel}</button>}
       </div>
     );
   }
@@ -103,15 +162,12 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     </div>
   );
 
-  const hr = DOC_SECTIONS.find(s => s.key === 'hr')!;
-  const it = DOC_SECTIONS.find(s => s.key === 'it')!;
-
   return (
     <div className="space-y-5">
       {/* Progress + sign-off banner */}
       <div className="bg-white border border-border rounded-card p-5">
         <div className="flex items-center justify-between text-xs mb-1">
-          <span className="font-semibold text-text-secondary">{dn} of {total} tasks initialed & dated</span>
+          <span className="font-semibold text-text-secondary">{dn} of {total} tasks initialed &amp; dated</span>
           <span className="text-text-muted">{pct}%</span>
         </div>
         <div className="h-2.5 rounded-full bg-[#eee7da] overflow-hidden"><div className="h-full rounded-full bg-[#c9a24a] transition-all" style={{ width: `${pct}%` }} /></div>
@@ -122,7 +178,7 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
         </div>
         {lockAssignment && !readOnly && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#eef2f7] text-[#3f5a76] border border-[#d4e0ec]">
-            HR assigns each task and adds accounts. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. Assigning tasks and adding/removing accounts are done by a full-access admin.
+            HR assigns each task and manages the rows. You can mark your part done — add your <b>initials</b>, the <b>date</b>, and any <b>notes</b>. Assigning tasks and adding/removing/reordering rows are done by a full-access admin.
           </div>
         )}
         {/* Manage assignee names — add, or remove added names with ✕ */}
@@ -141,15 +197,22 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
         )}
       </div>
 
-      {/* Section 1 — HR */}
-      <Section heading={hr.heading} blurb={hr.blurb}>
-        <div className="space-y-2">
-          {hr.items.map(itm => (
-            <TaskRow key={itm.id} label={itm.label} hint={itm.hint}
-              get={() => doc.items[itm.id] ?? {}}
-              set={(p, commit) => { apply(d => { d.items[itm.id] = { ...(d.items[itm.id] ?? {}), ...p }; }); if (commit) persist(); }} />
+      {/* Bulk move: select rows in any section, then send them to another */}
+      {!assignRO && selIds.size > 0 && (
+        <div className="sticky top-0 z-20 bg-white border-2 border-ink rounded-card px-4 py-3 flex items-center gap-2 flex-wrap shadow-card">
+          <span className="text-sm font-semibold text-text-primary">{selIds.size} selected</span>
+          <span className="text-xs text-text-muted">Move to:</span>
+          {SECTION_MOVE.map(s => (
+            <button key={s.key} onClick={() => moveSelectedTo(s.key)}
+              className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">{s.label}</button>
           ))}
+          <button onClick={() => setSelIds(new Set())} className="ml-auto text-xs font-semibold text-text-muted hover:text-ink">Clear</button>
         </div>
+      )}
+
+      {/* Section 1 — Pre-Offboarding */}
+      <Section heading="Section 1 — Pre-Offboarding" blurb="Employment status, benefits, and departure logistics.">
+        {RowSection({ listKey: 'hr', addLabel: '+ Add Pre-Offboarding task', placeholder: 'Task name' })}
         {/* Benefits quick reference */}
         <div className="mt-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Benefits quick reference</div>
@@ -164,53 +227,30 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
         </div>
       </Section>
 
-      {/* Section 2 — Ops */}
-      <Section heading="Section 2 — Ops" blurb="Access, mailbox, and account decisions. Complete after HR; IT will not act until this section is signed off.">
+      {/* Section 2 — Tools */}
+      <Section heading="Section 2 — Tools" blurb="Access, mailbox, and account/tool decisions. Complete after Section 1; IT will not act until this section is signed off.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           {opsField('Access cutoff date', 'accessCutoff')}
           {opsField('Mailbox disposition (shared / forward / hold — to whom)', 'mailbox')}
           {opsField('Electronic file ownership transferred to', 'fileOwner')}
           {opsField('Exceptions or holds (system + until when)', 'exceptions')}
         </div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts to close</div>
-        <div className="space-y-2">
-          {doc.accounts.map((a, i) => {
-            const complete = done(a.cell);
-            return (
-              <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
-                <div className="flex items-start gap-2">
-                  <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
-                  <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d.accounts[i].label = e.target.value; })} onBlur={persist}
-                    placeholder="Account / system name" className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
-                  {!assignRO && <button onClick={() => { apply(d => { d.accounts.splice(i, 1); }); persist(); }} title="Remove account" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
-                </div>
-                {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
-                <CellFields get={() => doc.accounts[i].cell} set={(p, commit) => { apply(d => { d.accounts[i].cell = { ...d.accounts[i].cell, ...p }; }); if (commit) persist(); }} />
-              </div>
-            );
-          })}
-          {!assignRO && <button onClick={() => { apply(d => { d.accounts.push(newAccount()); }); persist(); }} className="w-full border-2 border-dashed border-border-light rounded-ctrl py-2 text-sm font-semibold text-text-muted hover:text-ink hover:border-ink">+ Add account</button>}
-        </div>
+        <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts / tools to close</div>
+        {RowSection({ listKey: 'accounts', addLabel: '+ Add tool / account', placeholder: 'Account / system name' })}
       </Section>
 
       {/* Section 3 — IT */}
-      <Section heading={it.heading} blurb={it.blurb}>
-        <div className="space-y-2">
-          {it.items.map(itm => (
-            <TaskRow key={itm.id} label={itm.label} hint={itm.hint}
-              get={() => doc.items[itm.id] ?? {}}
-              set={(p, commit) => { apply(d => { d.items[itm.id] = { ...(d.items[itm.id] ?? {}), ...p }; }); if (commit) persist(); }} />
-          ))}
-        </div>
+      <Section heading="Section 3 — IT" blurb="Final technical shutdown and confirmation. Complete only after Sections 1 and 2 are signed off.">
+        {RowSection({ listKey: 'it', addLabel: '+ Add IT task', placeholder: 'Task name' })}
       </Section>
 
       {/* Sign-Off */}
       <Section heading="Sign-Off — Catie" blurb="The offboarding is complete only once all three sections are signed off.">
         <div className="space-y-2">
-          {([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
-            <TaskRow key={key} label={label}
-              get={() => doc.signoff[key] ?? {}}
-              set={(p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); }} />
+          {([['hr', 'Pre-Offboarding — Section 1 complete'], ['ops', 'Tools — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
+            <div key={key}>{TaskRow({ label,
+              get: () => doc.signoff[key] ?? {},
+              set: (p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); } })}</div>
           ))}
         </div>
       </Section>

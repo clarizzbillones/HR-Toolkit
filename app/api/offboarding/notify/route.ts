@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
-import { parseDoc, DOC_SECTIONS } from '@/lib/offboardingDoc';
+import { parseDoc } from '@/lib/offboardingDoc';
 import { notifyAssignees, type NotifyGroup } from '@/lib/assigneeNotify';
 
 const cellDone = (c: any) => !!(c && String(c.initial ?? '').trim() && String(c.date ?? '').trim());
@@ -20,8 +20,7 @@ export async function POST(req: Request) {
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const doc = parseDoc(row.doc);
   const rows: { label: string; cell: any }[] = [];
-  for (const s of DOC_SECTIONS) for (const it of s.items) rows.push({ label: it.label, cell: doc.items[it.id] });
-  for (const a of doc.accounts) rows.push({ label: a.label, cell: a.cell });
+  for (const r of [...doc.hr, ...doc.accounts, ...doc.it]) rows.push({ label: r.label, cell: r.cell });
   const byAssignee = new Map<string, { label: string; deadline?: string }[]>();
   for (const r of rows) {
     const a = String(r.cell?.assignee ?? '').trim();

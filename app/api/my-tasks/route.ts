@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
 import { normName } from '@/lib/employeeFiles';
 import { parseDoc as parseOnbDoc } from '@/lib/onboardingDoc';
-import { parseDoc as parseOffDoc, DOC_SECTIONS } from '@/lib/offboardingDoc';
+import { parseDoc as parseOffDoc } from '@/lib/offboardingDoc';
 
 // The open onboarding/offboarding document tasks assigned to the person viewing
 // the dashboard. A task is "open" when it has an assignee that matches the
@@ -43,21 +43,17 @@ export async function GET() {
     }
   } catch { /* ignore */ }
 
-  // Offboarding documents. HR/IT item cells are keyed by DocItem id; Ops is an
-  // account list.
+  // Offboarding documents — editable row arrays (Pre-Offboarding / Tools / IT).
   try {
     const rows = await sql`SELECT id, name, doc FROM offboarding` as any[];
-    const items = DOC_SECTIONS.flatMap(s => s.items.map(i => ({ id: i.id, label: i.label, section: s.key.toUpperCase() })));
     for (const r of rows) {
       const doc = parseOffDoc(r.doc);
-      for (const acc of doc.accounts) {
-        if (!isMine(acc.cell?.assignee) || !open(acc.cell)) continue;
-        tasks.push({ source: 'offboarding', personId: r.id, personName: r.name, section: 'Accounts to close', label: acc.label, deadline: '', assignee: (acc.cell?.assignee ?? '').toString() });
-      }
-      for (const it of items) {
-        const cell = (doc.items as any)?.[it.id];
-        if (!isMine(cell?.assignee) || !open(cell)) continue;
-        tasks.push({ source: 'offboarding', personId: r.id, personName: r.name, section: it.section, label: it.label, deadline: '', assignee: (cell?.assignee ?? '').toString() });
+      const sections: [string, any[]][] = [['Pre-Offboarding', doc.hr], ['Tools', doc.accounts], ['IT', doc.it]];
+      for (const [section, list] of sections) {
+        for (const row of list) {
+          if (!isMine(row.cell?.assignee) || !open(row.cell)) continue;
+          tasks.push({ source: 'offboarding', personId: r.id, personName: r.name, section, label: row.label, deadline: '', assignee: (row.cell?.assignee ?? '').toString() });
+        }
       }
     }
   } catch { /* ignore */ }
