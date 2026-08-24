@@ -8,7 +8,7 @@ import {
 } from '@/lib/offboarding';
 import { EXIT_QUESTIONS as EXIT_Q } from '@/lib/exitInterview';
 import OffboardingDoc from './OffboardingDoc';
-import { DOC_SECTIONS, BENEFITS_REF, OFFBOARDING_ASSIGNEES, type OffboardingDoc as Doc } from '@/lib/offboardingDoc';
+import { DOC_SECTIONS, BENEFITS_REF, OFFBOARDING_ASSIGNEES, docProgress as docProgressOf, parseDoc as parseOffDoc, type OffboardingDoc as Doc } from '@/lib/offboardingDoc';
 
 interface Rec {
   id: string; name: string; position: string | null; manager: string | null;
@@ -515,7 +515,9 @@ export default function OffboardingClient() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {rows.map(r => {
-              const { done, total } = activeProgress(r);
+              // Tile progress reflects Catie's offboarding DOCUMENT (its tasks
+              // initialed & dated), not the longer compliance checklist.
+              const { done, total } = docProgressOf(parseOffDoc((r as any).doc));
               const pct = total ? Math.round((done / total) * 100) : 0;
               const status = offboardingStatus(r);
               return (
