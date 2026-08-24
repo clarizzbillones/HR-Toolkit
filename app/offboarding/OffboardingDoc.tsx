@@ -86,7 +86,12 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   function CellFields({ get, set }: { get: () => Cell; set: (patch: Partial<Cell>, commit: boolean) => void }) {
     const c = get();
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-[130px_70px_140px_1fr] gap-2 mt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-[130px_70px_140px_1fr] gap-x-2 gap-y-1 mt-2">
+        {/* Column captions so the fields read clearly */}
+        <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Assigned to</span>
+        <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Initials</span>
+        <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#2f7d5b]">Date done</span>
+        <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Notes</span>
         <select disabled={assignRO} value={c.assignee ?? ''}
           onChange={e => {
             const v = e.target.value;
