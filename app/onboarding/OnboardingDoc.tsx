@@ -32,11 +32,14 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   // changed — they can only mark their part done (initials / date / notes).
   const [doc, setDoc] = useState<Doc>(rec.doc);
   const ref = useRef<Doc>(rec.doc);
-  // A locked document is fully read-only (an accident guard a full-access admin
-  // toggles). It disables cell edits, structural edits, and Clear all entries.
+  // A locked document freezes the STRUCTURE and ASSIGNMENTS (rows, assignees,
+  // deadlines, and Clear all entries) so they can't be changed by accident —
+  // but the assigned people can still mark their part done. So when locked:
+  //   • Catie (full-access admin) can unlock to change anything.
+  //   • Caitlin / Matthew / Ryan can still add their initials, date, and notes.
   const locked = !!doc.locked;
-  const cellRO = readOnly || locked;                          // initials / date / notes
-  const assignRO = readOnly || lockAssignment || locked;      // assignee + structural edits
+  const cellRO = readOnly;                                    // initials / date / notes — always open (unless view-only)
+  const assignRO = readOnly || lockAssignment || locked;     // assignee + deadline + structural edits
   const assigneeList = assignees && assignees.length ? assignees : [...ONBOARDING_ASSIGNEES];
   // Names the firm has added (removable); the built-in team can't be removed.
   const removableNames = assigneeList.filter(a => !ONBOARDING_ASSIGNEES.includes(a as any));
@@ -283,7 +286,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         </div>
         {locked && (
           <div className="mt-2 text-[12px] rounded-ctrl px-3 py-2 bg-[#f7efe1] text-[#8a6d3b] border border-[#e0c48a]">
-            🔒 This document is <b>locked</b> — all fields are read-only to prevent accidental changes.{!readOnly && !lockAssignment ? ' Click 🔒 Locked above to unlock.' : ''}
+            🔒 <b>Locked</b> — the rows, assignees, and deadlines are frozen to prevent accidental changes. Assigned people can still mark their part done (<b>initials</b>, <b>date</b>, <b>notes</b>).{!readOnly && !lockAssignment ? ' Click 🔒 Locked above to unlock and change assignments.' : ''}
           </div>
         )}
         {lockAssignment && !readOnly && !locked && (
