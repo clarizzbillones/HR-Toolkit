@@ -288,7 +288,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
 
       {/* Section 1 — Pre-Onboarding Tasks */}
       <Section heading={hr.heading} blurb={hr.blurb}>
-        {RowSection({ listKey: 'hr', addLabel: '+ Add HR task', placeholder: 'Task name' })}
+        {RowSection({ listKey: 'hr', addLabel: '+ Add Pre-Onboarding task', placeholder: 'Task name' })}
         {/* Benefits quick reference */}
         <div className="mt-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Benefits quick reference</div>
@@ -306,7 +306,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
       {/* Section 2 — 1st Day Tasks */}
       <Section heading="Section 2 — 1st Day Tasks" blurb="Accounts to open and 1st-day setup for the new hire. Complete after Section 1; IT will not act until this section is signed off.">
         <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts to open</div>
-        {RowSection({ listKey: 'accounts', addLabel: '+ Add account', placeholder: 'Account / system name' })}
+        {RowSection({ listKey: 'accounts', addLabel: '+ Add 1st Day task', placeholder: 'Account / system or 1st-day task' })}
       </Section>
 
       {/* Section 3 — IT */}
