@@ -15,7 +15,7 @@ export interface DocSection { key: 'hr' | 'ops' | 'it'; heading: string; blurb: 
 // three sections are now editable per hire — these are just the starting rows.
 export const ONB_DOC_SECTIONS: DocSection[] = [
   {
-    key: 'hr', heading: 'Section 1 — HR', blurb: 'Employment status, benefits, and onboarding logistics.',
+    key: 'hr', heading: 'Section 1 — Pre-Onboarding Tasks', blurb: 'Employment status, benefits, and onboarding logistics.',
     items: [
       { id: 'hr-assets', label: 'Physical assets issued', hint: 'Laptop, keys, access fob/badge, firm credit card, and any other firm property assigned and logged.' },
       { id: 'hr-email', label: 'Personal (non-firm) email on file', hint: 'Needed for pre-employment correspondence until firm email access is set up and confirmed.' },

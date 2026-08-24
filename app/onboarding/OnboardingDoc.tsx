@@ -64,6 +64,16 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   const pct = total ? Math.round((dn / total) * 100) : 0;
   const signed = docSignedOff(doc);
 
+  // Drag-and-drop reordering of rows within a section. Order is part of the
+  // shared structure, so a reorder saves the template (applies to every hire).
+  const dragRow = useRef<{ key: 'hr' | 'accounts' | 'it'; i: number } | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  function moveRow(listKey: 'hr' | 'accounts' | 'it', from: number, to: number) {
+    if (from === to) { return; }
+    apply(d => { const arr = d[listKey]; const [m] = arr.splice(from, 1); arr.splice(to, 0, m); });
+    saveStructure();
+  }
+
   // One editable cell (Assigned To / Deadline / Initial / Date done / Notes).
   // Text fields save on blur; selects/dates save immediately.
   function CellFields({ get, set }: { get: () => Cell; set: (patch: Partial<Cell>, commit: boolean) => void }) {
@@ -129,8 +139,15 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         {rows.map((a, i) => {
           const complete = done(a.cell);
           return (
-            <div key={a.id} className={`rounded-ctrl border px-3 py-2.5 ${complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
+            <div key={a.id}
+              onDragOver={assignRO ? undefined : (e => { e.preventDefault(); if (dragOver !== `${listKey}:${i}`) setDragOver(`${listKey}:${i}`); })}
+              onDrop={assignRO ? undefined : (() => { const s = dragRow.current; dragRow.current = null; setDragOver(null); if (s && s.key === listKey) moveRow(listKey, s.i, i); })}
+              className={`rounded-ctrl border px-3 py-2.5 ${dragOver === `${listKey}:${i}` ? 'border-ink ring-1 ring-[#c9a24a]' : complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
               <div className="flex items-start gap-2">
+                {!assignRO && (
+                  <span draggable onDragStart={() => { dragRow.current = { key: listKey, i }; }} onDragEnd={() => { dragRow.current = null; setDragOver(null); }}
+                    title="Drag to reorder" className="mt-1 cursor-grab active:cursor-grabbing select-none text-text-faint hover:text-text-muted text-sm">⠿</span>
+                )}
                 <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
                 <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={saveStructure}
                   placeholder={placeholder} className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
@@ -168,7 +185,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
     const benefits = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:12px">Benefits quick reference</div>
       <table style="width:100%;border-collapse:collapse;margin-top:4px"><thead>${th(['Benefit', 'Coverage begins', 'Notes'])}</thead><tbody>${ONB_BENEFITS_REF.map(b => `<tr style="border-bottom:1px solid #f1ece3"><td style="padding:5px 7px;font-size:12px;font-weight:600">${esc(b.benefit)}</td><td style="padding:5px 7px;font-size:12px">${esc(b.begins)}</td><td style="padding:5px 7px;font-size:11px;color:#555">${esc(b.notes)}</td></tr>`).join('')}</tbody></table>`;
     const signoff = `<div style="font-size:13px;font-weight:700;color:#1b2a3d;margin-top:18px">Sign-Off — Catie</div>
-      ${table([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']].map(([k, l]) => cellRow(l, undefined, (d.signoff as any)[k])).join(''))}`;
+      ${table([['hr', 'Pre-Onboarding Tasks — Section 1 complete'], ['ops', '1st Day Tasks — Section 2 complete'], ['it', 'IT — Section 3 complete']].map(([k, l]) => cellRow(l, undefined, (d.signoff as any)[k])).join(''))}`;
     const meta = (l: string, v: string) => `<div style="min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Onboarding Document — ${esc(rec.name)}</title>
 <style>@page{size:letter;margin:0.5in}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#faf8f4;padding:22px;font-family:Georgia,'Times New Roman',serif;color:#1b2a3d}table{page-break-inside:auto}tr{page-break-inside:avoid}</style></head><body>
@@ -176,13 +193,13 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px">
     <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON PLLC</div>
     <div style="font-size:19px;font-weight:700;color:#fff;margin-top:8px">Employee Onboarding Checklist</div>
-    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: HR first, then Ops, then IT. Each item is assigned with a deadline, then signed off with initials and a date as it's completed.</div>
+    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: Pre-Onboarding Tasks first, then 1st Day Tasks, then IT. Each item is assigned with a deadline, then signed off with initials and a date as it's completed.</div>
   </div>
   <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
     ${meta('Employee name', rec.name)}${meta('Position / Title', rec.position || '')}${meta('Start date', fmtDate(rec.start_date))}
   </div>
   ${sectionHead(hr.heading, hr.blurb)}${table(d.hr.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}${benefits}
-  ${sectionHead('Section 2 — Ops', 'Accounts to open for the new hire. Complete after HR; IT will not act until this section is signed off.')}
+  ${sectionHead('Section 2 — 1st Day Tasks', 'Accounts to open and 1st-day setup for the new hire. Complete after Section 1; IT will not act until this section is signed off.')}
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts to open</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
   ${sectionHead(it.heading, it.blurb)}${table(d.it.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}
   ${signoff}
@@ -197,7 +214,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
       {/* Progress + sign-off banner */}
       <div className="bg-white border border-border rounded-card p-5">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding document · HR → Ops → IT</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Onboarding document · Pre-Onboarding → 1st Day → IT</div>
           <button onClick={printDoc} className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
         </div>
         <div className="flex items-center justify-between text-xs mb-1">
@@ -248,8 +265,8 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         </div>
       </Section>
 
-      {/* Section 2 — Ops */}
-      <Section heading="Section 2 — Ops" blurb="Accounts to open for the new hire. Complete after HR; IT will not act until this section is signed off.">
+      {/* Section 2 — 1st Day Tasks */}
+      <Section heading="Section 2 — 1st Day Tasks" blurb="Accounts to open and 1st-day setup for the new hire. Complete after Section 1; IT will not act until this section is signed off.">
         <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts to open</div>
         {RowSection({ listKey: 'accounts', addLabel: '+ Add account', placeholder: 'Account / system name' })}
       </Section>
@@ -262,7 +279,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
       {/* Sign-Off */}
       <Section heading="Sign-Off — Catie" blurb="Onboarding is complete only once all three sections are signed off.">
         <div className="space-y-2">
-          {([['hr', 'HR — Section 1 complete'], ['ops', 'Ops — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
+          {([['hr', 'Pre-Onboarding Tasks — Section 1 complete'], ['ops', '1st Day Tasks — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
             <div key={key}>{TaskRow({ label,
               get: () => doc.signoff[key] ?? {},
               set: (p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); } })}</div>

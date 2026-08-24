@@ -299,13 +299,13 @@ export async function onboardingDocPdfDataUrl(rec: any): Promise<string> {
   };
   const heading = (t: string) => { d.gap(4); d.para(t, { font: bold, size: 13 }); d.gap(4); };
 
-  heading('Section 1 - HR');
+  heading('Section 1 - Pre-Onboarding Tasks');
   for (const r of doc.hr) taskRow(r.label, r.hint, r.cell);
   d.gap(2); d.para('BENEFITS QUICK REFERENCE', { font: bold, size: 8, color: MUTED });
   for (const b of ONB_BENEFITS_REF) d.para(`${b.benefit} - ${b.begins}. ${b.notes}`, { bullet: true, indent: 14, size: 9.5 });
   d.rule();
 
-  heading('Section 2 - Ops');
+  heading('Section 2 - 1st Day Tasks');
   d.para('ACCOUNTS TO OPEN', { font: bold, size: 8, color: MUTED }); d.gap(2);
   for (const a of doc.accounts) taskRow(a.label, a.hint, a.cell);
   d.rule();
@@ -315,8 +315,8 @@ export async function onboardingDocPdfDataUrl(rec: any): Promise<string> {
   d.rule();
 
   heading('Sign-Off - Catie');
-  taskRow('HR - Section 1 complete', undefined, doc.signoff.hr);
-  taskRow('Ops - Section 2 complete', undefined, doc.signoff.ops);
+  taskRow('Pre-Onboarding Tasks - Section 1 complete', undefined, doc.signoff.hr);
+  taskRow('1st Day Tasks - Section 2 complete', undefined, doc.signoff.ops);
   taskRow('IT - Section 3 complete', undefined, doc.signoff.it);
   return dataUrl(await d.bytes());
 }
