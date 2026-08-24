@@ -74,6 +74,27 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
     saveStructure();
   }
 
+  // Bulk-select rows (across sections) and move them to another section. The
+  // whole row moves — label, hint, and the hire's cell (initials/date/notes).
+  const [selIds, setSelIds] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) => setSelIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const SECTION_MOVE: { key: 'hr' | 'accounts' | 'it'; label: string }[] = [
+    { key: 'hr', label: 'Pre-Onboarding Tasks' }, { key: 'accounts', label: '1st Day Tasks' }, { key: 'it', label: 'IT' },
+  ];
+  function moveSelectedTo(target: 'hr' | 'accounts' | 'it') {
+    if (!selIds.size) return;
+    apply(d => {
+      const moving: any[] = [];
+      for (const key of ['hr', 'accounts', 'it'] as const) {
+        if (key === target) continue;
+        d[key] = d[key].filter(r => { if (selIds.has(r.id)) { moving.push(r); return false; } return true; });
+      }
+      d[target].push(...moving);
+    });
+    saveStructure();
+    setSelIds(new Set());
+  }
+
   // One editable cell (Assigned To / Deadline / Initial / Date done / Notes).
   // Text fields save on blur; selects/dates save immediately.
   function CellFields({ get, set }: { get: () => Cell; set: (patch: Partial<Cell>, commit: boolean) => void }) {
@@ -144,6 +165,10 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
               onDrop={assignRO ? undefined : (() => { const s = dragRow.current; dragRow.current = null; setDragOver(null); if (s && s.key === listKey) moveRow(listKey, s.i, i); })}
               className={`rounded-ctrl border px-3 py-2.5 ${dragOver === `${listKey}:${i}` ? 'border-ink ring-1 ring-[#c9a24a]' : complete ? 'border-[#cfe4d8] bg-[#f4faf6]' : 'border-border-light bg-white'}`}>
               <div className="flex items-start gap-2">
+                {!assignRO && (
+                  <input type="checkbox" checked={selIds.has(a.id)} onChange={() => toggleSel(a.id)} title="Select to move between sections"
+                    className="mt-1.5 w-4 h-4 accent-[#1b2a3d] shrink-0" />
+                )}
                 {!assignRO && (
                   <span draggable onDragStart={() => { dragRow.current = { key: listKey, i }; }} onDragEnd={() => { dragRow.current = null; setDragOver(null); }}
                     title="Drag to reorder" className="mt-1 cursor-grab active:cursor-grabbing select-none text-text-faint hover:text-text-muted text-sm">⠿</span>
@@ -248,7 +273,20 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         )}
       </div>
 
-      {/* Section 1 — HR */}
+      {/* Bulk move: select rows in any section, then send them to another */}
+      {!assignRO && selIds.size > 0 && (
+        <div className="sticky top-0 z-20 bg-white border-2 border-ink rounded-card px-4 py-3 flex items-center gap-2 flex-wrap shadow-card">
+          <span className="text-sm font-semibold text-text-primary">{selIds.size} selected</span>
+          <span className="text-xs text-text-muted">Move to:</span>
+          {SECTION_MOVE.map(s => (
+            <button key={s.key} onClick={() => moveSelectedTo(s.key)}
+              className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">{s.label}</button>
+          ))}
+          <button onClick={() => setSelIds(new Set())} className="ml-auto text-xs font-semibold text-text-muted hover:text-ink">Clear</button>
+        </div>
+      )}
+
+      {/* Section 1 — Pre-Onboarding Tasks */}
       <Section heading={hr.heading} blurb={hr.blurb}>
         {RowSection({ listKey: 'hr', addLabel: '+ Add HR task', placeholder: 'Task name' })}
         {/* Benefits quick reference */}
