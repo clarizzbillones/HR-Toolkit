@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {
-  BENEFITS_REF, OFFBOARDING_ASSIGNEES,
+  BENEFITS_REF, OFFBOARDING_ASSIGNEES, DEFAULT_ACCOUNTS,
   docProgress, docSignedOff, newRow,
   type OffboardingDoc as Doc, type Cell,
 } from '@/lib/offboardingDoc';
@@ -49,6 +49,16 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     onRemoveAssignee?.(n);
   }
   function toggleLock() { apply(d => { d.locked = !d.locked; }); persist(); }
+  // Add any standard closing tools (Westlaw, Tybera, court e-filing, Lawline,
+  // Courtdrive, etc.) that aren't already on this record — for offboardings
+  // created before a tool was added to the standard list.
+  function addStandardTools() {
+    const have = new Set(doc.accounts.map(a => a.label.trim().toLowerCase()));
+    const missing = DEFAULT_ACCOUNTS.filter(t => !have.has(t.label.trim().toLowerCase()));
+    if (!missing.length) { window.alert('All standard tools are already listed.'); return; }
+    apply(d => { for (const t of missing) { const r = newRow(t.label); r.hint = t.hint; d.accounts.push(r); } });
+    persist();
+  }
 
   const { done: dn, total } = docProgress(doc);
   const pct = total ? Math.round((dn / total) * 100) : 0;
@@ -257,7 +267,10 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
           {opsField('Electronic file ownership transferred to', 'fileOwner')}
           {opsField('Exceptions or holds (system + until when)', 'exceptions')}
         </div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted mb-1.5">Accounts / tools to close</div>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-gold-muted">Accounts / tools to close</div>
+          {!assignRO && <button onClick={addStandardTools} title="Add any standard closing tools (Westlaw, Tybera, court e-filing, Lawline, Courtdrive, …) not already listed" className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">+ Add standard tools</button>}
+        </div>
         {RowSection({ listKey: 'accounts', addLabel: '+ Add tool / account', placeholder: 'Account / system name' })}
       </Section>
 
