@@ -130,6 +130,7 @@ export const OFFBOARDING_ITEMS = OFFBOARDING_CHECKLIST.flatMap(s => s.items);
 export const SEPARATION_TYPES = [
   'Voluntary resignation', 'Performance termination', 'Misconduct termination',
   'Immediate termination', 'Layoff / reduction', 'Mutual separation',
+  'Transition to contractor from employee',
 ];
 
 // ---- Applicability helpers (age + tenure) ----
