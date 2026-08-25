@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
@@ -81,6 +81,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [showDocForm, setShowDocForm] = useState(false);
   const [editDocId, setEditDocId] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const quickFileRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<'employees' | 'contractors' | 'offboarded'>('employees');
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
@@ -323,6 +325,24 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     }
     setShowDocForm(false); setEditDocId(null); showToast('Saved');
   }
+  // Quick upload: attach a file directly with no form — filed as an "Other"
+  // document, titled from the file name, dated today. Use "+ Add entry" when
+  // you want to add a category, summary, etc.
+  async function quickUpload(file: File) {
+    if (!selected) return;
+    if (file.size > MAX_FILE) { showToast('File too large (max ~3.5 MB)'); return; }
+    setUploading(true);
+    try {
+      const attach = { attachment_name: file.name, attachment_data: await fileToDataUrl(file) };
+      const title = file.name.replace(/\.[^.]+$/, '');
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch('/api/employee-files/doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile_id: selected.id, category: 'Other', title, doc_date: today, summary: '', what_we_did: '', next_steps: '', author: '', ...attach }) });
+      const { doc } = await res.json();
+      if (doc) { setDocs(p => [doc, ...p]); bumpCount(selected.id, 1); showToast('File uploaded'); }
+      else showToast('Upload failed');
+    } catch { showToast('Upload failed'); }
+    finally { setUploading(false); }
+  }
   async function deleteDoc(d: Doc) {
     if (!confirm('Delete this entry?')) return;
     await fetch(`/api/employee-files/doc?id=${d.id}`, { method: 'DELETE' });
@@ -562,6 +582,12 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                       {selected.docs_locked ? '🔒 Locked' : '🔓 Lock'}
                     </button>
                     <button onClick={() => refreshNow()} disabled={syncing} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas disabled:opacity-50">{syncing ? 'Refreshing…' : '↻ Refresh now'}</button>
+                    {!docsRO && (
+                      <>
+                        <input ref={quickFileRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) quickUpload(f); e.currentTarget.value = ''; }} />
+                        <button onClick={() => quickFileRef.current?.click()} disabled={uploading} title="Upload a file straight to this person's file (PDF, Word, Excel, image)" className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas disabled:opacity-50">{uploading ? 'Uploading…' : '⬆ Upload file'}</button>
+                      </>
+                    )}
                     {!docsRO && <button onClick={startDoc} className="bg-ink text-white text-sm font-semibold px-3 py-1.5 rounded-ctrl hover:bg-ink-dark ml-1">+ Add entry</button>}
                   </div>
                 )}
