@@ -39,6 +39,10 @@ const OPS_STABLE_IDS_KEY = 'ops-tools-stable-ids-2026';
 // append the extra guide tools — replacing the earlier version that renamed
 // rows (e.g. dropped "Microsoft 365 mailbox created").
 const OPS_RESTORE_ORIGINALS_KEY = 'ops-tools-restore-originals-2026';
+// Add the Malpractice insurance HR row to already-saved templates (idempotent
+// by label), so it appears on every hire's Pre-Onboarding section.
+const HR_MALPRACTICE_KEY = 'hr-malpractice-2026';
+const HR_MALPRACTICE_ROW = { id: 'hr-malpractice', label: 'Malpractice insurance — add to policy', hint: 'Email Derek Smith to add the new hire to the firm malpractice policy (attorneys / timekeepers).' };
 
 async function runMigrations() {
   const [row] = await sql`SELECT onboarding_doc_template, doc_template_migrations FROM app_settings WHERE id = 'singleton'` as any[];
@@ -70,6 +74,13 @@ async function runMigrations() {
   if (!done.includes(OPS_RESTORE_ORIGINALS_KEY)) {
     if (tpl) { tpl = { ...tpl, accounts: defaultTemplate().accounts }; changed = true; }
     done = [...done, OPS_RESTORE_ORIGINALS_KEY];
+  }
+  // Add the Malpractice insurance HR row if it isn't already there.
+  if (!done.includes(HR_MALPRACTICE_KEY)) {
+    if (tpl && !tpl.hr.some(r => r.label.trim().toLowerCase() === HR_MALPRACTICE_ROW.label.toLowerCase())) {
+      tpl = { ...tpl, hr: [...tpl.hr, HR_MALPRACTICE_ROW] }; changed = true;
+    }
+    done = [...done, HR_MALPRACTICE_KEY];
   }
 
   if (changed && tpl) await sql`UPDATE app_settings SET onboarding_doc_template = ${JSON.stringify(tpl)} WHERE id = 'singleton'`;

@@ -21,6 +21,7 @@ export const ONB_DOC_SECTIONS: DocSection[] = [
       { id: 'hr-email', label: 'Personal (non-firm) email on file', hint: 'Needed for pre-employment correspondence until firm email access is set up and confirmed.' },
       { id: 'hr-offer', label: 'Offer letter / employment agreement signed', hint: 'Reviewed by counsel before use, if applicable.' },
       { id: 'hr-benefits', label: 'Coverage & Benefits Summary letter sent', hint: 'Sent to personal email ahead of start date. Covers medical/dental/vision, malpractice, 401(k), and life insurance — see reference table below.' },
+      { id: 'hr-malpractice', label: 'Malpractice insurance — add to policy', hint: 'Email Derek Smith to add the new hire to the firm malpractice policy (attorneys / timekeepers).' },
       { id: 'hr-announce', label: 'Firm-wide welcome announcement sent', hint: 'Timing coordinated with supervising attorney.' },
       { id: 'hr-nda', label: 'NDA e-signature' },
       { id: 'hr-keys', label: 'Hand-deliver necessary building keys / fobs' },

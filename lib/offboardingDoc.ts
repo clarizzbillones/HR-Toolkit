@@ -20,6 +20,7 @@ export const DOC_SECTIONS: DocSection[] = [
       { id: 'hr-email', label: 'Personal (non-firm) email on file', hint: 'Needed for post-employment correspondence once firm email access is cut.' },
       { id: 'hr-severance', label: 'Separation/severance agreement sent', hint: 'If applicable — reviewed by counsel before use.' },
       { id: 'hr-benefits', label: 'Coverage & Benefits Summary letter sent', hint: 'Sent to personal email. Covers medical/dental/vision, malpractice, 401(k), and life insurance — see reference table below.' },
+      { id: 'hr-malpractice', label: 'Malpractice insurance — coverage ends', hint: 'Confirm malpractice coverage ends on the last day; remind the departing attorney to arrange their own coverage if still practicing.' },
       { id: 'hr-transition', label: 'Client/case transition plan confirmed', hint: 'If applicable — case list, client preferences, and court dates/deadlines documented and handed off.' },
       { id: 'hr-announce', label: 'Firm-wide announcement sent', hint: 'Timing coordinated with supervising attorney.' },
     ],
