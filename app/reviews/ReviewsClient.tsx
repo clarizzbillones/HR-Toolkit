@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { useAccess } from '@/components/AccessProvider';
-import { computeReview, parseHistory, REVIEW_STATUSES, REVIEW_COHORTS, cohortDef, normalizeCohort, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
+import { computeReview, parseHistory, addMonths, REVIEW_STATUSES, REVIEW_COHORTS, cohortDef, normalizeCohort, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
@@ -382,6 +382,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 
   // Inline date editing in the roster table (click a date cell to change it).
   const [editCell, setEditCell] = useState<{ id: string; field: 'last' | 'next' } | null>(null);
+  // Quick-reschedule caret menu (jump the next review forward a month/year).
+  const [dateMenu, setDateMenu] = useState<string | null>(null);
   async function saveInlineDate(e: Employee, field: 'last' | 'next', val: string) {
     setEditCell(null);
     if (field === 'last') {
@@ -630,8 +632,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         {readOnly ? (
                           <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
                         ) : (
-                          <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to reschedule the next review"
-                            className="text-text-primary font-medium hover:underline decoration-dotted underline-offset-2">{formatDate(c.next)}</button>
+                          <span className="relative inline-flex items-center">
+                            <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to reschedule the next review"
+                              className="text-text-primary font-medium hover:underline decoration-dotted underline-offset-2">{formatDate(c.next)}</button>
+                            <button onClick={() => setDateMenu(dateMenu === e.id ? null : e.id)} title="Quick reschedule — next month / next year"
+                              className="ml-1 text-text-muted hover:text-ink text-[10px] leading-none px-0.5">▾</button>
+                            {dateMenu === e.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setDateMenu(null)} />
+                                <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-card shadow-xl border border-border-light py-1 min-w-[160px] text-left">
+                                  {([['+ 1 month', 1], ['+ 6 months', 6], ['+ 1 year', 12], ['− 1 month', -1]] as [string, number][]).map(([label, m]) => (
+                                    <button key={label} onClick={() => { setDateMenu(null); saveInlineDate(e, 'next', addMonths(c.next!, m)); }}
+                                      className="block w-full text-left px-3 py-1.5 text-xs hover:bg-canvas whitespace-nowrap">
+                                      {label} <span className="text-text-faint">· {formatDate(addMonths(c.next!, m))}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </span>
                         )}
                         {c.overridden && <span className="ml-1 text-[10px] text-[#3f6b8a]" title="Manually rescheduled">✎</span>}
                         <span className={`text-xs block ${c.days != null && c.days < 0 ? 'text-litred-alt font-semibold' : c.days != null && c.days <= 14 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
