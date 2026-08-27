@@ -55,8 +55,9 @@ export function parseItems(raw: any): string[] {
 }
 
 function esc(s: any): string { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-// Preserve line breaks in a free-text section.
-function multiline(s: any): string { return esc(s).replace(/\n/g, '<br>'); }
+// Preserve line breaks in a free-text section; bold [bracketed] targets so
+// numbers/placeholders stand out (matches the Word layout).
+function multiline(s: any): string { return esc(s).replace(/\n/g, '<br>').replace(/\[([^\]]+)\]/g, '<strong>[$1]</strong>'); }
 export function fmtLong(iso: any): string {
   if (!iso) return '';
   const d = new Date(String(iso).length <= 10 ? String(iso).slice(0, 10) + 'T12:00:00' : iso);
@@ -66,20 +67,21 @@ export function fmtLong(iso: any): string {
 // The full SMART Goals document as branded HTML (Litson navy + gold).
 export function smartGoalsDocHtml(row: SmartGoalsRow): string {
   const meta = (l: string, v: string) => `<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8474">${esc(l)}</div><div style="font-weight:600;color:#1b2a3d">${esc(v) || '—'}</div></div>`;
+  // Each goal is a two-column table: shaded S/M/A/R/T label on the left, content
+  // on the right (matches the firm's SMART Goals Word layout).
   const smartRow = (letter: string, label: string, val: string) => val && val.trim()
-    ? `<div style="margin:6px 0"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:5px;background:#1b2a3d;color:#c9a24a;font-weight:700;font-size:12px;margin-right:8px">${letter}</span><b style="color:#1b2a3d">${esc(label)}</b><div style="margin:3px 0 0 30px;color:#333">${multiline(val)}</div></div>`
+    ? `<tr>
+        <td style="width:132px;padding:8px 10px;border:1px solid #d8cfbe;background:#f4efe4;vertical-align:top;color:#1b2a3d;font-weight:700;font-size:12px"><span style="font-size:14px">${letter}</span>&nbsp;&nbsp;${esc(label)}</td>
+        <td style="padding:8px 10px;border:1px solid #d8cfbe;vertical-align:top;color:#333;font-size:12px;line-height:1.5">${multiline(val)}</td>
+      </tr>`
     : '';
-  const goalsHtml = (row.goals ?? []).map((g, i) => `
-    <div style="margin-top:16px;break-inside:avoid">
-      <div style="font-size:15px;font-weight:700;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:10px">${esc(g.title || `Goal ${i + 1}`)}</div>
-      <div style="margin-top:6px">
-        ${smartRow('S', 'Specific', g.specific)}
-        ${smartRow('M', 'Measurable', g.measurable)}
-        ${smartRow('A', 'Achievable', g.achievable)}
-        ${smartRow('R', 'Relevant', g.relevant)}
-        ${smartRow('T', 'Time-bound', g.timeBound)}
-      </div>
-    </div>`).join('');
+  const goalsHtml = (row.goals ?? []).map((g, i) => {
+    const body = smartRow('S', 'Specific', g.specific) + smartRow('M', 'Measurable', g.measurable) + smartRow('A', 'Achievable', g.achievable) + smartRow('R', 'Relevant', g.relevant) + smartRow('T', 'Time-bound', g.timeBound);
+    return `<div style="margin-top:18px;break-inside:avoid">
+      <div style="font-size:15px;font-weight:700;color:#1b2a3d;border-bottom:2px solid #c9a24a;padding-bottom:4px;margin-bottom:6px">${esc(g.title || `Goal ${i + 1}`)}</div>
+      <table style="width:100%;border-collapse:collapse">${body}</table>
+    </div>`;
+  }).join('');
   const items = (row.open_items ?? []).map(s => String(s).trim()).filter(Boolean);
   const openItemsHtml = items.length
     ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Open items for reviewer</div><ol style="margin:0;padding-left:20px;color:#333">${items.map(i => `<li style="margin:3px 0">${multiline(i)}</li>`).join('')}</ol></div>`
