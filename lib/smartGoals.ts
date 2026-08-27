@@ -84,7 +84,7 @@ export function smartGoalsDocHtml(row: SmartGoalsRow): string {
   }).join('');
   const items = (row.open_items ?? []).map(s => String(s).trim()).filter(Boolean);
   const openItemsHtml = items.length
-    ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Open items for reviewer</div><ol style="margin:0;padding-left:20px;color:#333">${items.map(i => `<li style="margin:3px 0">${multiline(i)}</li>`).join('')}</ol></div>`
+    ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:4px">Open items for reviewer</div>${items.map((it, i) => `<div style="margin:4px 0;padding-left:22px;text-indent:-22px;color:#333;font-size:12px;line-height:1.5"><strong>${i + 1}.</strong>&nbsp;${multiline(it)}</div>`).join('')}</div>`
     : '';
 
   return `<div style="font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;max-width:700px">
