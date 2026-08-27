@@ -121,6 +121,8 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   // "Who is reviewing what" overview.
   const [showOverview, setShowOverview] = useState(false);
   const [overviewBy, setOverviewBy] = useState<'reviewee' | 'reviewer'>('reviewee');
+  // Hide fully-done groups by default so the overview shows only outstanding work.
+  const [showDoneOverview, setShowDoneOverview] = useState(false);
   async function openOverview() {
     setShowOverview(true);
     try {
@@ -909,10 +911,31 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
             <div className="overflow-auto p-6 space-y-5">
               {invites.length === 0 ? (
                 <p className="text-sm text-text-muted text-center py-8">No reviewers assigned yet. Use <b>✉ Peers</b> / <b>Send review invites</b> to assign self &amp; peer reviewers — they’ll show up here.</p>
-              ) : overviewBy === 'reviewee' ? (
-                Object.entries(invites.reduce((acc, inv) => { (acc[inv.employee || '—'] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
-                  .sort((a, b) => a[0].localeCompare(b[0]))
-                  .map(([emp, list]) => {
+              ) : (() => {
+                // Group by the active view, then split into outstanding (has a
+                // pending assessment) and done (all complete). Done groups are
+                // hidden by default so only work-in-progress shows.
+                const keyOf = overviewBy === 'reviewee'
+                  ? (inv: typeof invites[number]) => inv.employee || '—'
+                  : (inv: typeof invites[number]) => inv.participant_name || inv.participant_email || '—';
+                const groups = Object.entries(invites.reduce((acc, inv) => { (acc[keyOf(inv)] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
+                  .sort((a, b) => a[0].localeCompare(b[0]));
+                const outstanding = groups.filter(([, l]) => l.some(p => !p.completed));
+                const doneGroups = groups.filter(([, l]) => l.length > 0 && l.every(p => p.completed));
+                const visible = showDoneOverview ? groups : outstanding;
+                return (<>
+                  {doneGroups.length > 0 && (
+                    <div className="flex items-center justify-between -mt-1">
+                      <span className="text-xs text-text-muted">{outstanding.length} outstanding · {doneGroups.length} done{showDoneOverview ? ' (shown)' : ' (hidden)'}</span>
+                      <button onClick={() => setShowDoneOverview(v => !v)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">
+                        {showDoneOverview ? 'Hide done' : `Show ${doneGroups.length} done`}
+                      </button>
+                    </div>
+                  )}
+                  {visible.length === 0 ? (
+                    <p className="text-sm text-text-muted text-center py-8">🎉 All caught up — every {overviewBy === 'reviewee' ? 'review' : 'reviewer'} is complete.</p>
+                  ) : overviewBy === 'reviewee' ? (
+                    visible.map(([emp, list]) => {
                     const pend = list.filter(p => !p.completed).length;
                     const allDone = list.length > 0 && pend === 0;
                     const empRec = employees.find(x => sameName(x.name, emp));
@@ -953,11 +976,9 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         </div>
                       </div>
                     );
-                  })
-              ) : (
-                Object.entries(invites.reduce((acc, inv) => { const k = inv.participant_name || inv.participant_email || '—'; (acc[k] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
-                  .sort((a, b) => a[0].localeCompare(b[0]))
-                  .map(([reviewer, list]) => {
+                    })
+                  ) : (
+                    visible.map(([reviewer, list]) => {
                     const pend = list.filter(p => !p.completed).length;
                     return (
                       <div key={reviewer}>
@@ -975,8 +996,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                         </div>
                       </div>
                     );
-                  })
-              )}
+                    })
+                  )}
+                </>);
+              })()}
             </div>
             <div className="px-6 py-4 border-t border-border flex justify-end">
               <button onClick={() => setShowOverview(false)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Done</button>
