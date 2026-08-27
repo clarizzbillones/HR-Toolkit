@@ -94,7 +94,6 @@ export function smartGoalsDocHtml(row: SmartGoalsRow): string {
     <div style="display:flex;gap:22px;flex-wrap:wrap;padding:0 2px 14px;border-bottom:1px solid #e6ddcd;margin-bottom:6px">
       ${meta('Employee', row.employee)}
       ${meta('Reviewer', row.reviewer)}
-      ${row.reviewer_position ? meta('Reviewer position', row.reviewer_position) : ''}
       ${meta('Review date', fmtLong(row.review_date))}
       ${row.goals_prepared ? meta('Goals prepared', fmtLong(row.goals_prepared)) : ''}
     </div>

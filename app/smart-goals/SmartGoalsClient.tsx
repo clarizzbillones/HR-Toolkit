@@ -117,11 +117,6 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
               </div>
               <datalist id="sg-staff">{staff.map(s => <option key={s.name} value={s.name} />)}</datalist>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Reviewer position</label>
-                <input value={form.reviewer_position ?? ''} onChange={e => set({ reviewer_position: e.target.value })} className={input} />
-              </div>
-              <div />
-              <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Review date</label>
                 <input type="date" value={form.review_date ?? ''} onChange={e => set({ review_date: e.target.value })} className={input} />
               </div>
