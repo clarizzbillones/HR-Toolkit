@@ -18,6 +18,7 @@ const navItems = [
   { href: '/trips',     label: 'Trip Help Desk' },
   { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/coaching',  label: 'Coaching' },
+  { href: '/smart-goals', label: 'SMART Goals' },
   { href: '/staffing',  label: 'Staffing' },
   { href: '/employee-files', label: 'Employee Files' },
   { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },

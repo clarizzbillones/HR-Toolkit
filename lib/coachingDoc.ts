@@ -2,48 +2,7 @@
 // document body (used in the PDF, the e-sign page, and the emails), and the two
 // email templates. Kept framework-free so it works server- and client-side.
 
-export const COACHING_TYPES = ['Quick check-in', 'Weekly', '30-day check-in', '60-day check-in', '90-day check-in', 'Performance conversation', 'SMART Goals'] as const;
-
-// SMART Performance Development Goals — mirrors the firm's SMART goals document:
-// header milestones, one block per goal (Specific / Measurable / Achievable /
-// Relevant / Time-bound), open items for the reviewer, and an acknowledgment.
-const SMART_GOALS_DRAFT = [
-  'SMART Performance Development Goals — specific, measurable goals with 3-, 6-, and 12-month milestones.',
-  '',
-  '**Milestones:** [3 months (Mon YYYY) · 6 months (Mon YYYY) · 12 months (Mon YYYY)]',
-  '**Goals prepared:** [Month DD, YYYY]',
-  '',
-  '**Goal 1 — [Goal title]**',
-  '**S · Specific:** [What exactly will be done, and how.]',
-  '**M · Measurable:** [The numbers/metrics that show progress — use [brackets] for targets.]',
-  '**A · Achievable:** [Why it is realistic — resources, support, who owns what.]',
-  '**R · Relevant:** [Why this goal matters and what it enables.]',
-  '**T · Time-bound:** [3 months: … · 6 months: … · 12 months: …]',
-  '',
-  '**Goal 2 — [Goal title]**',
-  '**S · Specific:** [ … ]',
-  '**M · Measurable:** [ … ]',
-  '**A · Achievable:** [ … ]',
-  '**R · Relevant:** [ … ]',
-  '**T · Time-bound:** [ … ]',
-  '',
-  '**Goal 3 — [Goal title]**',
-  '**S · Specific:** [ … ]',
-  '**M · Measurable:** [ … ]',
-  '**A · Achievable:** [ … ]',
-  '**R · Relevant:** [ … ]',
-  '**T · Time-bound:** [ … ]',
-  '',
-  '**Open Items for Reviewer**',
-  '• [Item to confirm before finalizing]',
-  '• [Item to confirm before finalizing]',
-  '',
-  '**Acknowledgment**',
-  'These goals have been discussed with me and I have had the opportunity to provide input.',
-  '',
-  'Employee signature: ______________________________   Date: ____________',
-  'Reviewer signature: ______________________________   Date: ____________',
-].join('\n');
+export const COACHING_TYPES = ['Quick check-in', 'Weekly', '30-day check-in', '60-day check-in', '90-day check-in', 'Performance conversation'] as const;
 
 // The firm's corrective / performance coaching template (kept alongside the
 // check-in drafts). Uses the exact section headings and guidance prompts.
@@ -89,7 +48,6 @@ export function coachingDraft(type: string): string {
     '90-day check-in': 'This 90-day review evaluates overall performance since hire, core competencies, and a forward development plan.',
   };
   if (type === 'Performance conversation') return PERFORMANCE_DRAFT;
-  if (type === 'SMART Goals') return SMART_GOALS_DRAFT;
   const body = type === 'Quick check-in' ? quick : common;
   return [head[type] ?? head['Weekly'], '', ...body].join('\n');
 }
@@ -158,18 +116,16 @@ export function coachingDocHtml(row: any): string {
         ? `<div style="margin-top:16px;background:#eef5f1;border:1px solid #cfe4d8;border-radius:8px;padding:10px 14px"><div style="font-weight:700;color:#2f7d5b">✓ Electronically signed</div><div style="font-size:13px;color:#33503f">Signed by <b>${esc(row.signature_name)}</b> on ${esc(fmtStamp(row.signed_at))}</div></div>`
         : '');
 
-  const isSmart = (row.coaching_type || '') === 'SMART Goals';
-  const title = isSmart ? 'SMART Performance Development Goals' : `Coaching Form — ${esc(row.coaching_type || 'Weekly')}`;
   return `<div style="font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;max-width:680px">
     <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px;margin-bottom:16px">
       <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
       <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
-      <div style="font-size:19px;font-weight:700;color:#fff;margin-top:9px">${title}</div>
+      <div style="font-size:19px;font-weight:700;color:#fff;margin-top:9px">Coaching Form — ${esc(row.coaching_type || 'Weekly')}</div>
     </div>
     <div style="display:flex;gap:22px;flex-wrap:wrap;padding:0 2px 14px;border-bottom:1px solid #e6ddcd;margin-bottom:14px">
       ${meta('Employee', row.employee)}
-      ${meta(isSmart ? 'Review date' : 'Coaching date', fmtLong(row.date))}
-      ${meta(isSmart ? 'Reviewer' : 'Submitted by', row.coach_name)}
+      ${meta('Coaching date', fmtLong(row.date))}
+      ${meta('Submitted by', row.coach_name)}
       ${meta('Position', row.coach_position)}
       ${row.submitted_at ? meta('Submitted', fmtStamp(row.submitted_at)) : ''}
     </div>
