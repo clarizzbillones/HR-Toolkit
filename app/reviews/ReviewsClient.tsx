@@ -52,14 +52,6 @@ function formatDate(dateStr: string) {
   return new Date(dateStr.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Shift a YYYY-MM-DD date by whole days (used to allow a small window around a
-// review's due date when deciding whether it's already been logged).
-function shiftYmd(ymd: string, days: number): string {
-  const d = new Date(ymd.slice(0, 10) + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString('en-CA');
-}
-
 // Pill colors for each review status (spec §6).
 const STATUS_PILL: Record<ReviewStatus, string> = {
   'Overdue': 'bg-[#fdeaea] text-[#b0412f]',
@@ -121,8 +113,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   // "Who is reviewing what" overview.
   const [showOverview, setShowOverview] = useState(false);
   const [overviewBy, setOverviewBy] = useState<'reviewee' | 'reviewer'>('reviewee');
-  // Hide fully-done groups by default so the overview shows only outstanding work.
-  const [showDoneOverview, setShowDoneOverview] = useState(false);
   async function openOverview() {
     setShowOverview(true);
     try {
@@ -340,14 +330,6 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     } finally {
       setSaving(false);
     }
-  }
-
-  // Log a review straight from the overview, when every assessment for the
-  // person is complete. Records the review date and reschedules the next one.
-  async function markReviewedFromOverview(emp: Employee, date: string) {
-    const history = [...parseHistory(emp.review_history), { date, peer_reviewers: [], notes: '' }];
-    await patchEmployee(emp.id, { last_review_date: date, review_history: JSON.stringify(history), next_review_override: null });
-    showToast(`${emp.name}'s review logged (${formatDate(date)}) — next review rescheduled`);
   }
 
   async function patchEmployee(id: string, fields: Record<string, string | null>) {
@@ -920,50 +902,25 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   : (inv: typeof invites[number]) => inv.participant_name || inv.participant_email || '—';
                 const groups = Object.entries(invites.reduce((acc, inv) => { (acc[keyOf(inv)] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
                   .sort((a, b) => a[0].localeCompare(b[0]));
-                const outstanding = groups.filter(([, l]) => l.some(p => !p.completed));
-                const doneGroups = groups.filter(([, l]) => l.length > 0 && l.every(p => p.completed));
-                const visible = showDoneOverview ? groups : outstanding;
+                // Completed reviews drop off entirely — the report lists only the
+                // people who still have an assessment pending.
+                const visible = groups.filter(([, l]) => l.some(p => !p.completed));
                 return (<>
-                  {doneGroups.length > 0 && (
-                    <div className="flex items-center justify-between -mt-1">
-                      <span className="text-xs text-text-muted">{outstanding.length} outstanding · {doneGroups.length} done{showDoneOverview ? ' (shown)' : ' (hidden)'}</span>
-                      <button onClick={() => setShowDoneOverview(v => !v)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">
-                        {showDoneOverview ? 'Hide done' : `Show ${doneGroups.length} done`}
-                      </button>
-                    </div>
-                  )}
                   {visible.length === 0 ? (
                     <p className="text-sm text-text-muted text-center py-8">🎉 All caught up — every {overviewBy === 'reviewee' ? 'review' : 'reviewer'} is complete.</p>
                   ) : overviewBy === 'reviewee' ? (
                     visible.map(([emp, list]) => {
                     const pend = list.filter(p => !p.completed).length;
-                    const allDone = list.length > 0 && pend === 0;
-                    const empRec = employees.find(x => sameName(x.name, emp));
                     const dl = list[0].deadline ? String(list[0].deadline).slice(0, 10) : null;
-                    const last = empRec ? lastOf(empRec) : null;
-                    // This review round counts as logged once the person's last
-                    // review is on/after (due date − 30d), so a slightly-early log still counts.
-                    const alreadyLogged = !!(last && dl && last >= shiftYmd(dl, -30));
-                    // Log date: the due date if it's already here, else today.
-                    const logDate = dl && dl <= today ? dl : today;
                     return (
                       <div key={emp}>
                         <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                           <div className="text-[13px] font-semibold text-text-primary">
                             {emp} <span className="text-text-muted font-normal">· {list.length - pend}/{list.length} complete{dl ? ` · due ${formatDate(dl)}` : ''}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {!readOnly && pend > 0 && (
-                              <button onClick={() => sendReminderNow(emp)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">🔔 Remind {pend} pending</button>
-                            )}
-                            {allDone && (alreadyLogged
-                              ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#e6f3ec] text-[#1f6b4a]" title={last ? `Review logged ${formatDate(last)}` : 'Review logged'}>✓ Reviewed{last ? ` · ${formatDate(last)}` : ''}</span>
-                              : !readOnly && empRec
-                                ? <button onClick={() => markReviewedFromOverview(empRec, logDate)} title={`All assessments complete — log the review as done (${formatDate(logDate)}) and reschedule the next one`}
-                                    className="text-xs font-semibold px-2.5 py-1 rounded-ctrl bg-[#1f6b4a] text-white hover:bg-[#185339]">✓ Log as reviewed</button>
-                                : null
-                            )}
-                          </div>
+                          {!readOnly && pend > 0 && (
+                            <button onClick={() => sendReminderNow(emp)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">🔔 Remind {pend} pending</button>
+                          )}
                         </div>
                         <div className="border border-border-light rounded-ctrl divide-y divide-[#f1ece3]">
                           {list.map(p => (
