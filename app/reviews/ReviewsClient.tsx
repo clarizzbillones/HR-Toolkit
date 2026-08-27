@@ -380,6 +380,26 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     return c;
   }
 
+  // Inline date editing in the roster table (click a date cell to change it).
+  const [editCell, setEditCell] = useState<{ id: string; field: 'last' | 'next' } | null>(null);
+  async function saveInlineDate(e: Employee, field: 'last' | 'next', val: string) {
+    setEditCell(null);
+    if (field === 'last') {
+      // Rewrite the latest history entry's date (keep its notes/peers) and clear
+      // any manual next-review override so the next review re-plans from here.
+      const sorted = parseHistory(e.review_history).slice().sort((a, b) => a.date.localeCompare(b.date));
+      const older = sorted.slice(0, -1);
+      const latest = sorted.length ? sorted[sorted.length - 1] : null;
+      const rebuilt = val ? [...older, { date: val, peer_reviewers: latest?.peer_reviewers ?? [], notes: latest?.notes ?? '' }] : older;
+      await patchEmployee(e.id, { last_review_date: val || null, review_history: JSON.stringify(rebuilt), next_review_override: null });
+    } else {
+      // Store as an override only when it differs from the computed prediction.
+      const predicted = computeFor(e).computed ?? '';
+      await patchEmployee(e.id, { next_review_override: val && val !== predicted ? val : null });
+    }
+    showToast(field === 'last' ? 'Last review date updated' : 'Next review rescheduled');
+  }
+
   // Everyone in the review cycle (principals excluded), each with derived fields.
   const tracked = employees.filter(e => !REVIEW_EXCLUDED.has(e.name.trim().toLowerCase()));
   const rosterAll = tracked.map(e => ({ e, c: computeFor(e), last: lastOf(e) }))
@@ -584,17 +604,46 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     <div className="text-xs text-text-muted">{displayRole(e)}</div>
                   </td>
                   <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{hireDateDisplay(e)}</td>
-                  <td className="px-5 py-3 text-text-muted whitespace-nowrap">{last ? formatDate(last) : '—'}</td>
+                  <td className="px-5 py-3 text-text-muted whitespace-nowrap">
+                    {editCell?.id === e.id && editCell.field === 'last' ? (
+                      <input type="date" autoFocus defaultValue={last ?? ''}
+                        onChange={ev => saveInlineDate(e, 'last', ev.target.value)}
+                        onBlur={() => setEditCell(null)}
+                        onKeyDown={ev => { if (ev.key === 'Escape') setEditCell(null); }}
+                        className="border border-ink rounded-ctrl px-2 py-1 text-sm focus:outline-none" />
+                    ) : readOnly ? (
+                      <span>{last ? formatDate(last) : '—'}</span>
+                    ) : (
+                      <button onClick={() => setEditCell({ id: e.id, field: 'last' })} title="Click to edit the last review date"
+                        className="hover:underline decoration-dotted underline-offset-2">{last ? formatDate(last) : <span className="text-[11px] text-text-faint">+ set date</span>}</button>
+                    )}
+                  </td>
                   <td className="px-5 py-3 whitespace-nowrap">
-                    {c.next ? (
+                    {editCell?.id === e.id && editCell.field === 'next' ? (
+                      <input type="date" autoFocus defaultValue={(c.next ?? '').slice(0, 10)}
+                        onChange={ev => saveInlineDate(e, 'next', ev.target.value)}
+                        onBlur={() => setEditCell(null)}
+                        onKeyDown={ev => { if (ev.key === 'Escape') setEditCell(null); }}
+                        className="border border-ink rounded-ctrl px-2 py-1 text-sm focus:outline-none" />
+                    ) : c.next ? (
                       <>
-                        <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
+                        {readOnly ? (
+                          <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
+                        ) : (
+                          <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to reschedule the next review"
+                            className="text-text-primary font-medium hover:underline decoration-dotted underline-offset-2">{formatDate(c.next)}</button>
+                        )}
                         {c.overridden && <span className="ml-1 text-[10px] text-[#3f6b8a]" title="Manually rescheduled">✎</span>}
                         <span className={`text-xs block ${c.days != null && c.days < 0 ? 'text-litred-alt font-semibold' : c.days != null && c.days <= 14 ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
                           {c.days != null ? relLabel(c.days) : ''}
                         </span>
                       </>
-                    ) : <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>}
+                    ) : readOnly ? (
+                      <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>
+                    ) : (
+                      <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to set the next review date"
+                        className="text-text-muted hover:underline decoration-dotted underline-offset-2 text-[11px]">+ set date</button>
+                    )}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     {(() => {
