@@ -3,11 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { useAccess } from '@/components/AccessProvider';
-import { computeReview, parseHistory, REVIEW_STATUSES, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
+import { computeReview, parseHistory, REVIEW_STATUSES, REVIEW_COHORTS, cohortDef, normalizeCohort, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
-  last_review_date: string | null; review_history: string | null; next_review_override: string | null; review_status_override: string | null;
+  last_review_date: string | null; review_history: string | null; next_review_override: string | null; review_status_override: string | null; review_cohort: string | null;
   review_6mo_status: string | null; review_6mo_date: string | null; review_6mo_summary: string | null;
   review_1yr_status: string | null; review_1yr_date: string | null; review_1yr_summary: string | null;
   review_notes: string | null;
@@ -110,6 +110,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     { employee: '', reviewType: '', link: '', deadline: '', participants: [{ ...blankParticipant }] });
   const [showReminders, setShowReminders] = useState(false);
   const [showCompletedReminders, setShowCompletedReminders] = useState(false);
+  // "Who is reviewing what" overview.
+  const [showOverview, setShowOverview] = useState(false);
+  const [overviewBy, setOverviewBy] = useState<'reviewee' | 'reviewer'>('reviewee');
+  async function openOverview() {
+    setShowOverview(true);
+    try {
+      const d = await (await fetch('/api/reviews/invites')).json();
+      setInvites(d.rows ?? []);
+    } catch { showToast('Could not load overview'); }
+  }
   const [invites, setInvites] = useState<{ id: string; employee: string; participant_name: string | null; participant_email: string; participant_type: string | null; review_type: string | null; deadline: string | null; completed: boolean; last_reminded_on: string | null }[]>([]);
 
   async function openReminders() {
@@ -347,6 +357,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const [statusFilter, setStatusFilter] = useState<ReviewStatus | 'All'>('All');
+  const [cohortFilter, setCohortFilter] = useState<'All' | 'apr_oct' | 'jan_jul' | 'none'>('All');
   const [search, setSearch] = useState('');
 
   // Raw hire date used as the review anchor — Staffing start date preferred,
@@ -362,7 +373,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     return h.length ? h.map(x => x.date).sort().slice(-1)[0] : null;
   }
   function computeFor(e: Employee) {
-    const c = computeReview(hireOf(e), lastOf(e), today, e.next_review_override);
+    const c = computeReview(hireOf(e), lastOf(e), today, e.next_review_override, e.review_cohort);
     // A manual status override wins over the derived status (date math unchanged).
     const ov = e.review_status_override;
     if (ov && (REVIEW_STATUSES as string[]).includes(ov)) return { ...c, status: ov as ReviewStatus };
@@ -379,11 +390,14 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
       return a.c.next.localeCompare(b.c.next); // next review ascending → overdue first
     });
   const q = search.trim().toLowerCase();
+  const cohortOf = (e: Employee) => normalizeCohort(e.review_cohort);
+  const matchesCohort = (e: Employee) =>
+    cohortFilter === 'All' ? true : cohortFilter === 'none' ? !cohortOf(e) : cohortOf(e) === cohortFilter;
   // While searching, ignore the status filter so a name always turns up.
-  const roster = rosterAll.filter(r => q
+  const roster = rosterAll.filter(r => matchesCohort(r.e) && (q
     ? (r.e.name.toLowerCase().includes(q) || (displayRole(r.e) || '').toLowerCase().includes(q))
     : (statusFilter === 'All' || r.c.status === statusFilter)
-  );
+  ));
 
   const overdueCount = rosterAll.filter(r => r.c.status === 'Overdue').length;
   const reviewWeekCount = rosterAll.filter(r => r.c.status === 'Review week').length;
@@ -404,16 +418,21 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
               {overdueCount > 0 && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#fdeaea] text-[#b0412f]">{overdueCount} overdue</span>}
               {reviewWeekCount > 0 && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#f7efe1] text-[#b07d2a]">{reviewWeekCount} review week</span>}
             </div>
-            <p className="text-sm text-text-muted mt-0.5">Reviews every 6 months · tracking {tracked.length} employees · times in CST</p>
+            <p className="text-sm text-text-muted mt-0.5">Bi-annual reviews · Spring/Fall (Apr &amp; Oct) &amp; Winter/Summer (Jan &amp; Jul) · tracking {tracked.length} employees · CST</p>
           </div>
-          {!readOnly && (
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={openOverview}
+              title="See who is reviewing whom, and what's pending vs complete, in one glance"
+              className="border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas transition-colors"
+            >📋 Reviews overview</button>
+            {!readOnly && (
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark transition-colors"
             >+ Log a review</button>
+            )}
           </div>
-          )}
         </div>
       </header>
 
@@ -537,6 +556,13 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                 )}
               </div>
               <span className="text-[11px] text-text-muted">Filter:</span>
+              <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value as typeof cohortFilter)}
+                title="Filter by review cohort" className="text-xs border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
+                <option value="All">All cohorts</option>
+                <option value="apr_oct">Spring / Fall (Apr &amp; Oct)</option>
+                <option value="jan_jul">Winter / Summer (Jan &amp; Jul)</option>
+                <option value="none">No cohort set</option>
+              </select>
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as ReviewStatus | 'All')}
                 className="text-xs border border-border-light rounded-ctrl px-2 py-1 bg-white focus:outline-none focus:border-ink">
                 {(['All', ...REVIEW_STATUSES] as const).map(s => <option key={s} value={s}>{s}</option>)}
@@ -546,7 +572,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[860px]">
             <thead className="bg-[#f1ece3]">
-              <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Tenure', 'Status', ''].map(h => (
+              <tr>{['Employee', 'Hire date', 'Last review', 'Next review', 'Schedule', 'Status', ''].map(h => (
                 <th key={h} className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary">{h}</th>
               ))}</tr>
             </thead>
@@ -570,7 +596,14 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                       </>
                     ) : <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>}
                   </td>
-                  <td className="px-5 py-3 text-text-secondary whitespace-nowrap">{c.tenure}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    {(() => {
+                      const def = cohortDef(e.review_cohort);
+                      return def
+                        ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#eef2f7] text-[#3f5a76]" title={`${def.seasons} · reviewed ${def.label}`}>{def.label}</span>
+                        : <span className="text-text-muted text-xs">—</span>;
+                    })()}
+                  </td>
                   <td className="px-5 py-3">
                     {c.status
                       ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_PILL[c.status]}`}>{c.status}</span>
@@ -826,6 +859,98 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
         </div>
       )}
 
+      {/* ---- Reviews overview: who is reviewing what · pending vs complete ---- */}
+      {showOverview && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowOverview(false)}>
+          <div className="bg-white rounded-card w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Reviews overview</h2>
+                <p className="text-xs text-text-muted">Who is reviewing whom — and what’s pending vs complete — at a glance.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-ctrl border border-border-light overflow-hidden text-xs font-semibold">
+                  <button onClick={() => setOverviewBy('reviewee')} className={`px-3 py-1.5 ${overviewBy === 'reviewee' ? 'bg-ink text-white' : 'text-text-muted hover:bg-canvas'}`}>By reviewee</button>
+                  <button onClick={() => setOverviewBy('reviewer')} className={`px-3 py-1.5 ${overviewBy === 'reviewer' ? 'bg-ink text-white' : 'text-text-muted hover:bg-canvas'}`}>By reviewer</button>
+                </div>
+                <button onClick={() => setShowOverview(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+              </div>
+            </div>
+
+            {(() => {
+              const total = invites.length;
+              const done = invites.filter(i => i.completed).length;
+              const pending = total - done;
+              return (
+                <div className="px-6 py-3 border-b border-border flex items-center gap-4 text-xs font-semibold bg-[#faf7f1]">
+                  <span className="text-text-secondary">{total} assessment{total === 1 ? '' : 's'}</span>
+                  <span className="text-[#1f6b4a]">● {done} complete</span>
+                  <span className="text-[#b07d2a]">● {pending} pending</span>
+                </div>
+              );
+            })()}
+
+            <div className="overflow-auto p-6 space-y-5">
+              {invites.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-8">No reviewers assigned yet. Use <b>✉ Peers</b> / <b>Send review invites</b> to assign self &amp; peer reviewers — they’ll show up here.</p>
+              ) : overviewBy === 'reviewee' ? (
+                Object.entries(invites.reduce((acc, inv) => { (acc[inv.employee || '—'] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
+                  .sort((a, b) => a[0].localeCompare(b[0]))
+                  .map(([emp, list]) => {
+                    const pend = list.filter(p => !p.completed).length;
+                    return (
+                      <div key={emp}>
+                        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                          <div className="text-[13px] font-semibold text-text-primary">
+                            {emp} <span className="text-text-muted font-normal">· {list.length - pend}/{list.length} complete{list[0].deadline ? ` · due ${formatDate(list[0].deadline)}` : ''}</span>
+                          </div>
+                          {!readOnly && pend > 0 && (
+                            <button onClick={() => sendReminderNow(emp)} className="text-xs font-semibold text-[#3f6b8a] hover:underline">🔔 Remind {pend} pending</button>
+                          )}
+                        </div>
+                        <div className="border border-border-light rounded-ctrl divide-y divide-[#f1ece3]">
+                          {list.map(p => (
+                            <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
+                              <span className="flex-1 truncate">{p.participant_name || p.participant_email}</span>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+              ) : (
+                Object.entries(invites.reduce((acc, inv) => { const k = inv.participant_name || inv.participant_email || '—'; (acc[k] ??= []).push(inv); return acc; }, {} as Record<string, typeof invites>))
+                  .sort((a, b) => a[0].localeCompare(b[0]))
+                  .map(([reviewer, list]) => {
+                    const pend = list.filter(p => !p.completed).length;
+                    return (
+                      <div key={reviewer}>
+                        <div className="text-[13px] font-semibold text-text-primary mb-2">
+                          {reviewer} <span className="text-text-muted font-normal">· reviewing {list.length} {list.length === 1 ? 'person' : 'people'} · {list.length - pend}/{list.length} done</span>
+                        </div>
+                        <div className="border border-border-light rounded-ctrl divide-y divide-[#f1ece3]">
+                          {list.map(p => (
+                            <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
+                              <span className="flex-1 truncate">{isSelfType(p.participant_type) ? 'Self-assessment' : <>Review of <b>{p.employee}</b></>}</span>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end">
+              <button onClick={() => setShowOverview(false)} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ---- Employee detail / summary drawer ---- */}
       {detail && (
         <EmployeeDetail
@@ -899,6 +1024,8 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
   const [nextRev, setNextRev] = useState(employee.next_review_override?.slice(0, 10) ?? '');
   // Editable status: '' = auto (use the derived status), else a manual override.
   const [statusOv, setStatusOv] = useState(employee.review_status_override ?? '');
+  // Fixed bi-annual review cohort ('' = none / hire-date cadence).
+  const [cohort, setCohort] = useState(normalizeCohort(employee.review_cohort) ?? '');
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState<{ which: string; name: string; doc_date: string | null }[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -989,6 +1116,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
         review_history: JSON.stringify(rebuilt),
         next_review_override: override,
         review_status_override: statusOv || null,
+        review_cohort: cohort || null,
         review_notes: summary || null,
       });
     } finally {
@@ -996,7 +1124,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
     }
   }
   // Effective next review (override wins) + the underlying prediction.
-  const drawerNext = computeReview(hire || null, lastRev || null, today, nextRev || null);
+  const drawerNext = computeReview(hire || null, lastRev || null, today, nextRev || null, cohort || null);
   const predicted = drawerNext.computed ?? '';
 
   return (
@@ -1127,6 +1255,20 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
           </div>
 
           <div>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Review schedule <span className="font-normal normal-case">(bi-annual cohort)</span></label>
+            <select value={cohort} onChange={e => { setCohort(e.target.value); setNextRev(''); }}
+              className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink bg-white">
+              <option value="">No cohort — 6 months from hire/last review</option>
+              {REVIEW_COHORTS.map(c => <option key={c.key} value={c.key}>{c.seasons} — reviewed {c.label}</option>)}
+            </select>
+            <p className="text-[11px] text-text-muted mt-1">
+              {cohort
+                ? `Reviewed twice a year in ${cohortDef(cohort)?.label}. The next review auto-plans to the upcoming cohort month.`
+                : 'Not in a fixed cohort — the next review is planned 6 months after the last one.'}
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Hire date <span className="font-normal normal-case">(review anchor)</span></label>
             <input type="date" value={hire} onChange={e => setHire(e.target.value)}
               className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
@@ -1142,7 +1284,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
                   (clears any manual override so it follows the prediction). */}
               <input type="date" value={lastRev} onChange={e => { setLastRev(e.target.value); setNextRev(''); }}
                 className="w-full border border-border-light rounded-ctrl px-2 py-2 text-sm focus:outline-none focus:border-ink" />
-              <p className="text-[11px] text-text-muted mt-1">The only writable date — the next review auto-plans 6 months out.</p>
+              <p className="text-[11px] text-text-muted mt-1">The only writable date — the next review auto-plans {cohort ? 'to the next cohort month' : '6 months out'}.</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Next review <span className="font-normal normal-case">(predicted — editable)</span></label>

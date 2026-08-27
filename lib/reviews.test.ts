@@ -67,5 +67,22 @@ for (const rel of ['reviewEmail.ts', 'inviteReminders.ts']) {
   eq(`${rel} has no tenure interpolation`, /\btenure_label\b|\bcycle_number\b/.test(src), false);
 }
 
+// Fixed bi-annual cohort scheduling (Apr/Oct = Spring/Fall, Jan/Jul = Winter/Summer).
+{
+  const t = '2026-08-27';
+  // Never reviewed → next cohort month on/after today.
+  eq('cohort · apr_oct never → Oct 1', computeReview(null, null, t, null, 'apr_oct').next, '2026-10-01');
+  eq('cohort · jan_jul never → Jan 1', computeReview(null, null, t, null, 'jan_jul').next, '2027-01-01');
+  // Reviewed in April → next is October same year.
+  eq('cohort · apr_oct after Apr → Oct', computeReview(null, '2026-04-03', t, null, 'apr_oct').next, '2026-10-01');
+  // Stale last review rolls forward past the grace window to the next real month.
+  eq('cohort · stale rolls to Oct', computeReview(null, '2025-11-19', t, null, 'apr_oct').next, '2026-10-01');
+  // Seasonal + reversed spellings normalise to the same cohort.
+  eq('cohort · Winter/Summer synonym', computeReview(null, null, t, null, 'Winter/Summer').next, '2027-01-01');
+  eq('cohort · Fall/Spring synonym', computeReview(null, null, t, null, 'Fall/Spring').next, '2026-10-01');
+  // A manual override still wins over the cohort date.
+  eq('cohort · override wins', computeReview(null, null, t, '2026-09-15', 'apr_oct').next, '2026-09-15');
+}
+
 console.log(`\n${failures === 0 ? 'ALL PASS' : failures + ' FAILURE(S)'}`);
 if (failures) process.exit(1);

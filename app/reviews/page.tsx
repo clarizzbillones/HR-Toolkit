@@ -57,7 +57,34 @@ export default async function ReviewsPage() {
   // Optional manual override of the derived review status (e.g. force "Scheduled"
   // when the date math says otherwise). Empty/NULL = use the computed status.
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_status_override TEXT`;
+  // Fixed bi-annual review cohort: everyone in a cohort is reviewed twice a year
+  // on two set months rather than on a hire-date cadence.
+  //   apr_oct = Apr & Oct (Spring/Fall) · jan_jul = Jan & Jul (Winter/Summer)
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS review_cohort TEXT`;
   await sql`UPDATE employees SET name = 'Carly Crotty' WHERE name = 'Carly Crolly'`;
+
+  // Seed each person's review cohort. Idempotent + non-destructive: only fills a
+  // row that has no cohort yet, so HR can re-assign anyone in the UI and it
+  // sticks across reloads. Apr/Oct = Spring/Fall, Jan/Jul = Winter/Summer.
+  const COHORTS: [string, string[]][] = [
+    ['apr_oct', [
+      'Alicia Van Huizen', 'Ally Foresman', 'Brent Hannafan', 'Brittany Brewer',
+      'Carly Crotty', 'John Ross Glover', 'Matt Gibbs', 'Ridwan Ahmed',
+      'Ryan Leite', 'Sloan Nickel', 'Syerra Ryan', 'Ted Canter',
+      'Paula Laborne Valle',
+    ]],
+    ['jan_jul', [
+      'Amy Green', 'Caitlin Giuliano', 'Clint Palmer', 'Joey Mundy',
+      "Ke'Lynn Enalls", 'Kelley Hess', 'Shannen Sharpe', 'Simran Mohini Jain',
+      'Fernanda Guillen', 'Isabella Maria Ardila',
+    ]],
+  ];
+  for (const [cohort, names] of COHORTS) {
+    for (const name of names) {
+      await sql`UPDATE employees SET review_cohort = ${cohort}
+        WHERE lower(name) = lower(${name}) AND (review_cohort IS NULL OR review_cohort = '')`;
+    }
+  }
 
   // Ensure the two clerks who were missing from the review roster exist
   // (principals Alex Little & Zachary Lawson are intentionally excluded from

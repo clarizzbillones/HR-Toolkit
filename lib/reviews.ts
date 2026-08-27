@@ -38,6 +38,49 @@ export function daysBetween(fromStr: string, toStr: string): number {
   return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
 }
 
+// ---- Fixed bi-annual cohort scheduling -------------------------------------
+// Instead of anchoring to each hire date, an employee can be placed in a review
+// COHORT: two fixed months, six months apart, so everyone in the cohort is
+// reviewed together twice a year (reviews target the 1st of the month).
+//   • 'apr_oct' — April & October   (Spring / Fall)
+//   • 'jan_jul' — January & July    (Winter / Summer)
+export type ReviewCohort = 'apr_oct' | 'jan_jul';
+export interface CohortDef { key: ReviewCohort; months: number[]; label: string; seasons: string }
+export const REVIEW_COHORTS: CohortDef[] = [
+  { key: 'apr_oct', months: [4, 10], label: 'Apr / Oct', seasons: 'Spring / Fall' },
+  { key: 'jan_jul', months: [1, 7], label: 'Jan / Jul', seasons: 'Winter / Summer' },
+];
+// Accept a range of spellings/synonyms so seasonal or reversed labels still map
+// to the right cohort (e.g. "Winter/Summer", "oct_apr", "Fall/Spring").
+export function normalizeCohort(raw: string | null | undefined): ReviewCohort | null {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (['apr_oct', 'oct_apr', 'april/october', 'october/april', 'spring/fall', 'fall/spring', 'spring_fall', 'fall_spring'].includes(s)) return 'apr_oct';
+  if (['jan_jul', 'jul_jan', 'january/july', 'july/january', 'winter/summer', 'summer/winter', 'winter_summer', 'summer_winter'].includes(s)) return 'jan_jul';
+  if (/(apr|oct|spring|fall)/.test(s)) return 'apr_oct';   // loose fallback
+  if (/(jan|jul|winter|summer)/.test(s)) return 'jan_jul';
+  return null;
+}
+export function cohortDef(key: string | null | undefined): CohortDef | null {
+  const k = normalizeCohort(key);
+  return k ? (REVIEW_COHORTS.find(c => c.key === k) ?? null) : null;
+}
+// The first cohort review date (YYYY-MM-01) after `afterYmd`. When `inclusive`
+// is true a review month that IS the anchor month counts (used for someone
+// never reviewed, so a review due this very month still shows).
+export function nextCohortDate(months: number[], afterYmd: string, inclusive = false): string {
+  const anchor = afterYmd.slice(0, 10);
+  const y = Number(anchor.slice(0, 4)) || 2000;
+  const asc = [...months].sort((a, b) => a - b);
+  for (let yr = y; yr <= y + 3; yr++) {
+    for (const mo of asc) {
+      const cand = `${yr}-${String(mo).padStart(2, '0')}-01`;
+      if (inclusive ? cand >= anchor : cand > anchor) return cand;
+    }
+  }
+  return `${y + 3}-${String(asc[0]).padStart(2, '0')}-01`;
+}
+
 // ---- Core scheduling -------------------------------------------------------
 
 // The cycle number of the NEXT due review (1 = 6mo, 2 = 1yr, 3 = 1.5yr, …).
@@ -101,6 +144,7 @@ export interface ReviewCompute {
   tenure: string;
   days: number | null;
   status: ReviewStatus | null;
+  cohort: ReviewCohort | null; // fixed bi-annual cohort, if the person is in one
 }
 // A missed review stays actionable (Overdue) for this catch-up window; once it
 // is more than this many days past due it is considered missed and the schedule
@@ -111,7 +155,30 @@ export const ROLL_GRACE_DAYS = 90;
 // (real reviews don't always land on the exact computed day). If a review is
 // missed past the grace window, the next date/cycle/tenure roll forward to the
 // next milestone that's still within reach.
-export function computeReview(hireDate: string | null, lastReview: string | null, today: string, override?: string | null): ReviewCompute {
+export function computeReview(hireDate: string | null, lastReview: string | null, today: string, override?: string | null, cohort?: string | null): ReviewCompute {
+  // Fixed bi-annual cohort takes precedence over the hire-date cadence: the next
+  // review is the cohort's next review month, not "last review + 6 months".
+  const coh = normalizeCohort(cohort ?? null);
+  if (coh) {
+    const def = cohortDef(coh)!;
+    let computed = lastReview
+      ? nextCohortDate(def.months, lastReview)          // next cohort month after the last review
+      : nextCohortDate(def.months, today, true);         // next cohort month on/after today
+    // A cohort review more than the grace window overdue rolls to the next month.
+    let guard = 0;
+    while (daysBetween(computed, today) > ROLL_GRACE_DAYS && guard++ < 240) {
+      computed = nextCohortDate(def.months, computed);
+    }
+    const ovc = override && override.trim() ? override.slice(0, 10) : null;
+    const nextc = ovc ?? computed;
+    const daysc = daysUntilDue(nextc, today);
+    return {
+      next: nextc, computed, overridden: !!ovc,
+      cycle: null, tenure: '—', days: daysc,
+      status: statusForCycle(statusFor(daysc), lastReview, today),
+      cohort: coh,
+    };
+  }
   let cycle = reviewCycle(hireDate, lastReview);
   let computed = nextReviewDate(hireDate, lastReview);
   if (computed) {
@@ -134,6 +201,7 @@ export function computeReview(hireDate: string | null, lastReview: string | null
     tenure: cycle != null ? (cycle * 0.5).toFixed(1) + ' yr' : '—',
     days,
     status: statusForCycle(statusFor(days), lastReview, today),
+    cohort: null,
   };
 }
 
@@ -163,6 +231,7 @@ export interface ReviewEmployee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
   last_review_date?: string | null; review_history?: any;
   next_review_override?: string | null; review_status_override?: string | null;
+  review_cohort?: string | null;
   review_6mo_date?: string | null; review_6mo_status?: string | null;
   review_1yr_date?: string | null; review_1yr_status?: string | null;
 }
@@ -191,7 +260,7 @@ export function reviewRows(employees: ReviewEmployee[], today?: string): ReviewR
   const t = today ?? new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const rows: ReviewRow[] = [];
   for (const e of employees ?? []) {
-    const c = computeReview(e.hire_date ?? null, lastReviewOf(e), t, e.next_review_override ?? null);
+    const c = computeReview(e.hire_date ?? null, lastReviewOf(e), t, e.next_review_override ?? null, e.review_cohort ?? null);
     if (!c.next) continue;
     const ov = e.review_status_override;
     const status = ov && (REVIEW_STATUSES as string[]).includes(ov) ? ov : (c.status ?? 'Scheduled');
