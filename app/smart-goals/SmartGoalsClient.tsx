@@ -16,7 +16,7 @@ const SMART = [
 export default function SmartGoalsClient({ initialRows, staff }: { initialRows: SmartGoalsRow[]; staff: Staff[] }) {
   const { showToast } = useToast();
   const { me } = useAccess();
-  const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/smart-goals');
+  const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/coaching');
   const [rows, setRows] = useState<SmartGoalsRow[]>(initialRows);
   const [form, setForm] = useState<Partial<SmartGoalsRow>>(emptyForm());
   const [editId, setEditId] = useState<string | null>(null);

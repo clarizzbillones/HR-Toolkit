@@ -14,7 +14,6 @@ export const SECTIONS: { key: string; label: string }[] = [
   { key: '/trips', label: 'Trip Help Desk' },
   { key: '/reviews', label: 'Performance Reviews' },
   { key: '/coaching', label: 'Coaching' },
-  { key: '/smart-goals', label: 'SMART Goals' },
   { key: '/staffing', label: 'Staffing' },
   { key: '/employee-files', label: 'Employee Files' },
   { key: '/onboarding', label: 'Onboarding' },
