@@ -103,9 +103,7 @@ export function smartGoalsDocHtml(row: SmartGoalsRow): string {
     ${openItemsHtml}
     <div style="margin-top:20px;border-top:1px solid #e6ddcd;padding-top:12px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:6px">Acknowledgment</div>
-      <div style="font-size:13px;color:#333">These goals have been discussed with me and I have had the opportunity to provide input.</div>
-      <div style="margin-top:18px;font-size:13px;color:#1b2a3d">Employee signature: <span style="display:inline-block;border-bottom:1px solid #999;width:230px">&nbsp;</span> &nbsp; Date: <span style="display:inline-block;border-bottom:1px solid #999;width:110px">&nbsp;</span></div>
-      <div style="margin-top:14px;font-size:13px;color:#1b2a3d">Reviewer signature: <span style="display:inline-block;border-bottom:1px solid #999;width:230px">&nbsp;</span> &nbsp; Date: <span style="display:inline-block;border-bottom:1px solid #999;width:110px">&nbsp;</span></div>
+      <div style="font-size:13px;color:#333">These goals have been discussed with the employee and they have had the opportunity to provide input.</div>
     </div>
   </div>`;
 }
