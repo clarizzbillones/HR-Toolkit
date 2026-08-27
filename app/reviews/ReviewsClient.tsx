@@ -987,7 +987,10 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   ) : overviewBy === 'reviewee' ? (
                     visible.map(([emp, list]) => {
                     const pend = list.filter(p => !p.completed).length;
-                    const dl = list[0].deadline ? String(list[0].deadline).slice(0, 10) : null;
+                    // Show the person's live next-review date (same source as the
+                    // roster), so editing the due date there updates it here too.
+                    const empRec = employees.find(x => sameName(x.name, emp));
+                    const dl = (empRec ? computeFor(empRec).next : null) ?? (list[0].deadline ? String(list[0].deadline).slice(0, 10) : null);
                     return (
                       <div key={emp}>
                         <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
