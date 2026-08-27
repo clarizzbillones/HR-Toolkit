@@ -101,9 +101,5 @@ export function smartGoalsDocHtml(row: SmartGoalsRow): string {
     ${row.milestones && row.milestones.trim() ? `<div style="font-size:13px;color:#33503f;margin:10px 0 2px"><b>Milestones:</b> ${esc(row.milestones)}</div>` : ''}
     ${goalsHtml}
     ${openItemsHtml}
-    <div style="margin-top:20px;border-top:1px solid #e6ddcd;padding-top:12px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474;margin-bottom:6px">Acknowledgment</div>
-      <div style="font-size:13px;color:#333">These goals have been discussed with the employee and they have had the opportunity to provide input.</div>
-    </div>
   </div>`;
 }
