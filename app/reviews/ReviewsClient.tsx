@@ -384,6 +384,16 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
   const [editCell, setEditCell] = useState<{ id: string; field: 'last' | 'next' } | null>(null);
   // Quick-reschedule caret menu (jump the next review forward a month/year).
   const [dateMenu, setDateMenu] = useState<string | null>(null);
+  // Inline-edit commit is on blur/Enter (not on every keystroke) so the native
+  // date picker can be navigated to any month/year before it saves. Escape sets
+  // this flag so the following blur cancels instead of saving.
+  const cancelEditRef = useRef(false);
+  function openCell(id: string, field: 'last' | 'next') { cancelEditRef.current = false; setEditCell({ id, field }); }
+  function commitCell(e: Employee, field: 'last' | 'next', original: string, val: string) {
+    if (cancelEditRef.current) { cancelEditRef.current = false; setEditCell(null); return; }
+    if (val === original) { setEditCell(null); return; } // unchanged — just close
+    saveInlineDate(e, field, val);
+  }
   async function saveInlineDate(e: Employee, field: 'last' | 'next', val: string) {
     setEditCell(null);
     if (field === 'last') {
@@ -609,23 +619,21 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                   <td className="px-5 py-3 text-text-muted whitespace-nowrap">
                     {editCell?.id === e.id && editCell.field === 'last' ? (
                       <input type="date" autoFocus defaultValue={last ?? ''}
-                        onChange={ev => saveInlineDate(e, 'last', ev.target.value)}
-                        onBlur={() => setEditCell(null)}
-                        onKeyDown={ev => { if (ev.key === 'Escape') setEditCell(null); }}
+                        onBlur={ev => commitCell(e, 'last', last ?? '', ev.target.value)}
+                        onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); else if (ev.key === 'Escape') { cancelEditRef.current = true; setEditCell(null); } }}
                         className="border border-ink rounded-ctrl px-2 py-1 text-sm focus:outline-none" />
                     ) : readOnly ? (
                       <span>{last ? formatDate(last) : '—'}</span>
                     ) : (
-                      <button onClick={() => setEditCell({ id: e.id, field: 'last' })} title="Click to edit the last review date"
+                      <button onClick={() => openCell(e.id, 'last')} title="Click to edit the last review date"
                         className="hover:underline decoration-dotted underline-offset-2">{last ? formatDate(last) : <span className="text-[11px] text-text-faint">+ set date</span>}</button>
                     )}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     {editCell?.id === e.id && editCell.field === 'next' ? (
                       <input type="date" autoFocus defaultValue={(c.next ?? '').slice(0, 10)}
-                        onChange={ev => saveInlineDate(e, 'next', ev.target.value)}
-                        onBlur={() => setEditCell(null)}
-                        onKeyDown={ev => { if (ev.key === 'Escape') setEditCell(null); }}
+                        onBlur={ev => commitCell(e, 'next', (c.next ?? '').slice(0, 10), ev.target.value)}
+                        onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur(); else if (ev.key === 'Escape') { cancelEditRef.current = true; setEditCell(null); } }}
                         className="border border-ink rounded-ctrl px-2 py-1 text-sm focus:outline-none" />
                     ) : c.next ? (
                       <>
@@ -633,7 +641,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                           <span className="text-text-primary font-medium">{formatDate(c.next)}</span>
                         ) : (
                           <span className="relative inline-flex items-center">
-                            <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to reschedule the next review"
+                            <button onClick={() => openCell(e.id, 'next')} title="Click to reschedule the next review"
                               className="text-text-primary font-medium hover:underline decoration-dotted underline-offset-2">{formatDate(c.next)}</button>
                             <button onClick={() => setDateMenu(dateMenu === e.id ? null : e.id)} title="Quick reschedule — next month / next year"
                               className="ml-1 text-text-muted hover:text-ink text-[10px] leading-none px-0.5">▾</button>
@@ -660,7 +668,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     ) : readOnly ? (
                       <span className="text-text-muted">— <span className="text-[11px]">set hire date</span></span>
                     ) : (
-                      <button onClick={() => setEditCell({ id: e.id, field: 'next' })} title="Click to set the next review date"
+                      <button onClick={() => openCell(e.id, 'next')} title="Click to set the next review date"
                         className="text-text-muted hover:underline decoration-dotted underline-offset-2 text-[11px]">+ set date</button>
                     )}
                   </td>
