@@ -142,25 +142,57 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   // Edit / delete (DB-backed report entries only)
   const [editEntry, setEditEntry] = useState<PtoEntry | null>(null);
+  // Set when editing an Outlook/calendar-only row: there's no DB entry to PATCH,
+  // so Save creates a report entry from the edited values and hides the Outlook
+  // copy (kept in Outlook) so it doesn't show twice.
+  const [calEditRow, setCalEditRow] = useState<MergedRow | null>(null);
   const [editForm, setEditForm] = useState({ employee: '', type: '', start_date: '', end_date: '', days: '', status: '' });
   const [savingEdit, setSavingEdit] = useState(false);
+  const closeEdit = () => { setEditEntry(null); setCalEditRow(null); };
 
   const { pushUndo } = useUndo();
 
-  function openEdit(id: string) {
-    const e = entries.find(x => x.id === id);
-    if (!e) { showToast('This entry comes from the calendar and can’t be edited here'); return; }
-    setEditEntry(e);
+  function openEdit(row: MergedRow) {
+    const e = entries.find(x => x.id === row.key);
+    if (e) {
+      setCalEditRow(null);
+      setEditEntry(e);
+      setEditForm({
+        employee: e.employee, type: e.type, start_date: e.start_date?.slice(0, 10) ?? '',
+        end_date: e.end_date?.slice(0, 10) ?? '', days: String(e.days ?? ''), status: e.status ?? 'Approved',
+      });
+      return;
+    }
+    // Calendar-only (Outlook) row — no DB entry yet.
+    setEditEntry(null);
+    setCalEditRow(row);
     setEditForm({
-      employee: e.employee, type: e.type, start_date: e.start_date?.slice(0, 10) ?? '',
-      end_date: e.end_date?.slice(0, 10) ?? '', days: String(e.days ?? ''), status: e.status ?? 'Approved',
+      employee: row.employee, type: row.type, start_date: (row.start ?? '').slice(0, 10),
+      end_date: (row.end ?? '').slice(0, 10), days: String(row.days ?? ''), status: row.status ?? 'Approved',
     });
   }
 
   async function saveEdit() {
-    if (!editEntry) return;
     setSavingEdit(true);
     try {
+      // Outlook row → create a report entry from the edits and hide the Outlook copy.
+      if (calEditRow) {
+        const res = await fetch('/api/pto', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: [{
+            employee: editForm.employee, type: editForm.type,
+            start_date: editForm.start_date || null, end_date: editForm.end_date || null,
+            days: editForm.days ? Number(editForm.days) : null, notes: calEditRow.calTitle ?? '',
+          }] }),
+        });
+        const data = await res.json();
+        if (Array.isArray(data.entries)) setEntries(data.entries);
+        await hideCalId(calEditRow.calId ?? calEditRow.key);
+        closeEdit();
+        showToast('Saved to report (edited from Outlook; original kept in Outlook)');
+        return;
+      }
+      if (!editEntry) return;
       const res = await fetch(`/api/pto/${editEntry.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -171,7 +203,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       });
       const { entry } = await res.json();
       if (entry) setEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
-      setEditEntry(null);
+      closeEdit();
       showToast('Entry updated');
     } finally { setSavingEdit(false); }
   }
@@ -692,12 +724,14 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
                       {r.source === 'calendar' ? (
                         <EditGate>
                           <span className="text-[10px] text-text-faint mr-1.5">Outlook</span>
+                          <button onClick={() => openEdit(r)} title="Edit — saves an editable report copy; original kept in Outlook"
+                            className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                           <button onClick={() => deletePto(r)} title="Remove from report only (kept in Outlook)"
-                            className="text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
+                            className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </EditGate>
                       ) : (
                         <EditGate>
-                          <button onClick={() => openEdit(r.key)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
+                          <button onClick={() => openEdit(r)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                           <button onClick={() => deletePto(r)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </EditGate>
                       )}
@@ -719,10 +753,13 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       </div>
 
       {/* Edit modal */}
-      {editEntry && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={() => setEditEntry(null)}>
+      {(editEntry || calEditRow) && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={closeEdit}>
           <div className="bg-white rounded-card p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-4">Edit PTO Entry</h2>
+            <h2 className="font-spectral text-[18px] font-semibold text-text-primary mb-4">{calEditRow ? 'Edit Outlook Entry' : 'Edit PTO Entry'}</h2>
+            {calEditRow && (
+              <p className="text-xs text-text-muted mb-4 -mt-2">Saving creates an editable copy in the report. The original stays in Outlook.</p>
+            )}
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wide block mb-1">Employee</label>
@@ -764,7 +801,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
               </div>
             </div>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setEditEntry(null)} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
+              <button onClick={closeEdit} className="flex-1 border border-border-light text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Cancel</button>
               <button onClick={saveEdit} disabled={savingEdit} className="flex-1 bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-40">
                 {savingEdit ? 'Saving…' : 'Save changes'}
               </button>
