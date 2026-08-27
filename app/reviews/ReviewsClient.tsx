@@ -927,7 +927,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                             <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
                               <span className="flex-1 truncate">{p.participant_name || p.participant_email}</span>
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                              {readOnly ? (
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                              ) : (
+                                <button onClick={() => toggleInviteDone(p.id, !p.completed)} title="Click to mark complete / pending"
+                                  className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border cursor-pointer hover:opacity-80 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -947,7 +952,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                             <div key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isSelfType(p.participant_type) ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#eef2f7] text-[#3f5a76]'}`}>{isSelfType(p.participant_type) ? 'Self' : 'Peer'}</span>
                               <span className="flex-1 truncate">{isSelfType(p.participant_type) ? 'Self-assessment' : <>Review of <b>{p.employee}</b></>}</span>
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                              {readOnly ? (
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</span>
+                              ) : (
+                                <button onClick={() => toggleInviteDone(p.id, !p.completed)} title="Click to mark complete / pending"
+                                  className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 border cursor-pointer hover:opacity-80 ${p.completed ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#cfe4d8]' : 'bg-[#f7efe1] text-[#b07d2a] border-[#e0c48a]'}`}>{p.completed ? '✓ Complete' : 'Pending'}</button>
+                              )}
                             </div>
                           ))}
                         </div>
