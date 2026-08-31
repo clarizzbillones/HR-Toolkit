@@ -180,6 +180,31 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
     showToast('Note added');
   }
 
+  // Inline note editing/deleting within the task drawer.
+  const [editNoteIdx, setEditNoteIdx] = useState<number | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
+  const cancelNoteRef = useRef(false);
+  function startEditNote(idx: number, text: string) { cancelNoteRef.current = false; setEditNoteIdx(idx); setEditNoteText(text); }
+  async function commitNoteEdit(id: string, idx: number, original: string) {
+    if (cancelNoteRef.current) { cancelNoteRef.current = false; setEditNoteIdx(null); return; }
+    const text = editNoteText.trim();
+    if (!text || text === original) { setEditNoteIdx(null); return; } // empty/unchanged — just close
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ noteEdit: { index: idx, text } }) });
+    const { task } = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? task : t));
+    setSelected(task);
+    setEditNoteIdx(null); setEditNoteText('');
+    showToast('Note updated');
+  }
+  async function deleteNote(id: string, idx: number) {
+    const res = await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ noteDelete: idx }) });
+    const { task } = await res.json();
+    setTasks(prev => prev.map(t => t.id === id ? task : t));
+    setSelected(task);
+    if (editNoteIdx === idx) setEditNoteIdx(null);
+    showToast('Note deleted');
+  }
+
   async function deleteTask(id: string) {
     const t = tasks.find(x => x.id === id);
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
@@ -476,8 +501,22 @@ export default function TasksClient({ initialTasks }: { initialTasks: Task[] }) 
               <div className="mb-5">
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Notes</div>
                 {JSON.parse(selected.notes || '[]').map((n: any, i: number) => (
-                  <div key={i} className="text-sm py-2 border-b border-[#f1ece3] last:border-0">
-                    <span className="text-xs text-text-muted mr-2">{n.date}</span>{n.text}
+                  <div key={i} className="text-sm py-2 border-b border-[#f1ece3] last:border-0 group flex items-start gap-2">
+                    <span className="text-xs text-text-muted shrink-0 pt-0.5">{n.date}</span>
+                    {editNoteIdx === i ? (
+                      <input autoFocus value={editNoteText} onChange={e => setEditNoteText(e.target.value)}
+                        onBlur={() => commitNoteEdit(selected.id, i, n.text)}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { cancelNoteRef.current = true; setEditNoteIdx(null); } }}
+                        className="flex-1 border border-ink rounded-ctrl px-2 py-1 text-sm focus:outline-none" />
+                    ) : (
+                      <>
+                        <span className="flex-1">{n.text}{n.edited_ts && <span className="text-[10px] text-text-faint ml-1">(edited)</span>}</span>
+                        <span className="flex gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => startEditNote(i, n.text)} title="Edit note" className="text-xs font-semibold text-text-muted hover:text-ink">Edit</button>
+                          <button onClick={() => deleteNote(selected.id, i)} title="Delete note" className="text-xs font-semibold text-litred-alt hover:underline">✕</button>
+                        </span>
+                      </>
+                    )}
                   </div>
                 ))}
                 <div className="flex gap-2 mt-2.5">

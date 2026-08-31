@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const { status, note, due_tag, title, urgent } = await req.json();
+  const { status, note, noteEdit, noteDelete, due_tag, title, urgent } = await req.json();
   const [task] = await sql`SELECT * FROM tasks WHERE id = ${params.id}`;
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -31,6 +31,29 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // the EOD report and note list can show the time a note was added.
     notes.push({ date: new Date().toLocaleDateString('en-US'), ts: new Date().toISOString(), text: note });
     await sql`UPDATE tasks SET notes = ${JSON.stringify(notes)} WHERE id = ${params.id}`;
+  }
+
+  // Edit an existing note's text by index (keeps its original date; stamps an
+  // edited time so the UI can show "(edited)").
+  if (noteEdit && typeof noteEdit.index === 'number') {
+    const notes = JSON.parse(task.notes || '[]');
+    if (noteEdit.index >= 0 && noteEdit.index < notes.length) {
+      const text = String(noteEdit.text ?? '').trim();
+      if (text) {
+        notes[noteEdit.index] = { ...notes[noteEdit.index], text, edited_ts: new Date().toISOString() };
+        await sql`UPDATE tasks SET notes = ${JSON.stringify(notes)} WHERE id = ${params.id}`;
+      }
+    }
+  }
+
+  // Delete a note by index.
+  if (noteDelete !== undefined && noteDelete !== null) {
+    const notes = JSON.parse(task.notes || '[]');
+    const idx = Number(noteDelete);
+    if (Number.isInteger(idx) && idx >= 0 && idx < notes.length) {
+      notes.splice(idx, 1);
+      await sql`UPDATE tasks SET notes = ${JSON.stringify(notes)} WHERE id = ${params.id}`;
+    }
   }
 
   if (due_tag !== undefined) {
