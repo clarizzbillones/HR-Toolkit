@@ -9,6 +9,46 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
+// Reflow raw PDF text into readable paragraphs. pdf-parse emits a hard line
+// break at every visual line (and doubled spaces from justified text), which
+// shreds paragraphs. This rejoins wrapped lines, keeps numbered/bulleted lists,
+// bolds short headings, and heals page-break splits inside a paragraph.
+function reflowPdfText(raw: string): string {
+  const lines = raw.split('\n').map(l => l.replace(/\s{2,}/g, ' ').trim());
+  const lens = lines.filter(l => l.length > 0).map(l => l.length).sort((a, b) => a - b);
+  const wide = lens.length ? lens[Math.floor(lens.length * 0.85)] : 80; // ~full line width
+
+  const isNum = (l: string) => /^\d+\.\s/.test(l);
+  const isBullet = (l: string) => /^[•·▪]\s?/.test(l) || /^-\s/.test(l);
+  const isLetterHead = (l: string) => /^[A-Z]\.\s+\S/.test(l);   // "A. The Amazon Matter"
+  const isHeading = (l: string) => {
+    if (!l || isNum(l) || isBullet(l) || isLetterHead(l)) return false;
+    return l.split(' ').length <= 8 && !/[.,;:]$/.test(l) && /^[A-Z0-9]/.test(l);
+  };
+  const endsSentence = (l: string) => /[.!?:”")]$/.test(l);
+
+  const out: string[] = [];
+  let para = '';
+  const flush = () => { if (para.trim()) out.push(para.trim()); para = ''; };
+
+  for (const line of lines) {
+    if (!line) { if (endsSentence(para)) flush(); continue; } // blank inside a sentence = soft wrap
+    if (isNum(line) || isBullet(line)) { flush(); para = line; continue; }
+    if (isLetterHead(line) || isHeading(line)) { flush(); out.push('__H__' + line); continue; }
+    para = para ? para + ' ' + line : line;
+    if (endsSentence(line) && line.length < wide * 0.9) flush(); // short ending line = paragraph break
+  }
+  flush();
+
+  const blocks: string[] = [];
+  for (let b of out) {
+    if (b.startsWith('__H__')) b = '**' + b.slice(5) + '**';
+    if (blocks.length) blocks.push('');
+    blocks.push(b);
+  }
+  return blocks.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Convert mammoth's HTML into the General-letter body's mini-markdown:
 // **bold**, *italic*, "• bullet" lines, blank line between paragraphs.
 function htmlToBody(html: string): string {
@@ -40,7 +80,7 @@ export async function POST(req: Request) {
       // Import lazily and from the lib path to avoid pdf-parse's debug harness.
       const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
       const { text: t } = await pdfParse(buf);
-      text = String(t || '').replace(/\n{3,}/g, '\n\n').trim();
+      text = reflowPdfText(String(t || ''));
     } else {
       // txt / md / rtf / anything else — treat as UTF-8 text.
       text = buf.toString('utf8');
