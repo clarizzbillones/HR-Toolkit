@@ -57,12 +57,21 @@ interface GenForm {
   // Optional acknowledgment / signature block for the addressee to sign & date.
   // Rendered BELOW the signer's signature. ackText is the receipt language.
   ackEnabled: boolean; ackName: string; ackTitle: string; ackText: string;
+  // Print density — shrinks font/spacing/margins to fit fewer pages.
+  density: 'normal' | 'compact' | 'tight';
 }
-const ACK_DEFAULT_TEXT = 'Please sign below to acknowledge that you have received and reviewed this letter and that we have discussed its contents. Your signature indicates receipt only; it does not necessarily indicate agreement. A copy of this letter will be placed in your personnel file.';
+// Print/preview sizing per density. px/plh drive the on-screen preview; pt/lh/
+// margin drive the printed PDF.
+const DENSITY: Record<GenForm['density'], { pt: string; lh: string; margin: string; px: number; plh: number; label: string }> = {
+  normal:  { pt: '11pt',  lh: '1.4',  margin: '0.65in 0.8in 0.55in', px: 13, plh: 1.6,  label: 'Normal' },
+  compact: { pt: '10pt',  lh: '1.3',  margin: '0.55in 0.7in 0.5in',  px: 12, plh: 1.45, label: 'Compact' },
+  tight:   { pt: '9.5pt', lh: '1.22', margin: '0.5in 0.6in 0.45in',  px: 11, plh: 1.32, label: 'Tight' },
+};
+const ACK_DEFAULT_TEXT = 'Please sign below to acknowledge that you have received and reviewed this letter and that we have discussed its contents. A copy of this letter will be placed in your personnel file.';
 const GEN_EMPTY: GenForm = {
   date: '', addressee: 'To Whom It May Concern:', re: '', greeting: '',
   body: '', signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', cc: '', withSig: true,
-  ackEnabled: false, ackName: '', ackTitle: '', ackText: ACK_DEFAULT_TEXT,
+  ackEnabled: false, ackName: '', ackTitle: '', ackText: ACK_DEFAULT_TEXT, density: 'normal',
 };
 
 // Certificate of Employment — modeled on the firm's sample (Paula Laborne
@@ -497,6 +506,7 @@ ${bodyHtml}
     const win = window.open('', '_blank');
     if (!win) return;
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const dz = DENSITY[gen.density] ?? DENSITY.normal;
 
     // Body: blank line = paragraph gap; lines starting with • or - become
     // bullet rows; **bold** / *italic* are honored inline; everything else is a
@@ -534,8 +544,8 @@ ${bodyHtml}
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Letter${gen.re ? ' – ' + esc(gen.re) : ''}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  @page{size:letter;margin:0.65in 0.8in 0.55in}
-  body{font-family:${BODY_FONT};color:#1a1a2e;font-size:11pt;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:letter;margin:${dz.margin}}
+  body{font-family:${BODY_FONT};color:#1a1a2e;font-size:${dz.pt};line-height:${dz.lh};-webkit-print-color-adjust:exact;print-color-adjust:exact}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
@@ -633,6 +643,7 @@ ${bodyHtml}
   const ready = !!(form.name && form.role && form.salary);
   const decReady = !!(dec.name && dec.body);
   const genReady = !!gen.body.trim();
+  const genDz = DENSITY[gen.density] ?? DENSITY.normal;
   const certReady = !!(cert.name && certBody.trim());
 
   const fields: [string, keyof Form, string][] = [
@@ -1079,6 +1090,20 @@ ${bodyHtml}
               Include Alex Little&rsquo;s signature image
             </label>
 
+            {/* Page density — shrink text/spacing to fit fewer pages */}
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1">Text size <span className="text-text-muted font-normal">(fit more per page)</span></label>
+              <div className="flex rounded-ctrl border border-border-light overflow-hidden text-xs font-semibold">
+                {(['normal', 'compact', 'tight'] as const).map(d => (
+                  <button key={d} type="button" onClick={() => setG('density', d)}
+                    className={clsx('flex-1 px-2 py-1.5', gen.density === d ? 'bg-ink text-white' : 'text-text-muted hover:bg-canvas')}>
+                    {DENSITY[d].label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-text-muted mt-1">Compact/Tight shrink the font, spacing and margins to reduce the page count.</p>
+            </div>
+
             {/* Acknowledgment — a signature + date block for the addressee */}
             <div className="border-t border-border-light -mx-6" />
             <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
@@ -1132,7 +1157,7 @@ ${bodyHtml}
               </div>
 
               {/* Body */}
-              <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
+              <div className="px-8 pt-6 pb-2 text-text-primary" style={{ fontFamily: BODY_FONT, fontSize: genDz.px, lineHeight: genDz.plh }}>
                 {gen.date && <p className="mb-4">{gen.date}</p>}
                 {gen.addressee && <p className="mb-4 font-bold">{gen.addressee}</p>}
                 {gen.re && <p className="mb-4"><span className="font-bold">RE:</span><span className="font-bold ml-3">{gen.re}</span></p>}
