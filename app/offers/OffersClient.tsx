@@ -54,16 +54,13 @@ function fmtInline(raw: string) { return inlineMd(escHtml(raw)); }
 interface GenForm {
   date: string; addressee: string; re: string; greeting: string;
   body: string; signer: string; signerTitle: string; cc: string; withSig: boolean;
-  // Optional uploaded letterhead image (data URL) that replaces the default
-  // Litson header — use it to match an existing letter's letterhead.
-  letterhead: string;
   // Optional acknowledgment / signature block for the addressee to sign & date.
   ackEnabled: boolean; ackName: string; ackTitle: string;
 }
 const GEN_EMPTY: GenForm = {
   date: '', addressee: 'To Whom It May Concern:', re: '', greeting: '',
   body: '', signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', cc: '', withSig: true,
-  letterhead: '', ackEnabled: false, ackName: '', ackTitle: '',
+  ackEnabled: false, ackName: '', ackTitle: '',
 };
 
 // Certificate of Employment — modeled on the firm's sample (Paula Laborne
@@ -128,15 +125,24 @@ export default function OffersClient() {
   function set(k: keyof Form, v: string) { setForm(p => ({ ...p, [k]: v })); }
   function setD(k: keyof DecForm, v: string) { setDec(p => ({ ...p, [k]: v })); }
   function setG<K extends keyof GenForm>(k: K, v: GenForm[K]) { setGen(p => ({ ...p, [k]: v })); }
-  const letterheadRef = useRef<HTMLInputElement>(null);
-  // Upload a letterhead image (PNG/JPG) to use in place of the default header.
-  function uploadLetterhead(file: File) {
-    if (!file.type.startsWith('image/')) { showToast('Please upload an image (PNG or JPG) of the letterhead'); return; }
-    if (file.size > 4 * 1024 * 1024) { showToast('Image is too large — keep it under 4 MB'); return; }
-    const r = new FileReader();
-    r.onload = () => { setG('letterhead', String(r.result || '')); showToast('Letterhead added'); };
-    r.onerror = () => showToast('Could not read the image');
-    r.readAsDataURL(file);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  // Import a letter's content from an uploaded document (Word/PDF/text). The
+  // extracted text (with basic bold/italic/bullet formatting preserved) fills
+  // the body — the app still supplies the Litson letterhead.
+  async function importLetterContent(file: File) {
+    if (file.size > 12 * 1024 * 1024) { showToast('File is too large — keep it under 12 MB'); return; }
+    setImporting(true);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/offers/extract', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok || !d.text) { showToast(d.error || 'Could not read that document'); return; }
+      const text = String(d.text).trim();
+      setGen(p => ({ ...p, body: p.body.trim() ? `${p.body.trim()}\n\n${text}` : text }));
+      showToast('Letter content imported');
+    } catch { showToast('Could not import the document'); }
+    finally { setImporting(false); }
   }
   function setC<K extends keyof CertForm>(k: K, v: CertForm[K]) { setCert(p => ({ ...p, [k]: v })); }
   // The certificate body: the user's edited text, or the live-composed text.
@@ -507,16 +513,6 @@ ${bodyHtml}
       ? `<div style="margin-top:20pt"><span style="font-weight:bold">cc:</span>&nbsp;&nbsp;${ccLines.map(esc).join('<br>')}</div>`
       : '';
 
-    // Letterhead: an uploaded image (full width) or the default Litson header.
-    const letterheadHtml = gen.letterhead
-      ? `<div style="margin-bottom:18pt"><img src="${gen.letterhead}" style="display:block;width:100%;height:auto" alt="Letterhead"/></div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
-  <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
-  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
-    J. Alex Little<br>615.985.8189<br>alex@litson.co
-  </div>
-</div>`;
-
     // Acknowledgment / signature block for the addressee to sign & date.
     const ackHtml = gen.ackEnabled
       ? `<div style="margin-top:28pt">
@@ -540,7 +536,12 @@ ${bodyHtml}
   body{font-family:${BODY_FONT};color:#1a1a2e;font-size:11pt;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-${letterheadHtml}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
+  <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
+  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
+    J. Alex Little<br>615.985.8189<br>alex@litson.co
+  </div>
+</div>
 ${gen.date ? `<div style="margin-bottom:16pt">${esc(gen.date)}</div>` : ''}
 ${gen.addressee ? `<div style="margin-bottom:16pt;font-weight:bold">${esc(gen.addressee)}</div>` : ''}
 ${gen.re ? `<div style="margin-bottom:14pt"><span style="font-weight:bold">RE:</span><span style="margin-left:1em;font-weight:bold">${esc(gen.re)}</span></div>` : ''}
@@ -1002,24 +1003,6 @@ ${bodyHtml}
               </div>
             </div>
             <div className="border-t border-border-light -mx-6" />
-            {/* Letterhead — upload an image to replace the default Litson header */}
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Letterhead</div>
-              <input ref={letterheadRef} type="file" accept="image/png,image/jpeg,image/jpg" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) { uploadLetterhead(e.target.files[0]); e.target.value = ''; } }} />
-              {gen.letterhead ? (
-                <div className="flex items-center gap-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={gen.letterhead} alt="Letterhead" className="h-10 w-auto border border-border-light rounded" />
-                  <button onClick={() => letterheadRef.current?.click()} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1.5 rounded-ctrl hover:bg-canvas">Replace</button>
-                  <button onClick={() => setG('letterhead', '')} className="text-xs font-semibold text-text-muted border border-border-light px-2.5 py-1.5 rounded-ctrl hover:text-litred-alt hover:bg-[#fdeaea]">Remove</button>
-                </div>
-              ) : (
-                <button onClick={() => letterheadRef.current?.click()} className="w-full text-sm font-semibold text-ink border border-dashed border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">⬆ Upload letterhead image</button>
-              )}
-              <p className="text-[11px] text-text-muted mt-1">Uses your uploaded image as the header instead of the default Litson letterhead. PNG or JPG (e.g. a screenshot/export of the letterhead you want to match).</p>
-            </div>
-            <div className="border-t border-border-light -mx-6" />
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted">Letter Details</div>
 
             <div>
@@ -1047,7 +1030,16 @@ ${bodyHtml}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1">Body *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-text-secondary">Body *</label>
+                <input ref={importRef} type="file" accept=".doc,.docx,.pdf,.txt,.md,.rtf" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) { importLetterContent(e.target.files[0]); e.target.value = ''; } }} />
+                <button type="button" onClick={() => importRef.current?.click()} disabled={importing}
+                  title="Import the letter text from a Word / PDF / text document — keeps the Litson letterhead"
+                  className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas disabled:opacity-50">
+                  {importing ? 'Importing…' : '⬆ Import from document'}
+                </button>
+              </div>
               <div className="flex items-center gap-1 mb-1.5">
                 <button type="button" onClick={() => applyFmt('bold')} title="Bold selected text (**text**)"
                   className="px-2.5 py-1 text-sm font-bold rounded-ctrl border border-border-light text-text-secondary hover:border-ink hover:text-text-primary transition-colors">B</button>
@@ -1118,22 +1110,15 @@ ${bodyHtml}
           {/* Letter preview panel */}
           <div className="space-y-3">
             <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
-              {/* Letterhead — uploaded image, or the default Litson header */}
-              {gen.letterhead ? (
-                <div className="px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={gen.letterhead} alt="Letterhead" className="block w-full h-auto" />
+              {/* Letterhead */}
+              <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
+                <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
+                  <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
+                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
                 </div>
-              ) : (
-                <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
-                  <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
-                    <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                    Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Body */}
               <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
