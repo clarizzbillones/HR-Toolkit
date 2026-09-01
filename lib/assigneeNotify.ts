@@ -16,13 +16,34 @@ const norm = (s: any) => String(s ?? '').normalize('NFKC').replace(/[^\p{L}\p{N}
 
 export interface Person { name: string; email: string }
 
+// Canonical mailboxes that override whatever else is on file for a person,
+// keyed by their first name (normalized). This guarantees mail always goes to
+// the right inbox even if an older/alternate address is stored. Clarizz's mail
+// always goes to her litson.co mailbox; add more via CANONICAL_EMAILS
+// ("clarizz=clarizz@litson.co; jane=jane@litson.co").
+function canonicalEmails(): Record<string, string> {
+  const m: Record<string, string> = { clarizz: 'clarizz@litson.co' };
+  for (const pair of String(process.env.CANONICAL_EMAILS ?? '').split(/[;,]/)) {
+    const [k, v] = pair.split('=').map(s => (s ?? '').trim());
+    if (k && v) m[norm(k)] = v;
+  }
+  return m;
+}
+
 // Everyone the toolkit knows an email for: Access Control viewers, portal
 // admins, and env-configured admins.
 export async function directoryPeople(): Promise<Person[]> {
   const out: Person[] = [];
   try { const g = await sql`SELECT email, name FROM access_grants` as any[]; for (const r of g) if (r.email) out.push({ name: r.name || '', email: String(r.email) }); } catch { /* no table */ }
   try { const pa = await listPortalAdmins(); for (const a of pa) if (a.email) out.push({ name: a.name || '', email: a.email }); } catch { /* ignore */ }
-  for (const e of new Set([...accessAdminList(), ...hrAdminList()])) if (e) out.push({ name: '', email: e });
+  // Give admin/env firm addresses a name derived from the local-part (e.g.
+  // clarizz@litson.co -> "clarizz") so they can be matched by name, not just
+  // by email local-part — and so the firm mailbox is always a candidate.
+  for (const e of new Set([...accessAdminList(), ...hrAdminList()])) if (e) out.push({ name: e.split('@')[0].replace(/[._]+/g, ' '), email: e });
+  // Force any person whose first name has a canonical mailbox onto that address,
+  // so an alternate address on file can never receive their mail.
+  const canon = canonicalEmails();
+  for (const p of out) { const first = norm(p.name).split(' ')[0]; if (first && canon[first]) p.email = canon[first]; }
   const seen = new Set<string>(); const uniq: Person[] = [];
   for (const p of out) { const k = p.email.toLowerCase(); if (!seen.has(k)) { seen.add(k); uniq.push(p); } }
   return uniq;
@@ -34,10 +55,11 @@ export function resolvePerson(assignee: string, people: Person[]): Person | null
   const a = norm(assignee); if (!a) return null;
   // Collect every person that matches (by full/first name, then email local-part)
   // so we can prefer the firm mailbox when someone has more than one address.
+  const aFirst = a.split(' ')[0];
   const matches: Person[] = [];
   for (const p of people) {
     const nm = norm(p.name);
-    if (nm && (nm === a || nm.split(' ')[0] === a || nm.split(' ').includes(a))) matches.push(p);
+    if (nm && (nm === a || nm.split(' ')[0] === a || nm.split(' ').includes(a) || nm.split(' ')[0] === aFirst)) matches.push(p);
   }
   for (const p of people) {
     if (matches.includes(p)) continue;
