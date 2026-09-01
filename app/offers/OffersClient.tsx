@@ -55,12 +55,14 @@ interface GenForm {
   date: string; addressee: string; re: string; greeting: string;
   body: string; signer: string; signerTitle: string; cc: string; withSig: boolean;
   // Optional acknowledgment / signature block for the addressee to sign & date.
-  ackEnabled: boolean; ackName: string; ackTitle: string;
+  // Rendered BELOW the signer's signature. ackText is the receipt language.
+  ackEnabled: boolean; ackName: string; ackTitle: string; ackText: string;
 }
+const ACK_DEFAULT_TEXT = 'Please sign below to acknowledge that you have received and reviewed this letter and that we have discussed its contents. Your signature indicates receipt only; it does not necessarily indicate agreement. A copy of this letter will be placed in your personnel file.';
 const GEN_EMPTY: GenForm = {
   date: '', addressee: 'To Whom It May Concern:', re: '', greeting: '',
   body: '', signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', cc: '', withSig: true,
-  ackEnabled: false, ackName: '', ackTitle: '',
+  ackEnabled: false, ackName: '', ackTitle: '', ackText: ACK_DEFAULT_TEXT,
 };
 
 // Certificate of Employment — modeled on the firm's sample (Paula Laborne
@@ -515,8 +517,8 @@ ${bodyHtml}
 
     // Acknowledgment / signature block for the addressee to sign & date.
     const ackHtml = gen.ackEnabled
-      ? `<div style="margin-top:28pt">
-  <div style="margin-bottom:30pt">Acknowledged and agreed:</div>
+      ? `<div style="margin-top:24pt;border-top:0.5pt solid #ccc;padding-top:12pt">
+  ${gen.ackText.trim() ? `<div style="text-align:justify;margin-bottom:30pt">${esc(gen.ackText)}</div>` : '<div style="margin-bottom:30pt"></div>'}
   <div style="display:flex;justify-content:space-between;gap:30pt;max-width:430px">
     <div style="flex:1">
       <div style="border-top:0.75pt solid #1a1a2e;padding-top:3pt">${esc(gen.ackName.trim() || gen.addressee.replace(/:$/, '').trim() || 'Name')}</div>
@@ -1088,16 +1090,24 @@ ${bodyHtml}
               Add an acknowledgment line for the addressee to sign &amp; date
             </label>
             {gen.ackEnabled && (
-              <div className="grid grid-cols-2 gap-2 pl-6">
+              <div className="pl-6 space-y-2">
+                <p className="text-[11px] text-text-muted">Appears below {gen.signer.split(' ')[0] || 'the signer'}&rsquo;s signature.</p>
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Acknowledged by</label>
-                  <input type="text" value={gen.ackName} onChange={e => setG('ackName', e.target.value)}
-                    placeholder="Employee name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Acknowledgment text</label>
+                  <textarea value={gen.ackText} onChange={e => setG('ackText', e.target.value)} rows={3}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Title <span className="text-text-muted font-normal">(optional)</span></label>
-                  <input type="text" value={gen.ackTitle} onChange={e => setG('ackTitle', e.target.value)}
-                    placeholder="Paralegal" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Acknowledged by</label>
+                    <input type="text" value={gen.ackName} onChange={e => setG('ackName', e.target.value)}
+                      placeholder="Employee name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Title <span className="text-text-muted font-normal">(optional)</span></label>
+                    <input type="text" value={gen.ackTitle} onChange={e => setG('ackTitle', e.target.value)}
+                      placeholder="Paralegal" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
                 </div>
               </div>
             )}
@@ -1159,10 +1169,11 @@ ${bodyHtml}
                 </div>
               )}
 
-              {/* Acknowledgment / signature block for the addressee */}
+              {/* Acknowledgment / signature block for the addressee — below the signature */}
               {gen.ackEnabled && (
                 <div className="px-8 pb-6 pt-2 text-[13px]" style={{ fontFamily: BODY_FONT }}>
-                  <p className="mb-8">Acknowledged and agreed:</p>
+                  <div className="border-t border-[#e8e2d8] mb-4" />
+                  {gen.ackText.trim() && <p className="mb-8" style={{ textAlign: 'justify' }}>{gen.ackText}</p>}
                   <div className="flex justify-between gap-8" style={{ maxWidth: '430px' }}>
                     <div className="flex-1">
                       <div className="border-t border-text-primary pt-1">{gen.ackName.trim() || gen.addressee.replace(/:$/, '').trim() || 'Name'}</div>

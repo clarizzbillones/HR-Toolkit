@@ -49,6 +49,23 @@ function reflowPdfText(raw: string): string {
   return blocks.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// Strip a letter's own trailing sign-off / signature / acknowledgment so the
+// General-letter builder's closing + acknowledgment aren't duplicated. Only
+// looks in the latter half of the document to avoid cutting real content.
+function trimClosing(text: string): string {
+  const lines = text.split('\n');
+  const closingRe = /^\s*\**\s*(sincerely|very truly yours|respectfully(?: submitted)?|regards|best regards|warm regards|kind regards|cordially|yours truly|with regards)\b/i;
+  const ackRe = /^\s*\**\s*acknowledg(e?ment|ing|e)\b/i;
+  const start = Math.floor(lines.length * 0.5);
+  let cut = -1;
+  for (let i = start; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    if ((closingRe.test(l) && l.replace(/\*/g, '').length < 40) || ackRe.test(l)) { cut = i; break; }
+  }
+  return cut >= 0 ? lines.slice(0, cut).join('\n').replace(/\n{3,}/g, '\n\n').trim() : text;
+}
+
 // Convert mammoth's HTML into the General-letter body's mini-markdown:
 // **bold**, *italic*, "• bullet" lines, blank line between paragraphs.
 function htmlToBody(html: string): string {
@@ -88,6 +105,10 @@ export async function POST(req: Request) {
     }
 
     if (!text.trim()) return NextResponse.json({ error: 'No readable text found in that document' }, { status: 422 });
+    // Drop the source letter's own closing/signature/acknowledgment — the
+    // builder adds those (and its acknowledgment renders below the signature).
+    const trimmed = trimClosing(text);
+    text = trimmed.trim() ? trimmed : text;
     return NextResponse.json({ text });
   } catch (e: any) {
     return NextResponse.json({ error: 'Could not read that document. Try a .docx, .pdf, or .txt file.' }, { status: 500 });
