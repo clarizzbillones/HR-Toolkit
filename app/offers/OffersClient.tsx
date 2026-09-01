@@ -1052,6 +1052,7 @@ ${bodyHtml}
                 placeholder={"Type the letter here. Leave a blank line between paragraphs.\n\nSelect text and use B / I above, or type **bold** and *italic*.\nStart a line with • or - for a bullet point."}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
               <p className="text-[11px] text-text-muted mt-1">Blank line = new paragraph. <code>**bold**</code>, <code>*italic*</code>, and lines starting with • or - become bullets.</p>
+              <p className="text-[11px] text-text-muted mt-0.5">Importing? <b>Word (.docx)</b> keeps bold &amp; italics. <b>PDF</b> keeps the text, paragraphs and headings, but not italics — add them back with the <i>I</i> button.</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
