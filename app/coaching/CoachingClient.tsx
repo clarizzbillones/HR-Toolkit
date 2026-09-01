@@ -29,7 +29,9 @@ const STATUS_PILL: Record<string, string> = {
 
 export default function CoachingClient({ initialRows, staff }: { initialRows: Row[]; staff: Staff[] }) {
   const { showToast } = useToast();
-  const { me } = useAccess(); const readOnly = !!me?.restricted;
+  // A restricted viewer is read-only UNLESS they were granted edit access to
+  // the Coaching section (matches the SMART Goals tab).
+  const { me } = useAccess(); const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/coaching');
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<typeof EMPTY>({ ...EMPTY });
