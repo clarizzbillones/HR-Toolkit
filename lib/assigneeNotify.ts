@@ -8,6 +8,9 @@ import { accessAdminList, hrAdminList } from './access';
 import { sendMailAsApp } from './graph';
 
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
+// When a person is known by more than one address, deliver to their firm
+// mailbox (litson.co) rather than any personal/other address on file.
+const FIRM_DOMAIN = (process.env.FIRM_EMAIL_DOMAIN ?? 'litson.co').toLowerCase();
 const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const norm = (s: any) => String(s ?? '').normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
 
@@ -29,15 +32,21 @@ export async function directoryPeople(): Promise<Person[]> {
 // full name, first name, or the email's local-part.
 export function resolvePerson(assignee: string, people: Person[]): Person | null {
   const a = norm(assignee); if (!a) return null;
+  // Collect every person that matches (by full/first name, then email local-part)
+  // so we can prefer the firm mailbox when someone has more than one address.
+  const matches: Person[] = [];
   for (const p of people) {
     const nm = norm(p.name);
-    if (nm && (nm === a || nm.split(' ')[0] === a || nm.split(' ').includes(a))) return p;
+    if (nm && (nm === a || nm.split(' ')[0] === a || nm.split(' ').includes(a))) matches.push(p);
   }
   for (const p of people) {
+    if (matches.includes(p)) continue;
     const local = norm(p.email.split('@')[0]);
-    if (local === a || local.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return p;
+    if (local === a || local.replace(/\s+/g, '') === a.replace(/\s+/g, '')) matches.push(p);
   }
-  return null;
+  if (!matches.length) return null;
+  // Prefer the firm (litson.co) mailbox over any other address on file.
+  return matches.find(p => p.email.toLowerCase().endsWith('@' + FIRM_DOMAIN)) ?? matches[0];
 }
 
 function notifyHtml(firstName: string, employeeName: string, kindLabel: string, tasks: { label: string; deadline?: string }[], url: string): string {
