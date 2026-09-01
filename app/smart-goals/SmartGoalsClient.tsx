@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
-import { emptyForm, emptyGoal, smartGoalsDocHtml, fmtLong, type SmartGoal, type SmartGoalsRow } from '@/lib/smartGoals';
+import { emptyForm, emptyGoal, emptyFollowUp, defaultCheckins, FOLLOWUP_STATUSES, smartGoalsDocHtml, fmtLong, type SmartGoal, type SmartGoalsRow, type FollowUp } from '@/lib/smartGoals';
 
 type Staff = { name: string; position: string; email: string };
 const SMART = [
@@ -29,7 +29,7 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
   function resetForm() { setForm(emptyForm()); setEditId(null); setShowForm(false); }
   function startNew() { setForm(emptyForm()); setEditId(null); setShowForm(true); }
   function startEdit(r: SmartGoalsRow) {
-    setForm({ ...r, review_date: r.review_date ? String(r.review_date).slice(0, 10) : '', goals_prepared: r.goals_prepared ? String(r.goals_prepared).slice(0, 10) : '', goals: r.goals.length ? r.goals : [emptyGoal()], open_items: r.open_items.length ? r.open_items : [''] });
+    setForm({ ...r, review_date: r.review_date ? String(r.review_date).slice(0, 10) : '', goals_prepared: r.goals_prepared ? String(r.goals_prepared).slice(0, 10) : '', goals: r.goals.length ? r.goals : [emptyGoal()], open_items: r.open_items.length ? r.open_items : [''], checkins: (r.checkins && r.checkins.length) ? r.checkins : defaultCheckins() });
     setEditId(r.id); setShowForm(true);
   }
 
@@ -43,6 +43,11 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
   const setItem = (i: number, v: string) => set({ open_items: items.map((x, j) => j === i ? v : x) });
   const addItem = () => set({ open_items: [...items, ''] });
   const removeItem = (i: number) => set({ open_items: items.filter((_, j) => j !== i) });
+  // Follow-up / progress check-ins
+  const checkins = form.checkins ?? [];
+  const setCheckin = (i: number, patch: Partial<FollowUp>) => set({ checkins: checkins.map((c, j) => j === i ? { ...c, ...patch } : c) });
+  const addCheckin = () => set({ checkins: [...checkins, emptyFollowUp()] });
+  const removeCheckin = (i: number) => set({ checkins: checkins.filter((_, j) => j !== i) });
 
   function pickEmployee(name: string) {
     const s = staff.find(x => x.name === name);
@@ -55,7 +60,7 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
 
   async function save() {
     if (!String(form.employee ?? '').trim()) { showToast('Pick an employee'); return; }
-    const payload = { ...form, goals, open_items: items.filter(x => x.trim() !== '') };
+    const payload = { ...form, goals, open_items: items.filter(x => x.trim() !== ''), checkins };
     if (editId) {
       const res = await fetch('/api/smart-goals', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...payload }) });
       const { row } = await res.json();
@@ -85,7 +90,7 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `SMART-Goals-${String(r.employee).replace(/[^\w]+/g, '-')}.doc`; a.click(); URL.revokeObjectURL(a.href);
   }
 
-  const currentForm: SmartGoalsRow = { id: editId ?? 'preview', employee: form.employee ?? '', reviewer: form.reviewer ?? '', reviewer_position: form.reviewer_position ?? '', review_date: form.review_date, goals_prepared: form.goals_prepared, milestones: form.milestones ?? '', goals, open_items: items };
+  const currentForm: SmartGoalsRow = { id: editId ?? 'preview', employee: form.employee ?? '', reviewer: form.reviewer ?? '', reviewer_position: form.reviewer_position ?? '', review_date: form.review_date, goals_prepared: form.goals_prepared, milestones: form.milestones ?? '', goals, open_items: items, checkins };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -170,6 +175,39 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
               </div>
             </div>
 
+            {/* Follow-up & progress — the 3 / 6 / 12-month benchmarks */}
+            <div className="mt-6">
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">Follow-up &amp; progress <span className="font-normal text-text-faint">— check-in dates and progress at each benchmark</span></label>
+              <div className="space-y-2">
+                {checkins.map((c, i) => (
+                  <div key={c.id} className="border border-border-light rounded-card p-3 bg-[#fbf9f4]">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_130px] gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Benchmark</label>
+                        <input value={c.label} onChange={e => setCheckin(i, { label: e.target.value })} placeholder="3-month" className={input} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Follow-up due</label>
+                        <input type="date" value={c.due} onChange={e => setCheckin(i, { due: e.target.value })} className={input} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Status</label>
+                        <select value={c.status} onChange={e => setCheckin(i, { status: e.target.value })} className={input + ' bg-white'}>
+                          {FOLLOWUP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Progress made</label>
+                      <textarea value={c.progress} onChange={e => setCheckin(i, { progress: e.target.value })} rows={2} placeholder="Progress at this check-in…" className={input + ' resize-y'} />
+                    </div>
+                    {checkins.length > 1 && <button onClick={() => removeCheckin(i)} className="mt-1.5 text-xs text-text-muted hover:text-litred-alt">✕ Remove benchmark</button>}
+                  </div>
+                ))}
+                <button onClick={addCheckin} className="text-xs font-semibold text-[#3f6b8a] hover:underline">+ Add follow-up benchmark</button>
+              </div>
+            </div>
+
             <div className="mt-6 flex gap-2">
               <button onClick={save} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{editId ? 'Save changes' : 'Save form'}</button>
               <button onClick={() => setViewRow(currentForm)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Preview</button>
@@ -188,6 +226,10 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
                 <div className="font-semibold text-text-primary">{r.employee || '—'}</div>
                 <div className="text-xs text-text-muted mt-0.5">Reviewer: {r.reviewer || '—'}{r.review_date ? ` · ${fmtLong(r.review_date)}` : ''}</div>
                 <div className="text-xs text-text-muted mt-2">{r.goals.length} goal{r.goals.length === 1 ? '' : 's'}</div>
+                {(() => {
+                  const next = (r.checkins ?? []).filter(c => c.due && c.status !== 'Complete').sort((a, b) => a.due.localeCompare(b.due))[0];
+                  return next ? <div className="text-xs font-semibold text-[#b07d2a] mt-1">Follow-up due {fmtLong(next.due)}{next.label ? ` · ${next.label}` : ''}</div> : null;
+                })()}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => setViewRow(r)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">View</button>
                   <button onClick={() => printDoc(r)} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">PDF</button>
