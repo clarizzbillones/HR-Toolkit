@@ -55,9 +55,24 @@ export async function getAppToken(): Promise<string | null> {
   } catch { return null; }
 }
 
+// Hard guard: never deliver to a blocked mailbox (the stale "catalyze" address).
+// Any recipient matching the blocked pattern is rewritten to the firm mailbox.
+// Configurable via env: BLOCKED_EMAIL_PATTERN (regex, default "catalyze") and
+// BLOCKED_EMAIL_REDIRECT (default clarizz@litson.co).
+export function redirectAddr(addr: string): string {
+  const a = String(addr ?? '').trim();
+  if (!a) return a;
+  const redirect = process.env.BLOCKED_EMAIL_REDIRECT ?? 'clarizz@litson.co';
+  const pattern = process.env.BLOCKED_EMAIL_PATTERN ?? 'catalyze';
+  try { if (new RegExp(pattern, 'i').test(a)) return redirect; }
+  catch { if (a.toLowerCase().includes('catalyze')) return redirect; }
+  return a;
+}
+
 function ccList(cc?: string | string[]) {
-  const arr = (Array.isArray(cc) ? cc : cc ? [cc] : []).filter(Boolean);
-  return arr.length ? { ccRecipients: arr.map(a => ({ emailAddress: { address: a } })) } : {};
+  const arr = (Array.isArray(cc) ? cc : cc ? [cc] : []).filter(Boolean).map(redirectAddr);
+  const uniq = [...new Set(arr.map(a => a.trim()).filter(Boolean))];
+  return uniq.length ? { ccRecipients: uniq.map(a => ({ emailAddress: { address: a } })) } : {};
 }
 
 export interface MailAttachment { name: string; contentBytes: string; contentType?: string }
@@ -72,7 +87,7 @@ export async function sendMailAsApp(fromUpn: string, to: string, subject: string
     const res = await fetch(`${GRAPH_BASE}/users/${encodeURIComponent(fromUpn)}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: to } }], ...ccList(cc), ...(atts.length ? { attachments: atts } : {}) } }),
+      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: redirectAddr(to) } }], ...ccList(cc), ...(atts.length ? { attachments: atts } : {}) } }),
     });
     if (!res.ok) return { ok: false, error: `Graph sendMail ${res.status}: ${(await res.text()).slice(0, 300)}` };
     return { ok: true };
@@ -93,7 +108,7 @@ export async function sendMail(
         message: {
           subject,
           body: { contentType: 'HTML', content: body },
-          toRecipients: [{ emailAddress: { address: to } }],
+          toRecipients: [{ emailAddress: { address: redirectAddr(to) } }],
           ...ccList(cc),
         },
       }),
