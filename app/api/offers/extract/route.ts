@@ -9,61 +9,115 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
-// Reflow raw PDF text into readable paragraphs. pdf-parse emits a hard line
-// break at every visual line (and doubled spaces from justified text), which
-// shreds paragraphs. This rejoins wrapped lines, keeps numbered/bulleted lists,
-// bolds short headings, and heals page-break splits inside a paragraph.
-function reflowPdfText(raw: string): string {
-  const lines = raw.split('\n').map(l => l.replace(/\s{2,}/g, ' ').trim());
-  const lens = lines.filter(l => l.length > 0).map(l => l.length).sort((a, b) => a - b);
-  const wide = lens.length ? lens[Math.floor(lens.length * 0.85)] : 80; // ~full line width
+const isItalicFont = (n?: string) => /italic|oblique/i.test(n || '');
+const isBoldFont = (n?: string) => /bold|black|heavy|semibold/i.test(n || '');
 
-  const isNum = (l: string) => /^\d+\.\s/.test(l);
-  const isBullet = (l: string) => /^[•·▪]\s?/.test(l) || /^-\s/.test(l);
-  const isLetterHead = (l: string) => /^[A-Z]\.\s+\S/.test(l);   // "A. The Amazon Matter"
+// Wrap a run of text in **/* markers for the letter body, keeping surrounding
+// spaces OUTSIDE the markers so the inline formatter parses them correctly.
+function wrapStyle(text: string, ital: boolean, bold: boolean): string {
+  if (!ital && !bold) return text;
+  const lead = (text.match(/^\s*/) || [''])[0];
+  const trail = (text.match(/\s*$/) || [''])[0];
+  const core = text.slice(lead.length, text.length - trail.length);
+  if (!core) return text;
+  const open = (bold ? '**' : '') + (ital ? '*' : '');
+  const close = (ital ? '*' : '') + (bold ? '**' : '');
+  return lead + open + core + close + trail;
+}
+
+// Extract a PDF's text with italic/bold preserved. pdf-parse throws styling
+// away, so we drive the bundled pdf.js engine directly: for each page we read
+// the text runs plus each run's font name (which reveals "...ItalicMT" /
+// "...BoldMT") and wrap styled runs in *…* / **…**. A newline is inserted when
+// the vertical position changes (same heuristic pdf-parse uses).
+async function extractPdfStyled(buf: Buffer): Promise<string> {
+  const mod: any = await import('pdf-parse/lib/pdf.js/v2.0.550/build/pdf.js');
+  const PDFJS: any = mod.default ?? mod;
+  PDFJS.disableWorker = true;
+  const doc: any = await PDFJS.getDocument(new Uint8Array(buf));
+  let all = '';
+  for (let pn = 1; pn <= doc.numPages; pn++) {
+    const page: any = await doc.getPage(pn);
+    await page.getOperatorList(); // forces fonts to load so names resolve
+    const tc: any = await page.getTextContent();
+    const fontNames: Record<string, string | null> = {};
+    const uniq = [...new Set(tc.items.map((i: any) => i.fontName))] as string[];
+    await Promise.all(uniq.map(fn => new Promise<void>(res => {
+      let done = false;
+      const finish = (name: string | null) => { if (!done) { done = true; fontNames[fn] = name; res(); } };
+      try { page.commonObjs.get(fn, (font: any) => finish(font && font.name)); } catch { finish(null); }
+      setTimeout(() => finish(null), 4000); // never hang on an unresolved font
+    })));
+    let lastY: number | null = null;
+    let line: { str: string; it: boolean; bd: boolean }[] = [];
+    const flushLine = () => {
+      let s = '', i = 0;
+      while (i < line.length) {
+        let j = i, txt = '';
+        while (j < line.length && line[j].it === line[i].it && line[j].bd === line[i].bd) { txt += line[j].str; j++; }
+        s += wrapStyle(txt, line[i].it, line[i].bd); i = j;
+      }
+      all += (all && !all.endsWith('\n') ? '\n' : '') + s.replace(/[ \t]{2,}/g, ' ').trim() + '\n';
+      line = [];
+    };
+    for (const it of tc.items) {
+      const y = it.transform[5];
+      if (lastY !== null && y !== lastY) flushLine();
+      line.push({ str: it.str, it: isItalicFont(fontNames[it.fontName] ?? ''), bd: isBoldFont(fontNames[it.fontName] ?? '') });
+      lastY = y;
+    }
+    flushLine();
+    all += '\n';
+  }
+  return all;
+}
+
+// Text with any *…*/**…** markers stripped — used for the layout heuristics so
+// the markers don't throw off length / punctuation checks.
+const plain = (l: string) => l.replace(/\*+/g, '').trim();
+
+// Reflow line-broken text (from the styled PDF extractor) into flowing
+// paragraphs: rejoin wrapped lines, keep numbered/bulleted lists, and put
+// bold headings on their own line. Inline *italic* / **bold** markers are
+// preserved as-is.
+function reflowBody(raw: string): string {
+  const lines = raw.split('\n').map(l => l.replace(/[ \t]{2,}/g, ' ').trimEnd());
+  const lens = lines.map(l => plain(l).length).filter(n => n > 0).sort((a, b) => a - b);
+  const wide = lens.length ? lens[Math.floor(lens.length * 0.85)] : 80;
+
+  const isNum = (l: string) => /^\d+\.\s/.test(plain(l));
+  const isBullet = (l: string) => /^[•·▪]\s?/.test(plain(l)) || /^-\s/.test(plain(l));
+  const isBoldHead = (l: string) => /^\*\*.+\*\*$/.test(l.trim()) && plain(l).split(' ').length <= 10;
+  const isLetterHead = (l: string) => /^[A-Z]\.\s+\S/.test(plain(l));
   const isHeading = (l: string) => {
-    if (!l || isNum(l) || isBullet(l) || isLetterHead(l)) return false;
-    return l.split(' ').length <= 8 && !/[.,;:]$/.test(l) && /^[A-Z0-9]/.test(l);
+    const p = plain(l);
+    if (!p || isNum(l) || isBullet(l) || isLetterHead(l)) return false;
+    return p.split(' ').length <= 8 && !/[.,;:]$/.test(p) && /^[A-Z0-9]/.test(p);
   };
-  const endsSentence = (l: string) => /[.!?:”")]$/.test(l);
+  const endsSentence = (l: string) => /[.!?:”")]$/.test(plain(l));
 
   const out: string[] = [];
   let para = '';
   const flush = () => { if (para.trim()) out.push(para.trim()); para = ''; };
-
-  for (const line of lines) {
-    if (!line) { if (endsSentence(para)) flush(); continue; } // blank inside a sentence = soft wrap
-    if (isNum(line) || isBullet(line)) { flush(); para = line; continue; }
-    if (isLetterHead(line) || isHeading(line)) { flush(); out.push('__H__' + line); continue; }
-    para = para ? para + ' ' + line : line;
-    if (endsSentence(line) && line.length < wide * 0.9) flush(); // short ending line = paragraph break
+  for (const raw2 of lines) {
+    const t = raw2.trim();
+    if (!t) { if (endsSentence(para)) flush(); continue; }
+    if (isBoldHead(raw2)) { flush(); out.push('__B__' + t); continue; }
+    if (isNum(raw2) || isBullet(raw2)) { flush(); para = t; continue; }
+    if (isLetterHead(raw2) || isHeading(raw2)) { flush(); out.push('__H__' + plain(raw2)); continue; }
+    para = para ? para + ' ' + t : t;
+    if (endsSentence(raw2) && plain(raw2).length < wide * 0.9) flush();
   }
   flush();
 
   const blocks: string[] = [];
   for (let b of out) {
-    if (b.startsWith('__H__')) b = '**' + b.slice(5) + '**';
+    if (b.startsWith('__B__')) b = b.slice(5);              // already bold from the font
+    else if (b.startsWith('__H__')) b = '**' + b.slice(5) + '**'; // bold a structural heading
     if (blocks.length) blocks.push('');
     blocks.push(b);
   }
   return blocks.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-// Strip a letter's own trailing sign-off / signature / acknowledgment so the
-// General-letter builder's closing + acknowledgment aren't duplicated. Only
-// looks in the latter half of the document to avoid cutting real content.
-function trimClosing(text: string): string {
-  const lines = text.split('\n');
-  const closingRe = /^\s*\**\s*(sincerely|very truly yours|respectfully(?: submitted)?|regards|best regards|warm regards|kind regards|cordially|yours truly|with regards)\b/i;
-  const ackRe = /^\s*\**\s*acknowledg(e?ment|ing|e)\b/i;
-  const start = Math.floor(lines.length * 0.5);
-  let cut = -1;
-  for (let i = start; i < lines.length; i++) {
-    const l = lines[i].trim();
-    if (!l) continue;
-    if ((closingRe.test(l) && l.replace(/\*/g, '').length < 40) || ackRe.test(l)) { cut = i; break; }
-  }
-  return cut >= 0 ? lines.slice(0, cut).join('\n').replace(/\n{3,}/g, '\n\n').trim() : text;
 }
 
 // Convert mammoth's HTML into the General-letter body's mini-markdown:
@@ -80,6 +134,23 @@ function htmlToBody(html: string): string {
   return s.trim();
 }
 
+// Strip a letter's own trailing sign-off / signature / acknowledgment so the
+// General-letter builder's closing + acknowledgment aren't duplicated. Only
+// looks in the latter half of the document to avoid cutting real content.
+function trimClosing(text: string): string {
+  const lines = text.split('\n');
+  const closingRe = /^\s*(sincerely|very truly yours|respectfully(?: submitted)?|regards|best regards|warm regards|kind regards|cordially|yours truly|with regards)\b/i;
+  const ackRe = /^\s*acknowledg(e?ment|ing|e)\b/i;
+  const start = Math.floor(lines.length * 0.5);
+  let cut = -1;
+  for (let i = start; i < lines.length; i++) {
+    const l = plain(lines[i]);
+    if (!l) continue;
+    if ((closingRe.test(l) && l.length < 40) || ackRe.test(l)) { cut = i; break; }
+  }
+  return cut >= 0 ? lines.slice(0, cut).join('\n').replace(/\n{3,}/g, '\n\n').trim() : text;
+}
+
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
@@ -94,10 +165,14 @@ export async function POST(req: Request) {
       const { value } = await mammoth.convertToHtml({ buffer: buf });
       text = htmlToBody(value);
     } else if (name.endsWith('.pdf')) {
-      // Import lazily and from the lib path to avoid pdf-parse's debug harness.
-      const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
-      const { text: t } = await pdfParse(buf);
-      text = reflowPdfText(String(t || ''));
+      try {
+        text = reflowBody(await extractPdfStyled(buf)); // keeps italic/bold
+      } catch {
+        // Fall back to plain text extraction if the styled path fails.
+        const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
+        const { text: t } = await pdfParse(buf);
+        text = reflowBody(String(t || ''));
+      }
     } else {
       // txt / md / rtf / anything else — treat as UTF-8 text.
       text = buf.toString('utf8');
@@ -110,7 +185,7 @@ export async function POST(req: Request) {
     const trimmed = trimClosing(text);
     text = trimmed.trim() ? trimmed : text;
     return NextResponse.json({ text });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json({ error: 'Could not read that document. Try a .docx, .pdf, or .txt file.' }, { status: 500 });
   }
 }

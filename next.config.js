@@ -6,6 +6,8 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/hr-forms/lb0489': ['./public/forms/lb0489.pdf'],
     '/api/onboarding/w8ben': ['./public/forms/w8ben.pdf'],
+    // The general-letter importer drives pdf.js directly to keep italic/bold.
+    '/api/offers/extract': ['./node_modules/pdf-parse/lib/pdf.js/v2.0.550/build/pdf.js'],
   },
   images: {
     remotePatterns: [],
