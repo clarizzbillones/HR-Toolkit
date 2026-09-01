@@ -54,10 +54,16 @@ function fmtInline(raw: string) { return inlineMd(escHtml(raw)); }
 interface GenForm {
   date: string; addressee: string; re: string; greeting: string;
   body: string; signer: string; signerTitle: string; cc: string; withSig: boolean;
+  // Optional uploaded letterhead image (data URL) that replaces the default
+  // Litson header — use it to match an existing letter's letterhead.
+  letterhead: string;
+  // Optional acknowledgment / signature block for the addressee to sign & date.
+  ackEnabled: boolean; ackName: string; ackTitle: string;
 }
 const GEN_EMPTY: GenForm = {
   date: '', addressee: 'To Whom It May Concern:', re: '', greeting: '',
   body: '', signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', cc: '', withSig: true,
+  letterhead: '', ackEnabled: false, ackName: '', ackTitle: '',
 };
 
 // Certificate of Employment — modeled on the firm's sample (Paula Laborne
@@ -122,6 +128,16 @@ export default function OffersClient() {
   function set(k: keyof Form, v: string) { setForm(p => ({ ...p, [k]: v })); }
   function setD(k: keyof DecForm, v: string) { setDec(p => ({ ...p, [k]: v })); }
   function setG<K extends keyof GenForm>(k: K, v: GenForm[K]) { setGen(p => ({ ...p, [k]: v })); }
+  const letterheadRef = useRef<HTMLInputElement>(null);
+  // Upload a letterhead image (PNG/JPG) to use in place of the default header.
+  function uploadLetterhead(file: File) {
+    if (!file.type.startsWith('image/')) { showToast('Please upload an image (PNG or JPG) of the letterhead'); return; }
+    if (file.size > 4 * 1024 * 1024) { showToast('Image is too large — keep it under 4 MB'); return; }
+    const r = new FileReader();
+    r.onload = () => { setG('letterhead', String(r.result || '')); showToast('Letterhead added'); };
+    r.onerror = () => showToast('Could not read the image');
+    r.readAsDataURL(file);
+  }
   function setC<K extends keyof CertForm>(k: K, v: CertForm[K]) { setCert(p => ({ ...p, [k]: v })); }
   // The certificate body: the user's edited text, or the live-composed text.
   const certBody = cert.body.trim() ? cert.body : composeCert(cert);
@@ -200,7 +216,7 @@ export default function OffersClient() {
   function loadGenTemplate(name: string) {
     const t = genTemplates[name];
     if (!t) { setGenTplName(''); return; }
-    setGen({ ...t });
+    setGen({ ...GEN_EMPTY, ...t }); // merge so templates saved before new fields still load
     setGenTplName(name);
     showToast(`Loaded “${name}”`);
   }
@@ -491,6 +507,32 @@ ${bodyHtml}
       ? `<div style="margin-top:20pt"><span style="font-weight:bold">cc:</span>&nbsp;&nbsp;${ccLines.map(esc).join('<br>')}</div>`
       : '';
 
+    // Letterhead: an uploaded image (full width) or the default Litson header.
+    const letterheadHtml = gen.letterhead
+      ? `<div style="margin-bottom:18pt"><img src="${gen.letterhead}" style="display:block;width:100%;height:auto" alt="Letterhead"/></div>`
+      : `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
+  <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
+  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
+    J. Alex Little<br>615.985.8189<br>alex@litson.co
+  </div>
+</div>`;
+
+    // Acknowledgment / signature block for the addressee to sign & date.
+    const ackHtml = gen.ackEnabled
+      ? `<div style="margin-top:28pt">
+  <div style="margin-bottom:30pt">Acknowledged and agreed:</div>
+  <div style="display:flex;justify-content:space-between;gap:30pt;max-width:430px">
+    <div style="flex:1">
+      <div style="border-top:0.75pt solid #1a1a2e;padding-top:3pt">${esc(gen.ackName.trim() || gen.addressee.replace(/:$/, '').trim() || 'Name')}</div>
+      ${gen.ackTitle.trim() ? `<div style="color:#555;font-size:10pt">${esc(gen.ackTitle)}</div>` : ''}
+    </div>
+    <div style="width:150pt">
+      <div style="border-top:0.75pt solid #1a1a2e;padding-top:3pt">Date</div>
+    </div>
+  </div>
+</div>`
+      : '';
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Letter${gen.re ? ' – ' + esc(gen.re) : ''}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -498,12 +540,7 @@ ${bodyHtml}
   body{font-family:${BODY_FONT};color:#1a1a2e;font-size:11pt;line-height:1.4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18pt">
-  <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
-  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
-    J. Alex Little<br>615.985.8189<br>alex@litson.co
-  </div>
-</div>
+${letterheadHtml}
 ${gen.date ? `<div style="margin-bottom:16pt">${esc(gen.date)}</div>` : ''}
 ${gen.addressee ? `<div style="margin-bottom:16pt;font-weight:bold">${esc(gen.addressee)}</div>` : ''}
 ${gen.re ? `<div style="margin-bottom:14pt"><span style="font-weight:bold">RE:</span><span style="margin-left:1em;font-weight:bold">${esc(gen.re)}</span></div>` : ''}
@@ -519,6 +556,7 @@ ${bodyHtml}
   </div>
 </div>
 ${ccHtml}
+${ackHtml}
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
   Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
@@ -964,6 +1002,24 @@ ${bodyHtml}
               </div>
             </div>
             <div className="border-t border-border-light -mx-6" />
+            {/* Letterhead — upload an image to replace the default Litson header */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-1.5">Letterhead</div>
+              <input ref={letterheadRef} type="file" accept="image/png,image/jpeg,image/jpg" className="hidden"
+                onChange={e => { if (e.target.files?.[0]) { uploadLetterhead(e.target.files[0]); e.target.value = ''; } }} />
+              {gen.letterhead ? (
+                <div className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={gen.letterhead} alt="Letterhead" className="h-10 w-auto border border-border-light rounded" />
+                  <button onClick={() => letterheadRef.current?.click()} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1.5 rounded-ctrl hover:bg-canvas">Replace</button>
+                  <button onClick={() => setG('letterhead', '')} className="text-xs font-semibold text-text-muted border border-border-light px-2.5 py-1.5 rounded-ctrl hover:text-litred-alt hover:bg-[#fdeaea]">Remove</button>
+                </div>
+              ) : (
+                <button onClick={() => letterheadRef.current?.click()} className="w-full text-sm font-semibold text-ink border border-dashed border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">⬆ Upload letterhead image</button>
+              )}
+              <p className="text-[11px] text-text-muted mt-1">Uses your uploaded image as the header instead of the default Litson letterhead. PNG or JPG (e.g. a screenshot/export of the letterhead you want to match).</p>
+            </div>
+            <div className="border-t border-border-light -mx-6" />
             <div className="text-xs font-bold uppercase tracking-wider text-gold-muted">Letter Details</div>
 
             <div>
@@ -1028,6 +1084,31 @@ ${bodyHtml}
               Include Alex Little&rsquo;s signature image
             </label>
 
+            {/* Acknowledgment — a signature + date block for the addressee */}
+            <div className="border-t border-border-light -mx-6" />
+            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+              <input type="checkbox" checked={gen.ackEnabled}
+                onChange={e => {
+                  const on = e.target.checked;
+                  setGen(p => ({ ...p, ackEnabled: on, ackName: on && !p.ackName.trim() ? p.addressee.replace(/:$/, '').trim() : p.ackName }));
+                }} />
+              Add an acknowledgment line for the addressee to sign &amp; date
+            </label>
+            {gen.ackEnabled && (
+              <div className="grid grid-cols-2 gap-2 pl-6">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Acknowledged by</label>
+                  <input type="text" value={gen.ackName} onChange={e => setG('ackName', e.target.value)}
+                    placeholder="Employee name" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Title <span className="text-text-muted font-normal">(optional)</span></label>
+                  <input type="text" value={gen.ackTitle} onChange={e => setG('ackTitle', e.target.value)}
+                    placeholder="Paralegal" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+              </div>
+            )}
+
             <button onClick={() => setGen({ ...GEN_EMPTY, date: fmtLongDate(new Date()) })}
               className="w-full text-sm font-semibold text-text-muted hover:text-text-primary py-2 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border transition-colors">
               Reset
@@ -1037,15 +1118,22 @@ ${bodyHtml}
           {/* Letter preview panel */}
           <div className="space-y-3">
             <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
-              {/* Letterhead */}
-              <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
-                <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
-                  <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
-                  Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
+              {/* Letterhead — uploaded image, or the default Litson header */}
+              {gen.letterhead ? (
+                <div className="px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={gen.letterhead} alt="Letterhead" className="block w-full h-auto" />
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-start justify-between px-8 pt-7 pb-5 border-b border-[#e8e2d8]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={LOGO_B64} alt="Litson" width={200} height={67} className="block" />
+                  <div className="text-right text-[10px] text-text-muted leading-[1.8] font-sans mt-1">
+                    <span className="font-semibold text-[10.5px] text-text-primary">J. Alex Little</span><br />
+                    Founding &amp; Managing Partner<br />615.985.8189<br />alex@litson.co
+                  </div>
+                </div>
+              )}
 
               {/* Body */}
               <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
@@ -1082,6 +1170,22 @@ ${bodyHtml}
                   {gen.cc.split('\n').map(l => l.trim()).filter(Boolean).map((l, i) => (
                     <span key={i}>{i > 0 && <br />}{l}</span>
                   ))}
+                </div>
+              )}
+
+              {/* Acknowledgment / signature block for the addressee */}
+              {gen.ackEnabled && (
+                <div className="px-8 pb-6 pt-2 text-[13px]" style={{ fontFamily: BODY_FONT }}>
+                  <p className="mb-8">Acknowledged and agreed:</p>
+                  <div className="flex justify-between gap-8" style={{ maxWidth: '430px' }}>
+                    <div className="flex-1">
+                      <div className="border-t border-text-primary pt-1">{gen.ackName.trim() || gen.addressee.replace(/:$/, '').trim() || 'Name'}</div>
+                      {gen.ackTitle.trim() && <div className="text-text-muted text-[12px]">{gen.ackTitle}</div>}
+                    </div>
+                    <div style={{ width: '140px' }}>
+                      <div className="border-t border-text-primary pt-1">Date</div>
+                    </div>
+                  </div>
                 </div>
               )}
 
