@@ -202,14 +202,14 @@ export default function AccessClient() {
                   const canEdit = editing.editSections.includes(s.key);
                   return (
                     <label key={s.key} title={s.key === '/' ? 'Gives this person a Dashboard showing ONLY the onboarding/offboarding tasks assigned to them — no firm-wide KPIs, birthdays, or modules.' : undefined}
-                      className="flex items-center gap-2 text-sm bg-white border border-border-light rounded-ctrl px-3 py-2 cursor-pointer hover:border-ink">
+                      className={`flex items-center gap-2 text-sm bg-white border rounded-ctrl px-3 py-2 cursor-pointer hover:border-ink ${canEdit ? 'border-[#e0c48a] ring-1 ring-[#e0c48a]' : 'border-border-light'}`}>
                       <input type="checkbox" className="w-4 h-4 accent-[#1b2a3d] shrink-0" checked={viewing}
                         onChange={() => setEditing({ ...editing, sections: toggle(editing.sections, s.key), editSections: editing.editSections.filter(k => k !== s.key) })} />
                       <span className="truncate">{s.key === '/' ? 'Dashboard — My Tasks' : s.label}</span>
                       {viewing && (
                         <button type="button" onClick={e => { e.preventDefault(); setEditing({ ...editing, editSections: toggle(editing.editSections, s.key) }); }}
                           title={canEdit ? 'Can edit — they can add & change entries (initials, dates, notes). Click to make view-only.' : 'View-only — they can see but not change anything. Click to let them add & change entries.'}
-                          className={`ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${canEdit ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a]' : 'border-border-light text-text-muted hover:text-[#b07d2a] hover:border-[#e0c48a]'}`}>{canEdit ? '✎ Can edit' : '👁 View only'}</button>
+                          className={`ml-auto shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap transition-colors ${canEdit ? 'bg-[#b07d2a] border-[#b07d2a] text-white shadow-sm' : 'bg-white border-[#e0c48a] text-[#b07d2a] hover:bg-[#f7efe1]'}`}>{canEdit ? '✎ Can edit' : '👁 View only · make editable'}</button>
                       )}
                     </label>
                   );
