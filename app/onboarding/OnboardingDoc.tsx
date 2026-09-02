@@ -37,6 +37,7 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
   // but the assigned people can still mark their part done. So when locked:
   //   • Catie (full-access admin) can unlock to change anything.
   //   • Caitlin / Matthew / Ryan can still add their initials, date, and notes.
+  const [savedDefault, setSavedDefault] = useState(false);
   const locked = !!doc.locked;
   const cellRO = readOnly;                                    // initials / date / notes — always open (unless view-only)
   const assignRO = readOnly || lockAssignment || locked;     // assignee + deadline + structural edits
@@ -269,6 +270,12 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
             {!readOnly && !lockAssignment && (
               <button onClick={toggleLock} title={locked ? 'Unlock to allow edits' : 'Lock this document to prevent accidental edits'}
                 className={`text-[11px] font-semibold border px-2.5 py-1 rounded-ctrl ${locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a] hover:bg-[#f2e6cf]' : 'text-ink border-border-light hover:bg-canvas'}`}>{locked ? '🔒 Locked' : '🔓 Lock'}</button>
+            )}
+            {!assignRO && onTemplateSave && (
+              <button
+                onClick={() => { if (confirm(`Make ${rec.name}'s onboarding document the default for all new hires? This copies its task rows (not the entries) to the shared template.`)) { onTemplateSave(templateFromDoc(ref.current)); setSavedDefault(true); setTimeout(() => setSavedDefault(false), 2500); } }}
+                title="Copy this document's task rows to the shared new-hire template so every future hire starts from this format"
+                className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">{savedDefault ? '✓ Set as default' : '★ Set as new-hire default'}</button>
             )}
             {!assignRO && <button onClick={clearEntries} title="Reset this hire's document to a blank copy of the shared structure (rows stay, entries cleared)" className="text-[11px] font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">↺ Clear all entries</button>}
             <button onClick={printDoc} className="text-[11px] font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
