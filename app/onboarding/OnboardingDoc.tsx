@@ -317,16 +317,17 @@ export default function OnboardingDoc({ rec, readOnly, lockAssignment, assignees
         )}
       </div>
 
-      {/* Bulk move: select rows in any section, then send them to another */}
+      {/* Bulk move: select rows in any section, then send them to another. A
+          fixed floating bar so it stays visible no matter how far you scroll. */}
       {!assignRO && selIds.size > 0 && (
-        <div className="sticky top-0 z-20 bg-white border-2 border-ink rounded-card px-4 py-3 flex items-center gap-2 flex-wrap shadow-card">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-white border-2 border-ink rounded-card px-4 py-3 flex items-center gap-2 flex-wrap shadow-xl max-w-[95vw]">
           <span className="text-sm font-semibold text-text-primary">{selIds.size} selected</span>
           <span className="text-xs text-text-muted">Move to:</span>
           {SECTION_MOVE.map(s => (
             <button key={s.key} onClick={() => moveSelectedTo(s.key)}
-              className="text-xs font-semibold text-ink border border-border-light bg-white px-3 py-1.5 rounded-ctrl hover:bg-canvas">{s.label}</button>
+              className="text-xs font-semibold text-white bg-ink px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">{s.label}</button>
           ))}
-          <button onClick={() => setSelIds(new Set())} className="ml-auto text-xs font-semibold text-text-muted hover:text-ink">Clear</button>
+          <button onClick={() => setSelIds(new Set())} className="ml-1 text-xs font-semibold text-text-muted hover:text-ink">Clear</button>
         </div>
       )}
 
