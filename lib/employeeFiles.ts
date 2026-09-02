@@ -205,9 +205,22 @@ export async function syncAllForProfile(profileId: string): Promise<{ coaching: 
       const [emp] = await sql`SELECT id FROM employees WHERE lower(name) = ${key} LIMIT 1` as any[];
       if (emp) { const r = await syncReviewsToEmployeeFile(emp.id, profileId); out.reviews = r.imported; }
     } catch { /* best-effort */ }
+
+    // 4) SMART Goals — attach / refresh every form's branded PDF. Matched with
+    //    robust name normalization so hidden characters / spacing still match.
+    try {
+      const sg = await sql`SELECT * FROM smart_goals` as any[];
+      for (const row of sg.filter(r => normName(r.employee) === key)) {
+        await upsertSmartGoalsFile(profileId, { ...row, goals: parseGoalsJson(row.goals), open_items: parseArrJson(row.open_items), checkins: parseArrJson(row.checkins) });
+      }
+    } catch { /* best-effort */ }
   } catch { /* best-effort */ }
   return out;
 }
+
+// Lightweight JSON parsers (kept local so this module has no client imports).
+function parseGoalsJson(raw: any): any[] { try { const a = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(a) ? a : []; } catch { return []; } }
+function parseArrJson(raw: any): any[] { try { const a = typeof raw === 'string' ? JSON.parse(raw) : raw; return Array.isArray(a) ? a : []; } catch { return []; } }
 
 // Best-effort: when a coaching form is signed, make sure the signed PDF is on
 // file for that employee (creating the profile if needed).
