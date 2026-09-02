@@ -12,7 +12,9 @@ interface Item {
   id: string; guide: string; kind: 'section' | 'schedule' | 'sop' | 'tool' | 'table' | 'task' | 'blocklabel' | 'blockhidden';
   title: string; body: string | null; day: string | null; assignee: string | null;
   location: string | null; url: string | null; owner: string | null; done: boolean; sort_order: number;
+  section?: string | null; // checklist section id this task belongs to (null = default Tasks)
 }
+interface ChecklistSection { id: string; name: string; note: string }
 // Render section text with clickable links and **bold**.
 // Supports [Label](https://url) for a friendly label; bare URLs are shortened.
 function linkify(text: string | null) {
@@ -1059,23 +1061,81 @@ export default function OnboardingClient() {
   // within the dragged item's group (Tools vs Tasks); order is renumbered with
   // Tools first, then Tasks, matching how the checklist is displayed.
   const [taskDragId, setTaskDragId] = useState<string | null>(null);
+  // Renumber the whole checklist in visual order (Tools first, then each named
+  // section in order, then the default Tasks bucket), placing `srcId` into
+  // `sectionId` — before `beforeId` when given, else at the end of that group.
+  async function placeTask(srcId: string, sectionId: string | null, beforeId?: string) {
+    const all = items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE).sort((a, b) => a.sort_order - b.sort_order);
+    const isTool = isToolTitle(all.find(i => i.id === srcId)?.title ?? '');
+    const validSection = (s: any) => (s && clSections.some(cs => cs.id === s)) ? s : null;
+    const toolIds = all.filter(i => isToolTitle(i.title)).map(i => i.id);
+    const nonTool = all.filter(i => !isToolTitle(i.title));
+    // Tools reorder among themselves; a non-tool task moves into sectionId.
+    let tools = toolIds.slice();
+    if (isTool) { tools = tools.filter(id => id !== srcId); const at = beforeId && tools.includes(beforeId) ? tools.indexOf(beforeId) : tools.length; tools.splice(at, 0, srcId); }
+    const order: string[] = [...tools];
+    const buckets = [...clSections.map(s => s.id), null as string | null];
+    for (const sid of buckets) {
+      let ids = nonTool.filter(i => i.id !== srcId && validSection((i as any).section) === sid).map(i => i.id);
+      if (!isTool && (validSection(sectionId)) === sid) {
+        const at = beforeId && ids.includes(beforeId) ? ids.indexOf(beforeId) : ids.length;
+        ids.splice(at, 0, srcId);
+      }
+      order.push(...ids);
+    }
+    setItems(prev => prev.map(i => {
+      const idx = order.indexOf(i.id); if (idx < 0) return i;
+      return { ...i, sort_order: idx, ...(i.id === srcId && !isTool ? { section: validSection(sectionId) } : {}) };
+    }));
+    if (!draftMode) for (let i = 0; i < order.length; i++) {
+      const body: any = { id: order[i], sort_order: i };
+      if (order[i] === srcId && !isTool) body.section = validSection(sectionId);
+      await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+  }
   async function reorderChecklist(targetId: string) {
     if (!taskDragId || taskDragId === targetId) { setTaskDragId(null); return; }
     const src = items.find(i => i.id === taskDragId), tgt = items.find(i => i.id === targetId);
-    if (!src || !tgt || src.kind !== 'task' || tgt.kind !== 'task' || src.guide !== CHECKLIST_GUIDE || tgt.guide !== CHECKLIST_GUIDE) { setTaskDragId(null); return; }
-    // Only reorder within the same group (both Tools or both Tasks).
-    if (isToolTitle(src.title) !== isToolTitle(tgt.title)) { setTaskDragId(null); return; }
-    const all = items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE).sort((a, b) => a.sort_order - b.sort_order);
-    let tools = all.filter(i => isToolTitle(i.title)).map(i => i.id);
-    let tasks = all.filter(i => !isToolTitle(i.title)).map(i => i.id);
-    const grp = isToolTitle(src.title) ? tools : tasks;
-    grp.splice(grp.indexOf(taskDragId), 1);
-    grp.splice(grp.indexOf(targetId), 0, taskDragId);
-    const ordered = [...tools, ...tasks];
-    const updated = ordered.map((id, i) => ({ id, sort_order: i }));
-    setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
+    if (!src || !tgt || src.kind !== 'task' || tgt.kind !== 'task') { setTaskDragId(null); return; }
+    if (isToolTitle(src.title) !== isToolTitle(tgt.title)) { setTaskDragId(null); return; } // don't mix Tools and Tasks
+    const sec = isToolTitle(src.title) ? null : (((tgt as any).section) ?? null);
+    await placeTask(taskDragId, sec, targetId);
     setTaskDragId(null);
-    if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+  }
+  // Drop a dragged task onto a section header → move it into that section.
+  async function dropTaskToSection(sectionId: string | null) {
+    if (!taskDragId) return;
+    const src = items.find(i => i.id === taskDragId);
+    if (src && !isToolTitle(src.title)) await placeTask(taskDragId, sectionId);
+    setTaskDragId(null);
+  }
+
+  // Named checklist sections (shared): [{ id, name, note }].
+  const [clSections, setClSections] = useState<ChecklistSection[]>([]);
+  useEffect(() => { fetch('/api/onboarding/checklist-sections').then(r => r.json()).then(d => setClSections(d.sections ?? [])).catch(() => {}); }, []);
+  async function saveSections(next: ChecklistSection[]) {
+    setClSections(next);
+    await fetch('/api/onboarding/checklist-sections', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sections: next }) });
+  }
+  function addChecklistSection() {
+    const name = window.prompt('New section name (e.g. Pre-onboarding tasks, HR tasks, Meetings scheduled):')?.trim();
+    if (!name) return;
+    saveSections([...clSections, { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, note: '' }]);
+  }
+  const renameSection = (id: string, name: string) => saveSections(clSections.map(s => s.id === id ? { ...s, name } : s));
+  const noteSection = (id: string, note: string) => saveSections(clSections.map(s => s.id === id ? { ...s, note } : s));
+  function deleteSection(id: string) {
+    if (!confirm('Delete this section? Its tasks move back to the default Tasks group.')) return;
+    saveSections(clSections.filter(s => s.id !== id));
+    // Unassign any tasks in this section (best-effort).
+    for (const t of tasksFor().filter(t => (t as any).section === id)) patch(t.id, { section: null } as any);
+  }
+  function moveSectionCl(id: string, dir: -1 | 1) {
+    const i = clSections.findIndex(s => s.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= clSections.length) return;
+    const next = [...clSections];[next[i], next[j]] = [next[j], next[i]];
+    saveSections(next);
   }
   // Move a section up (dir -1) or down (dir +1) by swapping order with its neighbour.
   async function moveSection(id: string, dir: -1 | 1) {
@@ -2279,7 +2339,7 @@ export default function OnboardingClient() {
                         return (
                           <div key={t.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group ${taskDragId === t.id ? 'opacity-50' : ''}`}
                             onDragOver={canReorder ? (e => e.preventDefault()) : undefined}
-                            onDrop={canReorder ? (() => reorderChecklist(t.id)) : undefined}>
+                            onDrop={canReorder ? (e => { e.stopPropagation(); reorderChecklist(t.id); }) : undefined}>
                             {canReorder && (
                               <span draggable onDragStart={() => setTaskDragId(t.id)} onDragEnd={() => setTaskDragId(null)}
                                 title="Drag to reorder" className="cursor-grab active:cursor-grabbing text-text-faint hover:text-text-muted select-none shrink-0 text-sm leading-none">⠿</span>
@@ -2297,19 +2357,60 @@ export default function OnboardingClient() {
                       };
                       const toolItems = list.filter(t => isToolTitle(t.title));
                       const taskItems = list.filter(t => !isToolTitle(t.title));
+                      const validSec = (s: any) => (s && clSections.some(cs => cs.id === s)) ? s : null;
+                      const inSection = (sid: string | null) => taskItems.filter(t => validSec((t as any).section) === sid);
+                      const dropZone = (sid: string | null) => canReorder ? { onDragOver: (e: any) => e.preventDefault(), onDrop: () => dropTaskToSection(sid) } : {};
                       return (
                         <>
+                          {/* Tools */}
                           <div className="flex items-center justify-between px-2 mt-1 mb-0.5">
                             <div className="text-[10px] font-bold uppercase tracking-wider text-[#6b4f8a]">🧰 Tools {toolItems.length > 0 && <span className="text-text-faint">({toolItems.filter(t => prog[t.title]).length}/{toolItems.length})</span>}</div>
                             <button onClick={addToolsToChecklist} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline">＋ Add setup tools</button>
                           </div>
                           {toolItems.map(renderRow)}
                           {toolItems.length === 0 && <p className="text-xs text-text-faint px-2 py-1">No tools yet — click “Add setup tools” to list Briefcatch, Clio, Dropbox, etc.</p>}
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted px-2 mt-3 mb-0.5">✓ Tasks {taskItems.length > 0 && <span className="text-text-faint">({taskItems.filter(t => prog[t.title]).length}/{taskItems.length})</span>}</div>
-                          {taskItems.map(renderRow)}
+
+                          {/* Named sections (Pre-onboarding, HR tasks, Meetings scheduled, …) */}
+                          {clSections.map((sec, si) => {
+                            const rows = inSection(sec.id);
+                            return (
+                              <div key={sec.id} className="mt-3 rounded-ctrl" {...dropZone(sec.id)}>
+                                <div className="flex items-center gap-2 px-2 mb-0.5">
+                                  <input value={sec.name} disabled={!canReorder} onChange={e => renameSection(sec.id, e.target.value)}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-text-primary bg-transparent focus:outline-none flex-1 min-w-0" />
+                                  <span className="text-text-faint text-[10px] shrink-0">{rows.length > 0 && `(${rows.filter(t => prog[t.title]).length}/${rows.length})`}</span>
+                                  {canReorder && (
+                                    <span className="flex items-center gap-1 shrink-0">
+                                      <button onClick={() => moveSectionCl(sec.id, -1)} disabled={si === 0} title="Move section up" className="text-[11px] text-text-faint hover:text-ink disabled:opacity-30">▲</button>
+                                      <button onClick={() => moveSectionCl(sec.id, 1)} disabled={si === clSections.length - 1} title="Move section down" className="text-[11px] text-text-faint hover:text-ink disabled:opacity-30">▼</button>
+                                      <button onClick={() => deleteSection(sec.id)} title="Delete section" className="text-[11px] text-text-muted hover:text-litred-alt">✕</button>
+                                    </span>
+                                  )}
+                                </div>
+                                {canReorder ? (
+                                  <textarea value={sec.note} onChange={e => noteSection(sec.id, e.target.value)} rows={1} placeholder="Add a note for this section (optional)…"
+                                    className="w-full text-[11px] text-text-muted italic bg-transparent px-2 mb-1 focus:outline-none resize-y" />
+                                ) : (sec.note && <p className="text-[11px] text-text-muted italic px-2 mb-1 whitespace-pre-wrap">{sec.note}</p>)}
+                                {rows.map(renderRow)}
+                                {rows.length === 0 && <p className="text-xs text-text-faint px-2 py-1">Drag tasks here, or add one below.</p>}
+                                {canReorder && <button onClick={() => add('task', { title: 'New task', owner: 'HR', section: sec.id } as any, CHECKLIST_GUIDE)} className="text-[11px] font-semibold text-[#3f6b8a] hover:underline px-2">+ Add to {sec.name || 'section'}</button>}
+                              </div>
+                            );
+                          })}
+
+                          {/* Default Tasks bucket (unsectioned) */}
+                          {(() => { const rows = inSection(null); return (
+                            <div className="mt-3 rounded-ctrl" {...dropZone(null)}>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted px-2 mb-0.5">✓ Tasks {rows.length > 0 && <span className="text-text-faint">({rows.filter(t => prog[t.title]).length}/{rows.length})</span>}</div>
+                              {rows.map(renderRow)}
+                            </div>
+                          ); })()}
+
                           {list.length === 0 && <p className="text-sm text-text-muted px-2 py-2">No checklist items yet.</p>}
-                          <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)}
-                            className="w-full text-left px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
+                          <div className="flex items-center gap-4 px-2 mt-2">
+                            <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)} className="text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
+                            {canReorder && <button onClick={addChecklistSection} className="text-sm font-semibold text-[#6b4f8a] hover:underline">＋ Add section</button>}
+                          </div>
                         </>
                       );
                     })()}

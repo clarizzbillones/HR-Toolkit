@@ -13,8 +13,13 @@ async function ensureTable() {
     owner text, done boolean DEFAULT false, sort_order int DEFAULT 0,
     created_at timestamptz DEFAULT now()
   )`;
-  for (const c of ['guide', 'day', 'assignee', 'location', 'url', 'owner'])
+  for (const c of ['guide', 'day', 'assignee', 'location', 'url', 'owner', 'section'])
     await sql`ALTER TABLE onboarding_items ADD COLUMN IF NOT EXISTS ${sql(c)} text`;
+  // Shared onboarding-checklist sections (named groups + optional notes), stored
+  // on the app_settings singleton.
+  await sql`CREATE TABLE IF NOT EXISTS app_settings (id TEXT PRIMARY KEY)`;
+  await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS onboarding_checklist_sections TEXT`;
+  await sql`INSERT INTO app_settings (id) VALUES ('singleton') ON CONFLICT (id) DO NOTHING`;
   await sql`UPDATE onboarding_items SET guide = 'General' WHERE guide IS NULL`;
   // One-time repair: an earlier POST handler coerced 'blockhidden'/'blocklabel'
   // items to 'section' (they weren't in the allowed-kind list). Reclassify any
@@ -473,8 +478,8 @@ export async function POST(req: Request) {
   const kind = ['section', 'schedule', 'sop', 'tool', 'table', 'task', 'blocklabel', 'blockhidden'].includes(body.kind) ? body.kind : 'section';
   const [{ mx }] = await sql`SELECT COALESCE(MAX(sort_order), -1)::int as mx FROM onboarding_items WHERE guide = ${guide} AND kind = ${kind}`;
   const id = cuid();
-  await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, sort_order)
-    VALUES (${id}, ${guide}, ${kind}, ${body.title ?? ''}, ${body.body ?? null}, ${body.day ?? null}, ${body.assignee ?? null}, ${body.location ?? null}, ${body.url ?? null}, ${body.owner ?? null}, ${(mx ?? -1) + 1})`;
+  await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, day, assignee, location, url, owner, section, sort_order)
+    VALUES (${id}, ${guide}, ${kind}, ${body.title ?? ''}, ${body.body ?? null}, ${body.day ?? null}, ${body.assignee ?? null}, ${body.location ?? null}, ${body.url ?? null}, ${body.owner ?? null}, ${body.section ?? null}, ${(mx ?? -1) + 1})`;
   const [item] = await sql`SELECT * FROM onboarding_items WHERE id = ${id}`;
   return NextResponse.json({ item }, { status: 201 });
 }
@@ -483,7 +488,7 @@ export async function PATCH(req: Request) {
   await ensureTable();
   const { id, ...f } = await req.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-  for (const key of ['title', 'body', 'day', 'assignee', 'location', 'url', 'owner', 'done', 'sort_order'] as const) {
+  for (const key of ['title', 'body', 'day', 'assignee', 'location', 'url', 'owner', 'section', 'done', 'sort_order'] as const) {
     if (f[key] !== undefined) await sql`UPDATE onboarding_items SET ${sql(key)} = ${f[key]} WHERE id = ${id}`;
   }
   const [item] = await sql`SELECT * FROM onboarding_items WHERE id = ${id}`;
