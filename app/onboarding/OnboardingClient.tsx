@@ -503,7 +503,7 @@ export default function OnboardingClient() {
 
   // The onboarding checklist is one global list shared by every new hire,
   // independent of which guide they're on (stored under CHECKLIST_GUIDE).
-  function tasksFor(_g?: string) { return items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE); }
+  function tasksFor(_g?: string) { return items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE).sort((a, b) => a.sort_order - b.sort_order); }
   const parseProg = (p: any) => { try { return JSON.parse(p ?? '{}') || {}; } catch { return {}; } };
   function progressOf(person: any) {
     // Combine the guide checklist with the person's own plan/to-dos, so re-hires
@@ -1053,6 +1053,28 @@ export default function OnboardingClient() {
     const updated = ids.map((id, i) => ({ id, sort_order: i }));
     setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
     setSchedDragId(null);
+    if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+  }
+  // Drag & drop reordering for the shared onboarding checklist. Reorder happens
+  // within the dragged item's group (Tools vs Tasks); order is renumbered with
+  // Tools first, then Tasks, matching how the checklist is displayed.
+  const [taskDragId, setTaskDragId] = useState<string | null>(null);
+  async function reorderChecklist(targetId: string) {
+    if (!taskDragId || taskDragId === targetId) { setTaskDragId(null); return; }
+    const src = items.find(i => i.id === taskDragId), tgt = items.find(i => i.id === targetId);
+    if (!src || !tgt || src.kind !== 'task' || tgt.kind !== 'task' || src.guide !== CHECKLIST_GUIDE || tgt.guide !== CHECKLIST_GUIDE) { setTaskDragId(null); return; }
+    // Only reorder within the same group (both Tools or both Tasks).
+    if (isToolTitle(src.title) !== isToolTitle(tgt.title)) { setTaskDragId(null); return; }
+    const all = items.filter(i => i.kind === 'task' && i.guide === CHECKLIST_GUIDE).sort((a, b) => a.sort_order - b.sort_order);
+    let tools = all.filter(i => isToolTitle(i.title)).map(i => i.id);
+    let tasks = all.filter(i => !isToolTitle(i.title)).map(i => i.id);
+    const grp = isToolTitle(src.title) ? tools : tasks;
+    grp.splice(grp.indexOf(taskDragId), 1);
+    grp.splice(grp.indexOf(targetId), 0, taskDragId);
+    const ordered = [...tools, ...tasks];
+    const updated = ordered.map((id, i) => ({ id, sort_order: i }));
+    setItems(prev => prev.map(i => { const u = updated.find(x => x.id === i.id); return u ? { ...i, sort_order: u.sort_order } : i; }));
+    setTaskDragId(null);
     if (!draftMode) for (const u of updated) await fetch('/api/onboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
   }
   // Move a section up (dir -1) or down (dir +1) by swapping order with its neighbour.
@@ -2250,17 +2272,24 @@ export default function OnboardingClient() {
                       <span className="text-[10px] text-text-faint">Shared checklist — edits apply to every new hire</span>
                     </div>
                     {(() => {
+                      const canReorder = !me?.restricted;
                       const renderRow = (t: any) => {
                         const isDone = !!prog[t.title];
                         const isHR = (t.owner ?? '') === 'HR';
                         return (
-                          <div key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group">
+                          <div key={t.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group ${taskDragId === t.id ? 'opacity-50' : ''}`}
+                            onDragOver={canReorder ? (e => e.preventDefault()) : undefined}
+                            onDrop={canReorder ? (() => reorderChecklist(t.id)) : undefined}>
+                            {canReorder && (
+                              <span draggable onDragStart={() => setTaskDragId(t.id)} onDragEnd={() => setTaskDragId(null)}
+                                title="Drag to reorder" className="cursor-grab active:cursor-grabbing text-text-faint hover:text-text-muted select-none shrink-0 text-sm leading-none">⠿</span>
+                            )}
                             <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
                             <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
                               className={`flex-1 text-sm bg-transparent focus:outline-none ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`} />
                             <button onClick={() => patch(t.id, { owner: isHR ? '' : 'HR' })} title="Toggle who owns this task"
                               className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${isHR ? 'bg-[#e9f0f5] text-[#3f6b8a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>
-                              {isHR ? 'HR' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}
+                              {isHR ? 'Litson' : (person.worker_type === 'Contractor' ? 'Contractor' : 'New Hire')}
                             </button>
                             <button onClick={() => remove(t.id)} title="Delete task" className="text-xs text-text-muted hover:text-litred-alt opacity-0 group-hover:opacity-100 shrink-0">✕</button>
                           </div>
