@@ -62,6 +62,16 @@ function fmtDate(iso: string | null | undefined) {
   const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// A label that refers to pay/salary/compensation, so its value shows as money.
+const isSalaryLabel = (l: any) => /salar|compensation|\bpay\b|wage/i.test(String(l ?? ''));
+// Format a salary-ish value as "$120,000". Leaves non-numeric text (e.g. "TBD")
+// and already-formatted ("$120k") values untouched.
+function fmtMoney(v: any): string {
+  const s = String(v ?? '').trim();
+  if (!s || s.startsWith('$') || !/\d/.test(s)) return s;
+  const n = Number(s.replace(/[^0-9.]/g, ''));
+  return isFinite(n) ? '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : s;
+}
 const EMPTY_P = { name: '', position: '', department: '', email: '', phone: '', start_date: '', details: '', photo: '' };
 const EMPTY_D = { category: 'Remark / Timeline', title: '', doc_date: '', summary: '', what_we_did: '', next_steps: '', author: '' };
 
@@ -485,7 +495,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                                 <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-1">{g.heading}</div>
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                                   {shown.map(([l, k]) => (
-                                    <div key={k}><span className="text-text-muted">{l}:</span> {k === 'dob' ? fmtDate(selected[k] as string) : String(selected[k])}</div>
+                                    <div key={k}><span className="text-text-muted">{l}:</span> {k === 'dob' ? fmtDate(selected[k] as string) : k === 'salary' ? fmtMoney(selected[k]) : String(selected[k])}</div>
                                   ))}
                                 </div>
                               </div>
@@ -498,7 +508,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                           <div className="text-[10px] font-bold uppercase tracking-widest text-gold-muted mb-1">More from Staffing</div>
                           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                             {extraPairs(selected.extra).map(([l, v]) => (
-                              <div key={l}><span className="text-text-muted">{l}:</span> {v}</div>
+                              <div key={l}><span className="text-text-muted">{l}:</span> {isSalaryLabel(l) ? fmtMoney(v) : v}</div>
                             ))}
                           </div>
                         </div>
