@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { parseGoals, parseItems, parseCheckins } from '@/lib/smartGoals';
+import { syncSmartGoalsToEmployeeFile } from '@/lib/employeeFiles';
 
 async function ensure() {
   await sql`CREATE TABLE IF NOT EXISTS smart_goals (
@@ -34,7 +35,9 @@ export async function POST(req: Request) {
   await sql`INSERT INTO smart_goals (id, employee, employee_email, reviewer, reviewer_position, review_date, goals_prepared, milestones, goals, open_items, checkins, status)
     VALUES (${id}, ${b.employee ?? ''}, ${b.employee_email ?? ''}, ${b.reviewer ?? ''}, ${b.reviewer_position ?? ''}, ${b.review_date ?? null}, ${b.goals_prepared ?? null}, ${b.milestones ?? ''}, ${JSON.stringify(b.goals ?? [])}, ${JSON.stringify(b.open_items ?? [])}, ${JSON.stringify(b.checkins ?? [])}, ${b.status ?? 'Draft'})`;
   const [row] = await sql`SELECT * FROM smart_goals WHERE id = ${id}` as any[];
-  return NextResponse.json({ row: parse(row) }, { status: 201 });
+  const parsed = parse(row);
+  await syncSmartGoalsToEmployeeFile(parsed); // file to the employee's Employee File
+  return NextResponse.json({ row: parsed }, { status: 201 });
 }
 
 export async function PATCH(req: Request) {
@@ -49,7 +52,9 @@ export async function PATCH(req: Request) {
   if ('status' in b) await sql`UPDATE smart_goals SET status = ${b.status ?? 'Draft'} WHERE id = ${b.id}`;
   const [row] = await sql`SELECT * FROM smart_goals WHERE id = ${b.id}` as any[];
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ row: parse(row) });
+  const parsed = parse(row);
+  await syncSmartGoalsToEmployeeFile(parsed); // keep the Employee File copy current
+  return NextResponse.json({ row: parsed });
 }
 
 export async function DELETE(req: Request) {

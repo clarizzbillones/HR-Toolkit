@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { sql, cuid } from '@/lib/db';
 import { sendMailAsApp } from '@/lib/graph';
 import { coachingEmailHtml, parseSignatories, type Signatory } from '@/lib/coachingDoc';
+import { syncCoachingToEmployeeFile } from '@/lib/employeeFiles';
 
 const lc = (s: any) => String(s ?? '').trim().toLowerCase();
 
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
       ${b.coaching_type ?? 'Weekly'}, ${b.date ?? null}, ${b.topic ?? ''}, ${b.notes ?? ''}, ${b.action_items ?? ''},
       ${JSON.stringify(b.signatories ?? [])}, ${b.follow_up_date ?? null}, ${b.status ?? 'Draft'})`;
   const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${id}`;
+  await syncCoachingToEmployeeFile(row); // file to the employee's Employee File on save
   return NextResponse.json({ row }, { status: 201 });
 }
 
@@ -110,6 +112,7 @@ export async function PATCH(req: Request) {
     WHERE id = ${b.id}`;
   const [row] = await sql`SELECT * FROM coaching_notes WHERE id = ${b.id}` as any[];
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  await syncCoachingToEmployeeFile(row); // keep the Employee File copy current
   return NextResponse.json({ row: { ...row, sign_token: row.sign_token ? true : null } });
 }
 

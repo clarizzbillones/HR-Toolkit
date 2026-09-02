@@ -174,6 +174,45 @@ export async function coachingPdfDataUrl(row: any): Promise<string> {
 
 // A branded PDF of the severance worksheet, stamped approved. `approver` carries
 // the e-approval details captured on the sign page.
+// Branded PDF for a SMART Goals form → filed to the employee's Employee File.
+export async function smartGoalsPdfDataUrl(row: any): Promise<string> {
+  const d = await Doc.create('SMART Performance Development Goals', '');
+  d.label('Employee', String(row.employee ?? ''));
+  const two = (a: [string, string], b: [string, string]) => { d.label(a[0], a[1]); d.label(b[0], b[1]); };
+  two(['Reviewer', String(row.reviewer ?? '')], ['Review date', fmtLong(row.review_date)]);
+  if (row.goals_prepared) d.label('Goals prepared', fmtLong(row.goals_prepared));
+  d.rule();
+  if (row.milestones && String(row.milestones).trim()) { d.para(`Milestones: ${String(row.milestones)}`, { size: 11, color: GREEN }); d.gap(6); }
+
+  const SMART: [string, string][] = [['specific', 'Specific'], ['measurable', 'Measurable'], ['achievable', 'Achievable'], ['relevant', 'Relevant'], ['timeBound', 'Time-bound']];
+  (row.goals ?? []).forEach((g: any, i: number) => {
+    d.gap(8);
+    d.para(String(g.title || `Goal ${i + 1}`), { font: d.bold, size: 12.5 });
+    for (const [key, label] of SMART) {
+      const v = String(g[key] ?? '').trim();
+      if (v) { d.para(`${label}:`, { font: d.bold, size: 10.5, color: MUTED }); d.para(v, { indent: 10 }); }
+    }
+  });
+
+  const items = (row.open_items ?? []).map((s: any) => String(s).trim()).filter(Boolean);
+  if (items.length) {
+    d.gap(10); d.para('OPEN ITEMS FOR REVIEWER', { font: d.bold, size: 8, color: MUTED });
+    items.forEach((it: string, i: number) => d.para(`${i + 1}. ${it}`, { indent: 10 }));
+  }
+
+  const checks = (row.checkins ?? []).filter((c: any) => (c.label && String(c.label).trim()) || (c.due && String(c.due).trim()) || (c.progress && String(c.progress).trim()));
+  if (checks.length) {
+    d.gap(12); d.para('FOLLOW-UP & PROGRESS', { font: d.bold, size: 8, color: MUTED }); d.gap(2);
+    for (const c of checks) {
+      const head = [String(c.label || '').trim() || 'Benchmark', c.due ? `Due ${fmtLong(c.due)}` : '', c.status ? `(${c.status})` : ''].filter(Boolean).join(' — ');
+      d.para(head, { font: d.bold, size: 11 });
+      if (c.progress && String(c.progress).trim()) d.para(String(c.progress), { indent: 10, size: 10.5 });
+      d.gap(4);
+    }
+  }
+  return dataUrl(await d.bytes());
+}
+
 export async function severancePdfDataUrl(p: any, approver?: { name?: string; signature_name?: string | null; signed_at?: string | null }): Promise<string> {
   const d = await Doc.create('Severance Calculation Worksheet (C1)', '');
   d.label('Employee', String(p.employee ?? ''));

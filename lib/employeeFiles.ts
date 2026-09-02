@@ -3,7 +3,7 @@
 // that fires when a coaching form becomes fully signed.
 
 import { sql, cuid } from '@/lib/db';
-import { coachingPdfDataUrl, reviewSummaryPdfDataUrl } from '@/lib/employeePdf';
+import { coachingPdfDataUrl, reviewSummaryPdfDataUrl, smartGoalsPdfDataUrl } from '@/lib/employeePdf';
 import { staffToProfile } from '@/lib/employeeProfile';
 
 // Robust name key for matching Staffing ↔ Employee File profiles: unicode-
@@ -218,4 +218,32 @@ export async function syncCoachingToEmployeeFile(c: any): Promise<void> {
     if (!profile) return;
     await upsertCoachingFile(profile.id, c);
   } catch { /* best-effort — never block signing */ }
+}
+
+// File a SMART Goals form into the employee's Employee File (category
+// Performance). Keyed by source_ref so re-saving updates rather than dupes.
+export async function upsertSmartGoalsFile(profileId: string, row: any): Promise<boolean> {
+  const ref = `smart-goals:${row.id}`;
+  const title = `SMART Goals${row.review_date ? ` — ${String(row.review_date).slice(0, 10)}` : ''}`;
+  const summary = [`${(row.goals ?? []).length} goal(s).`, row.milestones ? `Milestones: ${row.milestones}` : ''].filter(Boolean).join('\n');
+  const pdfUrl = await smartGoalsPdfDataUrl(row);
+  const attName = `SMART-Goals-${String(row.employee || 'form').replace(/[^\w]+/g, '-')}-${String(row.review_date ?? '').slice(0, 10) || 'form'}.pdf`;
+  const [exists] = await sql`SELECT id FROM employee_files WHERE profile_id = ${profileId} AND source_ref = ${ref} LIMIT 1` as any[];
+  if (exists) {
+    await sql`UPDATE employee_files SET title = ${title}, doc_date = ${row.review_date ?? null}, summary = ${summary},
+      author = ${row.reviewer ?? ''}, attachment_name = ${attName}, attachment_data = ${pdfUrl} WHERE id = ${exists.id}`;
+    return false;
+  }
+  await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
+    VALUES (${cuid()}, ${profileId}, 'Performance', ${title}, ${row.review_date ?? null}, ${summary}, ${''}, ${''}, ${row.reviewer ?? ''}, ${attName}, ${pdfUrl}, ${ref})`;
+  return true;
+}
+
+export async function syncSmartGoalsToEmployeeFile(row: any): Promise<void> {
+  try {
+    await ensureFiles();
+    const profile = await findOrCreateProfileByName(row.employee);
+    if (!profile) return;
+    await upsertSmartGoalsFile(profile.id, row);
+  } catch { /* best-effort — never block saving */ }
 }
