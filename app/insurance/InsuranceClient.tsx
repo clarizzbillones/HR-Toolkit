@@ -129,11 +129,13 @@ ${catBlocks}${openHtml}${exclHtml}
     const header = ['Insurance Type', 'Carrier', 'Policy Number', 'Broker / Agency', 'Broker Contact', 'Contact Info', 'Effective Date', 'Renews', 'Annual Premium', 'Notes'];
     const NC = header.length;
     const cell = (v: any, s?: any) => ({ v: v ?? '', t: 's', s });
-    const titleStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: GOLD }, bold: true, sz: 15 }, alignment: { vertical: 'center' } };
-    const subStyle = { font: { color: { rgb: MUTED }, italic: true, sz: 10 } };
-    const headStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 10 }, alignment: { wrapText: true, vertical: 'center' } };
-    const catStyle = (hex: string) => ({ fill: { fgColor: { rgb: hex } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 11 } });
-    const dataStyle = { alignment: { vertical: 'top', wrapText: true }, font: { sz: 10 } };
+    const bd = { style: 'thin', color: { rgb: 'E6DDCD' } };
+    const border = { top: bd, bottom: bd, left: bd, right: bd };
+    const titleStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: GOLD }, bold: true, sz: 16 }, alignment: { vertical: 'center' } };
+    const subStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: 'B9C4D2' }, italic: true, sz: 10 }, alignment: { vertical: 'center' } };
+    const headStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 10 }, alignment: { wrapText: true, vertical: 'center' }, border };
+    const catStyle = (hex: string) => ({ fill: { fgColor: { rgb: hex } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 11 }, alignment: { vertical: 'center' } });
+    const dataStyle = { alignment: { vertical: 'top', wrapText: true }, font: { sz: 10 }, border };
 
     const rows: any[][] = [];
     rows.push([cell('Litson PLLC — Insurance Master List', titleStyle), ...Array(NC - 1).fill(cell('', titleStyle))]);
@@ -149,12 +151,15 @@ ${catBlocks}${openHtml}${exclHtml}
       }
     }
     const ws1 = XLSX.utils.aoa_to_sheet(rows);
-    ws1['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 46 }];
+    ws1['!cols'] = [{ wch: 32 }, { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 13 }, { wch: 18 }, { wch: 18 }, { wch: 50 }];
+    // Taller banner + category rows; a comfortable default for the rest.
+    ws1['!rows'] = rows.map((_, i) => i === 0 ? { hpt: 26 } : i === 1 ? { hpt: 16 } : catRowIdx.includes(i) ? { hpt: 20 } : { hpt: 30 });
     ws1['!merges'] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: NC - 1 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: NC - 1 } },
       ...catRowIdx.map(r => ({ s: { r, c: 0 }, e: { r, c: NC - 1 } })),
     ];
+    ws1['!freeze'] = { xSplit: 0, ySplit: 4, topLeftCell: 'A5', activePane: 'bottomLeft', state: 'frozen' };
 
     const f2: any[][] = [
       [cell('Open Items & Things Left Off the Master List', catStyle(NAVY)), cell('', catStyle(NAVY))],
