@@ -22,6 +22,7 @@ const navItems = [
   { href: '/employee-files', label: 'Employee Files' },
   { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
   { href: '/offboarding', label: 'Offboarding' },
+  { href: '/insurance', label: 'Insurance' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
