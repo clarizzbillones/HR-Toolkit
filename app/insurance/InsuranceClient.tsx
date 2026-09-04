@@ -123,16 +123,51 @@ ${catBlocks}${openHtml}${exclHtml}
   }
 
   async function exportExcel() {
-    const XLSX: any = await import('xlsx');
+    const XLSX: any = await import('xlsx-js-style'); // styled fork (fills/fonts)
+    const NAVY = '1B2A3D', GOLD = 'C9A24A', MUTED = '8A7F6D';
+    const barHex = (cat: string) => ['1B2A3D', '6E2B3E', '2F5D3A', '34506E', '8A6D3B'][Math.max(0, catsPresent.indexOf(cat)) % 5];
     const header = ['Insurance Type', 'Carrier', 'Policy Number', 'Broker / Agency', 'Broker Contact', 'Contact Info', 'Effective Date', 'Renews', 'Annual Premium', 'Notes'];
-    const aoa: any[][] = [['Litson PLLC — Insurance Master List'], [`Exported ${new Date().toLocaleDateString()}`], [], header];
+    const NC = header.length;
+    const cell = (v: any, s?: any) => ({ v: v ?? '', t: 's', s });
+    const titleStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: GOLD }, bold: true, sz: 15 }, alignment: { vertical: 'center' } };
+    const subStyle = { font: { color: { rgb: MUTED }, italic: true, sz: 10 } };
+    const headStyle = { fill: { fgColor: { rgb: NAVY } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 10 }, alignment: { wrapText: true, vertical: 'center' } };
+    const catStyle = (hex: string) => ({ fill: { fgColor: { rgb: hex } }, font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 11 } });
+    const dataStyle = { alignment: { vertical: 'top', wrapText: true }, font: { sz: 10 } };
+
+    const rows: any[][] = [];
+    rows.push([cell('Litson PLLC — Insurance Master List', titleStyle), ...Array(NC - 1).fill(cell('', titleStyle))]);
+    rows.push([cell(`Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} · ${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium`, subStyle), ...Array(NC - 1).fill(cell('', subStyle))]);
+    rows.push([]);
+    rows.push(header.map(h => cell(h, headStyle)));
+    const catRowIdx: number[] = [];
     for (const cat of catsPresent) {
-      aoa.push([cat]);
-      for (const p of policies.filter(x => x.category === cat)) aoa.push([p.ins_type, p.carrier, p.policy_number, p.broker, p.broker_contact, p.contact_info, p.effective_date, p.renews, p.annual_premium, p.notes]);
+      catRowIdx.push(rows.length);
+      rows.push([cell(cat, catStyle(barHex(cat))), ...Array(NC - 1).fill(cell('', catStyle(barHex(cat))))]);
+      for (const p of policies.filter(x => x.category === cat)) {
+        rows.push([p.ins_type, p.carrier, p.policy_number, p.broker, p.broker_contact, p.contact_info, p.effective_date, p.renews, p.annual_premium, p.notes].map(v => cell(v, dataStyle)));
+      }
     }
-    const ws1 = XLSX.utils.aoa_to_sheet(aoa);
-    const f2: any[][] = [['Open Items & Things Left Off the Master List'], [], ['Item', 'Detail'], ...openItems.map(f => [f.item, f.detail]), [], ['Excluded from the master list (not Litson business insurance):'], ...excluded.map(f => [f.item, ''])];
+    const ws1 = XLSX.utils.aoa_to_sheet(rows);
+    ws1['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 46 }];
+    ws1['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: NC - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: NC - 1 } },
+      ...catRowIdx.map(r => ({ s: { r, c: 0 }, e: { r, c: NC - 1 } })),
+    ];
+
+    const f2: any[][] = [
+      [cell('Open Items & Things Left Off the Master List', catStyle(NAVY)), cell('', catStyle(NAVY))],
+      [cell('Item', headStyle), cell('Detail', headStyle)],
+      ...openItems.map(f => [cell(f.item, { ...dataStyle, font: { bold: true, sz: 10 } }), cell(f.detail, dataStyle)]),
+      [],
+      [cell('Excluded from the master list (not Litson business insurance)', catStyle('8A6D3B')), cell('', catStyle('8A6D3B'))],
+      ...excluded.map(f => [cell(f.item, dataStyle), cell('', dataStyle)]),
+    ];
     const ws2 = XLSX.utils.aoa_to_sheet(f2);
+    ws2['!cols'] = [{ wch: 46 }, { wch: 80 }];
+    ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws1, 'Insurance Master List');
     XLSX.utils.book_append_sheet(wb, ws2, 'Follow-ups & Exclusions');
