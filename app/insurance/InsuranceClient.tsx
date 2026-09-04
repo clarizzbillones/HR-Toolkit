@@ -23,6 +23,35 @@ function parseMoney(s: string): number {
 }
 const fmtUSD = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Best-effort next renewal date from the free-text "Renews" field. Handles
+// M/D/YYYY, M/D/YY and M/D (no year); rolls annual dates forward to the next
+// occurrence. Returns null for "Active until cancelled" / "N/A" etc.
+function nextRenewal(renews: string): Date | null {
+  const s = String(renews ?? '');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    let yr = parseInt(m[3], 10); if (yr < 100) yr += 2000;
+    let dt = new Date(yr, +m[1] - 1, +m[2]);
+    let guard = 0;
+    while (dt < today && /annual|yr|year/i.test(s) && guard++ < 10) dt = new Date(dt.getFullYear() + 1, dt.getMonth(), dt.getDate());
+    return isNaN(+dt) ? null : dt;
+  }
+  m = s.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+  if (m) {
+    let dt = new Date(today.getFullYear(), +m[1] - 1, +m[2]);
+    if (dt < today) dt = new Date(today.getFullYear() + 1, +m[1] - 1, +m[2]);
+    return isNaN(+dt) ? null : dt;
+  }
+  return null;
+}
+function daysUntil(dt: Date | null): number | null {
+  if (!dt) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((dt.getTime() - today.getTime()) / 86400000);
+}
+const fmtDate = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
 export default function InsuranceClient({ initialPolicies, initialFollowups, categories }: { initialPolicies: Policy[]; initialFollowups: FollowUp[]; categories: string[] }) {
   const { showToast } = useToast();
   const { me } = useAccess();
@@ -38,6 +67,30 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
   const openItems = followups.filter(f => f.kind !== 'excluded');
   const excluded = followups.filter(f => f.kind === 'excluded');
   const totalPremium = policies.reduce((s, p) => s + parseMoney(p.annual_premium), 0);
+  // Upcoming renewals (≤60 days), soonest first — powers the banner + row badges.
+  const upcoming = policies
+    .map(p => ({ p, days: daysUntil(nextRenewal(p.renews)), date: nextRenewal(p.renews) }))
+    .filter(x => x.days != null && x.days <= 60)
+    .sort((a, b) => (a.days! - b.days!));
+
+  async function exportExcel() {
+    const XLSX: any = await import('xlsx');
+    const header = ['Insurance Type', 'Carrier', 'Policy Number', 'Broker / Agency', 'Broker Contact', 'Contact Info', 'Effective Date', 'Renews', 'Annual Premium', 'Notes'];
+    const aoa: any[][] = [['Litson PLLC — Insurance Master List'], [`Exported ${new Date().toLocaleDateString()}`], [], header];
+    for (const cat of catsPresent) {
+      aoa.push([cat]);
+      for (const p of policies.filter(x => x.category === cat)) aoa.push([p.ins_type, p.carrier, p.policy_number, p.broker, p.broker_contact, p.contact_info, p.effective_date, p.renews, p.annual_premium, p.notes]);
+    }
+    const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+    const f2: any[][] = [['Open Items & Things Left Off the Master List'], [], ['Item', 'Detail'], ...openItems.map(f => [f.item, f.detail]), [], ['Excluded from the master list (not Litson business insurance):'], ...excluded.map(f => [f.item, ''])];
+    const ws2 = XLSX.utils.aoa_to_sheet(f2);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Insurance Master List');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Follow-ups & Exclusions');
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Litson_Insurance_Master_List.xlsx'; a.click(); URL.revokeObjectURL(a.href);
+  }
 
   function startNew() { setEditing({ id: '', category: categories[0], ins_type: '', carrier: '', policy_number: '', broker: '', broker_contact: '', contact_info: '', effective_date: '', renews: '', annual_premium: '', notes: '' }); setIsNew(true); }
   function startEdit(p: Policy) { setEditing({ ...p }); setIsNew(false); }
@@ -80,6 +133,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
           <p className="text-sm text-text-muted mt-0.5">Litson PLLC insurance master list — policies, carriers, renewals &amp; open items.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={exportExcel} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Excel</button>
           <button onClick={() => window.print()} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
           {!readOnly && <button onClick={startNew} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add policy</button>}
         </div>
@@ -88,7 +142,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
       <div className="flex-1 overflow-auto px-8 py-6 space-y-6">
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl">
-          {([['Policies on file', String(policies.length)], ['Known annual premium', fmtUSD(totalPremium)], ['Open items', String(openItems.length)]] as [string, string][]).map(([l, v]) => (
+          {([['Policies on file', String(policies.length)], ['Known annual premium', fmtUSD(totalPremium)], ['Renewing ≤60 days', String(upcoming.length)], ['Open items', String(openItems.length)]] as [string, string][]).map(([l, v]) => (
             <div key={l} className="bg-white border border-border-light rounded-card px-4 py-3" style={{ borderTop: '3px solid #c9a24a' }}>
               <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
               <div className="text-[20px] font-semibold text-text-primary">{v}</div>
@@ -96,6 +150,24 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
           ))}
         </div>
         <p className="text-[11px] text-text-faint -mt-3">Known annual premium sums only the policies with a numeric premium (TBD / N/A / roster-rated are excluded).</p>
+
+        {/* Upcoming renewals banner */}
+        {upcoming.length > 0 && (
+          <div className="bg-[#fdf6e9] border border-[#e0c48a] rounded-card px-5 py-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#b07d2a] mb-2">⏰ Renewals coming up (next 60 days)</div>
+            <div className="space-y-1">
+              {upcoming.map(({ p, days, date }) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm flex-wrap">
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${days! < 0 ? 'bg-[#fdeaea] text-[#b0412f]' : days! <= 30 ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>
+                    {days! < 0 ? `${Math.abs(days!)}d overdue` : days === 0 ? 'due today' : `in ${days}d`}
+                  </span>
+                  <span className="font-medium text-text-primary">{p.ins_type}</span>
+                  <span className="text-text-muted">· {p.carrier}{date ? ` · renews ${fmtDate(date)}` : ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Policies grouped by category */}
         {catsPresent.map(cat => (
@@ -119,7 +191,12 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
                       <td className="px-3 py-2.5 text-text-secondary min-w-[140px]">{p.broker}<div className="text-xs text-text-muted">{p.broker_contact}</div></td>
                       <td className="px-3 py-2.5 text-text-muted text-xs min-w-[160px]">{p.contact_info}</td>
                       <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{p.effective_date}</td>
-                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{p.renews}</td>
+                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">
+                        {p.renews}
+                        {(() => { const d = daysUntil(nextRenewal(p.renews)); return d != null && d <= 60 ? (
+                          <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${d <= 30 ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'today' : `${d}d`}</span>
+                        ) : null; })()}
+                      </td>
                       <td className="px-3 py-2.5 font-semibold text-text-primary whitespace-nowrap">{p.annual_premium}</td>
                       <td className="px-3 py-2.5 text-text-muted text-xs min-w-[240px] max-w-[320px]">{p.notes}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-right">
