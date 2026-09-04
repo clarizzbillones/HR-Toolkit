@@ -5,7 +5,7 @@ import { useSession, signOut, signIn } from 'next-auth/react';
 import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useAccess } from './AccessProvider';
-import { HR_ADMIN_SECTIONS } from '@/lib/access';
+import { HR_ADMIN_SECTIONS, canSeeGifts } from '@/lib/access';
 
 const navItems = [
   { href: '/',          label: 'Dashboard' },
@@ -23,6 +23,7 @@ const navItems = [
   { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
   { href: '/offboarding', label: 'Offboarding' },
   { href: '/insurance', label: 'Insurance' },
+  { href: '/gifts',     label: 'Gift Tracker' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
@@ -70,13 +71,16 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const restricted = !!me?.restricted;
   // The owner/access-admin always counts as an HR admin (never lock the owner out).
   const hrAdmin = !!(me?.isHrAdmin || me?.isAdmin);
+  // Gift Tracker is private to an email allowlist — hide it from everyone else.
+  const giftEmail = session?.user?.email ?? '';
   const orderedItems = (order.map(h => navItems.find(i => i.href === h)).filter(Boolean) as typeof navItems)
     // Hide restricted-user sections, and hide HR-admin-only sections from anyone
     // who isn't an HR admin (even full-access users).
     // The document sub-permissions also unlock their parent nav item.
     .filter(i => (!restricted || me!.sections.includes(i.href)
       || (i.href === '/onboarding' && me!.sections.includes('/onboarding-doc'))
-      || (i.href === '/offboarding' && me!.sections.includes('/offboarding-doc'))) && (!HR_ADMIN_SECTIONS.includes(i.href) || hrAdmin));
+      || (i.href === '/offboarding' && me!.sections.includes('/offboarding-doc'))) && (!HR_ADMIN_SECTIONS.includes(i.href) || hrAdmin)
+      && (i.href !== '/gifts' || canSeeGifts(giftEmail)));
   function onDrop(targetHref: string) {
     if (!dragHref || dragHref === targetHref) { setDragHref(null); return; }
     const next = [...order];
