@@ -1110,6 +1110,18 @@ export default function OnboardingClient() {
     setTaskDragId(null);
   }
 
+  // Bulk-select checklist tasks and move them to a section in one go.
+  const [clSelIds, setClSelIds] = useState<Set<string>>(new Set());
+  const toggleClSel = (id: string) => setClSelIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  async function moveSelectedToSection(sectionId: string | null) {
+    const ids = [...clSelIds];
+    setClSelIds(new Set());
+    for (const id of ids) {
+      const t = items.find(i => i.id === id);
+      if (t && t.kind === 'task' && !isToolTitle(t.title)) await patch(id, { section: sectionId } as any);
+    }
+    showToast(`Moved ${ids.length} task${ids.length === 1 ? '' : 's'}`);
+  }
   // Named checklist sections (shared): [{ id, name, note }].
   const [clSections, setClSections] = useState<ChecklistSection[]>([]);
   useEffect(() => { fetch('/api/onboarding/checklist-sections').then(r => r.json()).then(d => setClSections(d.sections ?? [])).catch(() => {}); }, []);
@@ -2340,11 +2352,15 @@ export default function OnboardingClient() {
                           <div key={t.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-ctrl hover:bg-canvas group ${taskDragId === t.id ? 'opacity-50' : ''}`}
                             onDragOver={canReorder ? (e => e.preventDefault()) : undefined}
                             onDrop={canReorder ? (e => { e.stopPropagation(); reorderChecklist(t.id); }) : undefined}>
+                            {canReorder && !isToolTitle(t.title) && (
+                              <input type="checkbox" checked={clSelIds.has(t.id)} onChange={() => toggleClSel(t.id)}
+                                title="Select to bulk-move into a section" className="w-4 h-4 accent-[#1b2a3d] shrink-0" />
+                            )}
                             {canReorder && (
                               <span draggable onDragStart={() => setTaskDragId(t.id)} onDragEnd={() => setTaskDragId(null)}
-                                title="Drag to reorder" className="cursor-grab active:cursor-grabbing text-text-faint hover:text-text-muted select-none shrink-0 text-sm leading-none">⠿</span>
+                                title="Drag to reorder / move between sections" className="cursor-grab active:cursor-grabbing text-text-faint hover:text-text-muted select-none shrink-0 text-sm leading-none">⠿</span>
                             )}
-                            <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
+                            <input type="checkbox" checked={isDone} onChange={e => toggleTask(person, t.title, e.target.checked)} title="Mark done" className="w-4 h-4 accent-[#2f7d5b] shrink-0" />
                             <input value={t.title} onChange={e => patch(t.id, { title: e.target.value })}
                               className={`flex-1 text-sm bg-transparent focus:outline-none ${isDone ? 'line-through text-text-muted' : 'text-text-primary'}`} />
                             <button onClick={() => patch(t.id, { owner: isHR ? '' : 'HR' })} title="Toggle who owns this task"
@@ -2411,6 +2427,20 @@ export default function OnboardingClient() {
                             <button onClick={() => add('task', { title: 'New task', owner: 'HR' }, CHECKLIST_GUIDE)} className="text-sm font-semibold text-text-muted hover:text-ink">+ Add checklist item</button>
                             {canReorder && <button onClick={addChecklistSection} className="text-sm font-semibold text-[#6b4f8a] hover:underline">＋ Add section</button>}
                           </div>
+
+                          {/* Floating bulk-move bar — select rows, then send them to a section */}
+                          {canReorder && clSelIds.size > 0 && (
+                            <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-white border-2 border-ink rounded-card px-4 py-3 flex items-center gap-2 flex-wrap shadow-xl max-w-[95vw]">
+                              <span className="text-sm font-semibold text-text-primary">{clSelIds.size} selected</span>
+                              <span className="text-xs text-text-muted">Move to:</span>
+                              {clSections.map(s => (
+                                <button key={s.id} onClick={() => moveSelectedToSection(s.id)}
+                                  className="text-xs font-semibold text-white bg-ink px-3 py-1.5 rounded-ctrl hover:bg-ink-dark">{s.name || 'Section'}</button>
+                              ))}
+                              <button onClick={() => moveSelectedToSection(null)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">Tasks (no section)</button>
+                              <button onClick={() => setClSelIds(new Set())} className="ml-1 text-xs font-semibold text-text-muted hover:text-ink">Clear</button>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
