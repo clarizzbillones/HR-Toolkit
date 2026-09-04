@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import EodModal from '@/components/EodModal';
 import MyTasks from '@/components/MyTasks';
 import { useAccess } from '@/components/AccessProvider';
+import { renewalDate, daysUntilRenewal } from '@/lib/renewal';
 
 interface Props {
   pendingCount: number;
@@ -151,6 +152,18 @@ export default function DashboardClient(props: Props) {
       if (Array.isArray(d.names)) setPtoNames(d.names);
     }).catch(() => {});
   }, [activeDate]);
+
+  // Upcoming insurance renewals (≤60 days) for the dashboard tile.
+  const [insRenewals, setInsRenewals] = useState<{ id: string; ins_type: string; carrier: string; days: number; date: Date | null }[]>([]);
+  useEffect(() => {
+    if (restricted) return;
+    fetch('/api/insurance').then(r => r.json()).then(d => {
+      const rows = (d.policies ?? []).map((p: any) => ({ id: p.id, ins_type: p.ins_type, carrier: p.carrier, days: daysUntilRenewal(p.renews), date: renewalDate(p.renews) }))
+        .filter((x: any) => x.days != null && x.days <= 60 && x.days >= -30)
+        .sort((a: any, b: any) => a.days - b.days);
+      setInsRenewals(rows);
+    }).catch(() => {});
+  }, [restricted]);
   const userName = session?.user?.name ?? 'there';
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -227,6 +240,26 @@ export default function DashboardClient(props: Props) {
             For a restricted viewer this is the whole dashboard, so keep the
             panel (with its empty state) visible even when they have none. */}
         <MyTasks alwaysShow={restricted} />
+
+        {!restricted && insRenewals.length > 0 && (
+          <div className="bg-white border border-border rounded-card p-5 mb-6" style={{ borderTop: '3px solid #b07d2a' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs font-bold tracking-widest uppercase text-[#b07d2a]">⏰ Insurance renewals due (next 60 days)</div>
+              <Link href="/insurance" className="text-xs font-semibold text-[#b07d2a] hover:underline">Insurance ↗</Link>
+            </div>
+            <div className="space-y-1.5">
+              {insRenewals.map(r => (
+                <Link key={r.id} href="/insurance" className="flex items-center gap-2 text-sm hover:bg-canvas rounded-ctrl px-2 py-1 -mx-2 transition-colors">
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${r.days <= 30 || r.days < 0 ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>
+                    {r.days < 0 ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? 'due today' : `in ${r.days}d`}
+                  </span>
+                  <span className="font-medium text-text-primary">{r.ins_type}</span>
+                  <span className="text-text-muted">· {r.carrier}{r.date ? ` · renews ${r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {!restricted && (<>
         {/* Upcoming birthdays & anniversaries (this month) */}
