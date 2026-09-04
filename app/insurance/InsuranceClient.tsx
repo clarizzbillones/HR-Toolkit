@@ -52,6 +52,15 @@ function daysUntil(dt: Date | null): number | null {
 }
 const fmtDate = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+// Distinct, on-brand accent per category (bar = solid header, tint = light bg).
+const CAT_PALETTE = [
+  { bar: '#1b2a3d', tint: '#eef2f7', text: '#1b2a3d' }, // navy — Property/Liability/WC
+  { bar: '#6e2b3e', tint: '#f6ecef', text: '#6e2b3e' }, // burgundy — Professional Liability
+  { bar: '#2f5d3a', tint: '#eaf3ec', text: '#2f5d3a' }, // forest — Life
+  { bar: '#34506e', tint: '#eaf0f6', text: '#34506e' }, // slate — Health & Welfare
+  { bar: '#8a6d3b', tint: '#f6efe1', text: '#8a6d3b' }, // gold-brown — extra
+];
+
 export default function InsuranceClient({ initialPolicies, initialFollowups, categories }: { initialPolicies: Policy[]; initialFollowups: FollowUp[]; categories: string[] }) {
   const { showToast } = useToast();
   const { me } = useAccess();
@@ -64,6 +73,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const catsPresent = categories.filter(c => policies.some(p => p.category === c)).concat(
     [...new Set(policies.map(p => p.category))].filter(c => !categories.includes(c)));
+  const catColor = (cat: string) => CAT_PALETTE[Math.max(0, catsPresent.indexOf(cat)) % CAT_PALETTE.length];
   const openItems = followups.filter(f => f.kind !== 'excluded');
   const excluded = followups.filter(f => f.kind === 'excluded');
   const totalPremium = policies.reduce((s, p) => s + parseMoney(p.annual_premium), 0);
@@ -72,6 +82,45 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
     .map(p => ({ p, days: daysUntil(nextRenewal(p.renews)), date: nextRenewal(p.renews) }))
     .filter(x => x.days != null && x.days <= 60)
     .sort((a, b) => (a.days! - b.days!));
+
+  // Branded PDF in the Litson palette (navy + gold), instead of printing the raw page.
+  function printDoc() {
+    const w = window.open('', '_blank'); if (!w) return;
+    const e = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const cols = ['Insurance type', 'Carrier', 'Policy #', 'Broker', 'Contact', 'Effective', 'Renews', 'Annual premium', 'Notes'];
+    const catBlocks = catsPresent.map(cat => {
+      const c = catColor(cat);
+      const rows = policies.filter(p => p.category === cat).map(p => `<tr>
+        <td style="font-weight:600;color:#1b2a3d">${e(p.ins_type)}</td>
+        <td>${e(p.carrier)}</td><td>${e(p.policy_number)}</td>
+        <td>${e(p.broker)}${p.broker_contact ? `<div style="color:#8a7f6d">${e(p.broker_contact)}</div>` : ''}</td>
+        <td style="color:#6a6456">${e(p.contact_info)}</td>
+        <td>${e(p.effective_date)}</td><td>${e(p.renews)}</td>
+        <td style="font-weight:600;white-space:nowrap">${e(p.annual_premium)}</td>
+        <td style="color:#6a6456">${e(p.notes)}</td></tr>`).join('');
+      return `<div style="break-inside:avoid;margin-top:16px">
+        <div style="background:${c.bar};color:#fff;font-weight:700;font-size:9.5pt;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;border-radius:6px 6px 0 0">${e(cat)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:8pt">
+          <thead><tr style="background:${c.tint}">${cols.map(col => `<th style="text-align:left;padding:5px 7px;border:0.5pt solid #e6ddcd;color:${c.text};text-transform:uppercase;font-size:7pt;letter-spacing:.04em">${col}</th>`).join('')}</tr></thead>
+          <tbody>${rows.replace(/<td>/g, '<td style="padding:5px 7px;border:0.5pt solid #e6ddcd;vertical-align:top;color:#333">').replace(/<td style="font-weight:600;color:#1b2a3d">/g, '<td style="padding:5px 7px;border:0.5pt solid #e6ddcd;vertical-align:top;font-weight:600;color:#1b2a3d">').replace(/<td style="font-weight:600;white-space:nowrap">/g, '<td style="padding:5px 7px;border:0.5pt solid #e6ddcd;vertical-align:top;font-weight:600;white-space:nowrap;color:#1b2a3d">').replace(/<td style="color:#6a6456">/g, '<td style="padding:5px 7px;border:0.5pt solid #e6ddcd;vertical-align:top;color:#6a6456">')}</tbody>
+        </table></div>`;
+    }).join('');
+    const openHtml = openItems.length ? `<div style="break-inside:avoid;margin-top:20px"><div style="color:#1b2a3d;font-weight:700;font-size:10pt;border-bottom:2px solid #c9a24a;padding-bottom:3px;margin-bottom:6px">Open Items &amp; Things Left Off the Master List</div>${openItems.map(f => `<div style="margin:5px 0"><span style="font-weight:600;color:#1b2a3d">${e(f.item)}</span>${f.detail ? `<div style="color:#555;font-size:9pt">${e(f.detail)}</div>` : ''}</div>`).join('')}</div>` : '';
+    const exclHtml = excluded.length ? `<div style="break-inside:avoid;margin-top:16px"><div style="color:#1b2a3d;font-weight:700;font-size:10pt;border-bottom:2px solid #c9a24a;padding-bottom:3px;margin-bottom:6px">Excluded from the Master List <span style="font-weight:400;color:#8a7f6d;font-size:8.5pt">(not Litson business insurance)</span></div>${excluded.map(f => `<div style="color:#555;font-size:9pt;margin:3px 0">• ${e(f.item)}</div>`).join('')}</div>` : '';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Insurance Master List</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}@page{size:letter landscape;margin:0.4in}
+body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>
+<div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 18px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:flex-end">
+  <div><div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
+    <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
+    <div style="font-size:18px;font-weight:700;color:#fff;margin-top:8px">Insurance Master List</div></div>
+  <div style="text-align:right;color:#9fb0c4;font-size:9px">${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium<br>Generated ${e(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</div>
+</div>
+${catBlocks}${openHtml}${exclHtml}
+<script>var i=document.images,n=i.length,d=0;function go(){if(++d>=n)window.print()}if(!n){window.print()}else{for(var k=0;k<n;k++){i[k].complete?go():(i[k].onload=go,i[k].onerror=go)}}</script>
+</body></html>`;
+    w.document.write(html); w.document.close();
+  }
 
   async function exportExcel() {
     const XLSX: any = await import('xlsx');
@@ -134,7 +183,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
         </div>
         <div className="flex items-center gap-2">
           <button onClick={exportExcel} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Excel</button>
-          <button onClick={() => window.print()} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
+          <button onClick={printDoc} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
           {!readOnly && (
             <button onClick={async () => { showToast('Sending test…'); try { const r = await fetch('/api/insurance/remind?test=1', { method: 'POST' }); const d = await r.json(); showToast(r.ok ? `✓ Test renewal email sent to ${d.to}` : (d.error || 'Could not send')); } catch { showToast('Could not send'); } }}
               title="Email a renewal-reminder preview to clarizz@litson.co now"
@@ -174,25 +223,27 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
           </div>
         )}
 
-        {/* Policies grouped by category */}
-        {catsPresent.map(cat => (
-          <div key={cat} className="bg-white border border-border rounded-card overflow-hidden">
-            <div className="px-5 py-3 border-b border-border bg-[#f1ece3]">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">{cat}</div>
+        {/* Policies grouped by category — each category gets a distinct accent */}
+        {catsPresent.map(cat => {
+          const c = catColor(cat);
+          return (
+          <div key={cat} className="bg-white border border-border rounded-card overflow-hidden" style={{ borderLeft: `4px solid ${c.bar}` }}>
+            <div className="px-5 py-3" style={{ background: c.bar }}>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-white">{cat}</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1000px]">
-                <thead className="bg-[#faf8f4]">
+                <thead style={{ background: c.tint }}>
                   <tr>{['Insurance type', 'Carrier', 'Policy #', 'Broker', 'Contact', 'Effective', 'Renews', 'Annual premium', 'Notes', ''].map(h => (
-                    <th key={h} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: c.text }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {policies.filter(p => p.category === cat).map(p => (
-                    <tr key={p.id} className="border-t border-[#f1ece3] align-top">
-                      <td className="px-3 py-2.5 font-medium text-text-primary min-w-[180px]">{p.ins_type}</td>
-                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{p.carrier}</td>
-                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{p.policy_number}</td>
+                  {policies.filter(p => p.category === cat).map((p, ri) => (
+                    <tr key={p.id} className="border-t border-[#f1ece3] align-top" style={{ background: ri % 2 ? '#faf8f4' : '#fff' }}>
+                      <td className="px-3 py-2.5 font-semibold min-w-[180px]" style={{ color: c.text, borderLeft: `3px solid ${c.bar}` }}>{p.ins_type}</td>
+                      <td className="px-3 py-2.5 text-text-primary font-medium whitespace-nowrap">{p.carrier}</td>
+                      <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap font-mono text-[12px]">{p.policy_number}</td>
                       <td className="px-3 py-2.5 text-text-secondary min-w-[140px]">{p.broker}<div className="text-xs text-text-muted">{p.broker_contact}</div></td>
                       <td className="px-3 py-2.5 text-text-muted text-xs min-w-[160px]">{p.contact_info}</td>
                       <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap">{p.effective_date}</td>
@@ -202,7 +253,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
                           <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${d <= 30 ? 'bg-[#fdeaea] text-[#b0412f]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'today' : `${d}d`}</span>
                         ) : null; })()}
                       </td>
-                      <td className="px-3 py-2.5 font-semibold text-text-primary whitespace-nowrap">{p.annual_premium}</td>
+                      <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{ color: c.text }}>{p.annual_premium}</td>
                       <td className="px-3 py-2.5 text-text-muted text-xs min-w-[240px] max-w-[320px]">{p.notes}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-right">
                         {!readOnly && (
@@ -218,7 +269,8 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
               </table>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Open items */}
         <div className="bg-white border border-border rounded-card overflow-hidden">
