@@ -61,10 +61,17 @@ const CAT_PALETTE = [
   { bar: '#8a6d3b', tint: '#f6efe1', text: '#8a6d3b' }, // gold-brown — extra
 ];
 
-export default function InsuranceClient({ initialPolicies, initialFollowups, categories }: { initialPolicies: Policy[]; initialFollowups: FollowUp[]; categories: string[] }) {
+export default function InsuranceClient({ initialPolicies, initialFollowups, categories, initialLocked }: { initialPolicies: Policy[]; initialFollowups: FollowUp[]; categories: string[]; initialLocked?: boolean }) {
   const { showToast } = useToast();
   const { me } = useAccess();
   const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/insurance');
+  const [locked, setLocked] = useState(!!initialLocked);
+  const editable = !readOnly && !locked; // may add/edit/delete
+  async function toggleLock() {
+    const next = !locked; setLocked(next);
+    await fetch('/api/insurance', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'lock', locked: next }) });
+    showToast(next ? '🔒 Insurance list locked' : '🔓 Unlocked — edits allowed');
+  }
   const [policies, setPolicies] = useState<Policy[]>(initialPolicies);
   const [followups, setFollowups] = useState<FollowUp[]>(initialFollowups);
   const [editing, setEditing] = useState<Policy | null>(null);
@@ -229,7 +236,11 @@ ${catBlocks}${openHtml}${exclHtml}
               title="Email a renewal-reminder preview to clarizz@litson.co now"
               className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">🔔 Test email</button>
           )}
-          {!readOnly && <button onClick={startNew} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add policy</button>}
+          {!readOnly && (
+            <button onClick={toggleLock} title={locked ? 'Unlock to allow edits' : 'Lock to prevent accidental edits'}
+              className={`text-sm font-semibold border px-4 py-2 rounded-ctrl ${locked ? 'bg-[#f7efe1] border-[#e0c48a] text-[#b07d2a] hover:bg-[#f2e6cf]' : 'text-ink border-border-light hover:bg-canvas'}`}>{locked ? '🔒 Locked' : '🔓 Lock'}</button>
+          )}
+          {editable && <button onClick={startNew} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add policy</button>}
         </div>
       </header>
 
@@ -281,7 +292,11 @@ ${catBlocks}${openHtml}${exclHtml}
                 <tbody>
                   {policies.filter(p => p.category === cat).map((p, ri) => (
                     <tr key={p.id} className="border-t border-[#f1ece3] align-top" style={{ background: ri % 2 ? '#faf8f4' : '#fff' }}>
-                      <td className="px-3 py-2.5 font-semibold min-w-[180px]" style={{ color: c.text, borderLeft: `3px solid ${c.bar}` }}>{p.ins_type}</td>
+                      <td className="px-3 py-2.5 font-semibold min-w-[180px]" style={{ color: c.text, borderLeft: `3px solid ${c.bar}` }}>
+                        {editable
+                          ? <button onClick={() => startEdit(p)} title="Click to edit this policy" className="text-left hover:underline decoration-dotted underline-offset-2" style={{ color: c.text }}>{p.ins_type}</button>
+                          : p.ins_type}
+                      </td>
                       <td className="px-3 py-2.5 text-text-primary font-medium whitespace-nowrap">{p.carrier}</td>
                       <td className="px-3 py-2.5 text-text-secondary whitespace-nowrap font-mono text-[12px]">{p.policy_number}</td>
                       <td className="px-3 py-2.5 text-text-secondary min-w-[140px]">{p.broker}<div className="text-xs text-text-muted">{p.broker_contact}</div></td>
@@ -296,10 +311,10 @@ ${catBlocks}${openHtml}${exclHtml}
                       <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{ color: c.text }}>{p.annual_premium}</td>
                       <td className="px-3 py-2.5 text-text-muted text-xs min-w-[240px] max-w-[320px]">{p.notes}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-right">
-                        {!readOnly && (
+                        {editable && (
                           <>
                             <button onClick={() => startEdit(p)} className="text-xs font-semibold text-ink border border-border-light px-2 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
-                            <button onClick={() => deletePolicy(p)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2 py-1 rounded-ctrl hover:bg-[#fdeaea]">✕</button>
+                            <button onClick={() => deletePolicy(p)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                           </>
                         )}
                       </td>
@@ -316,12 +331,12 @@ ${catBlocks}${openHtml}${exclHtml}
         <div className="bg-white border border-border rounded-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Open items &amp; things left off the master list</div>
-            {!readOnly && <button onClick={() => addFollowup('open')} className="text-xs font-semibold text-[#3f6b8a] hover:underline">+ Add item</button>}
+            {editable && <button onClick={() => addFollowup('open')} className="text-xs font-semibold text-[#3f6b8a] hover:underline">+ Add item</button>}
           </div>
           <div className="divide-y divide-[#f1ece3]">
             {openItems.map(f => (
               <div key={f.id} className="px-5 py-3">
-                {readOnly ? (
+                {!editable ? (
                   <><div className="font-semibold text-text-primary text-sm">{f.item}</div><div className="text-sm text-text-muted mt-0.5">{f.detail}</div></>
                 ) : (
                   <div className="flex gap-2 items-start">
@@ -342,12 +357,12 @@ ${catBlocks}${openHtml}${exclHtml}
         <div className="bg-white border border-border rounded-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Excluded from the master list <span className="font-normal normal-case text-text-faint">(not Litson business insurance)</span></div>
-            {!readOnly && <button onClick={() => addFollowup('excluded')} className="text-xs font-semibold text-[#3f6b8a] hover:underline">+ Add</button>}
+            {editable && <button onClick={() => addFollowup("excluded")} className="text-xs font-semibold text-[#3f6b8a] hover:underline">+ Add</button>}
           </div>
           <div className="divide-y divide-[#f1ece3]">
             {excluded.map(f => (
               <div key={f.id} className="px-5 py-2.5 flex gap-2 items-center">
-                {readOnly ? <span className="text-sm text-text-muted">• {f.item}</span> : (
+                {!editable ? <span className="text-sm text-text-muted">• {f.item}</span> : (
                   <>
                     <span className="text-text-faint">•</span>
                     <input value={f.item} onChange={e => editFollowupLocal(f.id, { item: e.target.value })} onBlur={() => saveFollowup(f)} className={input} />
@@ -386,7 +401,8 @@ ${catBlocks}${openHtml}${exclHtml}
                 <textarea value={editing.notes} onChange={e => setEditing({ ...editing, notes: e.target.value })} rows={3} className={input + ' resize-y'} />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2 items-center">
+              {!isNew && <button onClick={() => { const p = editing; setEditing(null); deletePolicy(p); }} className="text-sm font-semibold text-litred-alt border border-border-light px-4 py-2 rounded-ctrl hover:bg-[#fdeaea] mr-auto">Delete</button>}
               <button onClick={() => setEditing(null)} className="text-sm font-semibold text-text-muted px-4 py-2">Cancel</button>
               <button onClick={savePolicy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{isNew ? 'Add policy' : 'Save changes'}</button>
             </div>

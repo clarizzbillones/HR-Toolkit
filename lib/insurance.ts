@@ -49,6 +49,20 @@ const SEED_FOLLOWUPS: { kind: string; item: string; detail: string }[] = [
 // Renewal-date helpers live in a DB-free module so clients can import them too.
 export { renewalDate, daysUntilRenewal } from '@/lib/renewal';
 
+// Shared lock: when on, the master list is frozen against edits (a guard
+// against accidental changes; any full-access user can toggle it).
+export async function getInsuranceLocked(): Promise<boolean> {
+  await sql`CREATE TABLE IF NOT EXISTS app_settings (id TEXT PRIMARY KEY)`;
+  await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS insurance_locked BOOLEAN DEFAULT false`;
+  await sql`INSERT INTO app_settings (id) VALUES ('singleton') ON CONFLICT (id) DO NOTHING`;
+  const [row] = await sql`SELECT insurance_locked FROM app_settings WHERE id = 'singleton'` as any[];
+  return !!row?.insurance_locked;
+}
+export async function setInsuranceLocked(locked: boolean): Promise<void> {
+  await getInsuranceLocked();
+  await sql`UPDATE app_settings SET insurance_locked = ${!!locked} WHERE id = 'singleton'`;
+}
+
 export async function ensureInsurance(): Promise<void> {
   await sql`CREATE TABLE IF NOT EXISTS insurance_policies (
     id TEXT PRIMARY KEY, category TEXT, ins_type TEXT, carrier TEXT, policy_number TEXT,
