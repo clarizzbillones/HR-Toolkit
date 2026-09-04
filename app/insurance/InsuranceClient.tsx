@@ -135,6 +135,11 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
         <div className="flex items-center gap-2">
           <button onClick={exportExcel} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Excel</button>
           <button onClick={() => window.print()} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Print / PDF</button>
+          {!readOnly && (
+            <button onClick={async () => { showToast('Sending test…'); try { const r = await fetch('/api/insurance/remind?test=1', { method: 'POST' }); const d = await r.json(); showToast(r.ok ? `✓ Test renewal email sent to ${d.to}` : (d.error || 'Could not send')); } catch { showToast('Could not send'); } }}
+              title="Email a renewal-reminder preview to clarizz@litson.co now"
+              className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">🔔 Test email</button>
+          )}
           {!readOnly && <button onClick={startNew} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add policy</button>}
         </div>
       </header>
