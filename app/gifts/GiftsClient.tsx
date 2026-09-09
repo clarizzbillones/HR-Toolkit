@@ -74,7 +74,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="font-spectral text-[23px] font-semibold text-text-primary">🎁 Gift Tracker</h1>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f6ecef] text-[#6e2b3e] border border-[#e0b9c6]">Private · not shared yet</span>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#eef1f6] text-[#33445e] border border-[#c9d3e2]">Admin access</span>
           </div>
           <p className="text-sm text-text-muted mt-0.5">Clients &amp; vendors for holiday gifts</p>
         </div>

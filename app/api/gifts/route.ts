@@ -4,13 +4,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { ensureGifts } from '@/lib/gifts';
-import { canSeeGifts } from '@/lib/access';
 
-// Only people on the gift allowlist may read or write this list.
+// Any signed-in user may read/write the gift list (auth is enforced by
+// middleware); nav visibility is handled by the normal section access rules.
 async function guard() {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? '';
-  return canSeeGifts(email) ? null : NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return session?.user ? null : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 const COLS = ['name', 'relationship', 'address', 'phone', 'tier', 'ordered', 'ordered_note', 'mailed', 'sort_order'] as const;

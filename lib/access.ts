@@ -21,6 +21,7 @@ export const SECTIONS: { key: string; label: string }[] = [
   { key: '/offboarding', label: 'Offboarding' },
   { key: '/offboarding-doc', label: 'Offboarding Document' },
   { key: '/insurance', label: 'Insurance' },
+  { key: '/gifts', label: 'Gift Tracker' },
   { key: '/reports', label: 'Reports' },
   { key: '/design', label: 'Graphic Design' },
 ];
@@ -96,17 +97,4 @@ export function hrAdminList(): string[] {
 export function isHrAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
   if (role === 'admin') return true;
   return !!email && hrAdminList().includes(email.toLowerCase());
-}
-
-// Gift Tracker is a private, invite-only page controlled by an explicit email
-// allowlist (NOT the normal section grants), so it stays hidden from everyone
-// — full-access users included — until specific people are added. Start with
-// just Clarizz; add caitlin@litson.co / brittany@… (or set GIFT_ACCESS_EMAILS)
-// when it's ready to share.
-export function giftAccessList(): string[] {
-  return (process.env.GIFT_ACCESS_EMAILS ?? 'clarizz@litson.co,admin@litson.co')
-    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-}
-export function canSeeGifts(email: string | null | undefined): boolean {
-  return !!email && giftAccessList().includes(email.toLowerCase());
 }
