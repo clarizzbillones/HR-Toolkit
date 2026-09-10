@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
+import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -273,6 +274,55 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       showToast(`Survey emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
       loadSurveyStatus(); setShowSurvey(false);
     } finally { setBulkBusy(false); }
+  }
+
+  // ---- Info request (collect personal details -> Staffing + Employee File) ----
+  const [showInfo, setShowInfo] = useState(false);
+  const [infoBusy, setInfoBusy] = useState(false);
+  const [infoFieldIds, setInfoFieldIds] = useState<string[]>([...DEFAULT_FIELD_IDS]);
+  const [infoSel, setInfoSel] = useState<Set<string>>(new Set());
+  const [infoStatus, setInfoStatus] = useState<Record<string, string>>({});
+  async function loadInfoStatus() {
+    try {
+      const d = await fetch('/api/info-request').then(r => r.json());
+      const map: Record<string, string> = {};
+      for (const r of (d.rows ?? [])) {
+        if (!r.profile_id) continue;
+        if (map[r.profile_id] === 'Completed') continue;
+        if (r.status === 'Completed') map[r.profile_id] = 'Completed';
+        else if (!map[r.profile_id]) map[r.profile_id] = r.status || 'Sent';
+      }
+      setInfoStatus(map);
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadInfoStatus(); }, []);
+  function openInfoModal() {
+    setInfoSel(new Set(sendableEmployees().filter(p => infoStatus[p.id] !== 'Completed').map(p => p.id)));
+    setShowInfo(true);
+  }
+  function toggleInfoSel(id: string) { setInfoSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
+  function toggleInfoField(id: string) {
+    setInfoFieldIds(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  }
+  async function sendInfoSelected() {
+    const ids = [...infoSel];
+    if (!ids.length) { showToast('Select at least one employee'); return; }
+    if (!infoFieldIds.length) { showToast('Pick at least one thing to collect'); return; }
+    setInfoBusy(true);
+    try {
+      const res = await fetch('/api/info-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk', profileIds: ids, fieldIds: infoFieldIds }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      showToast(`Info request emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+      loadInfoStatus(); setShowInfo(false);
+    } finally { setInfoBusy(false); }
+  }
+  async function testInfoRequest() {
+    const email = window.prompt('Send a test info request to which email?');
+    if (!email || !email.trim()) return;
+    const res = await fetch('/api/info-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', email: email.trim(), fieldIds: infoFieldIds }) });
+    const d = await res.json();
+    showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
 
   const [syncing, setSyncing] = useState(false);
@@ -700,6 +750,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
           {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
           {!readOnly && <button onClick={openSurveyModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Choose which employees receive the Tools & Access survey">✉ Send tools survey</button>}
+          {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
@@ -841,6 +892,89 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
               <button onClick={() => setShowSurvey(false)} className="text-sm text-text-muted px-3">Cancel</button>
               <button onClick={sendSurveySelected} disabled={bulkBusy || surveySel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{bulkBusy ? 'Sending…' : `✉ Send to ${surveySel.size}`}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info request — pick fields, choose recipients, preview the email */}
+      {showInfo && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowInfo(false)}>
+          <div className="bg-white rounded-card w-full max-w-4xl max-h-[88vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-text-primary">Request info from employees</div>
+                <div className="text-xs text-text-muted mt-0.5">Answers update Staffing <b>and</b> the person’s Employee File. <b>{infoSel.size}</b> selected.</div>
+              </div>
+              <button onClick={() => setShowInfo(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+
+            <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[1fr_1fr] divide-x divide-border-light">
+              {/* Left: what to collect + who to send to */}
+              <div className="flex flex-col overflow-hidden">
+                <div className="px-5 py-3 border-b border-border-light">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-text-muted mb-2">What to collect</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {INFO_FIELDS.map(f => {
+                      const on = infoFieldIds.includes(f.id);
+                      return (
+                        <button key={f.id} onClick={() => toggleInfoField(f.id)} title={f.hint || f.label}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${on ? 'bg-[#1b2a3d] text-white border-[#1b2a3d]' : 'bg-white text-text-secondary border-border-light hover:border-ink/30'}`}>
+                          {on ? '✓ ' : ''}{f.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[11px] text-text-muted mt-2">Tip: you can change these anytime — today it’s just Personal Email.</div>
+                </div>
+                <div className="px-5 py-2 border-b border-border-light flex items-center gap-4 text-[11px] font-semibold">
+                  <button onClick={() => setInfoSel(new Set(sendableEmployees().map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select all with email</button>
+                  <button onClick={() => setInfoSel(new Set(sendableEmployees().filter(p => infoStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
+                  <button onClick={() => setInfoSel(new Set())} className="text-text-muted hover:underline">Clear</button>
+                </div>
+                <div className="flex-1 overflow-auto p-3 space-y-0.5">
+                  {profiles.filter(p => !p.offboarded).length === 0 && <p className="text-sm text-text-muted text-center py-6">No employees yet.</p>}
+                  {profiles.filter(p => !p.offboarded).map(p => {
+                    const email = String(p.email ?? '').trim();
+                    const st = infoStatus[p.id];
+                    return (
+                      <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
+                        <input type="checkbox" disabled={!email} checked={infoSel.has(p.id)} onChange={() => toggleInfoSel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
+                        <span className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-text-primary">{p.name}</span>
+                          <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
+                        </span>
+                        {st && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : '⏳ Awaiting'}</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right: live preview of the email that will go out */}
+              <div className="flex flex-col overflow-hidden bg-canvas">
+                <div className="px-5 py-3 border-b border-border-light flex items-center justify-between">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Email preview</div>
+                  <span className="text-[11px] text-text-muted">Subject: <span className="text-text-secondary">Litson PLLC — please update your info</span></span>
+                </div>
+                <div className="flex-1 overflow-auto p-5">
+                  {infoFieldIds.length === 0
+                    ? <p className="text-sm text-text-muted">Pick at least one thing to collect to preview the email.</p>
+                    : <div className="bg-white border border-border rounded-card p-4 shadow-sm"
+                        dangerouslySetInnerHTML={{ __html: infoRequestEmail(
+                          (profiles.find(p => infoSel.has(p.id))?.name) || 'there',
+                          '#', fieldsByIds(infoFieldIds)) }} />}
+                  <p className="text-[11px] text-text-muted mt-3">This is exactly what each recipient receives (their own name and a unique link are filled in per person).</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
+              <button onClick={testInfoRequest} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowInfo(false)} className="text-sm text-text-muted px-3">Cancel</button>
+                <button onClick={sendInfoSelected} disabled={infoBusy || infoSel.size === 0 || infoFieldIds.length === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{infoBusy ? 'Sending…' : `✉ Send to ${infoSel.size}`}</button>
+              </div>
             </div>
           </div>
         </div>
