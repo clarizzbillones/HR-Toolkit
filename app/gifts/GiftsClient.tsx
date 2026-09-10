@@ -5,7 +5,7 @@ import { useToast } from '@/components/Toast';
 
 interface Gift {
   id: string; name: string; relationship: string; address: string; phone: string;
-  tier: string; ordered: boolean; ordered_note: string; mailed: boolean; sort_order?: number;
+  tier: string; ordered: boolean; ordered_note: string; mailed: boolean; notes: string; sort_order?: number;
 }
 const TIERS = ['', '$', '$$', '$$$'];
 const TIER_STYLE: Record<string, string> = {
@@ -91,7 +91,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         {/* ── Table ────────────────────────────────────────────── */}
         <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1180 }}>
+            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1380 }}>
               <colgroup>
                 <col style={{ width: 210 }} />
                 <col style={{ width: 160 }} />
@@ -101,11 +101,12 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                 <col style={{ width: 128 }} />
                 <col style={{ width: 220 }} />
                 <col style={{ width: 120 }} />
+                <col style={{ width: 220 }} />
                 <col style={{ width: 56 }} />
               </colgroup>
               <thead>
                 <tr style={{ background: 'linear-gradient(180deg,#243449 0%,#1b2a3d 100%)' }}>
-                  {['Recipient', 'Relationship / Company', 'Address', 'Phone', 'Tier', 'Ordered', 'What was purchased', 'Mailed', ''].map((h, idx) => (
+                  {['Recipient', 'Relationship / Company', 'Address', 'Phone', 'Tier', 'Ordered', 'What was purchased', 'Mailed', 'Notes', ''].map((h, idx) => (
                     <th
                       key={h + idx}
                       className={clsx(
@@ -180,6 +181,10 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4] text-center" style={{ background: zebra }}>
                         <StatusToggle on={g.mailed} onClick={() => edit(g.id, { mailed: !g.mailed })} doneLabel="Mailed" todoLabel="Mark" tone="gold" />
                       </td>
+                      {/* Notes */}
+                      <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
+                        <textarea value={g.notes ?? ''} onChange={e => setLocal(g.id, { notes: e.target.value })} onBlur={e => save(g.id, { notes: e.target.value })} rows={2} placeholder="Notes…" className={input + ' resize-y leading-snug'} />
+                      </td>
                       {/* Delete */}
                       <td className="px-2 py-2.5 border-b border-[#f0ece4] text-center" style={{ background: zebra }}>
                         <button
@@ -194,7 +199,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                   );
                 })}
                 {rows.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-12 text-center text-text-muted border-b border-[#f0ece4]">No recipients yet — click “+ Add recipient”.</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-12 text-center text-text-muted border-b border-[#f0ece4]">No recipients yet — click “+ Add recipient”.</td></tr>
                 )}
               </tbody>
             </table>

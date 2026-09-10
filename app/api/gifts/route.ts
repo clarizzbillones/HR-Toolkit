@@ -12,7 +12,7 @@ async function guard() {
   return session?.user ? null : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
-const COLS = ['name', 'relationship', 'address', 'phone', 'tier', 'ordered', 'ordered_note', 'mailed', 'sort_order'] as const;
+const COLS = ['name', 'relationship', 'address', 'phone', 'tier', 'ordered', 'ordered_note', 'mailed', 'notes', 'sort_order'] as const;
 
 export async function GET() {
   const denied = await guard(); if (denied) return denied;

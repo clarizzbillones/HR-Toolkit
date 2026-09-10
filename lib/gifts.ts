@@ -15,9 +15,10 @@ export async function ensureGifts(): Promise<void> {
     id TEXT PRIMARY KEY,
     name TEXT, relationship TEXT, address TEXT, phone TEXT,
     tier TEXT, ordered BOOLEAN DEFAULT false, ordered_note TEXT,
-    mailed BOOLEAN DEFAULT false, sort_order INT DEFAULT 0,
+    mailed BOOLEAN DEFAULT false, notes TEXT, sort_order INT DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE gift_recipients ADD COLUMN IF NOT EXISTS notes TEXT`;
   const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM gift_recipients` as any[];
   if (n === 0) {
     let i = 0;
