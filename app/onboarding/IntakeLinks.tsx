@@ -77,6 +77,36 @@ export default function IntakeLinks() {
     } finally { setRemindingId(null); }
   }
 
+  // ---- View a completed submission (answers + attachments) ----
+  interface Detail { name: string; email: string; roleLabel: string; status: string; submitted_at: string | null; answers: { id: string; label: string; value: string }[]; files: { id: string; name: string; label: string | null; kind: string | null }[]; }
+  const [viewing, setViewing] = useState<Detail | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  async function openSubmission(id: string) {
+    setViewLoading(true);
+    try {
+      const d = await fetch(`/api/onboarding/intake?detail=${id}`).then(r => r.json());
+      if (d.detail) setViewing(d.detail); else showToast(d.error || 'Could not load submission');
+    } catch { showToast('Could not load submission'); }
+    finally { setViewLoading(false); }
+  }
+  function dataUrlToBlob(dataUrl: string): Blob {
+    const [meta, b64] = dataUrl.split(',');
+    const mime = /:(.*?);/.exec(meta)?.[1] || 'application/octet-stream';
+    const bin = atob(b64); const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+  async function openFile(fileId: string, download: boolean, fname: string) {
+    try {
+      const d = await fetch(`/api/onboarding/intake?file=${fileId}`).then(r => r.json());
+      if (!d?.data) { showToast('Could not load file'); return; }
+      const url = URL.createObjectURL(dataUrlToBlob(d.data));
+      if (download) { const a = document.createElement('a'); a.href = url; a.download = d.name || fname || 'document'; document.body.appendChild(a); a.click(); a.remove(); }
+      else window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch { showToast('Could not open file'); }
+  }
+
   const input = 'border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
 
   return (
@@ -170,6 +200,7 @@ export default function IntakeLinks() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {done && <button onClick={() => openSubmission(r.id)} title="See what they submitted and open their uploaded documents" className="text-xs font-semibold text-[#3f6b8a] hover:underline mr-3">👁 View submission</button>}
                       {!readOnly && !done && <button onClick={() => sendReminder(r)} disabled={remindingId === r.id} title={r.email ? `Email the form to ${r.email}` : 'Email the form (you’ll enter their address)'} className="text-xs font-semibold text-[#3f6b8a] hover:underline mr-3 disabled:opacity-50">{remindingId === r.id ? 'Sending…' : '🔔 Send reminder'}</button>}
                       {!readOnly && <button onClick={() => remove(r.id)} className="text-xs font-semibold text-litred-alt hover:underline">Delete</button>}
                     </td>
@@ -180,6 +211,61 @@ export default function IntakeLinks() {
           </table>
         </div>
       </div>
+
+      {(viewing || viewLoading) && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setViewing(null)}>
+          <div className="bg-white rounded-card w-full max-w-lg max-h-[88vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-text-primary">{viewing ? (viewing.name || 'Submission') : 'Loading…'}</div>
+                {viewing && <div className="text-xs text-text-muted mt-0.5">{viewing.roleLabel} onboarding intake{viewing.submitted_at ? ` · submitted ${new Date(viewing.submitted_at).toLocaleDateString()}` : ''}</div>}
+              </div>
+              <button onClick={() => setViewing(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="flex-1 overflow-auto p-5 space-y-5">
+              {viewLoading && !viewing ? <p className="text-sm text-text-muted">Loading submission…</p> : viewing && (
+                <>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-text-muted mb-2">Answers</div>
+                    {viewing.answers.length === 0 ? <p className="text-sm text-text-muted">No answers recorded.</p> : (
+                      <dl className="divide-y divide-border-light border border-border-light rounded-ctrl overflow-hidden">
+                        {viewing.answers.map(a => (
+                          <div key={a.id} className="flex gap-3 px-3 py-2">
+                            <dt className="text-xs font-semibold text-text-secondary w-2/5 shrink-0">{a.label}</dt>
+                            <dd className="text-sm text-text-primary flex-1 whitespace-pre-wrap break-words">{a.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-text-muted mb-2">Uploaded documents {viewing.files.length > 0 && `(${viewing.files.length})`}</div>
+                    {viewing.files.length === 0 ? <p className="text-sm text-text-muted">No documents were uploaded.</p> : (
+                      <div className="space-y-1.5">
+                        {viewing.files.map(f => (
+                          <div key={f.id} className="flex items-center gap-3 border border-border-light rounded-ctrl px-3 py-2">
+                            <span className="text-lg shrink-0">📎</span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-sm font-medium text-text-primary truncate">{f.label || f.name}</span>
+                              {f.label && <span className="block text-xs text-text-muted truncate">{f.name}</span>}
+                            </span>
+                            <button onClick={() => openFile(f.id, false, f.name)} className="shrink-0 text-xs font-semibold text-[#3f6b8a] hover:underline">Open</button>
+                            <button onClick={() => openFile(f.id, true, f.name)} className="shrink-0 text-xs font-semibold text-[#3f6b8a] hover:underline">Download</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-text-muted">These answers and documents are also filed in this person’s Employee File.</p>
+                </>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end">
+              <button onClick={() => setViewing(null)} className="text-sm font-semibold text-text-secondary px-4 py-2">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

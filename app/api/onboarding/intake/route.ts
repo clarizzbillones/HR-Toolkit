@@ -84,6 +84,43 @@ export async function GET(req: Request) {
   // Admin: list every intake.
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // Admin: one submission's answers + uploaded-file list (labelled, ordered).
+  const detail = u.searchParams.get('detail');
+  if (detail) {
+    const [row] = await sql`SELECT * FROM onboarding_intakes WHERE id = ${detail}` as any[];
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const role = row.role as IntakeRole;
+    const ans = parseAns(row.answers);
+    const seen = new Set<string>();
+    const answers: { id: string; label: string; value: string }[] = [];
+    for (const f of intakeFields(role)) {
+      if (f.type === 'info') continue;
+      seen.add(f.id);
+      const v = ans[f.id];
+      const val = Array.isArray(v) ? v.filter(Boolean).join('; ') : (v ?? '');
+      const s = String(val ?? '').trim();
+      if (s) answers.push({ id: f.id, label: f.label, value: s });
+    }
+    // Any answer keys not in the catalog (e.g. custom uploads' notes).
+    for (const [k, v] of Object.entries(ans)) {
+      if (seen.has(k)) continue;
+      const val = Array.isArray(v) ? v.filter(Boolean).join('; ') : (v ?? '');
+      const s = String(val ?? '').trim();
+      if (s) answers.push({ id: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: s });
+    }
+    const files = await sql`SELECT id, name, label, kind FROM onboarding_intake_files WHERE intake_id = ${detail} ORDER BY created_at ASC` as any[];
+    return NextResponse.json({ detail: { name: row.name ?? '', email: row.email ?? '', role, roleLabel: roleLabel(role), status: row.status, submitted_at: row.submitted_at, answers, files } });
+  }
+
+  // Admin: fetch one uploaded file's data (for opening / downloading).
+  const fileId = u.searchParams.get('file');
+  if (fileId) {
+    const [f] = await sql`SELECT name, data FROM onboarding_intake_files WHERE id = ${fileId}` as any[];
+    if (!f) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ name: f.name ?? 'document', data: f.data ?? '' });
+  }
+
   const rows = await sql`SELECT id, token, role, name, email, status, onboardee_id, profile_id, submitted_at, created_at FROM onboarding_intakes ORDER BY created_at DESC` as any[];
   return NextResponse.json({ rows });
 }
