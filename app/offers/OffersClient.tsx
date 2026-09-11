@@ -121,6 +121,18 @@ const BODY_FONT = '"Century Schoolbook","Century","Book Antiqua",Georgia,serif';
 // ---- Part-time offer templates (Summer / Fall law clerk) ------------------
 // Ready-made offer wording HR can drop in and edit, rather than AI-generating.
 type ClerkSeason = 'summer' | 'fall';
+// Resolve the role title for the chosen season: swap any season word already in
+// the role (so "Summer Law Clerk" → "Fall Law Clerk"), fall back to the default
+// clerk title when the role is blank or a season-less clerk title, and leave a
+// genuinely custom (non-clerk) role untouched.
+function clerkRoleFor(currentRole: string, season: ClerkSeason): string {
+  const cap = season === 'summer' ? 'Summer' : 'Fall';
+  const cur = String(currentRole || '').trim();
+  if (!cur) return `${cap} Law Clerk`;
+  const swapped = cur.replace(/\b(summer|fall|autumn)\b/gi, cap);
+  if (swapped.toLowerCase() !== cur.toLowerCase()) return swapped;
+  return /clerk/i.test(cur) ? `${cap} Law Clerk` : cur;
+}
 function offerGreeting(name: string, salTitle: string): string {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '[First name]';
@@ -701,13 +713,18 @@ ${bodyHtml}
   // for anything not yet entered. Everything stays editable afterward.
   function useClerkTemplate(season: ClerkSeason) {
     const y = new Date().getFullYear() + 1;
-    const defStart = season === 'summer' ? `${y}-05-24` : `${y}-09-01`;
+    // Keep an already-chosen year, but switch the month/day to the season's
+    // default. A date still at a template default (May 24 / Sep 1) is treated as
+    // auto-filled and swapped; a genuinely custom date is kept.
+    const yr = (String(form.startDate || '').match(/^(\d{4})/) || [])[1] || String(y);
+    const defStart = season === 'summer' ? `${yr}-05-24` : `${yr}-09-01`;
+    const isAutoDate = /^\d{4}-05-24$/.test(form.startDate) || /^\d{4}-09-01$/.test(form.startDate);
     const next: Form = {
       ...form,
-      role: form.role || (season === 'summer' ? 'Summer Law Clerk' : 'Fall Law Clerk'),
+      role: clerkRoleFor(form.role, season),
       salary: form.salary || '50',
       location: form.location || 'Nashville',
-      startDate: form.startDate || defStart,
+      startDate: (!form.startDate || isAutoDate) ? defStart : form.startDate,
     };
     setEmpType('employee');
     setCompBasis('hourly');
