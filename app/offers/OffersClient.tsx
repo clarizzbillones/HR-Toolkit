@@ -355,6 +355,17 @@ export default function OffersClient() {
   }
 
   async function generate() {
+    // Law-clerk offers use the exact firm template (deterministic), not the AI —
+    // so "Generate" matches the Summer/Fall template wording every time.
+    const roleL = form.role.toLowerCase();
+    const clerkSeason: ClerkSeason | null =
+      /summer/.test(roleL) ? 'summer' : /fall|autumn/.test(roleL) ? 'fall' : /clerk/.test(roleL) ? 'summer' : null;
+    if (clerkSeason) {
+      setEmpType('employee'); setCompBasis('hourly');
+      setDraft(clerkOfferDraft(clerkSeason, form, salTitle, new Date().getFullYear() + 1));
+      showToast(`${clerkSeason === 'summer' ? 'Summer' : 'Fall'} law clerk offer generated`);
+      return;
+    }
     setGenerating(true);
     try {
       const res = await fetch('/api/draft', {
