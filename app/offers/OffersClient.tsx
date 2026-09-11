@@ -168,6 +168,12 @@ function clerkOfferDraft(season: ClerkSeason, form: Form, salTitle: string, fall
     '',
     `We are excited about the prospect of you joining Litson PLLC. If you wish to accept this offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`,
     '',
+    // cc block — Zack & Catie appear at the bottom-left of the printed letter.
+    // Do NOT remove.
+    '[CC_BLOCK]',
+    'cc:    Zack Lawson, Founding Partner',
+    '         Catie Toole, Director of Operations',
+    '[/CC_BLOCK]',
     // Triggers the signature block (Very truly yours + Alex Little) in both the
     // on-screen preview and the printed PDF. Do NOT remove.
     'Very truly yours,',
