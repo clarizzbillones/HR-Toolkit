@@ -118,6 +118,47 @@ const LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA+gAAAFNCAIAAAAc
 const SIG_B64 = ALEX_SIGNATURE;
 const BODY_FONT = '"Century Schoolbook","Century","Book Antiqua",Georgia,serif';
 
+// ---- Part-time offer templates (Summer / Fall law clerk) ------------------
+// Ready-made offer wording HR can drop in and edit, rather than AI-generating.
+type ClerkSeason = 'summer' | 'fall';
+function offerGreeting(name: string, salTitle: string): string {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '[First name]';
+  const first = parts[0];
+  const last = parts.length > 1 ? parts[parts.length - 1] : first;
+  return salTitle ? `${salTitle} ${last}` : first;
+}
+function isoToLong(iso: string): string {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(iso || '');
+  return fmtLongDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+// Compose the clerk offer letter body from the current form values. The print
+// composer appends the "Very truly yours" + Alex signature block, so we omit it.
+function clerkOfferDraft(season: ClerkSeason, form: Form, salTitle: string, fallbackYear: number): string {
+  const greeting = offerGreeting(form.name, salTitle);
+  const year = (String(form.startDate || '').match(/^(\d{4})/) || [])[1] || String(fallbackYear);
+  const loc = (form.location || 'Nashville').replace(/,.*$/, '').trim() || 'Nashville';
+  const rate = (String(form.salary || '50').replace(/[^0-9.]/g, '')) || '50';
+  const role = form.role || (season === 'summer' ? 'Summer Law Clerk' : 'Fall Law Clerk');
+  const start = isoToLong(form.startDate) || (season === 'summer' ? `May 24, ${year}` : `September 1, ${year}`);
+  const lines = [
+    `[DATE_CENTERED]${fmtLongDate(new Date())}`,
+    '',
+    ...(form.name ? [form.name] : []),
+    ...(form.email ? [form.email] : []),
+    '',
+    `Dear ${greeting},`,
+    '',
+    `We are pleased to offer you employment with Litson PLLC as a ${role} for the ${year} ${season} program at our ${loc} office. You will be compensated at a rate of $${rate} per hour, paid on a weekly basis. Your compensation may be adjusted pursuant to firm policies, as in effect and amended from time to time. Your employment with Litson PLLC will be at will.`,
+    '',
+    `Your anticipated start date will be no later than ${start}.`,
+    '',
+    `We are excited about the prospect of you joining Litson PLLC. If you wish to accept this offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`,
+  ];
+  return lines.join('\n');
+}
+
 export default function OffersClient() {
   const { showToast } = useToast();
   const [letterKind, setLetterKind] = useState<LetterKind>('offer');
@@ -640,6 +681,25 @@ ${bodyHtml}
     win.document.close();
   }
 
+  // Drop a part-time clerk offer into the draft, pre-filling sensible defaults
+  // for anything not yet entered. Everything stays editable afterward.
+  function useClerkTemplate(season: ClerkSeason) {
+    const y = new Date().getFullYear() + 1;
+    const defStart = season === 'summer' ? `${y}-05-24` : `${y}-09-01`;
+    const next: Form = {
+      ...form,
+      role: form.role || (season === 'summer' ? 'Summer Law Clerk' : 'Fall Law Clerk'),
+      salary: form.salary || '50',
+      location: form.location || 'Nashville',
+      startDate: form.startDate || defStart,
+    };
+    setEmpType('employee');
+    setCompBasis('hourly');
+    setForm(next);
+    setDraft(clerkOfferDraft(season, next, salTitle, y));
+    showToast(`${season === 'summer' ? 'Summer' : 'Fall'} law clerk template loaded — edit anything below`);
+  }
+
   const ready = !!(form.name && form.role && form.salary);
   const decReady = !!(dec.name && dec.body);
   const genReady = !!gen.body.trim();
@@ -719,6 +779,22 @@ ${bodyHtml}
                   W-2 Employee
                 </button>
               </div>
+            </div>
+
+            {/* Part-time offer templates */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Part-time offer templates</div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => useClerkTemplate('summer')}
+                  className="flex-1 py-2 text-sm font-semibold rounded-ctrl border border-border bg-white text-text-secondary hover:border-ink hover:text-text-primary transition-colors">
+                  ☀️ Summer Law Clerk
+                </button>
+                <button type="button" onClick={() => useClerkTemplate('fall')}
+                  className="flex-1 py-2 text-sm font-semibold rounded-ctrl border border-border bg-white text-text-secondary hover:border-ink hover:text-text-primary transition-colors">
+                  🍂 Fall Law Clerk
+                </button>
+              </div>
+              <p className="text-[11px] text-text-muted mt-1.5">Fills the letter with the part-time clerk wording ($/hour, weekly, at-will). Enter a name/rate/date first to have them dropped in — or edit the draft after.</p>
             </div>
 
             {empType === 'contractor' && (
