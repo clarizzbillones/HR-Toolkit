@@ -157,8 +157,10 @@ function clerkOfferDraft(season: ClerkSeason, form: Form, salTitle: string, fall
   const lines = [
     `[DATE_CENTERED]${fmtLongDate(new Date())}`,
     '',
+    ...(form.email ? [`Via Email: ${form.email}`] : ['Via Email']),
     ...(form.name ? [form.name] : []),
-    ...(form.email ? [form.email] : []),
+    '',
+    '    Re:    Offer of Employment',
     '',
     `Dear ${greeting},`,
     '',
@@ -465,8 +467,8 @@ export default function OffersClient() {
       const l = linesArr[i];
       if (l.startsWith('[DATE_CENTERED]')) {
         bodyHtml += `<div style="text-align:center;margin-bottom:11pt">${esc(l.replace('[DATE_CENTERED]',''))}</div>`;
-      } else if (/^Via Email$/i.test(l.trim())) {
-        bodyHtml += `<div style="text-decoration:underline;font-weight:bold;margin-bottom:6pt">${esc(l)}</div>`;
+      } else if (/^Via Email\b/i.test(l.trim())) {
+        bodyHtml += `<div style="text-decoration:underline;font-weight:bold;margin-bottom:2pt">${esc(l)}</div>`;
       } else if (/^\s*Re:\s+/i.test(l)) {
         bodyHtml += `<div style="margin-left:2.5em;margin-bottom:6pt"><span style="font-weight:bold">Re:</span><span style="margin-left:2em;font-weight:bold">${esc(l.replace(/^\s*Re:\s+/i,''))}</span></div>`;
       } else if (l.trim() === '') {
