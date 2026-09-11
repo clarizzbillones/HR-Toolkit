@@ -155,6 +155,10 @@ function clerkOfferDraft(season: ClerkSeason, form: Form, salTitle: string, fall
     `Your anticipated start date will be no later than ${start}.`,
     '',
     `We are excited about the prospect of you joining Litson PLLC. If you wish to accept this offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`,
+    '',
+    // Triggers the signature block (Very truly yours + Alex Little) in both the
+    // on-screen preview and the printed PDF. Do NOT remove.
+    'Very truly yours,',
   ];
   return lines.join('\n');
 }
