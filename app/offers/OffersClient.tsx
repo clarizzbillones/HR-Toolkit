@@ -171,6 +171,7 @@ export default function OffersClient() {
   const [payBasis, setPayBasis] = useState<'monthly' | 'weekly' | 'biweekly'>('monthly');
   const [compBasis, setCompBasis] = useState<'annual' | 'monthly' | 'hourly'>('annual');  // W-2 employee
   const [salTitle, setSalTitle] = useState('');
+  const [clerkTpl, setClerkTpl] = useState<ClerkSeason | null>(null);  // which clerk template is loaded
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -361,7 +362,7 @@ export default function OffersClient() {
     const clerkSeason: ClerkSeason | null =
       /summer/.test(roleL) ? 'summer' : /fall|autumn/.test(roleL) ? 'fall' : /clerk/.test(roleL) ? 'summer' : null;
     if (clerkSeason) {
-      setEmpType('employee'); setCompBasis('hourly');
+      setEmpType('employee'); setCompBasis('hourly'); setClerkTpl(clerkSeason);
       setDraft(clerkOfferDraft(clerkSeason, form, salTitle, new Date().getFullYear() + 1));
       showToast(`${clerkSeason === 'summer' ? 'Summer' : 'Fall'} law clerk offer generated`);
       return;
@@ -711,6 +712,7 @@ ${bodyHtml}
     setEmpType('employee');
     setCompBasis('hourly');
     setForm(next);
+    setClerkTpl(season);
     setDraft(clerkOfferDraft(season, next, salTitle, y));
     showToast(`${season === 'summer' ? 'Summer' : 'Fall'} law clerk template loaded — edit anything below`);
   }
@@ -801,11 +803,13 @@ ${bodyHtml}
               <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Part-time offer templates</div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => useClerkTemplate('summer')}
-                  className="flex-1 py-2 text-sm font-semibold rounded-ctrl border border-border bg-white text-text-secondary hover:border-ink hover:text-text-primary transition-colors">
+                  className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                    clerkTpl === 'summer' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
                   ☀️ Summer Law Clerk
                 </button>
                 <button type="button" onClick={() => useClerkTemplate('fall')}
-                  className="flex-1 py-2 text-sm font-semibold rounded-ctrl border border-border bg-white text-text-secondary hover:border-ink hover:text-text-primary transition-colors">
+                  className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                    clerkTpl === 'fall' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
                   🍂 Fall Law Clerk
                 </button>
               </div>
@@ -965,7 +969,7 @@ ${bodyHtml}
                   className="bg-white border border-border text-text-primary text-sm font-semibold px-4 py-2.5 rounded-ctrl hover:bg-canvas transition-colors">
                   ↓ TXT
                 </button>
-                <button onClick={() => { setDraft(''); setForm(EMPTY); }}
+                <button onClick={() => { setDraft(''); setForm(EMPTY); setClerkTpl(null); }}
                   className="ml-auto text-sm font-semibold text-text-muted hover:text-text-primary px-3 py-2 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border transition-colors">
                   Clear
                 </button>
