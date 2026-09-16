@@ -91,10 +91,10 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         {/* ── Table ────────────────────────────────────────────── */}
         <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1470 }}>
+            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1490 }}>
               <colgroup>
                 <col style={{ width: 250 }} />
-                <col style={{ width: 160 }} />
+                <col style={{ width: 180 }} />
                 <col style={{ width: 300 }} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 108 }} />
@@ -140,7 +140,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
-                        <input value={g.relationship} onChange={e => setLocal(g.id, { relationship: e.target.value })} onBlur={e => save(g.id, { relationship: e.target.value })} placeholder="—" className={input} />
+                        <textarea value={g.relationship} onChange={e => setLocal(g.id, { relationship: e.target.value })} onBlur={e => save(g.id, { relationship: e.target.value })} rows={1} placeholder="—" style={{ fieldSizing: 'content' } as any} className={input + ' resize-y leading-snug'} />
                       </td>
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
                         <textarea
@@ -154,7 +154,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                         />
                       </td>
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
-                        <input value={g.phone} onChange={e => setLocal(g.id, { phone: e.target.value })} onBlur={e => save(g.id, { phone: e.target.value })} placeholder="—" className={input + ' tabular-nums'} />
+                        <input value={g.phone} onChange={e => setLocal(g.id, { phone: e.target.value })} onBlur={e => save(g.id, { phone: e.target.value })} placeholder="—" title={g.phone} className={input + ' tabular-nums'} />
                       </td>
                       {/* Tier */}
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4] whitespace-nowrap" style={{ background: zebra }}>
@@ -176,7 +176,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                       </td>
                       {/* What purchased */}
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
-                        <input value={g.ordered_note} onChange={e => setLocal(g.id, { ordered_note: e.target.value })} onBlur={e => save(g.id, { ordered_note: e.target.value })} placeholder="e.g. wine basket, gift card…" className={input} />
+                        <textarea value={g.ordered_note} onChange={e => setLocal(g.id, { ordered_note: e.target.value })} onBlur={e => save(g.id, { ordered_note: e.target.value })} rows={1} placeholder="e.g. wine basket, gift card…" style={{ fieldSizing: 'content' } as any} className={input + ' resize-y leading-snug'} />
                       </td>
                       {/* Mailed */}
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4] text-center" style={{ background: zebra }}>
@@ -184,7 +184,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                       </td>
                       {/* Notes */}
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
-                        <textarea value={g.notes ?? ''} onChange={e => setLocal(g.id, { notes: e.target.value })} onBlur={e => save(g.id, { notes: e.target.value })} rows={2} placeholder="Notes…" className={input + ' resize-y leading-snug'} />
+                        <textarea value={g.notes ?? ''} onChange={e => setLocal(g.id, { notes: e.target.value })} onBlur={e => save(g.id, { notes: e.target.value })} rows={2} placeholder="Notes…" style={{ fieldSizing: 'content' } as any} className={input + ' resize-y leading-snug'} />
                       </td>
                       {/* Delete */}
                       <td className="px-2 py-2.5 border-b border-[#f0ece4] text-center" style={{ background: zebra }}>
