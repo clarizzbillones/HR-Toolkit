@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useState, useRef, type ReactNode, type Keyb
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/Toast';
 import IntakeLinks from './IntakeLinks';
+import EmailTemplates from './EmailTemplates';
 import OnboardingDoc from './OnboardingDoc';
 import { FIRM_SYSTEMS } from '@/lib/firmSystems';
 import { parseDoc as parseOnbDoc, reconcile as reconcileDoc, allAssignees, defaultTemplate, type OnboardingDoc as OnbDoc, type DocTemplate as OnbTemplate } from '@/lib/onboardingDoc';
@@ -244,10 +245,10 @@ export default function OnboardingClient() {
   function enterDraft() { setSnapshot(items.map(i => ({ ...i }))); setDraftMode(true); setEditing(null); }
   function exitDraft() { if (snapshot) setItems(snapshot); setSnapshot(null); setDraftMode(false); setEditing(null); showToast('Reverted to the saved template'); }
   const [hire, setHire] = useState('');
-  const [view, setView] = useState<'dashboard' | 'guides' | 'intake' | 'workflow'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'guides' | 'intake' | 'workflow' | 'emails'>('dashboard');
   const [addingWf, setAddingWf] = useState(false);
   const [wfHire, setWfHire] = useState(''); // which hire's progress to light up on the workflow
-  useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && ['dashboard', 'workflow', 'guides', 'intake'].includes(t)) setView(t as any); } catch { /* ignore */ } }, []);
+  useEffect(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); if (t && ['dashboard', 'workflow', 'guides', 'intake', 'emails'].includes(t)) setView(t as any); } catch { /* ignore */ } }, []);
   const [people, setPeople] = useState<any[]>([]);
   // Once a hire is marked complete (hired), drop them from the workflow picker.
   useEffect(() => { if (wfHire) { const p = people.find(x => String(x.id) === wfHire); if (p && p.status === 'Complete') setWfHire(''); } }, [people, wfHire]);
@@ -1686,14 +1687,14 @@ export default function OnboardingClient() {
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center gap-4 flex-wrap">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Onboarding</h1>
-          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : view === 'workflow' ? 'The standard hiring & onboarding journey, interview to first check-ins' : 'Edit, add, or remove anything, then send it'}</p>
+          <p className="text-sm text-text-muted mt-0.5">{view === 'dashboard' ? 'Track each new hire’s progress; completed people flow into Staffing' : view === 'intake' ? 'Share a link for future hires to fill out their info and upload documents' : view === 'workflow' ? 'The standard hiring & onboarding journey, interview to first check-ins' : view === 'emails' ? 'Ready-to-send emails for new hires — copy and paste into Outlook' : 'Edit, add, or remove anything, then send it'}</p>
         </div>
         {canSeeModule && (
         <div className="flex items-center bg-[#f1ece3] rounded-ctrl p-0.5 ml-4">
-          {(['dashboard', 'workflow', 'guides', 'intake'] as const).map(v => (
+          {(['dashboard', 'workflow', 'guides', 'intake', 'emails'] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`text-sm font-semibold px-4 py-1.5 rounded transition-colors ${view === v ? 'bg-white text-ink shadow-sm' : 'text-text-muted hover:text-text-primary'}`}>
-              {v === 'dashboard' ? 'Dashboard' : v === 'workflow' ? 'Workflow' : v === 'guides' ? 'Guide Templates' : 'Intake Links'}
+              {v === 'dashboard' ? 'Dashboard' : v === 'workflow' ? 'Workflow' : v === 'guides' ? 'Guide Templates' : v === 'intake' ? 'Intake Links' : 'Email Templates'}
             </button>
           ))}
         </div>
@@ -1881,6 +1882,7 @@ export default function OnboardingClient() {
       )}
 
       {view === 'intake' && <IntakeLinks />}
+      {view === 'emails' && <EmailTemplates />}
       {view === 'workflow' && (() => {
         const STAGE_WF: Record<string, number> = { '': 0, undecided: 0, offer_sent: 4, offer_viewed: 4, offer_accepted: 5, onboarding: 10, complete: 14 };
         const sel = people.find(p => String(p.id) === wfHire) || null;
