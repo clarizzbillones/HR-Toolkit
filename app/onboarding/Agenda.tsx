@@ -7,6 +7,7 @@ type Block =
   | { h: string }
   | { p: string }
   | { note: string }
+  | { tiny: string }
   | { checks: string[] }
   | { meta: [string, string][] }
   | { table: { headers: string[]; rows: string[][] } }
@@ -15,9 +16,10 @@ interface Section { title: string; kicker?: string; page?: boolean; blocks: Bloc
 
 const SECTIONS: Section[] = [
   {
-    title: 'Onboarding Call Agendas',
-    kicker: 'New hire — standard first day · Draft for review',
+    title: 'New hire — standard first day',
+    kicker: 'Onboarding call agendas · Draft for review',
     blocks: [
+      { tiny: 'Prepared by HR · Litson PLLC' },
       { p: 'These four calls run in the same order for every new hire. Each has a distinct purpose so the meetings do not overlap: the first is the welcome and the map of the firm, the second is how we actually work and use our legal systems, the third is the employee’s own HR setup, and the fourth is money and expenses.' },
       { note: 'This is a draft template. Each lead can customize or add to their own section. Placeholders in brackets are filled in per hire.' },
       { h: 'Order of calls' },
@@ -146,9 +148,13 @@ const SECTIONS: Section[] = [
 ];
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const FONT = '"Century Schoolbook","Century","Book Antiqua",Georgia,serif';
-const NAVY = '#1b2a3d';
+const FONT = 'Calibri,"Segoe UI",Arial,sans-serif';
+const NAVY = '#1F2A44';
 const GOLD = '#c9a24a';
+const GRAY = '#666666';
+const GRAY2 = '#888888';
+const THFILL = '#E4E8EF';
+const BORDER = '#cfd6e0';
 const BOX = '&#9744;'; // ☐
 
 export default function Agenda() {
@@ -163,31 +169,37 @@ export default function Agenda() {
   // Everything is rendered with INLINE styles so Word and the browser (PDF)
   // look identical — Word drops CSS class rules but honors inline styles.
   function blockHtml(b: Block): string {
-    if ('h' in b) return `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:10.5pt;margin:9pt 0 3pt">${esc(sub(b.h))}</div>`;
-    if ('p' in b) return `<p style="font-family:${FONT};font-size:10pt;line-height:1.4;margin:3pt 0">${esc(sub(b.p))}</p>`;
-    if ('note' in b) return `<p style="font-family:${FONT};font-style:italic;color:#6b7280;font-size:9pt;margin:2pt 0 5pt">${esc(sub(b.note))}</p>`;
-    if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10pt;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
-    if ('meta' in b) return `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:2pt 0 9pt"><tbody>${b.meta.map(([k, v]) => `<tr><td style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:10pt;padding:2px 12px 2px 0;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="font-family:${FONT};font-size:10pt;padding:2px 0;vertical-align:top">${esc(sub(v))}</td></tr>`).join('')}</tbody></table>`;
-    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;margin:6pt 0 10pt;border:0.5pt solid #d8cfbe"><thead><tr>${b.table.headers.map(h => `<th style="background:${NAVY};color:#ffffff;text-align:left;padding:6px 9px;font-family:Arial,sans-serif;font-size:8.5pt;border:0.5pt solid ${NAVY}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map((r, ri) => `<tr>${r.map(c => `<td style="border:0.5pt solid #d8cfbe;padding:6px 9px;font-family:${FONT};font-size:9pt;vertical-align:top;background:${ri % 2 ? '#faf8f4' : '#ffffff'}">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    if ('notes' in b) return `<div style="border:0.5pt solid #d8cfbe;height:66px;margin:4pt 0 6pt"></div>`;
+    if ('h' in b) {
+      // Numbered items are navy bold headings; the rest are small gray uppercase
+      // section labels (ORDER OF CALLS, ACCOUNTS AND ACCESS, …).
+      if (/^\d+\./.test(b.h.trim()))
+        return `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:11.5pt;margin:9pt 0 3pt">${esc(sub(b.h))}</div>`;
+      return `<div style="font-family:${FONT};font-weight:bold;color:${GRAY};font-size:9.5pt;letter-spacing:1px;text-transform:uppercase;margin:11pt 0 4pt">${esc(sub(b.h))}</div>`;
+    }
+    if ('p' in b) return `<p style="font-family:${FONT};font-size:10.5pt;line-height:1.4;margin:3pt 0">${esc(sub(b.p))}</p>`;
+    if ('note' in b) return `<p style="font-family:${FONT};color:${GRAY};font-size:9.5pt;margin:2pt 0 5pt">${esc(sub(b.note))}</p>`;
+    if ('tiny' in b) return `<p style="font-family:${FONT};color:${GRAY2};font-size:9.5pt;margin:1pt 0 8pt">${esc(sub(b.tiny))}</p>`;
+    if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10pt;color:#333333;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
+    if ('meta' in b) return b.meta.map(([k, v]) => `<p style="font-family:${FONT};font-size:10.5pt;font-weight:bold;color:#222222;margin:2pt 0">${esc(k)}:&nbsp;&nbsp;${esc(sub(v))}</p>`).join('');
+    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%;margin:6pt 0 10pt;border:0.75pt solid ${BORDER}"><thead><tr>${b.table.headers.map(h => `<th style="background:${THFILL};color:${NAVY};text-align:left;padding:5px 8px;font-family:${FONT};font-weight:bold;font-size:9.5pt;border:0.75pt solid ${BORDER}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map(r => `<tr>${r.map(c => `<td style="border:0.75pt solid ${BORDER};padding:5px 8px;font-family:${FONT};font-size:9.5pt;vertical-align:top">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if ('notes' in b) return `<div style="border:0.75pt solid ${BORDER};height:60px;margin:4pt 0 6pt"></div>`;
     return '';
   }
-  // Full-width navy LITSON banner (a table cell — Word renders cell fills and
-  // full width reliably, unlike a flexbox div).
-  const bar = `<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 10pt"><tbody><tr><td style="background:${NAVY};padding:9px 16px"><span style="font-family:Arial,sans-serif;font-weight:700;letter-spacing:6px;font-size:13pt;color:#ffffff">LITSON</span>&nbsp;<span style="color:${GOLD};font-size:15pt">&#8226;</span></td></tr></tbody></table>`;
 
   function sectionHtml(s: Section, forExport = false): string {
     const brk = forExport && s.page ? `<br clear="all" style="page-break-before:always">` : '';
-    return brk + bar
-      + `<h2 style="font-family:${FONT};font-size:13pt;color:${NAVY};margin:0 0 2pt;border-left:4px solid ${GOLD};padding-left:8px">${esc(sub(s.title))}</h2>`
-      + (s.kicker ? `<div style="font-family:${FONT};color:#6b7280;font-size:9.5pt;margin:0 0 9pt;padding-left:12px">${esc(sub(s.kicker))}</div>` : '')
+    const titleSize = s.page ? 15 : 16;
+    return brk
+      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:11pt;letter-spacing:1px;margin:0 0 5pt">LITSON <span style="color:${GOLD}">&#8226;</span></div>`
+      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:${titleSize}pt;margin:0 0 2pt">${esc(sub(s.title))}</div>`
+      + (s.kicker ? `<div style="font-family:${FONT};color:${GRAY};font-size:10pt;margin:0 0 9pt">${esc(sub(s.kicker))}</div>` : '')
       + s.blocks.map(blockHtml).join('');
   }
 
   function fullHtml(): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
-      + `<style>@page{size:8.5in 11in;margin:0.6in 0.7in}</style></head>`
-      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10pt;line-height:1.4;margin:0.6in 0.7in">`
+      + `<style>@page{size:8.5in 11in;margin:0.7in 0.75in}</style></head>`
+      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10.5pt;line-height:1.4;margin:0.7in 0.75in">`
       + SECTIONS.map(s => sectionHtml(s, true)).join('')
       + `<div style="margin-top:16pt;border-top:0.5pt solid #aaa;padding-top:5pt;font-family:Arial,sans-serif;font-size:8pt;color:#888">Prepared by HR · Litson PLLC · Draft for review</div>`
       + `</body></html>`;
