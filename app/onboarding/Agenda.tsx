@@ -20,6 +20,7 @@ const SECTIONS: Section[] = [
     kicker: 'Onboarding call agendas · Draft for review',
     blocks: [
       { tiny: 'Prepared by HR · Litson PLLC' },
+      { meta: [['Prepared for', '[New hire name]'], ['Start date', '[START DATE]']] },
       { p: 'These four calls run in the same order for every new hire. Each has a distinct purpose so the meetings do not overlap: the first is the welcome and the map of the firm, the second is how we actually work and use our legal systems, the third is the employee’s own HR setup, and the fourth is money and expenses.' },
       { note: 'This is a draft template. Each lead can customize or add to their own section. Placeholders in brackets are filled in per hire.' },
       { h: 'Order of calls' },
