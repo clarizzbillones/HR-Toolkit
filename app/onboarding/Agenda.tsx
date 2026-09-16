@@ -166,11 +166,15 @@ export default function Agenda() {
     if ('notes' in b) return `<div class="notesbox"></div>`;
     return '';
   }
-  function sectionHtml(s: Section): string {
-    return `<section class="${s.page ? 'page' : ''}">`
-      + `<div class="letterhead"><span class="wm">LITSON</span><span class="dot">•</span></div>`
+  function sectionHtml(s: Section, forExport = false): string {
+    // An explicit break element is honored by Word (and Chrome print); a CSS
+    // class on <section> is not reliable in Word. Only in the exported doc — the
+    // on-screen preview just stacks the sections.
+    const brk = forExport && s.page ? `<br clear="all" style="page-break-before:always">` : '';
+    return brk + `<section>`
+      + `<div class="keep"><div class="letterhead"><span class="wm">LITSON</span><span class="dot">•</span></div>`
       + `<h2>${esc(sub(s.title))}</h2>`
-      + (s.kicker ? `<div class="kicker">${esc(sub(s.kicker))}</div>` : '')
+      + (s.kicker ? `<div class="kicker">${esc(sub(s.kicker))}</div>` : '') + `</div>`
       + s.blocks.map(blockHtml).join('')
       + `</section>`;
   }
@@ -179,8 +183,8 @@ export default function Agenda() {
     *{box-sizing:border-box}
     body{font-family:Georgia,'Times New Roman',serif;color:#1a1a2e;font-size:11pt;line-height:1.45;margin:0}
     section{padding:0 0 18pt}
-    section.page{page-break-before:always}
-    .letterhead{background:#1b2a3d;border-radius:6px;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;margin-bottom:12pt}
+    .keep{page-break-inside:avoid;page-break-after:avoid}
+    .letterhead{background:#1b2a3d;border-radius:6px;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;margin-bottom:12pt;page-break-after:avoid}
     .wm{color:#fff;font-family:Arial,sans-serif;font-weight:700;letter-spacing:5px;font-size:12pt}
     .dot{color:#c9a24a;font-size:14pt;line-height:1}
     h2{font-size:16pt;margin:0 0 2pt;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:8px}
@@ -216,7 +220,7 @@ export default function Agenda() {
 
   function fullHtml(): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title><style>${STYLE}</style></head><body>`
-      + SECTIONS.map(sectionHtml).join('')
+      + SECTIONS.map(s => sectionHtml(s, true)).join('')
       + `<div style="margin-top:16pt;border-top:0.5pt solid #aaa;padding-top:5pt;font-family:Arial,sans-serif;font-size:8pt;color:#888">Prepared by HR · Litson PLLC · Draft for review</div>`
       + `</body></html>`;
   }
@@ -263,7 +267,7 @@ export default function Agenda() {
 
         {/* Live preview */}
         <div className="bg-white border border-border rounded-card p-8 shadow-sm agenda-preview">
-          <div dangerouslySetInnerHTML={{ __html: `<style>${scopeCss(STYLE, '.agenda-preview')}</style>` + SECTIONS.map(sectionHtml).join('') }} />
+          <div dangerouslySetInnerHTML={{ __html: `<style>${scopeCss(STYLE, '.agenda-preview')}</style>` + SECTIONS.map(s => sectionHtml(s)).join('') }} />
         </div>
       </div>
     </div>
