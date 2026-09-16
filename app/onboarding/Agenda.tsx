@@ -180,19 +180,21 @@ export default function Agenda() {
     if ('note' in b) return `<p style="font-family:${FONT};color:${GRAY};font-size:9.5pt;margin:2pt 0 5pt">${esc(sub(b.note))}</p>`;
     if ('tiny' in b) return `<p style="font-family:${FONT};color:${GRAY2};font-size:9.5pt;margin:1pt 0 8pt">${esc(sub(b.tiny))}</p>`;
     if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10pt;color:#333333;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
-    if ('meta' in b) return b.meta.map(([k, v]) => `<p style="font-family:${FONT};font-size:10.5pt;font-weight:bold;color:#222222;margin:2pt 0">${esc(k)}:&nbsp;&nbsp;${esc(sub(v))}</p>`).join('');
-    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%;margin:6pt 0 10pt;border:0.75pt solid ${BORDER}"><thead><tr>${b.table.headers.map(h => `<th style="background:${THFILL};color:${NAVY};text-align:left;padding:5px 8px;font-family:${FONT};font-weight:bold;font-size:9.5pt;border:0.75pt solid ${BORDER}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map(r => `<tr>${r.map(c => `<td style="border:0.75pt solid ${BORDER};padding:5px 8px;font-family:${FONT};font-size:9.5pt;vertical-align:top">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    if ('notes' in b) return `<div style="border:0.75pt solid ${BORDER};height:60px;margin:4pt 0 6pt"></div>`;
+    if ('meta' in b) return `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:2pt 0 10pt">${b.meta.map(([k, v]) => `<tr><td style="font-family:${FONT};font-size:10.5pt;font-weight:bold;color:${NAVY};padding:2pt 10pt 2pt 0;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="font-family:${FONT};font-size:10.5pt;color:#222222;padding:2pt 0;vertical-align:top">${esc(sub(v))}</td></tr>`).join('')}</table>`;
+    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="7" style="border-collapse:collapse;width:100%;margin:7pt 0 11pt;border:0.75pt solid ${BORDER}"><thead><tr>${b.table.headers.map(h => `<th style="background:${THFILL};color:${NAVY};text-align:left;padding:6px 10px;font-family:${FONT};font-weight:bold;font-size:9.5pt;border:0.75pt solid ${BORDER};border-bottom:1.25pt solid ${NAVY}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map((r, ri) => `<tr>${r.map(c => `<td style="border:0.75pt solid ${BORDER};padding:6px 10px;font-family:${FONT};font-size:9.5pt;line-height:1.35;vertical-align:top;background:${ri % 2 ? '#f7f9fc' : '#ffffff'}">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if ('notes' in b) return `<div style="border:0.75pt solid ${BORDER};border-radius:3px;height:62px;margin:4pt 0 8pt"></div>`;
     return '';
   }
 
   function sectionHtml(s: Section, forExport = false): string {
     const brk = forExport && s.page ? `<br clear="all" style="page-break-before:always">` : '';
-    const titleSize = s.page ? 15 : 16;
+    const titleSize = s.page ? 15 : 17;
+    // Letterhead: LITSON wordmark + a full-width navy rule, then the title.
     return brk
-      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:11pt;letter-spacing:1px;margin:0 0 5pt">LITSON <span style="color:${GOLD}">&#8226;</span></div>`
+      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:16pt;letter-spacing:5px;margin:0 0 3pt">LITSON<span style="color:${GOLD};letter-spacing:0">&nbsp;&#8226;</span></div>`
+      + `<hr style="border:none;border-top:1.5pt solid ${NAVY};height:0;margin:0 0 9pt">`
       + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:${titleSize}pt;margin:0 0 2pt">${esc(sub(s.title))}</div>`
-      + (s.kicker ? `<div style="font-family:${FONT};color:${GRAY};font-size:10pt;margin:0 0 9pt">${esc(sub(s.kicker))}</div>` : '')
+      + (s.kicker ? `<div style="font-family:${FONT};color:${GRAY};font-size:10pt;margin:0 0 10pt">${esc(sub(s.kicker))}</div>` : '')
       + s.blocks.map(blockHtml).join('');
   }
 
