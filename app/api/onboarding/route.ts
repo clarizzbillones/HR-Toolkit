@@ -178,7 +178,7 @@ const C_TASKS: [string, string][] = [
 // so the heading, the short explanation, and the table stay together — mirroring
 // the Benefits Package document instead of pushing every table to the bottom.
 const B_SECTIONS: [number, string, string][] = [
-  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. The insurance benefits described here are viewed and managed through the Ease / Gusto employee portal.\n\n[TABLE]\nDetail | Information\nPrepared for | [EMPLOYEE NAME]\nPosition | Attorney\nStart date | [START DATE]\n[/TABLE]`],
+  [0, 'Employee Benefits Package — Attorneys', `This benefits package applies to **attorneys** (employees only) — it is not available to contractors. The insurance benefits described here are viewed and managed through the Ease / Gusto employee portal.\n\n[TABLE]\nDetail | Information\nPrepared for | [EMPLOYEE NAME]\nPosition | Attorney\nStart date | [START DATE]\n[/TABLE]\n\n**Effective date & premiums**\nYour benefits become effective on the **first day of the month following your hire date**. For example, if you start on September 22, your benefits become effective October 1.\n\nLitson PLLC covers **$600 per month** toward your health insurance premium; the remaining cost is the employee's responsibility.`],
   [1, 'Medical Insurance', `Provider: **Blue Cross Blue Shield**\n\n[TABLE]\nOption | Plan | Network\nOption 1 | BlueCross SG Silver 147P | Blue Network P\nOption 2 | BlueCross SG Gold 117P | Blue Network P\n[/TABLE]\n\nMember services: (800) 565-9140\nID cards: Physical cards are mailed within 10–14 business days of the coverage effective date. If they do not arrive, contact member services. Electronic ID cards are also available.`],
   [2, 'Dental Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian | Guardian 1500 with Child Ortho (UCR) | (800) 541-7846\n[/TABLE]`],
   [3, 'Vision Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian (VSP) | Guardian 10/20/150, 12/12 | (800) 877-7195\n[/TABLE]`],
@@ -203,7 +203,7 @@ const B_TASKS: [string, string][] = [
 // Same firm benefits as the attorney package; the bonus structure differs
 // (two side-by-side tracks — hours and revenue — paid at the higher result).
 const B2_SECTIONS: [number, string, string][] = [
-  [0, 'Employee Benefits Package — Legal Support Staff', `This benefits package applies to **legal support staff** (employees only) — it is not available to contractors. The insurance benefits described here are viewed and managed through the Ease / Gusto employee portal.\n\n[TABLE]\nDetail | Information\nPrepared for | [EMPLOYEE NAME]\nPosition | Legal Support Staff\nStart date | [START DATE]\n[/TABLE]`],
+  [0, 'Employee Benefits Package — Legal Support Staff', `This benefits package applies to **legal support staff** (employees only) — it is not available to contractors. The insurance benefits described here are viewed and managed through the Ease / Gusto employee portal.\n\n[TABLE]\nDetail | Information\nPrepared for | [EMPLOYEE NAME]\nPosition | Legal Support Staff\nStart date | [START DATE]\n[/TABLE]\n\n**Effective date & premiums**\nYour benefits become effective on the **first day of the month following your hire date**. For example, if you start on September 22, your benefits become effective October 1.\n\nLitson PLLC covers **$600 per month** toward your health insurance premium; the remaining cost is the employee's responsibility.`],
   [1, 'Medical Insurance', `Provider: **Blue Cross Blue Shield**\n\n[TABLE]\nOption | Plan | Network\nOption 1 | BlueCross SG Silver 147P | Blue Network P\nOption 2 | BlueCross SG Gold 117P | Blue Network P\n[/TABLE]\n\nMember services: (800) 565-9140\nID cards: Physical cards are mailed within 10–14 business days of the coverage effective date. If they do not arrive, contact member services. Electronic ID cards are also available.`],
   [2, 'Dental Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian | Guardian 1500 with Child Ortho (UCR) | (800) 541-7846\n[/TABLE]`],
   [3, 'Vision Insurance', `[TABLE]\nProvider | Plan | Member Services\nGuardian (VSP) | Guardian 10/20/150, 12/12 | (800) 877-7195\n[/TABLE]`],
@@ -247,7 +247,7 @@ async function seedAll() {
 
 // Add / refresh the Benefits Package guide without disturbing other guides.
 // Bump BENEFITS_V to re-seed just this guide from the definitions above.
-const BENEFITS_V = 3;
+const BENEFITS_V = 4;
 async function ensureBenefitsGuide() {
   const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'benefits_guide_v' LIMIT 1` as any[];
   const cur = meta.length ? parseInt(meta[0].body ?? '0') : 0;
@@ -261,7 +261,7 @@ async function ensureBenefitsGuide() {
 }
 
 // Add / refresh the Support Staff benefits guide. Bump to re-seed just this one.
-const SUPPORT_BENEFITS_V = 1;
+const SUPPORT_BENEFITS_V = 2;
 async function ensureSupportBenefitsGuide() {
   const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'support_benefits_guide_v' LIMIT 1` as any[];
   const cur = meta.length ? parseInt(meta[0].body ?? '0') : 0;
