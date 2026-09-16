@@ -10,7 +10,7 @@ type Block =
   | { tiny: string }
   | { checks: string[] }
   | { meta: [string, string][] }
-  | { table: { headers: string[]; rows: string[][] } }
+  | { table: { headers: string[]; rows: string[][]; widths?: number[] } }
   | { notes: true };
 interface Section { title: string; kicker?: string; page?: boolean; blocks: Block[] }
 
@@ -23,7 +23,7 @@ const SECTIONS: Section[] = [
       { p: 'These four calls run in the same order for every new hire. Each has a distinct purpose so the meetings do not overlap: the first is the welcome and the map of the firm, the second is how we actually work and use our legal systems, the third is the employee’s own HR setup, and the fourth is money and expenses.' },
       { note: 'This is a draft template. Each lead can customize or add to their own section. Placeholders in brackets are filled in per hire.' },
       { h: 'Order of calls' },
-      { table: { headers: ['#', 'Call', 'Led by', 'Duration', 'Focus'], rows: [
+      { table: { widths: [6, 30, 26, 13, 25], headers: ['#', 'Call', 'Led by', 'Duration', 'Focus'], rows: [
         ['1', 'Initial onboarding call', 'Clarizz + Catie', '45 min', 'Welcome and map of the firm'],
         ['2', 'Legal systems & operations', 'Caitlin', '45 min', 'How we work and the systems used'],
         ['3', 'HR meeting', 'Clarizz', '45 min', 'The employee’s own setup'],
@@ -59,7 +59,7 @@ const SECTIONS: Section[] = [
       { checks: ['Laptop working and required software installed', 'Signed into firm email', 'Multi-factor authentication and password manager set up', 'Signed into all active accounts', 'Note anything not working and who is fixing it'] },
       { h: '3. Firm roster and points of contact' },
       { note: 'The full roster is covered here only, so later calls do not repeat it.' },
-      { table: { headers: ['Need', 'Go to'], rows: [
+      { table: { widths: [52, 48], headers: ['Need', 'Go to'], rows: [
         ['Legal workflows, case setup, Clio, e-filing, practice systems', 'Caitlin Giuliano — Legal Operations Coordinator'],
         ['Operations, process and policy questions', 'Caitlin Giuliano — Legal Operations Coordinator'],
         ['Escalations', 'Catie Toole — Director of Operations'],
@@ -176,23 +176,25 @@ export default function Agenda() {
         return `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:11.5pt;margin:9pt 0 3pt">${esc(sub(b.h))}</div>`;
       return `<div style="font-family:${FONT};font-weight:bold;color:${GRAY};font-size:9.5pt;letter-spacing:1px;text-transform:uppercase;margin:11pt 0 4pt">${esc(sub(b.h))}</div>`;
     }
-    if ('p' in b) return `<p style="font-family:${FONT};font-size:10.5pt;line-height:1.4;margin:3pt 0">${esc(sub(b.p))}</p>`;
+    if ('p' in b) return `<p style="font-family:${FONT};font-size:11pt;line-height:1.4;margin:3pt 0">${esc(sub(b.p))}</p>`;
     if ('note' in b) return `<p style="font-family:${FONT};color:${GRAY};font-size:9.5pt;margin:2pt 0 5pt">${esc(sub(b.note))}</p>`;
     if ('tiny' in b) return `<p style="font-family:${FONT};color:${GRAY2};font-size:9.5pt;margin:1pt 0 8pt">${esc(sub(b.tiny))}</p>`;
-    if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10pt;color:#333333;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
-    if ('meta' in b) return `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:2pt 0 10pt">${b.meta.map(([k, v]) => `<tr><td style="font-family:${FONT};font-size:10.5pt;font-weight:bold;color:${NAVY};padding:2pt 10pt 2pt 0;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="font-family:${FONT};font-size:10.5pt;color:#222222;padding:2pt 0;vertical-align:top">${esc(sub(v))}</td></tr>`).join('')}</table>`;
-    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="7" style="border-collapse:collapse;width:100%;margin:7pt 0 11pt;border:0.75pt solid ${BORDER}"><thead><tr>${b.table.headers.map(h => `<th style="background:${THFILL};color:${NAVY};text-align:left;padding:6px 10px;font-family:${FONT};font-weight:bold;font-size:9.5pt;border:0.75pt solid ${BORDER};border-bottom:1.25pt solid ${NAVY}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map((r, ri) => `<tr>${r.map(c => `<td style="border:0.75pt solid ${BORDER};padding:6px 10px;font-family:${FONT};font-size:9.5pt;line-height:1.35;vertical-align:top;background:${ri % 2 ? '#f7f9fc' : '#ffffff'}">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    if ('notes' in b) return `<div style="border:0.75pt solid ${BORDER};border-radius:3px;height:62px;margin:4pt 0 8pt"></div>`;
+    if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10.5pt;color:#1a1a2e;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
+    if ('meta' in b) return b.meta.map(([k, v]) => `<p style="font-family:${FONT};font-size:11pt;font-weight:bold;color:#1a1a2e;margin:2pt 0">${esc(k)}:&nbsp;&nbsp;${esc(sub(v))}</p>`).join('');
+    if ('table' in b) {
+      const cg = b.table.widths ? `<colgroup>${b.table.widths.map(w => `<col style="width:${w}%">`).join('')}</colgroup>` : '';
+      return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;margin:7pt 0 11pt;border:0.75pt solid ${BORDER}">${cg}<thead><tr>${b.table.headers.map(h => `<th style="background:${THFILL};color:#1a1a2e;text-align:left;padding:6px 9px;font-family:${FONT};font-weight:bold;font-size:9.5pt;border:0.75pt solid ${BORDER}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map((r, ri) => `<tr>${r.map(c => `<td style="border:0.75pt solid ${BORDER};padding:6px 9px;font-family:${FONT};font-size:9.5pt;line-height:1.35;vertical-align:top;background:${ri % 2 ? '#F4F6F9' : '#ffffff'}">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    if ('notes' in b) return `<div style="border:0.75pt solid ${BORDER};height:62px;margin:4pt 0 8pt"></div>`;
     return '';
   }
 
   function sectionHtml(s: Section, forExport = false): string {
     const brk = forExport && s.page ? `<br clear="all" style="page-break-before:always">` : '';
-    const titleSize = s.page ? 15 : 17;
-    // Letterhead: LITSON wordmark + a full-width navy rule, then the title.
+    const titleSize = s.page ? 15 : 16;
+    // Letterhead: small navy LITSON wordmark, then the title + kicker.
     return brk
-      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:16pt;letter-spacing:5px;margin:0 0 3pt">LITSON<span style="color:${GOLD};letter-spacing:0">&nbsp;&#8226;</span></div>`
-      + `<hr style="border:none;border-top:1.5pt solid ${NAVY};height:0;margin:0 0 9pt">`
+      + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:11pt;margin:0 0 4pt">LITSON</div>`
       + `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:${titleSize}pt;margin:0 0 2pt">${esc(sub(s.title))}</div>`
       + (s.kicker ? `<div style="font-family:${FONT};color:${GRAY};font-size:10pt;margin:0 0 10pt">${esc(sub(s.kicker))}</div>` : '')
       + s.blocks.map(blockHtml).join('');
@@ -200,8 +202,8 @@ export default function Agenda() {
 
   function fullHtml(): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
-      + `<style>@page{size:8.5in 11in;margin:0.7in 0.75in}</style></head>`
-      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10.5pt;line-height:1.4;margin:0">`
+      + `<style>@page{size:8.5in 11in;margin:1in}</style></head>`
+      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:11pt;line-height:1.4;margin:0">`
       + SECTIONS.map(s => sectionHtml(s, true)).join('')
       + `<div style="margin-top:16pt;border-top:0.5pt solid #aaa;padding-top:5pt;font-family:Arial,sans-serif;font-size:8pt;color:#888">Prepared by HR · Litson PLLC · Draft for review</div>`
       + `</body></html>`;
