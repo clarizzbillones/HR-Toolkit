@@ -201,7 +201,7 @@ export default function Agenda() {
   function fullHtml(): string {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
       + `<style>@page{size:8.5in 11in;margin:0.7in 0.75in}</style></head>`
-      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10.5pt;line-height:1.4;margin:0.7in 0.75in">`
+      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10.5pt;line-height:1.4;margin:0">`
       + SECTIONS.map(s => sectionHtml(s, true)).join('')
       + `<div style="margin-top:16pt;border-top:0.5pt solid #aaa;padding-top:5pt;font-family:Arial,sans-serif;font-size:8pt;color:#888">Prepared by HR · Litson PLLC · Draft for review</div>`
       + `</body></html>`;
