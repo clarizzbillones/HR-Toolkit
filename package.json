@@ -19,6 +19,7 @@
     "@vercel/functions": "^3.7.4",
     "autoprefixer": "10.4.19",
     "clsx": "2.1.1",
+    "docx-preview": "^0.4.0",
     "html-to-image": "1.11.11",
     "html2canvas": "^1.4.1",
     "mammoth": "^1.12.0",

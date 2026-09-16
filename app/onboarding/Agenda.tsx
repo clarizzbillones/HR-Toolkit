@@ -210,11 +210,39 @@ export default function Agenda() {
       + `</body></html>`;
   }
 
-  function downloadPdf() {
-    const w = window.open('', '_blank');
-    if (!w) { showToast('Allow pop-ups to download the PDF'); return; }
-    w.document.write(fullHtml() + '<script>window.onload=function(){window.print()}<\/script>');
-    w.document.close();
+  // Render the actual filled .docx (from the template route) and print THAT, so
+  // the PDF matches the Word download exactly. Falls back to the HTML render.
+  async function downloadPdf() {
+    try {
+      const params = new URLSearchParams({ name: name.trim(), date: startDate.trim() });
+      const res = await fetch(`/api/onboarding/agenda-docx?${params.toString()}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      const { renderAsync } = await import('docx-preview');
+      const bodyEl = document.createElement('div');
+      const styleEl = document.createElement('div');
+      const holder = document.createElement('div');
+      holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in';
+      holder.append(styleEl, bodyEl);
+      document.body.appendChild(holder);
+      await renderAsync(blob, bodyEl, styleEl, { inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: true, ignoreWidth: false });
+      const w = window.open('', '_blank');
+      if (!w) { showToast('Allow pop-ups to download the PDF'); holder.remove(); return; }
+      w.document.write(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
+        + styleEl.innerHTML
+        + `<style>@page{margin:0}body{margin:0;background:#fff}.docx-wrapper{background:#fff!important;padding:0!important}.docx-wrapper>section.docx{box-shadow:none!important;margin:0 auto!important}</style></head><body>`
+        + bodyEl.innerHTML
+        + `<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>`);
+      w.document.close();
+      holder.remove();
+    } catch {
+      // Fallback: the HTML render (approximate).
+      const w = window.open('', '_blank');
+      if (!w) { showToast('Allow pop-ups to download the PDF'); return; }
+      w.document.write(fullHtml() + '<script>window.onload=function(){window.print()}<\/script>');
+      w.document.close();
+    }
   }
   // The Word download is the firm's own master .docx with the name/date filled
   // in server-side — so it is exactly the firm's format.
