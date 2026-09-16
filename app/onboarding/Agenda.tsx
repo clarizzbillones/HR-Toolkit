@@ -225,15 +225,23 @@ export default function Agenda() {
       holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:8.5in';
       holder.append(styleEl, bodyEl);
       document.body.appendChild(holder);
-      await renderAsync(blob, bodyEl, styleEl, { inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: true, ignoreWidth: false });
+      // ignoreHeight lets each page section shrink to its content instead of a
+      // forced full-page box (which overflowed longer calls onto ugly extra
+      // pages); the document's own page breaks still separate the calls.
+      await renderAsync(blob, bodyEl, styleEl, { inWrapper: true, breakPages: true, ignoreHeight: true, ignoreLastRenderedPageBreak: true });
       const w = window.open('', '_blank');
       if (!w) { showToast('Allow pop-ups to download the PDF'); holder.remove(); return; }
       w.document.write(
         `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
         + styleEl.innerHTML
-        + `<style>@page{margin:0}body{margin:0;background:#fff}.docx-wrapper{background:#fff!important;padding:0!important}.docx-wrapper>section.docx{box-shadow:none!important;margin:0 auto!important}</style></head><body>`
+        + `<style>@page{size:Letter;margin:0}body{margin:0;background:#fff}`
+        + `.docx-wrapper{background:#fff!important;padding:0!important;margin:0!important}`
+        + `.docx-wrapper>section.docx{box-shadow:none!important;margin:0 auto!important;min-height:0!important}`
+        + `.docx-wrapper>section.docx>article{break-inside:auto}`
+        + `table,tr,td,th,.docx-wrapper>section.docx>article>*{break-inside:avoid}`
+        + `</style></head><body>`
         + bodyEl.innerHTML
-        + `<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>`);
+        + `<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>`);
       w.document.close();
       holder.remove();
     } catch {
