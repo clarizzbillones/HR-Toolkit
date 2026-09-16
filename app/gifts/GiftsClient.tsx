@@ -91,9 +91,9 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         {/* ── Table ────────────────────────────────────────────── */}
         <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1520 }}>
+            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1540 }}>
               <colgroup>
-                <col style={{ width: 250 }} />
+                <col style={{ width: 270 }} />
                 <col style={{ width: 180 }} />
                 <col style={{ width: 300 }} />
                 <col style={{ width: 170 }} />
@@ -136,7 +136,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                           >
                             {initial(g.name)}
                           </span>
-                          <input value={g.name} onChange={e => setLocal(g.id, { name: e.target.value })} onBlur={e => save(g.id, { name: e.target.value })} placeholder="Name" title={g.name} className={input + ' font-semibold min-w-0'} />
+                          <textarea value={g.name} onChange={e => setLocal(g.id, { name: e.target.value })} onBlur={e => save(g.id, { name: e.target.value })} rows={1} placeholder="Name" title={g.name} style={{ fieldSizing: 'content' } as any} className={input + ' font-semibold min-w-0 resize-y leading-snug'} />
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
