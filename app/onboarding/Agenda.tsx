@@ -216,15 +216,14 @@ export default function Agenda() {
     w.document.write(fullHtml() + '<script>window.onload=function(){window.print()}<\/script>');
     w.document.close();
   }
+  // The Word download is the firm's own master .docx with the name/date filled
+  // in server-side — so it is exactly the firm's format.
   function downloadWord() {
-    const header = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">';
-    const html = fullHtml().replace('<!DOCTYPE html><html>', header);
-    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const params = new URLSearchParams({ name: name.trim(), date: startDate.trim() });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Litson-Onboarding-Call-Agendas${name.trim() ? '-' + name.trim().replace(/\s+/g, '-') : ''}.doc`;
+    a.href = `/api/onboarding/agenda-docx?${params.toString()}`;
+    a.download = '';
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     showToast('Word document downloaded');
   }
 
