@@ -91,12 +91,12 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         {/* ── Table ────────────────────────────────────────────── */}
         <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1490 }}>
+            <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 1520 }}>
               <colgroup>
                 <col style={{ width: 250 }} />
                 <col style={{ width: 180 }} />
                 <col style={{ width: 300 }} />
-                <col style={{ width: 140 }} />
+                <col style={{ width: 170 }} />
                 <col style={{ width: 108 }} />
                 <col style={{ width: 128 }} />
                 <col style={{ width: 220 }} />
@@ -154,7 +154,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
                         />
                       </td>
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4]" style={{ background: zebra }}>
-                        <input value={g.phone} onChange={e => setLocal(g.id, { phone: e.target.value })} onBlur={e => save(g.id, { phone: e.target.value })} placeholder="—" title={g.phone} className={input + ' tabular-nums'} />
+                        <textarea value={g.phone} onChange={e => setLocal(g.id, { phone: e.target.value })} onBlur={e => save(g.id, { phone: e.target.value })} rows={1} placeholder="—" title={g.phone} style={{ fieldSizing: 'content' } as any} className={input + ' tabular-nums resize-y leading-snug'} />
                       </td>
                       {/* Tier */}
                       <td className="px-3.5 py-2.5 border-b border-[#f0ece4] whitespace-nowrap" style={{ background: zebra }}>
