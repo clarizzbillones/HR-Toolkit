@@ -274,6 +274,23 @@ async function ensureSupportBenefitsGuide() {
   else await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'support_benefits_guide_v', ${String(SUPPORT_BENEFITS_V)})`;
 }
 
+// One-time, non-destructive patch: add the "Effective date & premiums" note to
+// EVERY benefits overview section, matched by its CONTENT (the intro table) so
+// it reaches guides that have been renamed in the app (e.g. "Attorney Benefits
+// Package") — not just the default guide names. Idempotent per section (skips
+// any that already have the note) and guarded so it runs only once, respecting
+// later manual edits.
+const PREMIUM_NOTE = `\n\n**Effective date & premiums**\nYour benefits become effective on the **first day of the month following your hire date**. For example, if you start on September 22, your benefits become effective October 1.\n\nLitson PLLC covers **$600 per month** toward your health insurance premium; the remaining cost is the employee's responsibility.`;
+async function patchBenefitsPremiumNote() {
+  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'benefits_premium_note_v1' LIMIT 1`;
+  if (done.length) return;
+  for (const marker of ['%Position | Attorney%', '%Position | Legal Support Staff%']) {
+    await sql`UPDATE onboarding_items SET body = body || ${PREMIUM_NOTE}
+      WHERE kind = 'section' AND body LIKE ${marker} AND body NOT LIKE '%Effective date & premiums%'`;
+  }
+  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'benefits_premium_note_v1', '1')`;
+}
+
 async function migrate() {
   const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'seed_version' LIMIT 1`;
   const cur = meta.length ? parseInt((meta as any[])[0].body ?? '0') : 0;
@@ -381,6 +398,7 @@ export async function GET() {
   await ensureGlobalChecklist();
   await ensureBenefitsGuide();
   await ensureSupportBenefitsGuide();
+  await patchBenefitsPremiumNote();
   await migratePaigeSopIntoGeneral();
   await ensureGuideToolsV1();
   const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
