@@ -146,6 +146,10 @@ const SECTIONS: Section[] = [
 ];
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const FONT = '"Century Schoolbook","Century","Book Antiqua",Georgia,serif';
+const NAVY = '#1b2a3d';
+const GOLD = '#c9a24a';
+const BOX = '&#9744;'; // ☐
 
 export default function Agenda() {
   const { showToast } = useToast();
@@ -156,70 +160,34 @@ export default function Agenda() {
     s.replace(/\[New hire name\]/g, name.trim() || '[New hire name]')
      .replace(/\[START DATE\]/g, startDate.trim() || '[Start date]');
 
+  // Everything is rendered with INLINE styles so Word and the browser (PDF)
+  // look identical — Word drops CSS class rules but honors inline styles.
   function blockHtml(b: Block): string {
-    if ('h' in b) return `<div class="h">${esc(sub(b.h))}</div>`;
-    if ('p' in b) return `<p>${esc(sub(b.p))}</p>`;
-    if ('note' in b) return `<p class="note">${esc(sub(b.note))}</p>`;
-    if ('checks' in b) return `<ul>${b.checks.map(c => `<li>${esc(sub(c))}</li>`).join('')}</ul>`;
-    if ('meta' in b) return `<table class="meta"><tbody>${b.meta.map(([k, v]) => `<tr><td class="mk">${esc(k)}</td><td>${esc(sub(v))}</td></tr>`).join('')}</tbody></table>`;
-    if ('table' in b) return `<table class="tbl"><thead><tr>${b.table.headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map(r => `<tr>${r.map(c => `<td>${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    if ('notes' in b) return `<div class="notesbox"></div>`;
+    if ('h' in b) return `<div style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:10.5pt;margin:9pt 0 3pt">${esc(sub(b.h))}</div>`;
+    if ('p' in b) return `<p style="font-family:${FONT};font-size:10pt;line-height:1.4;margin:3pt 0">${esc(sub(b.p))}</p>`;
+    if ('note' in b) return `<p style="font-family:${FONT};font-style:italic;color:#6b7280;font-size:9pt;margin:2pt 0 5pt">${esc(sub(b.note))}</p>`;
+    if ('checks' in b) return b.checks.map(c => `<div style="font-family:${FONT};font-size:10pt;margin:2pt 0">${BOX}&nbsp;&nbsp;${esc(sub(c))}</div>`).join('');
+    if ('meta' in b) return `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:2pt 0 9pt"><tbody>${b.meta.map(([k, v]) => `<tr><td style="font-family:${FONT};font-weight:bold;color:${NAVY};font-size:10pt;padding:2px 12px 2px 0;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="font-family:${FONT};font-size:10pt;padding:2px 0;vertical-align:top">${esc(sub(v))}</td></tr>`).join('')}</tbody></table>`;
+    if ('table' in b) return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;margin:6pt 0 10pt;border:0.5pt solid #d8cfbe"><thead><tr>${b.table.headers.map(h => `<th style="background:${NAVY};color:#ffffff;text-align:left;padding:6px 9px;font-family:Arial,sans-serif;font-size:8.5pt;border:0.5pt solid ${NAVY}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map((r, ri) => `<tr>${r.map(c => `<td style="border:0.5pt solid #d8cfbe;padding:6px 9px;font-family:${FONT};font-size:9pt;vertical-align:top;background:${ri % 2 ? '#faf8f4' : '#ffffff'}">${esc(sub(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if ('notes' in b) return `<div style="border:0.5pt solid #d8cfbe;height:66px;margin:4pt 0 6pt"></div>`;
     return '';
   }
+  // Full-width navy LITSON banner (a table cell — Word renders cell fills and
+  // full width reliably, unlike a flexbox div).
+  const bar = `<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 10pt"><tbody><tr><td style="background:${NAVY};padding:9px 16px"><span style="font-family:Arial,sans-serif;font-weight:700;letter-spacing:6px;font-size:13pt;color:#ffffff">LITSON</span>&nbsp;<span style="color:${GOLD};font-size:15pt">&#8226;</span></td></tr></tbody></table>`;
+
   function sectionHtml(s: Section, forExport = false): string {
-    // An explicit break element is honored by Word (and Chrome print); a CSS
-    // class on <section> is not reliable in Word. Only in the exported doc — the
-    // on-screen preview just stacks the sections.
     const brk = forExport && s.page ? `<br clear="all" style="page-break-before:always">` : '';
-    return brk + `<section>`
-      + `<div class="keep"><div class="letterhead"><span class="wm">LITSON</span><span class="dot">•</span></div>`
-      + `<h2>${esc(sub(s.title))}</h2>`
-      + (s.kicker ? `<div class="kicker">${esc(sub(s.kicker))}</div>` : '') + `</div>`
-      + s.blocks.map(blockHtml).join('')
-      + `</section>`;
-  }
-
-  const STYLE = `
-    *{box-sizing:border-box}
-    body{font-family:Georgia,'Times New Roman',serif;color:#1a1a2e;font-size:11pt;line-height:1.45;margin:0}
-    section{padding:0 0 18pt}
-    .keep{page-break-inside:avoid;page-break-after:avoid}
-    .letterhead{background:#1b2a3d;border-radius:6px;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;margin-bottom:12pt;page-break-after:avoid}
-    .wm{color:#fff;font-family:Arial,sans-serif;font-weight:700;letter-spacing:5px;font-size:12pt}
-    .dot{color:#c9a24a;font-size:14pt;line-height:1}
-    h2{font-size:16pt;margin:0 0 2pt;color:#1b2a3d;border-left:4px solid #c9a24a;padding-left:8px}
-    .kicker{color:#6b7280;font-size:10pt;margin:0 0 12pt;padding-left:12px}
-    .h{font-weight:700;color:#1b2a3d;margin:12pt 0 4pt;font-size:11.5pt}
-    p{margin:4pt 0}
-    p.note{color:#6b7280;font-style:italic;font-size:10pt;margin:3pt 0 6pt}
-    ul{margin:4pt 0 8pt;padding:0;list-style:none}
-    li{position:relative;padding-left:20px;margin:3pt 0}
-    li:before{content:'\\2610';position:absolute;left:0;color:#1b2a3d}
-    table{border-collapse:collapse;width:100%;margin:6pt 0 10pt;font-size:10pt}
-    table.tbl th{background:#1b2a3d;color:#fff;text-align:left;padding:6px 9px;font-family:Arial,sans-serif;font-size:9pt}
-    table.tbl td{border:0.5pt solid #d8cfbe;padding:6px 9px;vertical-align:top}
-    table.tbl tr:nth-child(even) td{background:#faf8f4}
-    table.meta{width:auto;margin:2pt 0 10pt}
-    table.meta td{padding:2px 10px 2px 0;vertical-align:top}
-    table.meta .mk{font-weight:700;color:#1b2a3d;white-space:nowrap}
-    .notesbox{border:0.5pt solid #d8cfbe;border-radius:4px;height:80px;margin:4pt 0 6pt;background:repeating-linear-gradient(#fff,#fff 23px,#eee3d0 24px)}
-  `;
-
-  // Prefix every selector so the preview <style> can't leak into the rest of
-  // the app (the export document uses the raw, global rules instead).
-  function scopeCss(css: string, scope: string): string {
-    return css.replace(/([^{}]+)\{/g, (_m, sel: string) =>
-      sel.split(',').map(s => {
-        s = s.trim();
-        if (!s) return s;
-        if (s === 'body') return scope;
-        if (s === '*') return `${scope} *`;
-        return `${scope} ${s}`;
-      }).join(', ') + ' {');
+    return brk + bar
+      + `<h2 style="font-family:${FONT};font-size:13pt;color:${NAVY};margin:0 0 2pt;border-left:4px solid ${GOLD};padding-left:8px">${esc(sub(s.title))}</h2>`
+      + (s.kicker ? `<div style="font-family:${FONT};color:#6b7280;font-size:9.5pt;margin:0 0 9pt;padding-left:12px">${esc(sub(s.kicker))}</div>` : '')
+      + s.blocks.map(blockHtml).join('');
   }
 
   function fullHtml(): string {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title><style>${STYLE}</style></head><body>`
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Litson Onboarding Call Agendas${name.trim() ? ` — ${esc(name.trim())}` : ''}</title>`
+      + `<style>@page{size:8.5in 11in;margin:0.6in 0.7in}</style></head>`
+      + `<body style="font-family:${FONT};color:#1a1a2e;font-size:10pt;line-height:1.4;margin:0.6in 0.7in">`
       + SECTIONS.map(s => sectionHtml(s, true)).join('')
       + `<div style="margin-top:16pt;border-top:0.5pt solid #aaa;padding-top:5pt;font-family:Arial,sans-serif;font-size:8pt;color:#888">Prepared by HR · Litson PLLC · Draft for review</div>`
       + `</body></html>`;
@@ -252,7 +220,7 @@ export default function Agenda() {
         <div className="bg-white border border-border rounded-card p-5 mb-5 flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">New hire name</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. John Casey" className={inputCls + ' w-52'} />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Bill Abely" className={inputCls + ' w-52'} />
           </div>
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Start date</label>
@@ -262,12 +230,12 @@ export default function Agenda() {
             <button onClick={downloadPdf} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">🖨 Download PDF</button>
             <button onClick={downloadWord} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">⬇ Download Word</button>
           </div>
-          <p className="w-full text-[11px] text-text-muted">Fill in the name and start date to personalize every call agenda, then download. Placeholders in [brackets] fill in automatically.</p>
+          <p className="w-full text-[11px] text-text-muted">Fill in the name and start date to personalize every call agenda, then download. The PDF and Word files use the same layout.</p>
         </div>
 
-        {/* Live preview */}
-        <div className="bg-white border border-border rounded-card p-8 shadow-sm agenda-preview">
-          <div dangerouslySetInnerHTML={{ __html: `<style>${scopeCss(STYLE, '.agenda-preview')}</style>` + SECTIONS.map(s => sectionHtml(s)).join('') }} />
+        {/* Live preview — identical inline styles to the exported files */}
+        <div className="bg-white border border-border rounded-card p-8 shadow-sm">
+          <div dangerouslySetInnerHTML={{ __html: SECTIONS.map(s => sectionHtml(s)).join('') }} />
         </div>
       </div>
     </div>
