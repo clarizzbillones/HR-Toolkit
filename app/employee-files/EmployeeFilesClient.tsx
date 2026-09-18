@@ -244,13 +244,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     return () => window.removeEventListener('hr-nav', h);
   }, []);
 
-  async function testToolsSurvey() {
-    const email = window.prompt('Send a test Tools & Access survey to which email?');
-    if (!email || !email.trim()) return;
-    const res = await fetch('/api/tools-survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', email: email.trim() }) });
-    const d = await res.json();
-    showToast(res.ok && d.emailed ? `Test survey emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
-  }
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveySel, setSurveySel] = useState<Set<string>>(new Set());
@@ -402,6 +395,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       showToast(`RSVP emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
       loadRsvp(); setShowRsvp(false);
     } finally { setRsvpBusy(false); }
+  }
+  async function testRsvp() {
+    const email = window.prompt('Send a test RSVP to which email?');
+    if (!email || !email.trim()) return;
+    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', eventId: rsvpEventId, email: email.trim() }) });
+    const d = await res.json();
+    showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
   // Download the RSVP responses as a CSV report.
   function downloadRsvpReport() {
@@ -850,7 +850,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         <div className="ml-auto flex items-center gap-2.5 flex-wrap">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
           {!readOnly && <button onClick={syncStaffing} disabled={syncing} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Create a tile for every employee in Staffing">{syncing ? 'Syncing…' : '⇪ Sync from Staffing'}</button>}
-          {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
           {!readOnly && <button onClick={openSurveyModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Choose which employees receive the Tools & Access survey">✉ Send tools survey</button>}
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
@@ -1158,7 +1157,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             </div>
 
             <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
-              <button onClick={downloadRsvpReport} className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Download the responses as a CSV report">⬇ Download report</button>
+              <div className="flex items-center gap-2">
+                <button onClick={testRsvp} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
+                <button onClick={downloadRsvpReport} className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Download the responses as a CSV report">⬇ Download report</button>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowRsvp(false)} className="text-sm text-text-muted px-3">Close</button>
                 <button onClick={sendRsvpSelected} disabled={rsvpBusy || rsvpSel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{rsvpBusy ? 'Sending…' : `✉ Send to ${rsvpSel.size}`}</button>
