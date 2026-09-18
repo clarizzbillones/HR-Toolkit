@@ -4,6 +4,7 @@ import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
+import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -321,6 +322,49 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const email = window.prompt('Send a test info request to which email?');
     if (!email || !email.trim()) return;
     const res = await fetch('/api/info-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', email: email.trim(), fieldIds: infoFieldIds }) });
+    const d = await res.json();
+    showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
+  }
+
+  // ---- Event RSVP survey (headcount) ----
+  const [showRsvp, setShowRsvp] = useState(false);
+  const [rsvpBusy, setRsvpBusy] = useState(false);
+  const [rsvpEventId, setRsvpEventId] = useState(EVENTS[0]?.id ?? '');
+  const [rsvpSel, setRsvpSel] = useState<Set<string>>(new Set());
+  const [rsvpRows, setRsvpRows] = useState<any[]>([]);
+  const rsvpEvent = EVENTS.find(e => e.id === rsvpEventId) ?? EVENTS[0];
+  const rsvpStatus: Record<string, string> = {};
+  for (const r of rsvpRows) { if (!r.profile_id) continue; if (rsvpStatus[r.profile_id] === 'Completed') continue; if (r.status === 'Completed') rsvpStatus[r.profile_id] = 'Completed'; else if (!rsvpStatus[r.profile_id]) rsvpStatus[r.profile_id] = r.status || 'Sent'; }
+  // Headcount from completed responses (attending + plus-ones).
+  const rsvpDone = rsvpRows.filter(r => r.status === 'Completed');
+  const attending = rsvpDone.filter(r => r.answers?.attending === 'Yes').length;
+  const plusOnes = rsvpDone.filter(r => r.answers?.attending === 'Yes' && r.answers?.plus_one === 'Yes').length;
+  const notAttending = rsvpDone.filter(r => r.answers?.attending === 'No').length;
+  async function loadRsvp(id = rsvpEventId) {
+    try { const d = await fetch(`/api/rsvp?eventId=${encodeURIComponent(id)}`).then(r => r.json()); setRsvpRows(d.rows ?? []); } catch { /* ignore */ }
+  }
+  useEffect(() => { loadRsvp(); }, [rsvpEventId]);
+  function openRsvpModal() {
+    setRsvpSel(new Set(sendableEmployees().filter(p => rsvpStatus[p.id] !== 'Completed').map(p => p.id)));
+    setShowRsvp(true);
+  }
+  function toggleRsvpSel(id: string) { setRsvpSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; }); }
+  async function sendRsvpSelected() {
+    const ids = [...rsvpSel];
+    if (!ids.length) { showToast('Select at least one employee'); return; }
+    setRsvpBusy(true);
+    try {
+      const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-bulk', eventId: rsvpEventId, profileIds: ids }) });
+      const d = await res.json();
+      if (!res.ok) { showToast(d.error || 'Could not send'); return; }
+      showToast(`RSVP emailed to ${d.sent} of ${d.total}${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`);
+      loadRsvp(); setShowRsvp(false);
+    } finally { setRsvpBusy(false); }
+  }
+  async function testRsvp() {
+    const email = window.prompt('Send a test RSVP to which email?');
+    if (!email || !email.trim()) return;
+    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', eventId: rsvpEventId, email: email.trim() }) });
     const d = await res.json();
     showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
@@ -751,6 +795,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={testToolsSurvey} className="bg-white border border-border-light text-text-secondary text-sm font-semibold px-3 py-2 rounded-ctrl hover:bg-canvas" title="Send a test Tools & Access survey to any email to preview it">✉ Test</button>}
           {!readOnly && <button onClick={openSurveyModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Choose which employees receive the Tools & Access survey">✉ Send tools survey</button>}
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
+          {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
@@ -974,6 +1019,84 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowInfo(false)} className="text-sm text-text-muted px-3">Cancel</button>
                 <button onClick={sendInfoSelected} disabled={infoBusy || infoSel.size === 0 || infoFieldIds.length === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{infoBusy ? 'Sending…' : `✉ Send to ${infoSel.size}`}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event RSVP — send + headcount */}
+      {showRsvp && rsvpEvent && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowRsvp(false)}>
+          <div className="bg-white rounded-card w-full max-w-4xl max-h-[88vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-text-primary">{rsvpEvent.title}</div>
+                <div className="text-xs text-text-muted mt-0.5">Send the RSVP form and track the headcount. <b>{rsvpSel.size}</b> selected.</div>
+              </div>
+              <button onClick={() => setShowRsvp(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+
+            {/* Headcount summary */}
+            <div className="px-5 py-3 border-b border-border-light grid grid-cols-4 gap-3">
+              {([['Responded', rsvpDone.length, '#33445e'], ['Attending', attending, '#2f7d5b'], ['Plus-ones', plusOnes, '#a97d24'], ['Not attending', notAttending, '#6e2b3e']] as const).map(([l, v, c]) => (
+                <div key={l} className="bg-canvas rounded-ctrl px-3 py-2 border border-border-light">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{l}</div>
+                  <div className="text-xl font-bold" style={{ color: c }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-1.5 border-b border-border-light text-[11px] text-text-muted">Expected total heads: <b className="text-text-secondary">{attending + plusOnes}</b> ({attending} employee{attending === 1 ? '' : 's'} + {plusOnes} plus-one{plusOnes === 1 ? '' : 's'})</div>
+
+            <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[1fr_1fr] divide-x divide-border-light">
+              {/* Recipients */}
+              <div className="flex flex-col overflow-hidden">
+                <div className="px-5 py-2 border-b border-border-light flex items-center gap-4 text-[11px] font-semibold">
+                  <button onClick={() => setRsvpSel(new Set(sendableEmployees().map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select all with email</button>
+                  <button onClick={() => setRsvpSel(new Set(sendableEmployees().filter(p => rsvpStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
+                  <button onClick={() => setRsvpSel(new Set())} className="text-text-muted hover:underline">Clear</button>
+                </div>
+                <div className="flex-1 overflow-auto p-3 space-y-0.5">
+                  {profiles.filter(p => !p.offboarded).map(p => {
+                    const email = String(p.email ?? '').trim();
+                    const st = rsvpStatus[p.id];
+                    const ans = rsvpDone.find(r => r.profile_id === p.id)?.answers;
+                    return (
+                      <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
+                        <input type="checkbox" disabled={!email} checked={rsvpSel.has(p.id)} onChange={() => toggleRsvpSel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
+                        <span className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-text-primary">{p.name}</span>
+                          <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
+                        </span>
+                        {st === 'Completed'
+                          ? (ans?.attending === 'Yes'
+                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">{`✓ Yes${ans?.plus_one === 'Yes' ? ' +1' : ''}`}</span>
+                              : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>)
+                          : st ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f7efe1] text-[#b07d2a]">⏳ Awaiting</span>
+                          : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Email preview */}
+              <div className="flex flex-col overflow-hidden bg-canvas">
+                <div className="px-5 py-3 border-b border-border-light flex items-center justify-between">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Email preview</div>
+                  <span className="text-[11px] text-text-muted">Subject: <span className="text-text-secondary">Litson PLLC — {rsvpEvent.title}</span></span>
+                </div>
+                <div className="flex-1 overflow-auto p-5">
+                  <div className="bg-white border border-border rounded-card p-4 shadow-sm"
+                    dangerouslySetInnerHTML={{ __html: rsvpEmail((profiles.find(p => rsvpSel.has(p.id))?.name) || 'there', '#', rsvpEvent, true) }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
+              <button onClick={testRsvp} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowRsvp(false)} className="text-sm text-text-muted px-3">Close</button>
+                <button onClick={sendRsvpSelected} disabled={rsvpBusy || rsvpSel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{rsvpBusy ? 'Sending…' : `✉ Send to ${rsvpSel.size}`}</button>
               </div>
             </div>
           </div>
