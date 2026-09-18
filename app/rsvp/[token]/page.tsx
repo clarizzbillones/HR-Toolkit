@@ -21,16 +21,28 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
   const ev = row?.event;
   const questions: Q[] = ev?.questions ?? [];
 
-  // A question is shown only if it has no condition, or the referenced answer matches.
-  const visible = (q: Q) => !q.showIf || answers[q.showIf.q] === q.showIf.value;
+  // A question is shown only if it has no condition, or the referenced answer
+  // matches AND that referenced question is itself shown (so chained conditions
+  // like plus-one → plus-one name hide together when "attending" is No).
+  const byId = (id: string) => questions.find(q => q.id === id);
+  const visible = (q: Q): boolean => {
+    if (!q.showIf) return true;
+    const parent = byId(q.showIf.q);
+    if (parent && !visible(parent)) return false;
+    return answers[q.showIf.q] === q.showIf.value;
+  };
 
   async function submit() {
     setError('');
-    const missing = questions.filter(q => visible(q) && !String(answers[q.id] ?? '').trim());
+    const shown = questions.filter(visible);
+    const missing = shown.filter(q => !String(answers[q.id] ?? '').trim());
     if (missing.length) { setError('Please answer every question.'); return; }
+    // Only submit answers for the questions that were shown.
+    const clean: Record<string, string> = {};
+    for (const q of shown) if (answers[q.id] != null) clean[q.id] = answers[q.id];
     setBusy(true);
     try {
-      const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', token, answers }) });
+      const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'submit', token, answers: clean }) });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Could not submit.'); if (d.done) setDone(true); return; }
       setDone(true);

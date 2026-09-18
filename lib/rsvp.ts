@@ -17,7 +17,7 @@ export const EVENTS: EventDef[] = [
     description: `We're planning a happy hour on October 19 from 5:30–7:00 PM to welcome our international employees who will be in town! Spouses/plus-ones are welcome.\n\nPlease RSVP below so we can get an accurate headcount.`,
     questions: [
       { id: 'attending', label: 'Will you be attending?', type: 'choice', options: ['Yes', 'No'] },
-      { id: 'plus_one', label: 'Will you be bringing a spouse/plus-one?', type: 'choice', options: ['Yes', 'No'] },
+      { id: 'plus_one', label: 'Will you be bringing a spouse/plus-one?', type: 'choice', options: ['Yes', 'No'], showIf: { q: 'attending', value: 'Yes' } },
       { id: 'plus_one_name', label: 'Your spouse/plus-one’s name', type: 'text', showIf: { q: 'plus_one', value: 'Yes' } },
     ],
   },

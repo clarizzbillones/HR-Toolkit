@@ -403,13 +403,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       loadRsvp(); setShowRsvp(false);
     } finally { setRsvpBusy(false); }
   }
-  async function testRsvp() {
-    const email = window.prompt('Send a test RSVP to which email?');
-    if (!email || !email.trim()) return;
-    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-test', eventId: rsvpEventId, email: email.trim() }) });
-    const d = await res.json();
-    showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
-  }
   // Download the RSVP responses as a CSV report.
   function downloadRsvpReport() {
     if (!rsvpEvent) return;
@@ -861,6 +854,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={openSurveyModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Choose which employees receive the Tools & Access survey">✉ Send tools survey</button>}
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
+          {!readOnly && <button onClick={openNewForm} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Create a new fillable RSVP / survey form">＋ New form</button>}
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
@@ -1100,7 +1094,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   <select value={rsvpEventId} onChange={e => setRsvpEventId(e.target.value)} className="text-sm font-semibold text-text-primary bg-white border border-border-light rounded-ctrl px-2 py-1 focus:outline-none focus:border-ink max-w-[280px]">
                     {rsvpEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
                   </select>
-                  <button onClick={openNewForm} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2 py-1 rounded-ctrl hover:bg-canvas">＋ New form</button>
                   {rsvpEvent?.custom && <button onClick={() => openEditForm(rsvpEvent)} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2 py-1 rounded-ctrl hover:bg-canvas">✎ Edit</button>}
                   {rsvpEvent?.custom && <button onClick={() => deleteForm(rsvpEvent)} className="text-xs font-semibold text-litred-alt border border-border-light px-2 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
                 </div>
@@ -1165,10 +1158,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             </div>
 
             <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button onClick={testRsvp} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
-                <button onClick={downloadRsvpReport} className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Download the responses as a CSV report">⬇ Download report</button>
-              </div>
+              <button onClick={downloadRsvpReport} className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Download the responses as a CSV report">⬇ Download report</button>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowRsvp(false)} className="text-sm text-text-muted px-3">Close</button>
                 <button onClick={sendRsvpSelected} disabled={rsvpBusy || rsvpSel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{rsvpBusy ? 'Sending…' : `✉ Send to ${rsvpSel.size}`}</button>
