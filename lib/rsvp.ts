@@ -2,7 +2,12 @@
 // a firm event. Answers roll up into a headcount. Events are defined here in
 // code (add to EVENTS to offer a new form); responses live in event_rsvps.
 
-export interface RsvpQuestion { id: string; label: string; options: string[] }
+export interface RsvpQuestion {
+  id: string; label: string;
+  type?: 'choice' | 'text';       // default 'choice'
+  options?: string[];             // for 'choice'
+  showIf?: { q: string; value: string }; // only show when another answer matches
+}
 export interface EventDef { id: string; title: string; description: string; questions: RsvpQuestion[] }
 
 export const EVENTS: EventDef[] = [
@@ -11,8 +16,9 @@ export const EVENTS: EventDef[] = [
     title: 'October 19 Happy Hour — Headcount',
     description: `We're planning a happy hour on October 19 from 5:30–7:00 PM to welcome our international employees who will be in town! Spouses/plus-ones are welcome.\n\nPlease RSVP below so we can get an accurate headcount.`,
     questions: [
-      { id: 'attending', label: 'Will you be attending?', options: ['Yes', 'No'] },
-      { id: 'plus_one', label: 'Will you be bringing a spouse/plus-one?', options: ['Yes', 'No'] },
+      { id: 'attending', label: 'Will you be attending?', type: 'choice', options: ['Yes', 'No'] },
+      { id: 'plus_one', label: 'Will you be bringing a spouse/plus-one?', type: 'choice', options: ['Yes', 'No'] },
+      { id: 'plus_one_name', label: 'Your spouse/plus-one’s name', type: 'text', showIf: { q: 'plus_one', value: 'Yes' } },
     ],
   },
 ];

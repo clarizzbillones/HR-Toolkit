@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-interface Q { id: string; label: string; options: string[] }
+interface Q { id: string; label: string; type?: 'choice' | 'text'; options?: string[]; showIf?: { q: string; value: string } }
 
 export default function RsvpPage({ params }: { params: { token: string } }) {
   const { token } = params;
@@ -21,9 +21,12 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
   const ev = row?.event;
   const questions: Q[] = ev?.questions ?? [];
 
+  // A question is shown only if it has no condition, or the referenced answer matches.
+  const visible = (q: Q) => !q.showIf || answers[q.showIf.q] === q.showIf.value;
+
   async function submit() {
     setError('');
-    const missing = questions.filter(q => !answers[q.id]);
+    const missing = questions.filter(q => visible(q) && !String(answers[q.id] ?? '').trim());
     if (missing.length) { setError('Please answer every question.'); return; }
     setBusy(true);
     try {
@@ -53,20 +56,29 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
         ) : (
           <div style={{ background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 22 }}>
             {ev?.description && <p style={{ marginTop: 0, color: '#555', whiteSpace: 'pre-wrap' }}>{ev.description}</p>}
-            {questions.map((q, i) => (
-              <div key={q.id} style={{ borderTop: i === 0 ? '1px solid #eee3d0' : '1px solid #eee3d0', paddingTop: 14, marginTop: 12 }}>
-                <div style={{ fontWeight: 600, color: '#1b2a3d', fontSize: 15, marginBottom: 8 }}>{i + 1}. {q.label}</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {q.options.map(o => {
-                    const on = answers[q.id] === o;
-                    return (
-                      <button key={o} type="button" onClick={() => setAnswers(a => ({ ...a, [q.id]: o }))}
-                        style={{ fontSize: 14, fontWeight: 600, padding: '9px 20px', borderRadius: 20, cursor: 'pointer', border: '1px solid ' + (on ? '#1b2a3d' : '#d8cfbe'), background: on ? '#1b2a3d' : '#fff', color: on ? '#fff' : '#555' }}>{o}</button>
-                    );
-                  })}
+            {(() => { let num = 0; return questions.filter(visible).map((q) => {
+              const isText = q.type === 'text';
+              if (!isText) num += 1;
+              return (
+                <div key={q.id} style={{ borderTop: '1px solid #eee3d0', paddingTop: 14, marginTop: 12 }}>
+                  <div style={{ fontWeight: 600, color: '#1b2a3d', fontSize: 15, marginBottom: 8 }}>{isText ? '' : `${num}. `}{q.label}</div>
+                  {isText ? (
+                    <input value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} placeholder="Full name"
+                      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, color: '#1b2a3d', outline: 'none' }} />
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {(q.options ?? []).map(o => {
+                        const on = answers[q.id] === o;
+                        return (
+                          <button key={o} type="button" onClick={() => setAnswers(a => ({ ...a, [q.id]: o }))}
+                            style={{ fontSize: 14, fontWeight: 600, padding: '9px 20px', borderRadius: 20, cursor: 'pointer', border: '1px solid ' + (on ? '#1b2a3d' : '#d8cfbe'), background: on ? '#1b2a3d' : '#fff', color: on ? '#fff' : '#555' }}>{o}</button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            }); })()}
             {error && <p style={{ color: '#b0412f', fontSize: 13, marginTop: 14 }}>{error}</p>}
             <button onClick={submit} disabled={busy} style={{ marginTop: 18, background: busy ? '#9aa4b0' : '#1b2a3d', color: '#fff', border: 'none', fontWeight: 700, padding: '12px 24px', borderRadius: 8, cursor: busy ? 'default' : 'pointer', fontSize: 15 }}>{busy ? 'Submitting…' : 'Submit RSVP'}</button>
             <p style={{ fontSize: 12, color: '#999', marginTop: 14 }}>Your response is shared only with Litson PLLC's HR team.</p>

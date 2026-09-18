@@ -368,6 +368,29 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const d = await res.json();
     showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
+  // Download the RSVP responses as a CSV report.
+  function downloadRsvpReport() {
+    if (!rsvpEvent) return;
+    const done = rsvpRows.filter(r => r.status === 'Completed');
+    if (!done.length) { showToast('No responses yet to download'); return; }
+    const qs = rsvpEvent.questions;
+    const header = ['Name', 'Email', ...qs.map(q => q.label), 'Responded at'];
+    const cell = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = done.map(r => [r.name, r.email, ...qs.map(q => r.answers?.[q.id] ?? ''), r.submitted_at ? new Date(r.submitted_at).toLocaleString() : ''].map(cell).join(','));
+    // Summary rows at the bottom.
+    lines.push('');
+    lines.push([cell('Attending'), cell(attending)].join(','));
+    lines.push([cell('Plus-ones'), cell(plusOnes)].join(','));
+    lines.push([cell('Not attending'), cell(notAttending)].join(','));
+    lines.push([cell('Expected total heads'), cell(attending + plusOnes)].join(','));
+    const csv = [header.map(cell).join(','), ...lines].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `RSVP-${rsvpEvent.title.replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-')}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    showToast('Report downloaded');
+  }
 
   const [syncing, setSyncing] = useState(false);
   async function syncStaffing() {
@@ -1093,7 +1116,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             </div>
 
             <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
-              <button onClick={testRsvp} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
+              <div className="flex items-center gap-2">
+                <button onClick={testRsvp} className="text-sm font-semibold text-[#3f6b8a] border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">✉ Send test to me</button>
+                <button onClick={downloadRsvpReport} className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Download the responses as a CSV report">⬇ Download report</button>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowRsvp(false)} className="text-sm text-text-muted px-3">Close</button>
                 <button onClick={sendRsvpSelected} disabled={rsvpBusy || rsvpSel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{rsvpBusy ? 'Sending…' : `✉ Send to ${rsvpSel.size}`}</button>
