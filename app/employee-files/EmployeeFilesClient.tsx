@@ -329,10 +329,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   // ---- Event RSVP survey (headcount) ----
   const [showRsvp, setShowRsvp] = useState(false);
   const [rsvpBusy, setRsvpBusy] = useState(false);
+  const [rsvpEvents, setRsvpEvents] = useState<any[]>(EVENTS);
   const [rsvpEventId, setRsvpEventId] = useState(EVENTS[0]?.id ?? '');
   const [rsvpSel, setRsvpSel] = useState<Set<string>>(new Set());
   const [rsvpRows, setRsvpRows] = useState<any[]>([]);
-  const rsvpEvent = EVENTS.find(e => e.id === rsvpEventId) ?? EVENTS[0];
+  const rsvpEvent = rsvpEvents.find(e => e.id === rsvpEventId) ?? rsvpEvents[0];
   const rsvpStatus: Record<string, string> = {};
   for (const r of rsvpRows) { if (!r.profile_id) continue; if (rsvpStatus[r.profile_id] === 'Completed') continue; if (r.status === 'Completed') rsvpStatus[r.profile_id] = 'Completed'; else if (!rsvpStatus[r.profile_id]) rsvpStatus[r.profile_id] = r.status || 'Sent'; }
   // Headcount from completed responses (attending + plus-ones).
@@ -341,7 +342,48 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const plusOnes = rsvpDone.filter(r => r.answers?.attending === 'Yes' && r.answers?.plus_one === 'Yes').length;
   const notAttending = rsvpDone.filter(r => r.answers?.attending === 'No').length;
   async function loadRsvp(id = rsvpEventId) {
-    try { const d = await fetch(`/api/rsvp?eventId=${encodeURIComponent(id)}`).then(r => r.json()); setRsvpRows(d.rows ?? []); } catch { /* ignore */ }
+    try {
+      const d = await fetch(`/api/rsvp?eventId=${encodeURIComponent(id)}`).then(r => r.json());
+      if (Array.isArray(d.events)) setRsvpEvents(d.events);
+      setRsvpRows(d.rows ?? []);
+    } catch { /* ignore */ }
+  }
+  // ---- Form builder (create/edit RSVP forms) ----
+  interface BQ { id: string; label: string; type: 'choice' | 'text'; options: string[]; showIf?: { q: string; value: string } }
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [builderId, setBuilderId] = useState<string | null>(null);
+  const [bTitle, setBTitle] = useState('');
+  const [bDesc, setBDesc] = useState('');
+  const [bQ, setBQ] = useState<BQ[]>([]);
+  function newQuestion(): BQ { return { id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), label: '', type: 'choice', options: ['Yes', 'No'] }; }
+  function openNewForm() { setBuilderId(null); setBTitle(''); setBDesc(''); setBQ([newQuestion()]); setShowBuilder(true); }
+  function openEditForm(ev: any) {
+    if (!ev || !ev.custom) { showToast('Built-in forms can’t be edited — create a new one'); return; }
+    setBuilderId(ev.id); setBTitle(ev.title ?? ''); setBDesc(ev.description ?? '');
+    setBQ((ev.questions ?? []).map((q: any) => ({ id: q.id, label: q.label, type: q.type === 'text' ? 'text' : 'choice', options: q.options ?? ['Yes', 'No'], showIf: q.showIf })));
+    setShowBuilder(true);
+  }
+  const setQ = (i: number, patch: Partial<BQ>) => setBQ(qs => qs.map((q, idx) => idx === i ? { ...q, ...patch } : q));
+  async function saveForm() {
+    if (!bTitle.trim()) { showToast('Enter a form title'); return; }
+    const questions = bQ.filter(q => q.label.trim()).map(q => ({ id: q.id, label: q.label.trim(), type: q.type, options: q.type === 'choice' ? q.options.filter(Boolean) : undefined, showIf: q.showIf?.q ? q.showIf : undefined }));
+    if (!questions.length) { showToast('Add at least one question'); return; }
+    const action = builderId ? 'update-event' : 'create-event';
+    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id: builderId, title: bTitle.trim(), description: bDesc, questions }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Could not save form'); return; }
+    setShowBuilder(false);
+    await loadRsvp(d.event?.id ?? rsvpEventId);
+    if (d.event?.id) setRsvpEventId(d.event.id);
+    showToast(builderId ? 'Form updated' : 'Form created');
+  }
+  async function deleteForm(ev: any) {
+    if (!ev?.custom) return;
+    if (!confirm(`Delete the form "${ev.title}" and its responses?`)) return;
+    await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete-event', id: ev.id }) });
+    const remaining = rsvpEvents.filter(e => e.id !== ev.id);
+    setRsvpEvents(remaining); setRsvpEventId(remaining[0]?.id ?? '');
+    showToast('Form deleted');
   }
   useEffect(() => { loadRsvp(); }, [rsvpEventId]);
   function openRsvpModal() {
@@ -373,10 +415,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     if (!rsvpEvent) return;
     const done = rsvpRows.filter(r => r.status === 'Completed');
     if (!done.length) { showToast('No responses yet to download'); return; }
-    const qs = rsvpEvent.questions;
-    const header = ['Name', 'Email', ...qs.map(q => q.label), 'Responded at'];
+    const qs: any[] = rsvpEvent.questions ?? [];
+    const header = ['Name', 'Email', ...qs.map((q: any) => q.label), 'Responded at'];
     const cell = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = done.map(r => [r.name, r.email, ...qs.map(q => r.answers?.[q.id] ?? ''), r.submitted_at ? new Date(r.submitted_at).toLocaleString() : ''].map(cell).join(','));
+    const lines = done.map(r => [r.name, r.email, ...qs.map((q: any) => r.answers?.[q.id] ?? ''), r.submitted_at ? new Date(r.submitted_at).toLocaleString() : ''].map(cell).join(','));
     // Summary rows at the bottom.
     lines.push('');
     lines.push([cell('Attending'), cell(attending)].join(','));
@@ -1053,11 +1095,18 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowRsvp(false)}>
           <div className="bg-white rounded-card w-full max-w-4xl max-h-[88vh] flex flex-col shadow-xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-text-primary">{rsvpEvent.title}</div>
-                <div className="text-xs text-text-muted mt-0.5">Send the RSVP form and track the headcount. <b>{rsvpSel.size}</b> selected.</div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select value={rsvpEventId} onChange={e => setRsvpEventId(e.target.value)} className="text-sm font-semibold text-text-primary bg-white border border-border-light rounded-ctrl px-2 py-1 focus:outline-none focus:border-ink max-w-[280px]">
+                    {rsvpEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                  </select>
+                  <button onClick={openNewForm} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2 py-1 rounded-ctrl hover:bg-canvas">＋ New form</button>
+                  {rsvpEvent?.custom && <button onClick={() => openEditForm(rsvpEvent)} className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-2 py-1 rounded-ctrl hover:bg-canvas">✎ Edit</button>}
+                  {rsvpEvent?.custom && <button onClick={() => deleteForm(rsvpEvent)} className="text-xs font-semibold text-litred-alt border border-border-light px-2 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>}
+                </div>
+                <div className="text-xs text-text-muted mt-1">Send the form and track the headcount. <b>{rsvpSel.size}</b> selected.</div>
               </div>
-              <button onClick={() => setShowRsvp(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+              <button onClick={() => setShowRsvp(false)} className="text-text-muted hover:text-text-primary text-xl leading-none shrink-0">×</button>
             </div>
 
             {/* Headcount summary */}
@@ -1124,6 +1173,73 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 <button onClick={() => setShowRsvp(false)} className="text-sm text-text-muted px-3">Close</button>
                 <button onClick={sendRsvpSelected} disabled={rsvpBusy || rsvpSel.size === 0} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">{rsvpBusy ? 'Sending…' : `✉ Send to ${rsvpSel.size}`}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Form builder — create / edit a fillable RSVP or survey form */}
+      {showBuilder && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setShowBuilder(false)}>
+          <div className="bg-white rounded-card w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <div className="text-sm font-semibold text-text-primary">{builderId ? 'Edit form' : 'New form'}</div>
+              <button onClick={() => setShowBuilder(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="flex-1 overflow-auto p-5 space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Form title</label>
+                <input value={bTitle} onChange={e => setBTitle(e.target.value)} placeholder="e.g. Holiday Party — Headcount" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Intro / description</label>
+                <textarea value={bDesc} onChange={e => setBDesc(e.target.value)} rows={3} placeholder="What the form is about…" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Questions</label>
+                <button onClick={() => setBQ(qs => [...qs, newQuestion()])} className="text-xs font-semibold text-[#3f6b8a] hover:underline">＋ Add question</button>
+              </div>
+              {bQ.map((q, i) => {
+                const priorChoices = bQ.slice(0, i).filter(x => x.type === 'choice' && x.label.trim());
+                return (
+                  <div key={q.id} className="border border-border-light rounded-ctrl p-3 space-y-2 bg-canvas">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-text-muted w-5">{i + 1}.</span>
+                      <input value={q.label} onChange={e => setQ(i, { label: e.target.value })} placeholder="Question text" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+                      <select value={q.type} onChange={e => setQ(i, { type: e.target.value as any, options: e.target.value === 'choice' ? (q.options.length ? q.options : ['Yes', 'No']) : q.options })} className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white">
+                        <option value="choice">Multiple choice</option>
+                        <option value="text">Short text</option>
+                      </select>
+                      <button onClick={() => setBQ(qs => qs.filter((_, idx) => idx !== i))} className="text-text-muted hover:text-litred-alt text-sm px-1" title="Remove question">✕</button>
+                    </div>
+                    {q.type === 'choice' && (
+                      <div className="flex items-center gap-2 pl-7">
+                        <span className="text-[11px] text-text-muted">Choices:</span>
+                        <input value={q.options.join(', ')} onChange={e => setQ(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="Yes, No" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1 text-sm bg-white focus:outline-none focus:border-ink" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 pl-7 text-[11px] text-text-muted">
+                      <span>Show only if</span>
+                      <select value={q.showIf?.q ?? ''} onChange={e => setQ(i, { showIf: e.target.value ? { q: e.target.value, value: priorChoices.find(x => x.id === e.target.value)?.options[0] ?? 'Yes' } : undefined })} className="border border-border-light rounded-ctrl px-1.5 py-1 text-xs bg-white max-w-[160px]">
+                        <option value="">always shown</option>
+                        {priorChoices.map(x => <option key={x.id} value={x.id}>{x.label.slice(0, 30)}</option>)}
+                      </select>
+                      {q.showIf?.q && (
+                        <>
+                          <span>=</span>
+                          <select value={q.showIf.value} onChange={e => setQ(i, { showIf: { q: q.showIf!.q, value: e.target.value } })} className="border border-border-light rounded-ctrl px-1.5 py-1 text-xs bg-white">
+                            {(priorChoices.find(x => x.id === q.showIf!.q)?.options ?? ['Yes', 'No']).map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button onClick={() => setShowBuilder(false)} className="text-sm text-text-muted px-3">Cancel</button>
+              <button onClick={saveForm} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">{builderId ? 'Save changes' : 'Create form'}</button>
             </div>
           </div>
         </div>

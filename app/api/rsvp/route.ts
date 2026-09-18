@@ -5,11 +5,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { sendMailAsApp } from '@/lib/graph';
-import { EVENTS, eventById, rsvpEmail } from '@/lib/rsvp';
+import { EVENTS, eventById as builtinEvent, rsvpEmail, type EventDef, type RsvpQuestion } from '@/lib/rsvp';
 
 const SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
-const DEFAULT_EVENT = EVENTS[0]?.id ?? '';
 const parse = (v: any) => { try { const a = typeof v === 'string' ? JSON.parse(v) : v; return a && typeof a === 'object' ? a : {}; } catch { return {}; } };
+const parseArr = (v: any): any[] => { try { const a = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
 const origin = (req: Request) => process.env.NEXTAUTH_URL || `${req.headers.get('x-forwarded-proto') ?? 'https'}://${req.headers.get('host')}`;
 
 async function ensure() {
@@ -18,26 +18,56 @@ async function ensure() {
     status TEXT DEFAULT 'Sent', answers TEXT, created_by TEXT,
     submitted_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  // Custom, user-created RSVP/survey forms (built-ins live in code).
+  await sql`CREATE TABLE IF NOT EXISTS rsvp_events (
+    id TEXT PRIMARY KEY, title TEXT, description TEXT, questions TEXT, created_by TEXT,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+}
+
+const rowToEvent = (r: any): EventDef => ({ id: r.id, title: r.title ?? '', description: r.description ?? '', questions: parseArr(r.questions) as RsvpQuestion[], custom: true } as any);
+
+async function allEvents(): Promise<EventDef[]> {
+  const rows = await sql`SELECT id, title, description, questions FROM rsvp_events WHERE active ORDER BY created_at DESC` as any[];
+  return [...EVENTS, ...rows.map(rowToEvent)];
+}
+async function resolveEvent(id: string): Promise<EventDef | undefined> {
+  const b = builtinEvent(id); if (b) return b;
+  const [r] = await sql`SELECT id, title, description, questions FROM rsvp_events WHERE id = ${id}` as any[];
+  return r ? rowToEvent(r) : undefined;
+}
+
+// Normalize builder-submitted questions: ensure ids, valid types, options.
+function cleanQuestions(input: any): RsvpQuestion[] {
+  if (!Array.isArray(input)) return [];
+  return input.map((q: any, i: number) => {
+    const type = q?.type === 'text' ? 'text' : 'choice';
+    const out: RsvpQuestion = { id: String(q?.id || `q${i + 1}`).replace(/[^\w]/g, '').slice(0, 40) || `q${i + 1}`, label: String(q?.label ?? '').slice(0, 300), type };
+    if (type === 'choice') out.options = (Array.isArray(q?.options) ? q.options : ['Yes', 'No']).map((o: any) => String(o).slice(0, 80)).filter(Boolean).slice(0, 8);
+    if (q?.showIf?.q && q?.showIf?.value != null) out.showIf = { q: String(q.showIf.q), value: String(q.showIf.value) };
+    return out;
+  }).filter(q => q.label);
 }
 
 export async function GET(req: Request) {
   await ensure();
   const u = new URL(req.url);
   const token = u.searchParams.get('token');
-  // Public: load the form for an employee to fill in.
   if (token) {
     const [row] = await sql`SELECT event_id, name, status, answers FROM event_rsvps WHERE token = ${token}` as any[];
     if (!row) return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 404 });
-    const ev = eventById(row.event_id);
+    const ev = await resolveEvent(row.event_id);
     if (!ev) return NextResponse.json({ error: 'This event is no longer available.' }, { status: 404 });
     return NextResponse.json({ row: { name: row.name ?? '', status: row.status, event: ev, answers: row.status === 'Completed' ? parse(row.answers) : {} } });
   }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const eventId = u.searchParams.get('eventId') ?? DEFAULT_EVENT;
+  const events = await allEvents();
+  const eventId = u.searchParams.get('eventId') ?? events[0]?.id ?? '';
   const rows = await sql`SELECT id, token, name, email, profile_id, status, answers, submitted_at, created_at
     FROM event_rsvps WHERE event_id = ${eventId} ORDER BY created_at DESC` as any[];
-  return NextResponse.json({ events: EVENTS, rows: rows.map(r => ({ ...r, answers: parse(r.answers) })) });
+  return NextResponse.json({ events, rows: rows.map(r => ({ ...r, answers: parse(r.answers) })) });
 }
 
 export async function POST(req: Request) {
@@ -57,11 +87,38 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const by = (session.user as any).email ?? null;
-  const eventId = String(b.eventId ?? DEFAULT_EVENT);
-  const ev = eventById(eventId);
+
+  // ---- Form builder: create / update / delete custom forms ----
+  if (b.action === 'create-event') {
+    const title = String(b.title ?? '').trim();
+    if (!title) return NextResponse.json({ error: 'Enter a form title' }, { status: 400 });
+    const qs = cleanQuestions(b.questions);
+    if (!qs.length) return NextResponse.json({ error: 'Add at least one question' }, { status: 400 });
+    const id = 'ev-' + cuid();
+    await sql`INSERT INTO rsvp_events (id, title, description, questions, created_by) VALUES (${id}, ${title}, ${String(b.description ?? '')}, ${JSON.stringify(qs)}, ${by})`;
+    const ev = await resolveEvent(id);
+    return NextResponse.json({ event: ev }, { status: 201 });
+  }
+  if (b.action === 'update-event') {
+    const id = String(b.id ?? '');
+    if (builtinEvent(id)) return NextResponse.json({ error: 'Built-in forms can’t be edited' }, { status: 400 });
+    const qs = cleanQuestions(b.questions);
+    await sql`UPDATE rsvp_events SET title = ${String(b.title ?? '').trim()}, description = ${String(b.description ?? '')}, questions = ${JSON.stringify(qs)}, updated_at = NOW() WHERE id = ${id}`;
+    const ev = await resolveEvent(id);
+    return NextResponse.json({ event: ev });
+  }
+  if (b.action === 'delete-event') {
+    const id = String(b.id ?? '');
+    if (builtinEvent(id)) return NextResponse.json({ error: 'Built-in forms can’t be deleted' }, { status: 400 });
+    await sql`DELETE FROM rsvp_events WHERE id = ${id}`;
+    await sql`DELETE FROM event_rsvps WHERE event_id = ${id}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  const eventId = String(b.eventId ?? '');
+  const ev = await resolveEvent(eventId);
   if (!ev) return NextResponse.json({ error: 'Unknown event' }, { status: 400 });
 
-  // Send a test to a chosen address.
   if (b.action === 'send-test') {
     const email = String(b.email ?? '').trim();
     if (!email) return NextResponse.json({ error: 'Enter an email to send the test to' }, { status: 400 });
@@ -73,7 +130,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, emailed: true, url });
   }
 
-  // Email the RSVP to a chosen set of people (by profile).
   if (b.action === 'send-bulk') {
     const pick = Array.isArray(b.profileIds) ? new Set(b.profileIds.map(String)) : null;
     let profiles: any[] = [];
