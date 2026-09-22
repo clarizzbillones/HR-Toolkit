@@ -18,6 +18,14 @@ function extractName(summary: string): string {
     .replace(/\b(OOO|PTO|WFH|OUT OF OFFICE|VACATION|LEAVE|REMOTE|WORK FROM HOME)\b/gi, '')
     .replace(/[-–—]/g, ' ').replace(/\s+/g, ' ').trim().split(' ')[0] || summary.trim();
 }
+// Stable, content-based id so the SAME event gets the SAME id on every import.
+// This makes the "hidden calendar ids" (deleted entries) survive reconnects,
+// re-syncs and Outlook UID churn — a deleted entry can never come back.
+function stableId(sig: string): string {
+  let h = 5381;
+  for (let i = 0; i < sig.length; i++) h = ((h << 5) + h + sig.charCodeAt(i)) >>> 0;
+  return 'e' + h.toString(36);
+}
 function parseIcs(text: string) {
   const events: { id: string; name: string; tag: string; start: string; end: string; title: string }[] = [];
   const blocks = text.split('BEGIN:VEVENT');
@@ -27,7 +35,6 @@ function parseIcs(text: string) {
     const summary = get('SUMMARY');
     const dtstart = get('DTSTART');
     const dtend = get('DTEND');
-    const uid = get('UID');
     if (!summary || !dtstart) continue;
     const start = parseDate(dtstart);
     let end = dtend ? parseDate(dtend) : start;
@@ -37,7 +44,9 @@ function parseIcs(text: string) {
       end = d.toISOString().slice(0, 10);
     }
     if (end < '2026-06-01') continue;
-    events.push({ id: uid || `${i}`, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
+    // Identify the event by its content, not its position or UID.
+    const id = stableId(`${summary.toLowerCase().trim()}|${start}|${end}`);
+    events.push({ id, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
   }
   return events;
 }

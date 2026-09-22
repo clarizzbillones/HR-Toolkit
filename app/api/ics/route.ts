@@ -16,6 +16,14 @@ function parseDate(val: string): string {
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
 }
 
+// Stable, content-based id (matches /api/ics-refresh) so the same event always
+// has the same id — deleted/hidden entries never reappear on reconnect.
+function stableId(sig: string): string {
+  let h = 5381;
+  for (let i = 0; i < sig.length; i++) h = ((h << 5) + h + sig.charCodeAt(i)) >>> 0;
+  return 'e' + h.toString(36);
+}
+
 function detectTag(summary: string): string {
   const t = summary.toUpperCase();
   if (t.includes('OOO') || t.includes('OUT OF OFFICE')) return 'OOO';
@@ -46,7 +54,6 @@ function parseIcs(text: string): IcsEvent[] {
     const summary = get('SUMMARY');
     const dtstart = get('DTSTART');
     const dtend = get('DTEND');
-    const uid = get('UID');
     if (!summary || !dtstart) continue;
     const start = parseDate(dtstart);
     let end = dtend ? parseDate(dtend) : start;
@@ -56,7 +63,8 @@ function parseIcs(text: string): IcsEvent[] {
       end = d.toISOString().slice(0, 10);
     }
     if (end < '2026-06-01') continue;
-    events.push({ id: uid || `${i}`, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
+    const id = stableId(`${summary.toLowerCase().trim()}|${start}|${end}`);
+    events.push({ id, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
   }
   return events;
 }
