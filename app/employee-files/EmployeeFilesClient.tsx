@@ -407,6 +407,16 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const d = await res.json();
     showToast(res.ok && d.emailed ? `Test emailed to ${email.trim()}` : (d.error || 'Could not send the test'));
   }
+  // Delete a person's survey entry for this event (removes the sent link and
+  // any response), resetting them to "Not sent".
+  async function removeRsvpEntry(profileId: string, name: string) {
+    const ids = rsvpRows.filter(r => r.profile_id === profileId).map(r => r.id);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${name || 'this person'}'s survey entry? Their sent link and any response will be removed, and they'll show as "Not sent" again.`)) return;
+    for (const id of ids) await fetch(`/api/rsvp?id=${id}`, { method: 'DELETE' });
+    await loadRsvp();
+    showToast('Survey entry deleted');
+  }
   // Download the RSVP responses as a CSV report.
   function downloadRsvpReport() {
     if (!rsvpEvent) return;
@@ -1142,6 +1152,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                               : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>)
                           : st ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f7efe1] text-[#b07d2a]">⏳ Awaiting</span>
                           : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
+                        {st && <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeRsvpEntry(p.id, p.name); }} title="Delete this survey entry (resets to Not sent)" className="shrink-0 text-text-muted hover:text-litred-alt text-xs px-1">✕</button>}
                       </label>
                     );
                   })}
