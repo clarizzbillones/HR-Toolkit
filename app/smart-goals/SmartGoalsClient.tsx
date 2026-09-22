@@ -58,8 +58,13 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
     set({ reviewer: name, reviewer_position: s?.position ?? form.reviewer_position });
   }
 
+  // Names must match someone in the employee list — no free-typed names.
+  const staffNames = staff.map(s => s.name);
+  const isKnown = (n: string | undefined) => staffNames.includes(String(n ?? '').trim());
   async function save() {
     if (!String(form.employee ?? '').trim()) { showToast('Pick an employee'); return; }
+    if (!isKnown(form.employee)) { showToast(`“${form.employee}” isn’t in the employee list — pick a name from the dropdown`); return; }
+    if (String(form.reviewer ?? '').trim() && !isKnown(form.reviewer)) { showToast(`“${form.reviewer}” isn’t in the employee list — pick a name from the dropdown`); return; }
     const payload = { ...form, goals, open_items: items.filter(x => x.trim() !== ''), checkins };
     if (editId) {
       const res = await fetch('/api/smart-goals', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editId, ...payload }) });
@@ -114,11 +119,13 @@ export default function SmartGoalsClient({ initialRows, staff }: { initialRows: 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Employee</label>
-                <input list="sg-staff" value={form.employee ?? ''} onChange={e => pickEmployee(e.target.value)} placeholder="Name" className={input} />
+                <input list="sg-staff" value={form.employee ?? ''} onChange={e => pickEmployee(e.target.value)} placeholder="Name" className={input + (String(form.employee ?? '').trim() && !isKnown(form.employee) ? ' border-litred-alt focus:border-litred-alt' : '')} />
+                {String(form.employee ?? '').trim() && !isKnown(form.employee) && <p className="text-[11px] font-semibold text-litred-alt mt-1">Not in the employee list — pick a name from the dropdown.</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Reviewer</label>
-                <input list="sg-staff" value={form.reviewer ?? ''} onChange={e => pickReviewer(e.target.value)} placeholder="Reviewer name" className={input} />
+                <input list="sg-staff" value={form.reviewer ?? ''} onChange={e => pickReviewer(e.target.value)} placeholder="Reviewer name" className={input + (String(form.reviewer ?? '').trim() && !isKnown(form.reviewer) ? ' border-litred-alt focus:border-litred-alt' : '')} />
+                {String(form.reviewer ?? '').trim() && !isKnown(form.reviewer) && <p className="text-[11px] font-semibold text-litred-alt mt-1">Not in the employee list — pick a name from the dropdown.</p>}
               </div>
               <datalist id="sg-staff">{staff.map(s => <option key={s.name} value={s.name} />)}</datalist>
               <div>

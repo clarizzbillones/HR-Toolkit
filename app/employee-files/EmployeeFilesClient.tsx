@@ -474,6 +474,21 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setProfiles(p => p.filter(x => x.id !== selected.id));
     setSelected(null); showToast('Deleted');
   }
+  // Merge a duplicate profile INTO the currently open one.
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSrc, setMergeSrc] = useState('');
+  async function mergeInto() {
+    if (!selected || !mergeSrc) { showToast('Pick a profile to merge'); return; }
+    const src = profiles.find(p => p.id === mergeSrc);
+    if (!confirm(`Merge “${src?.name}” INTO “${selected.name}”?\n\nAll of ${src?.name}'s documents and records move to ${selected.name}, and “${src?.name}” is removed. This can't be undone.`)) return;
+    const res = await fetch('/api/employee-files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', sourceId: mergeSrc, targetId: selected.id }) });
+    const d = await res.json();
+    if (!res.ok) { showToast(d.error || 'Merge failed'); return; }
+    setProfiles(p => p.filter(x => x.id !== mergeSrc));
+    setMergeOpen(false); setMergeSrc('');
+    openProfile(selected);
+    showToast('Profiles merged');
+  }
 
   async function pickPhoto(f: File, target: 'add' | 'profile') {
     if (f.size > MAX_PHOTO) { showToast('Photo too large (max 2 MB)'); return; }
@@ -684,6 +699,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         <div className="flex gap-2 mt-4 flex-wrap">
                           <button onClick={() => setEditingProfile(true)} className="text-xs font-semibold text-ink border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">Edit profile</button>
                           <button onClick={() => resyncFromStaffing()} title="Pull the latest email, phone, position, etc. from Staffing (and report if the name doesn't match)" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">↻ Resync from Staffing</button>
+                          <button onClick={() => { setMergeSrc(''); setMergeOpen(true); }} title="Merge a duplicate profile into this one — moves their documents here and removes the duplicate" className="text-xs font-semibold text-[#3f6b8a] border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-canvas">⧉ Merge duplicate…</button>
                           <button onClick={deleteProfile} className="text-xs font-semibold text-litred-alt border border-border-light px-3 py-1.5 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
                         </div>
                       )}
@@ -850,6 +866,30 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             </div>
           </div>
         </div>
+
+        {/* Merge a duplicate profile into this one */}
+        {mergeOpen && (
+          <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-6" onClick={e => e.target === e.currentTarget && setMergeOpen(false)}>
+            <div className="bg-white rounded-card w-full max-w-md shadow-xl overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+                <div className="text-sm font-semibold text-text-primary">Merge a duplicate into {selected.name}</div>
+                <button onClick={() => setMergeOpen(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+              </div>
+              <div className="p-5 space-y-3">
+                <p className="text-sm text-text-muted">Pick the duplicate profile to merge <b>into {selected.name}</b>. Its documents and records move here, blank fields on {selected.name} get filled in, and the duplicate is removed.</p>
+                <select value={mergeSrc} onChange={e => setMergeSrc(e.target.value)} className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                  <option value="">Select the duplicate…</option>
+                  {profiles.filter(p => p.id !== selected.id).map(p => <option key={p.id} value={p.id}>{p.name}{p.email ? ` — ${p.email}` : ' — no email'} · {p.doc_count ?? 0} doc{(p.doc_count ?? 0) === 1 ? '' : 's'}</option>)}
+                </select>
+                <p className="text-[11px] text-text-muted">This can’t be undone.</p>
+              </div>
+              <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+                <button onClick={() => setMergeOpen(false)} className="text-sm text-text-muted px-3">Cancel</button>
+                <button onClick={mergeInto} disabled={!mergeSrc} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-50">Merge</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1256,6 +1296,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           </div>
         </div>
       )}
+
     </div>
   );
 }

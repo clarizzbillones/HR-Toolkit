@@ -69,6 +69,33 @@ export async function POST(req: Request) {
   await ensure();
   const b = await req.json();
 
+  // Merge one duplicate profile into another: move all documents and records
+  // from source → target, fill the target's blank fields, then delete source.
+  if (b.action === 'merge') {
+    const src = String(b.sourceId ?? ''); const tgt = String(b.targetId ?? '');
+    if (!src || !tgt || src === tgt) return NextResponse.json({ error: 'Pick two different profiles' }, { status: 400 });
+    const [s] = await sql`SELECT * FROM employee_profiles WHERE id = ${src}` as any[];
+    const [t] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+    if (!s || !t) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    await sql`UPDATE employee_files SET profile_id = ${tgt} WHERE profile_id = ${src}`;
+    for (const tbl of ['employee_accounts', 'info_requests', 'event_rsvps', 'tools_surveys']) {
+      try { await sql`UPDATE ${sql(tbl)} SET profile_id = ${tgt} WHERE profile_id = ${src}`; } catch { /* table may not exist */ }
+    }
+    // Fill only the target's blank fields from the source.
+    const cols = ['email', 'phone', 'position', 'department', 'start_date', 'details', ...EXTRA_COLS];
+    const fill: Record<string, any> = {};
+    for (const c of cols) { const tv = String((t as any)[c] ?? '').trim(); const sv = (s as any)[c]; if (!tv && sv != null && String(sv).trim()) fill[c] = sv; }
+    try {
+      const se = s.extra ? JSON.parse(s.extra) : {}; const te = t.extra ? JSON.parse(t.extra) : {};
+      const merged = { ...se, ...te };
+      if (Object.keys(merged).length) fill.extra = JSON.stringify(merged);
+    } catch { /* ignore */ }
+    if (Object.keys(fill).length) await sql`UPDATE employee_profiles SET ${sql(fill)} WHERE id = ${tgt}`;
+    await sql`DELETE FROM employee_profiles WHERE id = ${src}`;
+    const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+    return NextResponse.json({ ok: true, profile });
+  }
+
   // Create one profile per Staffing employee that doesn't have a file yet.
   if (b.action === 'sync-staffing') {
     let staff: any[] = [];
