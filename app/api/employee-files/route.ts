@@ -39,6 +39,41 @@ async function ensure() {
 
 const stripDoc = (d: any) => ({ ...d, attachment_data: undefined, has_attachment: !!d.attachment_data });
 
+// Merge one profile into another: move all documents/records, fill the target's
+// blank fields, then delete the source. Returns the target profile.
+async function mergeProfiles(src: string, tgt: string): Promise<any | null> {
+  const [s] = await sql`SELECT * FROM employee_profiles WHERE id = ${src}` as any[];
+  const [t] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+  if (!s || !t || s.id === t.id) return null;
+  await sql`UPDATE employee_files SET profile_id = ${tgt} WHERE profile_id = ${src}`;
+  for (const tbl of ['employee_accounts', 'info_requests', 'event_rsvps', 'tools_surveys']) {
+    try { await sql`UPDATE ${sql(tbl)} SET profile_id = ${tgt} WHERE profile_id = ${src}`; } catch { /* table may not exist */ }
+  }
+  const cols = ['email', 'phone', 'position', 'department', 'start_date', 'details', ...EXTRA_COLS];
+  const fill: Record<string, any> = {};
+  for (const c of cols) { const tv = String((t as any)[c] ?? '').trim(); const sv = (s as any)[c]; if (!tv && sv != null && String(sv).trim()) fill[c] = sv; }
+  try {
+    const se = s.extra ? JSON.parse(s.extra) : {}; const te = t.extra ? JSON.parse(t.extra) : {};
+    const merged = { ...se, ...te };
+    if (Object.keys(merged).length) fill.extra = JSON.stringify(merged);
+  } catch { /* ignore */ }
+  if (Object.keys(fill).length) await sql`UPDATE employee_profiles SET ${sql(fill)} WHERE id = ${tgt}`;
+  await sql`DELETE FROM employee_profiles WHERE id = ${src}`;
+  const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+  return profile;
+}
+
+// One-off: combine the known duplicate "Simran Jain" into "Simran Mohini Jain".
+// Idempotent — once the source is gone it never runs again.
+async function autoMergeKnownDuplicates() {
+  try {
+    const rows = await sql`SELECT id, name FROM employee_profiles WHERE lower(name) IN ('simran jain', 'simran mohini jain')` as any[];
+    const src = rows.find(r => String(r.name).toLowerCase() === 'simran jain');
+    const tgt = rows.find(r => String(r.name).toLowerCase() === 'simran mohini jain');
+    if (src && tgt) await mergeProfiles(src.id, tgt.id);
+  } catch { /* best-effort */ }
+}
+
 export async function GET(req: Request) {
   if (!(await requireHrAdmin())) return FORBIDDEN();
   await ensure();
@@ -53,6 +88,8 @@ export async function GET(req: Request) {
     const docs = await sql`SELECT * FROM employee_files WHERE profile_id = ${id} ORDER BY doc_date DESC NULLS LAST, created_at DESC`;
     return NextResponse.json({ profile, docs: (docs as any[]).map(stripDoc) });
   }
+  // Combine known duplicates before listing (one-off, self-clearing).
+  await autoMergeKnownDuplicates();
   // List: profiles with a doc count for the tiles. The Employees/Contractors
   // split follows Staffing's worker type, so overlay the current Staffing value
   // (matched by name) onto each profile.
@@ -74,25 +111,8 @@ export async function POST(req: Request) {
   if (b.action === 'merge') {
     const src = String(b.sourceId ?? ''); const tgt = String(b.targetId ?? '');
     if (!src || !tgt || src === tgt) return NextResponse.json({ error: 'Pick two different profiles' }, { status: 400 });
-    const [s] = await sql`SELECT * FROM employee_profiles WHERE id = ${src}` as any[];
-    const [t] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
-    if (!s || !t) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    await sql`UPDATE employee_files SET profile_id = ${tgt} WHERE profile_id = ${src}`;
-    for (const tbl of ['employee_accounts', 'info_requests', 'event_rsvps', 'tools_surveys']) {
-      try { await sql`UPDATE ${sql(tbl)} SET profile_id = ${tgt} WHERE profile_id = ${src}`; } catch { /* table may not exist */ }
-    }
-    // Fill only the target's blank fields from the source.
-    const cols = ['email', 'phone', 'position', 'department', 'start_date', 'details', ...EXTRA_COLS];
-    const fill: Record<string, any> = {};
-    for (const c of cols) { const tv = String((t as any)[c] ?? '').trim(); const sv = (s as any)[c]; if (!tv && sv != null && String(sv).trim()) fill[c] = sv; }
-    try {
-      const se = s.extra ? JSON.parse(s.extra) : {}; const te = t.extra ? JSON.parse(t.extra) : {};
-      const merged = { ...se, ...te };
-      if (Object.keys(merged).length) fill.extra = JSON.stringify(merged);
-    } catch { /* ignore */ }
-    if (Object.keys(fill).length) await sql`UPDATE employee_profiles SET ${sql(fill)} WHERE id = ${tgt}`;
-    await sql`DELETE FROM employee_profiles WHERE id = ${src}`;
-    const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+    const profile = await mergeProfiles(src, tgt);
+    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     return NextResponse.json({ ok: true, profile });
   }
 
