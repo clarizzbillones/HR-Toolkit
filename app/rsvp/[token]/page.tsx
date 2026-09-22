@@ -63,7 +63,9 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
         : done ? (
           <div style={{ background: '#eef5f1', border: '1px solid #cfe4d8', borderRadius: 12, padding: 22, textAlign: 'center' }}>
             <div style={{ fontWeight: 700, color: '#2f7d5b', fontSize: 16 }}>✓ Thank you for your RSVP!</div>
-            <div style={{ color: '#33503f', fontSize: 13, marginTop: 4 }}>Your response has been recorded. You can close this page.</div>
+            {ev?.thankYou
+              ? <div style={{ color: '#33503f', fontSize: 14, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{ev.thankYou}</div>
+              : <div style={{ color: '#33503f', fontSize: 13, marginTop: 4 }}>Your response has been recorded. You can close this page.</div>}
           </div>
         ) : (
           <div style={{ background: '#fff', border: '1px solid #e6ddcd', borderRadius: 12, padding: 22 }}>

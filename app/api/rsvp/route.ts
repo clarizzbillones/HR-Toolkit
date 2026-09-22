@@ -24,17 +24,18 @@ async function ensure() {
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE rsvp_events ADD COLUMN IF NOT EXISTS thank_you TEXT`;
 }
 
-const rowToEvent = (r: any): EventDef => ({ id: r.id, title: r.title ?? '', description: r.description ?? '', questions: parseArr(r.questions) as RsvpQuestion[], custom: true } as any);
+const rowToEvent = (r: any): EventDef => ({ id: r.id, title: r.title ?? '', description: r.description ?? '', questions: parseArr(r.questions) as RsvpQuestion[], thankYou: r.thank_you ?? '', custom: true } as any);
 
 async function allEvents(): Promise<EventDef[]> {
-  const rows = await sql`SELECT id, title, description, questions FROM rsvp_events WHERE active ORDER BY created_at DESC` as any[];
+  const rows = await sql`SELECT id, title, description, questions, thank_you FROM rsvp_events WHERE active ORDER BY created_at DESC` as any[];
   return [...EVENTS, ...rows.map(rowToEvent)];
 }
 async function resolveEvent(id: string): Promise<EventDef | undefined> {
   const b = builtinEvent(id); if (b) return b;
-  const [r] = await sql`SELECT id, title, description, questions FROM rsvp_events WHERE id = ${id}` as any[];
+  const [r] = await sql`SELECT id, title, description, questions, thank_you FROM rsvp_events WHERE id = ${id}` as any[];
   return r ? rowToEvent(r) : undefined;
 }
 
@@ -95,7 +96,7 @@ export async function POST(req: Request) {
     const qs = cleanQuestions(b.questions);
     if (!qs.length) return NextResponse.json({ error: 'Add at least one question' }, { status: 400 });
     const id = 'ev-' + cuid();
-    await sql`INSERT INTO rsvp_events (id, title, description, questions, created_by) VALUES (${id}, ${title}, ${String(b.description ?? '')}, ${JSON.stringify(qs)}, ${by})`;
+    await sql`INSERT INTO rsvp_events (id, title, description, questions, thank_you, created_by) VALUES (${id}, ${title}, ${String(b.description ?? '')}, ${JSON.stringify(qs)}, ${String(b.thankYou ?? '')}, ${by})`;
     const ev = await resolveEvent(id);
     return NextResponse.json({ event: ev }, { status: 201 });
   }
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
     const id = String(b.id ?? '');
     if (builtinEvent(id)) return NextResponse.json({ error: 'Built-in forms can’t be edited' }, { status: 400 });
     const qs = cleanQuestions(b.questions);
-    await sql`UPDATE rsvp_events SET title = ${String(b.title ?? '').trim()}, description = ${String(b.description ?? '')}, questions = ${JSON.stringify(qs)}, updated_at = NOW() WHERE id = ${id}`;
+    await sql`UPDATE rsvp_events SET title = ${String(b.title ?? '').trim()}, description = ${String(b.description ?? '')}, questions = ${JSON.stringify(qs)}, thank_you = ${String(b.thankYou ?? '')}, updated_at = NOW() WHERE id = ${id}`;
     const ev = await resolveEvent(id);
     return NextResponse.json({ event: ev });
   }

@@ -347,12 +347,13 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [builderId, setBuilderId] = useState<string | null>(null);
   const [bTitle, setBTitle] = useState('');
   const [bDesc, setBDesc] = useState('');
+  const [bThankYou, setBThankYou] = useState('');
   const [bQ, setBQ] = useState<BQ[]>([]);
   function newQuestion(): BQ { return { id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), label: '', type: 'choice', options: ['Yes', 'No'] }; }
-  function openNewForm() { setBuilderId(null); setBTitle(''); setBDesc(''); setBQ([newQuestion()]); setShowBuilder(true); }
+  function openNewForm() { setBuilderId(null); setBTitle(''); setBDesc(''); setBThankYou(''); setBQ([newQuestion()]); setShowBuilder(true); }
   function openEditForm(ev: any) {
     if (!ev || !ev.custom) { showToast('Built-in forms can’t be edited — create a new one'); return; }
-    setBuilderId(ev.id); setBTitle(ev.title ?? ''); setBDesc(ev.description ?? '');
+    setBuilderId(ev.id); setBTitle(ev.title ?? ''); setBDesc(ev.description ?? ''); setBThankYou(ev.thankYou ?? '');
     setBQ((ev.questions ?? []).map((q: any) => ({ id: q.id, label: q.label, type: q.type === 'text' ? 'text' : 'choice', options: q.options ?? ['Yes', 'No'], showIf: q.showIf })));
     setShowBuilder(true);
   }
@@ -362,7 +363,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     const questions = bQ.filter(q => q.label.trim()).map(q => ({ id: q.id, label: q.label.trim(), type: q.type, options: q.type === 'choice' ? q.options.filter(Boolean) : undefined, showIf: q.showIf?.q ? q.showIf : undefined }));
     if (!questions.length) { showToast('Add at least one question'); return; }
     const action = builderId ? 'update-event' : 'create-event';
-    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id: builderId, title: bTitle.trim(), description: bDesc, questions }) });
+    const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id: builderId, title: bTitle.trim(), description: bDesc, thankYou: bThankYou, questions }) });
     const d = await res.json();
     if (!res.ok) { showToast(d.error || 'Could not save form'); return; }
     setShowBuilder(false);
@@ -1189,6 +1190,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Intro / description</label>
                 <textarea value={bDesc} onChange={e => setBDesc(e.target.value)} rows={3} placeholder="What the form is about…" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">Confirmation message <span className="font-normal normal-case text-text-faint">(shown after they submit)</span></label>
+                <textarea value={bThankYou} onChange={e => setBThankYou(e.target.value)} rows={2} placeholder="e.g. Thank you! Your response will help us finalize the plans…" className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
               </div>
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Questions</label>

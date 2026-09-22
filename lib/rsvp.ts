@@ -8,7 +8,7 @@ export interface RsvpQuestion {
   options?: string[];             // for 'choice'
   showIf?: { q: string; value: string }; // only show when another answer matches
 }
-export interface EventDef { id: string; title: string; description: string; questions: RsvpQuestion[] }
+export interface EventDef { id: string; title: string; description: string; questions: RsvpQuestion[]; thankYou?: string }
 
 export const EVENTS: EventDef[] = [
   {
@@ -30,18 +30,14 @@ export function eventById(id: string | null | undefined): EventDef | undefined {
 const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export function rsvpEmail(name: string, url: string, ev: EventDef, reminder = false): string {
-  const first = esc(String(name || '').split(' ')[0] || 'there');
   const desc = esc(ev.description).replace(/\n+/g, '</p><p style="margin:8px 0">');
   return `<div style="font-family:Arial,sans-serif;color:#1b2a3d;max-width:560px">
     <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:14px 16px;margin-bottom:16px">
       <div style="font-size:14px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
       <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
     </div>
-    <p>Hi ${first},</p>
-    <p style="font-size:16px;font-weight:700;color:#1b2a3d;margin:6px 0">${esc(ev.title)}</p>
     <p style="margin:8px 0">${desc}</p>
     <p style="margin:18px 0"><a href="${esc(url)}" style="display:inline-block;background:#1b2a3d;color:#fff;text-decoration:none;font-weight:bold;padding:11px 22px;border-radius:8px">${reminder ? 'RSVP now' : 'RSVP here'}</a></p>
     <p style="font-size:12px;color:#666">Or paste this link into your browser:<br>${esc(url)}</p>
-    <p style="font-size:12px;color:#999;margin-top:14px">Thank you!</p>
   </div>`;
 }
