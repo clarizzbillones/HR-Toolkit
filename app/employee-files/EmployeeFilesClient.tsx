@@ -332,9 +332,17 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   // Headcount from completed responses (attending + plus-ones).
   // Only real employee responses count — test sends (no profile_id) are ignored.
   const rsvpDone = rsvpRows.filter(r => r.status === 'Completed' && r.profile_id);
-  const attending = rsvpDone.filter(r => r.answers?.attending === 'Yes').length;
-  const plusOnes = rsvpDone.filter(r => r.answers?.attending === 'Yes' && r.answers?.plus_one === 'Yes').length;
-  const notAttending = rsvpDone.filter(r => r.answers?.attending === 'No').length;
+  // Work for ANY form: the first choice question is the attendance question, and
+  // an answer counts as attending / not by whether it starts with Yes / No.
+  const rsvpQs: any[] = rsvpEvent?.questions ?? [];
+  const attendQ = rsvpQs.find(q => q.type === 'choice');
+  const plusQ = rsvpQs.find(q => /plus|spouse|guest/i.test(`${q.id} ${q.label}`));
+  const ynYes = (v: any) => /^\s*yes/i.test(String(v ?? ''));
+  const ynNo = (v: any) => /^\s*no/i.test(String(v ?? ''));
+  const attOf = (r: any) => attendQ ? r.answers?.[attendQ.id] : undefined;
+  const attending = attendQ ? rsvpDone.filter(r => ynYes(attOf(r))).length : 0;
+  const notAttending = attendQ ? rsvpDone.filter(r => ynNo(attOf(r))).length : 0;
+  const plusOnes = (attendQ && plusQ) ? rsvpDone.filter(r => ynYes(attOf(r)) && ynYes(r.answers?.[plusQ.id])).length : 0;
   async function loadRsvp(id = rsvpEventId) {
     try {
       const d = await fetch(`/api/rsvp?eventId=${encodeURIComponent(id)}`).then(r => r.json());
@@ -1188,9 +1196,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                           <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
                         </span>
                         {st === 'Completed'
-                          ? (ans?.attending === 'Yes'
-                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">{`✓ Yes${ans?.plus_one === 'Yes' ? ' +1' : ''}`}</span>
-                              : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>)
+                          ? (ynYes(attOf({ answers: ans }))
+                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">{`✓ Yes${plusQ && ynYes(ans?.[plusQ.id]) ? ' +1' : ''}`}</span>
+                              : ynNo(attOf({ answers: ans }))
+                                ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>
+                                : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">✓ Submitted</span>)
                           : st ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f7efe1] text-[#b07d2a]">⏳ Awaiting</span>
                           : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
                         {st && <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeRsvpEntry(p.id, p.name); }} title="Delete this survey entry (resets to Not sent)" className="shrink-0 text-text-muted hover:text-litred-alt text-xs px-1">✕</button>}
