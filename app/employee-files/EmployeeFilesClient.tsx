@@ -330,7 +330,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const rsvpStatus: Record<string, string> = {};
   for (const r of rsvpRows) { if (!r.profile_id) continue; if (rsvpStatus[r.profile_id] === 'Completed') continue; if (r.status === 'Completed') rsvpStatus[r.profile_id] = 'Completed'; else if (!rsvpStatus[r.profile_id]) rsvpStatus[r.profile_id] = r.status || 'Sent'; }
   // Headcount from completed responses (attending + plus-ones).
-  const rsvpDone = rsvpRows.filter(r => r.status === 'Completed');
+  // Only real employee responses count — test sends (no profile_id) are ignored.
+  const rsvpDone = rsvpRows.filter(r => r.status === 'Completed' && r.profile_id);
   const attending = rsvpDone.filter(r => r.answers?.attending === 'Yes').length;
   const plusOnes = rsvpDone.filter(r => r.answers?.attending === 'Yes' && r.answers?.plus_one === 'Yes').length;
   const notAttending = rsvpDone.filter(r => r.answers?.attending === 'No').length;
@@ -420,7 +421,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   // Download the RSVP responses as a CSV report.
   function downloadRsvpReport() {
     if (!rsvpEvent) return;
-    const done = rsvpRows.filter(r => r.status === 'Completed');
+    const done = rsvpRows.filter(r => r.status === 'Completed' && r.profile_id);
     if (!done.length) { showToast('No responses yet to download'); return; }
     const qs: any[] = rsvpEvent.questions ?? [];
     const header = ['Name', 'Email', ...qs.map((q: any) => q.label), 'Responded at'];

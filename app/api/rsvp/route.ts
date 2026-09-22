@@ -64,6 +64,8 @@ export async function GET(req: Request) {
   }
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Clean up any test responses that were recorded before (test = no employee).
+  await sql`DELETE FROM event_rsvps WHERE profile_id IS NULL AND status = 'Completed'`;
   const events = await allEvents();
   const eventId = u.searchParams.get('eventId') ?? events[0]?.id ?? '';
   const rows = await sql`SELECT id, token, name, email, profile_id, status, answers, submitted_at, created_at
@@ -80,6 +82,9 @@ export async function POST(req: Request) {
     const [row] = await sql`SELECT * FROM event_rsvps WHERE token = ${b.token}` as any[];
     if (!row) return NextResponse.json({ error: 'This link is invalid or has expired.' }, { status: 404 });
     if (row.status === 'Completed') return NextResponse.json({ error: 'You already responded — thank you!', done: true }, { status: 409 });
+    // Test sends (no employee attached) are never recorded — the tester still
+    // sees the thank-you page, but nothing is counted or stored.
+    if (!row.profile_id) { await sql`DELETE FROM event_rsvps WHERE id = ${row.id}`; return NextResponse.json({ ok: true }); }
     const answers = (b.answers && typeof b.answers === 'object') ? b.answers : {};
     await sql`UPDATE event_rsvps SET answers = ${JSON.stringify(answers)}, status = 'Completed', submitted_at = NOW() WHERE id = ${row.id}`;
     return NextResponse.json({ ok: true });
