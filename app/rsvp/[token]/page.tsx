@@ -77,7 +77,7 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
                 <div key={q.id} style={{ borderTop: '1px solid #eee3d0', paddingTop: 14, marginTop: 12 }}>
                   <div style={{ fontWeight: 600, color: '#1b2a3d', fontSize: 15, marginBottom: 8 }}>{isText ? '' : `${num}. `}{q.label}</div>
                   {isText ? (
-                    <input value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} placeholder="Full name"
+                    <input value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} placeholder="Type your answer here"
                       style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d8cfbe', borderRadius: 8, padding: '10px 12px', fontSize: 15, color: '#1b2a3d', outline: 'none' }} />
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
