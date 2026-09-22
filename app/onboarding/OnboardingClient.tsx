@@ -1315,6 +1315,30 @@ export default function OnboardingClient() {
   const blockLabel = (g: string, bk: string, fallback: string) =>
     items.find(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk)?.title || fallback;
   const [hdrDraft, setHdrDraft] = useState<Record<string, string>>({});
+  // Copy a link group as rich HTML so pasting into Outlook/Gmail keeps the
+  // titles as live, clickable hyperlinks.
+  async function copyBlockForEmail(title: string, list: Item[]) {
+    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const items = list.filter(l => (l.title || '').trim());
+    if (!items.length) { showToast('Nothing to copy in this section'); return; }
+    const rows = items.map(l => {
+      const t = esc(l.title); const u = (l.url || '').trim();
+      return u
+        ? `<li style="margin:4px 0"><a href="${esc(u)}" style="color:#3f6b8a;text-decoration:underline">${t}</a></li>`
+        : `<li style="margin:4px 0">${t}</li>`;
+    }).join('');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1b2a3d"><p style="font-weight:bold;margin:0 0 6px">${esc(title)}</p><ul style="margin:0;padding-left:20px">${rows}</ul></div>`;
+    const text = `${title}\n` + items.map(l => `• ${l.title}${l.url ? `: ${l.url}` : ''}`).join('\n');
+    try {
+      const CI: any = (window as any).ClipboardItem;
+      if (navigator.clipboard && CI) {
+        await navigator.clipboard.write([new CI({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      showToast(`${title} copied — paste into an email for live links`);
+    } catch { showToast('Copy failed'); }
+  }
   async function saveBlockLabel(g: string, bk: string, text: string) {
     const matches = items.filter(i => i.kind === 'blocklabel' && i.guide === g && i.day === bk);
     if (matches.length) {
@@ -1339,8 +1363,13 @@ export default function OnboardingClient() {
           title="Click to rename this header"
           className="text-sm font-bold uppercase tracking-wider bg-transparent rounded px-1 -mx-1 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#c9a24a] w-56" style={{ color }} />
         {list.length > 0 && (
+          <button onClick={() => copyBlockForEmail(blockLabel(g, kind, title), list)}
+            className="ml-auto text-[11px] font-semibold text-[#3f6b8a] hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
+            title="Copy this group with clickable links — paste into an email">✉ Copy for email</button>
+        )}
+        {list.length > 0 && (
           <button onClick={() => copyLinksToGuide(kind, list)}
-            className="ml-auto text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
+            className="text-[11px] font-semibold text-text-muted hover:text-ink border border-border-light rounded-ctrl px-2 py-0.5 hover:bg-canvas"
             title={`Copy these ${title} (with their links) to another guide`}>⧉ Copy to…</button>
         )}
         <button onClick={() => hideBlock(blockHideKey(g, kind === 'tool' ? 'tools' : 'sop'))}
