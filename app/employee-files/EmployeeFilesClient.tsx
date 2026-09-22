@@ -368,7 +368,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setShowBuilder(false);
     await loadRsvp(d.event?.id ?? rsvpEventId);
     if (d.event?.id) setRsvpEventId(d.event.id);
-    showToast(builderId ? 'Form updated' : 'Form created');
+    // Open the Send RSVP window on the new/edited form so it's visible right away.
+    setRsvpSel(new Set(sendableEmployees().map(p => p.id)));
+    setShowRsvp(true);
+    showToast(builderId ? 'Form updated' : 'Form created — select recipients to send');
   }
   async function deleteForm(ev: any) {
     if (!ev?.custom) return;
