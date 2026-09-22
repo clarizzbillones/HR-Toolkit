@@ -1136,7 +1136,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   <button onClick={() => setRsvpSel(new Set())} className="text-text-muted hover:underline">Clear</button>
                 </div>
                 <div className="flex-1 overflow-auto p-3 space-y-0.5">
-                  {profiles.filter(p => !p.offboarded).map(p => {
+                  {profiles.filter(p => !p.offboarded && String(p.email ?? '').trim()).map(p => {
                     const email = String(p.email ?? '').trim();
                     const st = rsvpStatus[p.id];
                     const ans = rsvpDone.find(r => r.profile_id === p.id)?.answers;
