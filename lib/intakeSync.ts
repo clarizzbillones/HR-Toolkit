@@ -9,7 +9,7 @@
 // columns, the summary entry is keyed by source_ref, and uploads are re-filed
 // via attachPdfToEmployeeFile (which dedupes on source_ref).
 import { sql, cuid } from '@/lib/db';
-import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
+import { attachPdfToEmployeeFile, findOrCreateProfileByName, normName } from '@/lib/employeeFiles';
 import { intakeFields, roleLabel, roleMeta, type IntakeRole } from '@/lib/onboardingIntake';
 
 const parseAns = (v: any): Record<string, any> => {
@@ -17,18 +17,32 @@ const parseAns = (v: any): Record<string, any> => {
   catch { return {}; }
 };
 
+// Match a hire across records even when one copy carries a nickname. Strips
+// quoted / parenthetical nickname segments — William "Bill" Abely, William
+// (Bill) Abely, William 'Bill' Abely — then normalizes to a first+last key. So
+// the Staffing display name matches the legal name on the intake form.
+function coreName(s: any): string {
+  const stripped = String(s ?? '')
+    .replace(/"[^"]*"/g, ' ')
+    .replace(/'[^']*'/g, ' ')
+    .replace(/[‘’“”][^‘’“”]*[‘’“”]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ');
+  return normName(stripped);
+}
+
 async function ensureStaff() {
   await sql`CREATE TABLE IF NOT EXISTS staff_directory (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, position TEXT, dialpad TEXT, personal_phone TEXT, email TEXT,
     start_date TEXT, dob TEXT, favorite_color TEXT, favorite_treat TEXT, note TEXT, ktn TEXT, marriott TEXT,
     delta TEXT, weight TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
-  for (const c of ['southwest', 'american', 'worker_type'])
+  for (const c of ['southwest', 'american', 'worker_type', 'address'])
     await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS ${sql(c)} TEXT`;
 }
 
 // Find the most recent COMPLETED intake for a person, by explicit intake id,
-// linked onboardee, or name. Returns null when there is nothing to sync.
+// linked onboardee, or name (nickname-tolerant). Returns null when there is
+// nothing to sync.
 export async function findCompletedIntake(opts: { intakeId?: string | null; onboardeeId?: string | null; name?: string | null }) {
   try {
     if (opts.intakeId) {
@@ -39,44 +53,58 @@ export async function findCompletedIntake(opts: { intakeId?: string | null; onbo
       const [r] = await sql`SELECT * FROM onboarding_intakes WHERE onboardee_id = ${opts.onboardeeId} AND status = 'Completed' ORDER BY submitted_at DESC NULLS LAST LIMIT 1` as any[];
       if (r) return r;
     }
-    const nm = String(opts.name ?? '').trim();
-    if (nm) {
-      const [r] = await sql`SELECT * FROM onboarding_intakes WHERE lower(name) = lower(${nm}) AND status = 'Completed' ORDER BY submitted_at DESC NULLS LAST LIMIT 1` as any[];
-      if (r) return r;
+    const key = coreName(opts.name);
+    if (key) {
+      // Exact (fast path) then nickname-tolerant match over completed intakes.
+      const [exact] = await sql`SELECT * FROM onboarding_intakes WHERE lower(name) = lower(${String(opts.name).trim()}) AND status = 'Completed' ORDER BY submitted_at DESC NULLS LAST LIMIT 1` as any[];
+      if (exact) return exact;
+      const all = await sql`SELECT * FROM onboarding_intakes WHERE status = 'Completed' ORDER BY submitted_at DESC NULLS LAST` as any[];
+      for (const r of all) {
+        const ans = parseAns(r.answers);
+        if (coreName(ans.full_legal_name || r.name) === key) return r;
+      }
     }
   } catch { /* table may not exist yet */ }
   return null;
 }
 
 // Apply one completed intake row's data to Staffing + the Employee File. Safe to
-// call repeatedly. Returns a small summary of what it touched.
-export async function applyIntakeToRecords(intake: any): Promise<{ staffed: boolean; profileFilled: boolean; filesFiled: number }> {
+// call repeatedly. `targetName` is the display name the rest of the app uses for
+// this hire (e.g. the Staffing / onboarding record's name, possibly with a
+// nickname) — records are enriched under that name so we never fork a duplicate
+// under the bare legal name. Returns a small summary of what it touched.
+export async function applyIntakeToRecords(intake: any, targetName?: string | null): Promise<{ staffed: boolean; profileFilled: boolean; filesFiled: number }> {
   const role = intake.role as IntakeRole;
   const answers = parseAns(intake.answers);
   const meta = roleMeta(role);
-  const name = String(answers.full_legal_name || intake.name || '').trim();
+  const legalName = String(answers.full_legal_name || intake.name || '').trim();
+  const name = String(targetName ?? '').trim() || legalName;
   if (!name) return { staffed: false, profileFilled: false, filesFiled: 0 };
+  const key = coreName(name) || coreName(legalName);
 
   const email = String(answers.personal_email || intake.email || '').trim() || null;
   const position = String(answers.role_title || answers.business_name || meta.titleHint || '').trim() || meta.titleHint;
   const startDate = answers.start_date || answers.services_start || null;
+  const address = answers.home_address ?? null;
 
   let staffed = false;
   let profileFilled = false;
   let filesFiled = 0;
 
-  // 1) Staffing directory — insert if missing, otherwise fill only blank columns.
+  // 1) Staffing directory — find the row (nickname-tolerant), fill blank columns;
+  //    insert a fresh row only when the person isn't in the directory at all.
   try {
     await ensureStaff();
-    const [ex] = await sql`SELECT * FROM staff_directory WHERE lower(name) = lower(${name}) LIMIT 1` as any[];
+    const rows = await sql`SELECT * FROM staff_directory` as any[];
+    const ex = rows.find(r => coreName(r.name) === key) || null;
     if (!ex) {
-      await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, start_date, dob, worker_type, weight, ktn, favorite_color, favorite_treat)
-        VALUES (${cuid()}, ${name}, ${position}, ${email}, ${answers.phone ?? null}, ${startDate}, ${answers.dob ?? null}, ${meta.workerType}, ${answers.weight ?? null}, ${answers.tsa_ktn ?? null}, ${answers.favorite_color ?? null}, ${answers.favorite_snack ?? null})`;
+      await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, address, start_date, dob, worker_type, weight, ktn, favorite_color, favorite_treat)
+        VALUES (${cuid()}, ${name}, ${position}, ${email}, ${answers.phone ?? null}, ${address}, ${startDate}, ${answers.dob ?? null}, ${meta.workerType}, ${answers.weight ?? null}, ${answers.tsa_ktn ?? null}, ${answers.favorite_color ?? null}, ${answers.favorite_snack ?? null})`;
       staffed = true;
     } else {
       const upd: Record<string, any> = {};
       const fill = (col: string, val: any) => { const v = val == null ? '' : String(val).trim(); if (v && !String(ex[col] ?? '').trim()) upd[col] = v; };
-      fill('position', position); fill('email', email); fill('personal_phone', answers.phone);
+      fill('position', position); fill('email', email); fill('personal_phone', answers.phone); fill('address', address);
       fill('start_date', startDate); fill('dob', answers.dob); fill('worker_type', meta.workerType);
       fill('weight', answers.weight); fill('ktn', answers.tsa_ktn);
       fill('favorite_color', answers.favorite_color); fill('favorite_treat', answers.favorite_snack);
@@ -91,7 +119,7 @@ export async function applyIntakeToRecords(intake: any): Promise<{ staffed: bool
       const upd: Record<string, any> = {};
       const setBlank = (col: string, val: any) => { const v = val == null ? '' : String(val).trim(); if (v && !String(profile[col] ?? '').trim()) upd[col] = v; };
       setBlank('email', email); setBlank('phone', answers.phone); setBlank('position', position);
-      setBlank('start_date', startDate); setBlank('dob', answers.dob); setBlank('address', answers.home_address);
+      setBlank('start_date', startDate); setBlank('dob', answers.dob); setBlank('address', address);
       setBlank('worker_type', meta.workerType); setBlank('weight', answers.weight); setBlank('ktn', answers.tsa_ktn);
       setBlank('favorite_color', answers.favorite_color); setBlank('favorite_treat', answers.favorite_snack);
       setBlank('details', answers.additional_notes);
@@ -130,9 +158,9 @@ export async function applyIntakeToRecords(intake: any): Promise<{ staffed: bool
 }
 
 // Convenience: look up a person's completed intake and sync it. No-op when the
-// person never submitted one.
+// person never submitted one. `name` is the display name to enrich under.
 export async function syncCompletedIntakeToRecords(opts: { intakeId?: string | null; onboardeeId?: string | null; name?: string | null }) {
   const intake = await findCompletedIntake(opts);
   if (!intake) return null;
-  return applyIntakeToRecords(intake);
+  return applyIntakeToRecords(intake, opts.name ?? null);
 }

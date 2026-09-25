@@ -856,10 +856,12 @@ export default function OnboardingClient() {
     setDashTab('hired');
     showToast(`${person.name} hired — added to Staffing`);
   }
-  // Re-push a hired person into Staffing (idempotent — only inserts if missing).
+  // Re-push a hired person into Staffing and re-copy their completed intake form
+  // (address, emergency contact, favorites, uploads) into Staffing + Employee
+  // File. Idempotent — only fills blanks and inserts what's missing.
   async function addToStaffing(person: any) {
     await fetch('/api/onboardees', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: person.id, complete: true }) });
-    showToast(`${person.name} is in the Staffing directory`);
+    showToast(`${person.name} synced to Staffing & Employee File`);
   }
   async function deleteOnboardee(id: string) {
     if (!confirm('Remove this onboarding record?')) return;
@@ -2484,7 +2486,7 @@ export default function OnboardingClient() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-[#2f7d5b]">✓ Hired · in Staffing</span>
                         <a href="/staffing" className="text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">Open in Staffing ↗</a>
-                        <button onClick={() => addToStaffing(person)} className="text-xs font-semibold text-text-muted border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Re-add if the Staffing record was removed">Re-add to Staffing</button>
+                        <button onClick={() => addToStaffing(person)} className="text-xs font-semibold text-text-muted border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas" title="Re-copy this hire’s completed intake form (address, emergency contact, favorites, uploads) into Staffing & their Employee File">↻ Sync intake info</button>
                       </div>
                     ) : (
                       <button onClick={() => completeOnboardee(person)} disabled={!allDone}
