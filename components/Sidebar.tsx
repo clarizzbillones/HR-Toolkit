@@ -7,26 +7,27 @@ import clsx from 'clsx';
 import { useAccess } from './AccessProvider';
 import { HR_ADMIN_SECTIONS } from '@/lib/access';
 
+// Nav items, ordered alphabetically by label.
 const navItems = [
-  { href: '/',          label: 'Dashboard' },
-  { href: '/tasks',     label: 'Open HR Tasks', badgeKey: 'tasks' },
-  { href: '/pto',       label: 'PTO & Calendar' },
-  { href: '/offers',    label: 'Letters' },
-  { href: '/hr-forms',  label: 'HR Forms' },
-  { href: '/sop',       label: 'SOP Builder' },
-  { href: '/payroll',   label: 'Payroll' },
-  { href: '/trips',     label: 'Trip Help Desk' },
-  { href: '/reviews',   label: 'Performance Reviews' },
   { href: '/coaching',  label: 'Coaching' },
-  { href: '/staffing',  label: 'Staffing' },
-  { href: '/employee-files', label: 'Employee Files' },
-  { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
-  { href: '/offboarding', label: 'Offboarding' },
-  { href: '/insurance', label: 'Insurance' },
-  { href: '/gifts',     label: 'Gift Tracker' },
   { href: '/documents', label: 'Company Documents' },
-  { href: '/reports',   label: 'Reports' },
+  { href: '/',          label: 'Dashboard' },
+  { href: '/employee-files', label: 'Employee Files' },
+  { href: '/gifts',     label: 'Gift Tracker' },
   { href: '/design',    label: 'Graphic Design' },
+  { href: '/hr-forms',  label: 'HR Forms' },
+  { href: '/insurance', label: 'Insurance' },
+  { href: '/offers',    label: 'Letters' },
+  { href: '/offboarding', label: 'Offboarding' },
+  { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },
+  { href: '/tasks',     label: 'Open HR Tasks', badgeKey: 'tasks' },
+  { href: '/payroll',   label: 'Payroll' },
+  { href: '/reviews',   label: 'Performance Reviews' },
+  { href: '/pto',       label: 'PTO & Calendar' },
+  { href: '/reports',   label: 'Reports' },
+  { href: '/sop',       label: 'SOP Builder' },
+  { href: '/staffing',  label: 'Staffing' },
+  { href: '/trips',     label: 'Trip Help Desk' },
 ];
 
 function initials(name: string) {
@@ -60,7 +61,7 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
   const [dragHref, setDragHref] = useState<string | null>(null);
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('nav-order') || 'null');
+      const saved = JSON.parse(localStorage.getItem('nav-order-v2') || 'null');
       if (Array.isArray(saved)) {
         const known = navItems.map(i => i.href);
         const merged = [...saved.filter((h: string) => known.includes(h)), ...known.filter(h => !saved.includes(h))];
@@ -85,7 +86,7 @@ export default function Sidebar({ pendingTaskCount }: SidebarProps) {
     const from = next.indexOf(dragHref); const to = next.indexOf(targetHref);
     next.splice(from, 1); next.splice(to, 0, dragHref);
     setOrder(next); setDragHref(null);
-    try { localStorage.setItem('nav-order', JSON.stringify(next)); } catch { /* ignore */ }
+    try { localStorage.setItem('nav-order-v2', JSON.stringify(next)); } catch { /* ignore */ }
   }
 
   const userName = session?.user?.name ?? 'Clarizz Alon';
