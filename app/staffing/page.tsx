@@ -1,6 +1,7 @@
 import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import StaffingClient from './StaffingClient';
+import { autoMergeDuplicateStaff } from '@/lib/staffDedupe';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,8 @@ export default async function StaffingPage() {
   )`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS southwest TEXT`;
   await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS southwest TEXT`;
+  // Collapse any duplicate rows (e.g. after a profile merge / rename) before load.
+  await autoMergeDuplicateStaff();
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;
   const vendors = await sql`SELECT * FROM vendor_contacts ORDER BY entity ASC, name ASC`;
   const offboarded = await sql`SELECT * FROM offboarded_staff ORDER BY name ASC`;
