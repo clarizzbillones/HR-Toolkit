@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
 import { EXTRA_COLS, staffToProfile } from '@/lib/employeeProfile';
 import { syncAllForProfile, normName } from '@/lib/employeeFiles';
+import { coreName } from '@/lib/intakeSync';
 
 // Employee Files is HR-admin-only; enforce it on every request.
 async function requireHrAdmin() {
@@ -72,13 +73,13 @@ async function mergeProfiles(src: string, tgt: string): Promise<any | null> {
 // `keepName`, filling blanks from the others before deleting them. Matches by
 // normalized name across every supplied variant.
 async function mergeStaffRows(names: (string | null | undefined)[], keepName: string): Promise<void> {
-  const keys = new Set(names.map(n => normName(n)).filter(Boolean));
+  const keys = new Set(names.map(n => coreName(n)).filter(Boolean));
   if (!keys.size) return;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS extra TEXT`;
   const rows = await sql`SELECT * FROM staff_directory` as any[];
-  const matches = rows.filter(r => keys.has(normName(r.name)));
+  const matches = rows.filter(r => keys.has(coreName(r.name)));
   if (matches.length < 2) return;
-  const keep = matches.find(r => normName(r.name) === normName(keepName)) || matches[0];
+  const keep = matches.find(r => coreName(r.name) === coreName(keepName)) || matches[0];
   const others = matches.filter(r => r.id !== keep.id);
   const cols = ['worker_type', 'position', 'dialpad', 'personal_phone', 'email', 'address', 'start_date', 'dob', 'favorite_color', 'favorite_treat', 'note', 'ktn', 'marriott', 'delta', 'southwest', 'american', 'weight'];
   const upd: Record<string, any> = {};

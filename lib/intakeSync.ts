@@ -21,7 +21,7 @@ const parseAns = (v: any): Record<string, any> => {
 // quoted / parenthetical nickname segments — William "Bill" Abely, William
 // (Bill) Abely, William 'Bill' Abely — then normalizes to a first+last key. So
 // the Staffing display name matches the legal name on the intake form.
-function coreName(s: any): string {
+export function coreName(s: any): string {
   const stripped = String(s ?? '')
     .replace(/"[^"]*"/g, ' ')
     .replace(/'[^']*'/g, ' ')
