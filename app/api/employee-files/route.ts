@@ -60,7 +60,41 @@ async function mergeProfiles(src: string, tgt: string): Promise<any | null> {
   if (Object.keys(fill).length) await sql`UPDATE employee_profiles SET ${sql(fill)} WHERE id = ${tgt}`;
   await sql`DELETE FROM employee_profiles WHERE id = ${src}`;
   const [profile] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
+  // Also collapse the Staffing directory: a duplicate profile usually has a
+  // duplicate Staffing row (e.g. "William Abely" vs "William \"Bill\" Abely"),
+  // so Staffing must end up with a single employee too. Keep the row under the
+  // surviving profile's name, fill its blanks from the other(s), then delete them.
+  try { await mergeStaffRows([t.name, s.name], profile?.name ?? t.name); } catch { /* best-effort */ }
   return profile;
+}
+
+// Collapse duplicate Staffing rows for one person into a single row named
+// `keepName`, filling blanks from the others before deleting them. Matches by
+// normalized name across every supplied variant.
+async function mergeStaffRows(names: (string | null | undefined)[], keepName: string): Promise<void> {
+  const keys = new Set(names.map(n => normName(n)).filter(Boolean));
+  if (!keys.size) return;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS extra TEXT`;
+  const rows = await sql`SELECT * FROM staff_directory` as any[];
+  const matches = rows.filter(r => keys.has(normName(r.name)));
+  if (matches.length < 2) return;
+  const keep = matches.find(r => normName(r.name) === normName(keepName)) || matches[0];
+  const others = matches.filter(r => r.id !== keep.id);
+  const cols = ['worker_type', 'position', 'dialpad', 'personal_phone', 'email', 'address', 'start_date', 'dob', 'favorite_color', 'favorite_treat', 'note', 'ktn', 'marriott', 'delta', 'southwest', 'american', 'weight'];
+  const upd: Record<string, any> = {};
+  // Always keep the surviving profile's name on the retained row.
+  if (String(keep.name ?? '') !== String(keepName ?? '') && String(keepName ?? '').trim()) upd.name = keepName;
+  let mergedExtra: Record<string, any> = {};
+  try { mergedExtra = keep.extra ? JSON.parse(keep.extra) : {}; } catch { /* ignore */ }
+  for (const o of others) {
+    for (const c of cols) {
+      if (upd[c] === undefined && !String(keep[c] ?? '').trim() && o[c] != null && String(o[c]).trim()) upd[c] = o[c];
+    }
+    try { const oe = o.extra ? JSON.parse(o.extra) : {}; mergedExtra = { ...oe, ...mergedExtra }; } catch { /* ignore */ }
+  }
+  if (Object.keys(mergedExtra).length) upd.extra = JSON.stringify(mergedExtra);
+  if (Object.keys(upd).length) await sql`UPDATE staff_directory SET ${sql(upd)} WHERE id = ${keep.id}`;
+  for (const o of others) await sql`DELETE FROM staff_directory WHERE id = ${o.id}`;
 }
 
 // One-off: combine the known duplicate "Simran Jain" into "Simran Mohini Jain".
