@@ -4,9 +4,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
-import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { intakeFields, intakeUploads, filterFields, filterUploads, isIntakeRole, roleLabel, roleMeta, REQUIRED_FIELDS, type IntakeRole } from '@/lib/onboardingIntake';
 import { sendMailAsApp } from '@/lib/graph';
+import { applyIntakeToRecords } from '@/lib/intakeSync';
 
 const INTAKE_SENDER = process.env.REVIEW_REMINDER_SENDER ?? 'clarizz@litson.co';
 const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -42,14 +42,6 @@ async function ensure() {
     data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   await sql`ALTER TABLE onboarding_intake_files ADD COLUMN IF NOT EXISTS label TEXT`;
-}
-async function ensureStaff() {
-  await sql`CREATE TABLE IF NOT EXISTS staff_directory (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, position TEXT, dialpad TEXT, personal_phone TEXT, email TEXT,
-    start_date TEXT, dob TEXT, favorite_color TEXT, favorite_treat TEXT, note TEXT, ktn TEXT, marriott TEXT,
-    delta TEXT, weight TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`;
-  for (const c of ['southwest', 'american', 'worker_type']) await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS ${sql(c)} TEXT`;
 }
 async function ensureOnboardees() {
   await sql`CREATE TABLE IF NOT EXISTS onboardees (
@@ -166,51 +158,15 @@ export async function POST(req: Request) {
       }
     } catch { /* best-effort */ }
 
-    // 2) Staffing directory.
-    try {
-      await ensureStaff();
-      const [ex] = await sql`SELECT id FROM staff_directory WHERE lower(name) = lower(${name}) LIMIT 1` as any[];
-      if (!ex) await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, start_date, dob, worker_type, weight, ktn, favorite_color, favorite_treat)
-        VALUES (${cuid()}, ${name}, ${position}, ${email}, ${answers.phone ?? null}, ${startDate}, ${answers.dob ?? null}, ${meta.workerType}, ${answers.weight ?? null}, ${answers.tsa_ktn ?? null}, ${answers.favorite_color ?? null}, ${answers.favorite_snack ?? null})`;
-    } catch { /* best-effort */ }
-
-    // 3) Employee File profile (fill blanks) + file the uploads and a summary.
+    // 2 & 3) Push the submission into Staffing + the hire's Employee File — home
+    // address → Staffing "Address", favorites, emergency contact, TSA/KTN, and
+    // every uploaded document. Shared with the "Mark hired" flow so every new
+    // hire's data carries over automatically and identically (nickname-tolerant
+    // name matching, fills blanks on existing rows, never overwrites).
     let profileId: string | null = null;
     try {
-      const profile = await findOrCreateProfileByName(name);
-      if (profile) {
-        profileId = profile.id;
-        const upd: Record<string, any> = {};
-        const setBlank = (col: string, val: any) => { const v = val == null ? '' : String(val).trim(); if (v && !String(profile[col] ?? '').trim()) upd[col] = v; };
-        setBlank('email', email); setBlank('phone', answers.phone); setBlank('position', position);
-        setBlank('start_date', startDate); setBlank('dob', answers.dob); setBlank('address', answers.home_address);
-        setBlank('worker_type', meta.workerType); setBlank('weight', answers.weight); setBlank('ktn', answers.tsa_ktn);
-        setBlank('favorite_color', answers.favorite_color); setBlank('favorite_treat', answers.favorite_snack);
-        setBlank('details', answers.additional_notes);
-        if (Object.keys(upd).length) { try { await sql`UPDATE employee_profiles SET ${sql(upd)} WHERE id = ${profile.id}`; } catch { /* older schema */ } }
-
-        // A summary remark of everything they entered (list fields joined).
-        const lines = intakeFields(role).map(f => { const v = answers[f.id]; const val = Array.isArray(v) ? v.filter(Boolean).join('; ') : v; return val ? `${f.label}: ${val}` : ''; }).filter(Boolean);
-        const emergency = [answers.emergency_name, answers.emergency_phone].filter(Boolean).join(' · ');
-        const summary = [`Submitted the ${roleLabel(role)} onboarding intake form.`, ...lines].join('\n');
-        await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data, source_ref)
-          VALUES (${cuid()}, ${profile.id}, 'Onboarding', ${`Onboarding intake — ${roleLabel(role)}`}, ${new Date().toISOString().slice(0, 10)}, ${summary}, ${''}, ${emergency ? `Emergency contact: ${emergency}` : ''}, ${name}, ${null}, ${null}, ${`intake:${row.id}`})
-          ON CONFLICT DO NOTHING`;
-
-        // Each uploaded document as its own filed entry.
-        const stored = await sql`SELECT id, name, label, data FROM onboarding_intake_files WHERE intake_id = ${row.id}` as any[];
-        let i = 0;
-        for (const f of stored) {
-          const docType = String(f.label ?? '').trim();
-          await attachPdfToEmployeeFile({
-            name, category: 'Onboarding',
-            title: docType ? `${docType}${f.name ? ` — ${f.name}` : ''}` : `Onboarding document — ${f.name}`,
-            docDate: new Date().toISOString().slice(0, 10), attName: f.name || 'document',
-            dataUrl: f.data, sourceRef: `intake-file:${row.id}:${i++}`,
-            summary: `Uploaded during onboarding intake (${roleLabel(role)})${docType ? ` — ${docType}` : ''}.`, author: name,
-          });
-        }
-      }
+      const res = await applyIntakeToRecords({ id: row.id, role, name, email, answers }, name);
+      profileId = res.profileId;
     } catch { /* best-effort */ }
 
     await sql`UPDATE onboarding_intakes SET answers = ${JSON.stringify(answers)}, status = 'Completed', submitted_at = NOW(), onboardee_id = ${onboardeeId}, profile_id = ${profileId} WHERE id = ${row.id}`;

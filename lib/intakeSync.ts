@@ -73,13 +73,13 @@ export async function findCompletedIntake(opts: { intakeId?: string | null; onbo
 // this hire (e.g. the Staffing / onboarding record's name, possibly with a
 // nickname) — records are enriched under that name so we never fork a duplicate
 // under the bare legal name. Returns a small summary of what it touched.
-export async function applyIntakeToRecords(intake: any, targetName?: string | null): Promise<{ staffed: boolean; profileFilled: boolean; filesFiled: number }> {
+export async function applyIntakeToRecords(intake: any, targetName?: string | null): Promise<{ staffed: boolean; profileFilled: boolean; filesFiled: number; profileId: string | null }> {
   const role = intake.role as IntakeRole;
   const answers = parseAns(intake.answers);
   const meta = roleMeta(role);
   const legalName = String(answers.full_legal_name || intake.name || '').trim();
   const name = String(targetName ?? '').trim() || legalName;
-  if (!name) return { staffed: false, profileFilled: false, filesFiled: 0 };
+  if (!name) return { staffed: false, profileFilled: false, filesFiled: 0, profileId: null };
   const key = coreName(name) || coreName(legalName);
 
   const email = String(answers.personal_email || intake.email || '').trim() || null;
@@ -90,6 +90,7 @@ export async function applyIntakeToRecords(intake: any, targetName?: string | nu
   let staffed = false;
   let profileFilled = false;
   let filesFiled = 0;
+  let profileId: string | null = null;
 
   // 1) Staffing directory — find the row (nickname-tolerant), fill blank columns;
   //    insert a fresh row only when the person isn't in the directory at all.
@@ -116,6 +117,7 @@ export async function applyIntakeToRecords(intake: any, targetName?: string | nu
   try {
     const profile = await findOrCreateProfileByName(name);
     if (profile) {
+      profileId = profile.id;
       const upd: Record<string, any> = {};
       const setBlank = (col: string, val: any) => { const v = val == null ? '' : String(val).trim(); if (v && !String(profile[col] ?? '').trim()) upd[col] = v; };
       setBlank('email', email); setBlank('phone', answers.phone); setBlank('position', position);
@@ -154,7 +156,7 @@ export async function applyIntakeToRecords(intake: any, targetName?: string | nu
     }
   } catch { /* best-effort */ }
 
-  return { staffed, profileFilled, filesFiled };
+  return { staffed, profileFilled, filesFiled, profileId };
 }
 
 // Convenience: look up a person's completed intake and sync it. No-op when the
