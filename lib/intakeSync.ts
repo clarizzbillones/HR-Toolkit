@@ -166,3 +166,49 @@ export async function syncCompletedIntakeToRecords(opts: { intakeId?: string | n
   if (!intake) return null;
   return applyIntakeToRecords(intake, opts.name ?? null);
 }
+
+// Lightweight, Staffing-only self-heal: fill blank Staffing columns from every
+// completed intake (home address → Address, phone, DOB, favorites, TSA/KTN,
+// email, position, start date). Cheap enough to run on each Staffing load, so a
+// hire's intake data — especially the mailing address — shows up automatically
+// without anyone clicking "Sync intake info". Only fills blanks; never
+// overwrites; matches names nickname-tolerantly.
+export async function backfillStaffFromCompletedIntakes(): Promise<void> {
+  try {
+    const intakes = await sql`SELECT role, name, answers FROM onboarding_intakes WHERE status = 'Completed'` as any[];
+    if (!intakes.length) return;
+    await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS address TEXT`;
+    const staff = await sql`SELECT * FROM staff_directory` as any[];
+    if (!staff.length) return;
+    for (const intake of intakes) {
+      const answers = parseAns(intake.answers);
+      const meta = roleMeta(intake.role as IntakeRole);
+      const key = coreName(answers.full_legal_name || intake.name);
+      if (!key) continue;
+      const row = staff.find(r => coreName(r.name) === key);
+      if (!row) continue;
+      const map: Record<string, any> = {
+        address: answers.home_address,
+        personal_phone: answers.phone,
+        dob: answers.dob,
+        weight: answers.weight,
+        ktn: answers.tsa_ktn,
+        favorite_color: answers.favorite_color,
+        favorite_treat: answers.favorite_snack,
+        email: answers.personal_email,
+        position: answers.role_title || answers.business_name || meta.titleHint,
+        start_date: answers.start_date || answers.services_start,
+        worker_type: meta.workerType,
+      };
+      const upd: Record<string, any> = {};
+      for (const [c, v] of Object.entries(map)) {
+        const val = v == null ? '' : String(v).trim();
+        if (val && !String(row[c] ?? '').trim()) upd[c] = val;
+      }
+      if (Object.keys(upd).length) {
+        await sql`UPDATE staff_directory SET ${sql(upd)} WHERE id = ${row.id}`;
+        Object.assign(row, upd); // keep local copy current for this pass
+      }
+    }
+  } catch { /* best-effort */ }
+}
