@@ -4,6 +4,7 @@ import { sql, cuid } from '@/lib/db';
 import { parseDoc, docSignedOff, docComplete, grantedAccounts, emptyDoc } from '@/lib/onboardingDoc';
 import { attachPdfToEmployeeFile, findOrCreateProfileByName } from '@/lib/employeeFiles';
 import { onboardingDocPdfDataUrl } from '@/lib/employeePdf';
+import { syncCompletedIntakeToRecords } from '@/lib/intakeSync';
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS onboardees (
@@ -140,6 +141,10 @@ export async function PATCH(req: Request) {
         await sql`INSERT INTO staff_directory (id, name, position, email, personal_phone, start_date, dob, worker_type)
           VALUES (${cuid()}, ${p.name}, ${p.position ?? null}, ${p.email ?? null}, ${p.phone ?? null}, ${p.start_date ?? null}, ${p.dob ?? null}, ${p.worker_type ?? 'Employee'})`;
       }
+      // Carry the completed intake form (if any) into Staffing + the Employee
+      // File: address, emergency contact, TSA/KTN, favorites, uploaded docs, etc.
+      // No-op when the hire never submitted an intake.
+      try { await syncCompletedIntakeToRecords({ onboardeeId: id, name: p.name }); } catch { /* best-effort */ }
     }
     const [row] = await sql`SELECT * FROM onboardees WHERE id = ${id}`;
     return NextResponse.json({ row: parse(row), staffed: true });
