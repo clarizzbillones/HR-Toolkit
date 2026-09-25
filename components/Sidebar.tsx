@@ -24,6 +24,7 @@ const navItems = [
   { href: '/offboarding', label: 'Offboarding' },
   { href: '/insurance', label: 'Insurance' },
   { href: '/gifts',     label: 'Gift Tracker' },
+  { href: '/documents', label: 'Company Documents' },
   { href: '/reports',   label: 'Reports' },
   { href: '/design',    label: 'Graphic Design' },
 ];
