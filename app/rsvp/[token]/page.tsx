@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-interface Q { id: string; label: string; type?: 'choice' | 'text'; options?: string[]; showIf?: { q: string; value: string } }
+interface Q { id: string; label: string; heading?: string; type?: 'choice' | 'text'; options?: string[]; showIf?: { q: string; value: string } }
 
 export default function RsvpPage({ params }: { params: { token: string } }) {
   const { token } = params;
@@ -75,6 +75,7 @@ export default function RsvpPage({ params }: { params: { token: string } }) {
               if (!isText) num += 1;
               return (
                 <div key={q.id} style={{ borderTop: '1px solid #eee3d0', paddingTop: 14, marginTop: 12 }}>
+                  {q.heading && <div style={{ fontWeight: 800, color: '#1b2a3d', fontSize: 16, marginBottom: 4 }}>{q.heading}</div>}
                   <div style={{ fontWeight: 600, color: '#1b2a3d', fontSize: 15, marginBottom: 8 }}>{isText ? '' : `${num}. `}{q.label}</div>
                   {isText ? (
                     <input value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} placeholder="Type your answer here"

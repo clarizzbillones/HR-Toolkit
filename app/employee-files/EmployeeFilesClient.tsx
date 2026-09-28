@@ -351,25 +351,25 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     } catch { /* ignore */ }
   }
   // ---- Form builder (create/edit RSVP forms) ----
-  interface BQ { id: string; label: string; type: 'choice' | 'text'; options: string[]; showIf?: { q: string; value: string } }
+  interface BQ { id: string; label: string; heading: string; type: 'choice' | 'text'; options: string[]; showIf?: { q: string; value: string } }
   const [showBuilder, setShowBuilder] = useState(false);
   const [builderId, setBuilderId] = useState<string | null>(null);
   const [bTitle, setBTitle] = useState('');
   const [bDesc, setBDesc] = useState('');
   const [bThankYou, setBThankYou] = useState('');
   const [bQ, setBQ] = useState<BQ[]>([]);
-  function newQuestion(): BQ { return { id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), label: '', type: 'choice', options: ['Yes', 'No'] }; }
+  function newQuestion(): BQ { return { id: 'q' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), label: '', heading: '', type: 'choice', options: ['Yes', 'No'] }; }
   function openNewForm() { setBuilderId(null); setBTitle(''); setBDesc(''); setBThankYou(''); setBQ([newQuestion()]); setShowBuilder(true); }
   function openEditForm(ev: any) {
     if (!ev || !ev.custom) { showToast('Built-in forms can’t be edited — create a new one'); return; }
     setBuilderId(ev.id); setBTitle(ev.title ?? ''); setBDesc(ev.description ?? ''); setBThankYou(ev.thankYou ?? '');
-    setBQ((ev.questions ?? []).map((q: any) => ({ id: q.id, label: q.label, type: q.type === 'text' ? 'text' : 'choice', options: q.options ?? ['Yes', 'No'], showIf: q.showIf })));
+    setBQ((ev.questions ?? []).map((q: any) => ({ id: q.id, label: q.label, heading: q.heading ?? '', type: q.type === 'text' ? 'text' : 'choice', options: q.options ?? ['Yes', 'No'], showIf: q.showIf })));
     setShowBuilder(true);
   }
   const setQ = (i: number, patch: Partial<BQ>) => setBQ(qs => qs.map((q, idx) => idx === i ? { ...q, ...patch } : q));
   async function saveForm() {
     if (!bTitle.trim()) { showToast('Enter a form title'); return; }
-    const questions = bQ.filter(q => q.label.trim()).map(q => ({ id: q.id, label: q.label.trim(), type: q.type, options: q.type === 'choice' ? q.options.filter(Boolean) : undefined, showIf: q.showIf?.q ? q.showIf : undefined }));
+    const questions = bQ.filter(q => q.label.trim()).map(q => ({ id: q.id, label: q.label.trim(), heading: q.heading.trim() || undefined, type: q.type, options: q.type === 'choice' ? q.options.filter(Boolean) : undefined, showIf: q.showIf?.q ? q.showIf : undefined }));
     if (!questions.length) { showToast('Add at least one question'); return; }
     const action = builderId ? 'update-event' : 'create-event';
     const res = await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id: builderId, title: bTitle.trim(), description: bDesc, thankYou: bThankYou, questions }) });
@@ -1267,7 +1267,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   <div key={q.id} className="border border-border-light rounded-ctrl p-3 space-y-2 bg-canvas">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-text-muted w-5">{i + 1}.</span>
-                      <input value={q.label} onChange={e => setQ(i, { label: e.target.value })} placeholder="Question text" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
+                      <input value={q.heading} onChange={e => setQ(i, { heading: e.target.value })} placeholder="Bold heading (optional) — e.g. 9:00 AM – Lifestyle Photos" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm font-bold bg-white focus:outline-none focus:border-ink" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-5" />
+                      <input value={q.label} onChange={e => setQ(i, { label: e.target.value })} placeholder="Question text — e.g. Will you be available to participate?" className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:border-ink" />
                       <select value={q.type} onChange={e => setQ(i, { type: e.target.value as any, options: e.target.value === 'choice' ? (q.options.length ? q.options : ['Yes', 'No']) : q.options })} className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm bg-white">
                         <option value="choice">Multiple choice</option>
                         <option value="text">Short text</option>

@@ -4,6 +4,7 @@
 
 export interface RsvpQuestion {
   id: string; label: string;
+  heading?: string;               // optional bold heading shown above the question
   type?: 'choice' | 'text';       // default 'choice'
   options?: string[];             // for 'choice'
   showIf?: { q: string; value: string }; // only show when another answer matches

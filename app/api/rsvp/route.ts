@@ -45,6 +45,8 @@ function cleanQuestions(input: any): RsvpQuestion[] {
   return input.map((q: any, i: number) => {
     const type = q?.type === 'text' ? 'text' : 'choice';
     const out: RsvpQuestion = { id: String(q?.id || `q${i + 1}`).replace(/[^\w]/g, '').slice(0, 40) || `q${i + 1}`, label: String(q?.label ?? '').slice(0, 300), type };
+    const heading = String(q?.heading ?? '').slice(0, 200).trim();
+    if (heading) out.heading = heading;
     if (type === 'choice') out.options = (Array.isArray(q?.options) ? q.options : ['Yes', 'No']).map((o: any) => String(o).slice(0, 80)).filter(Boolean).slice(0, 8);
     if (q?.showIf?.q && q?.showIf?.value != null) out.showIf = { q: String(q.showIf.q), value: String(q.showIf.value) };
     return out;
