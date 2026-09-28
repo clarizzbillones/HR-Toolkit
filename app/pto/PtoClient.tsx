@@ -260,6 +260,54 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterCalEvent, setFilterCalEvent] = useState('');
+  const [showHidden, setShowHidden] = useState(false);
+
+  // Restore hidden calendar entries: drop the given id/signature strings from the
+  // hidden list so they reappear on the report on the next merge.
+  async function unhide(keys: string[]) {
+    const drop = new Set(keys);
+    const next = [...hiddenCalIds].filter(k => !drop.has(k));
+    setHiddenCalIds(new Set(next));
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: next }) });
+    showToast('Entry restored');
+  }
+  async function unhideAll() {
+    if (!confirm('Restore ALL hidden calendar entries? They will reappear on the report.')) return;
+    setHiddenCalIds(new Set());
+    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [] }) });
+    setShowHidden(false);
+    showToast('All hidden entries restored');
+  }
+
+  // Build a readable list of what's currently hidden. Match hidden ids/signatures
+  // back to known calendar events where possible; anything unmatched (e.g. an
+  // event since removed from Outlook) is shown from its stored signature.
+  const hiddenList = useMemo(() => {
+    const hidden = new Set(hiddenCalIds);
+    const used = new Set<string>();
+    const items: { label: string; dates: string; keys: string[] }[] = [];
+    for (const c of calEvents) {
+      const sig = calSig(resolveAlias(c.name), c.start, c.end);
+      const keys: string[] = [];
+      if (hidden.has(c.id)) keys.push(c.id);
+      if (hidden.has(sig)) keys.push(sig);
+      if (!keys.length) continue;
+      keys.forEach(k => used.add(k));
+      items.push({ label: `${resolveAlias(c.name)} — ${c.title || c.tag}`, dates: c.start === c.end ? c.start : `${c.start} → ${c.end}`, keys });
+    }
+    // Orphans: hidden strings with no matching current calendar event.
+    for (const k of hidden) {
+      if (used.has(k)) continue;
+      if (k.startsWith('sig:')) {
+        const [who, start, end] = k.slice(4).split('|');
+        const name = who ? who.replace(/\b\w/g, ch => ch.toUpperCase()) : 'Unknown';
+        items.push({ label: `${name} (no longer in Outlook)`, dates: start && end ? (start === end ? start : `${start} → ${end}`) : '', keys: [k] });
+      } else {
+        items.push({ label: 'Removed calendar entry', dates: '', keys: [k] });
+      }
+    }
+    return items;
+  }, [hiddenCalIds, calEvents]);
 
   function toggleSet<T>(set: Set<T>, val: T): Set<T> {
     const next = new Set(set);
@@ -525,8 +573,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
               {calConnected && <span className="ml-auto text-xs font-semibold text-text-muted">{calEvents.length} events</span>}
             </div>
             {calConnected ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
+                <button onClick={() => setShowHidden(true)}
+                  className="text-xs text-[#b07d2a] hover:text-ink font-semibold">Hidden ({hiddenList.length})</button>
                 <button onClick={refreshCalendar} disabled={calLoading}
                   className="text-xs text-[#3f6b8a] hover:text-ink font-semibold disabled:opacity-50">{calLoading ? 'Refreshing…' : 'Refresh'}</button>
                 <button onClick={disconnectCalendar}
@@ -760,6 +810,43 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       </div>
 
       {/* Edit modal */}
+      {showHidden && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={() => setShowHidden(false)}>
+          <div className="bg-white rounded-card w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-spectral text-[18px] font-semibold text-text-primary">Hidden calendar entries</h2>
+                <p className="text-xs text-text-muted mt-0.5">Entries you deleted from the report. Restoring brings one back on the next sync.</p>
+              </div>
+              <button onClick={() => setShowHidden(false)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
+            </div>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {hiddenList.length === 0 ? (
+                <p className="text-sm text-text-muted py-8 text-center">Nothing is hidden. Deleted calendar entries will show up here.</p>
+              ) : (
+                <div className="space-y-2">
+                  {hiddenList.map((h, i) => (
+                    <div key={i} className="flex items-center gap-3 border border-border-light rounded-ctrl px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-text-primary truncate">{h.label}</div>
+                        {h.dates && <div className="text-xs text-text-muted">{h.dates}</div>}
+                      </div>
+                      <button onClick={() => unhide(h.keys)} className="text-xs font-semibold text-[#2f7d5b] border border-[#bfe0cc] px-3 py-1.5 rounded-ctrl hover:bg-[#eef5f1] whitespace-nowrap">↩ Restore</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {hiddenList.length > 0 && (
+              <div className="px-6 py-3 border-t border-border flex justify-between items-center">
+                <button onClick={unhideAll} className="text-xs font-semibold text-litred-alt hover:underline">Restore all</button>
+                <button onClick={() => setShowHidden(false)} className="text-sm text-text-muted px-3">Done</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {(editEntry || calEditRow) && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={closeEdit}>
           <div className="bg-white rounded-card p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
