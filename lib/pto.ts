@@ -67,6 +67,15 @@ export function workingDays(start: string, end: string) {
 }
 export function datesOverlap(as: string, ae: string, bs: string, be: string) { return as <= be && ae >= bs; }
 
+// A content signature for a calendar entry that stays stable even when the
+// event's summary changes (e.g. a half-day gets a "(11:20-1pm)" annotation) —
+// keyed on the resolved person + dates only. Stored alongside the event id in
+// the "hidden" list so a deleted entry never returns just because its title (and
+// therefore its content-hash id) changed. Prefixed so it never collides with ids.
+export function calSig(employee: string, start: string, end: string): string {
+  return `sig:${normName(employee)}|${start}|${end}`;
+}
+
 // Mirrors PtoClient's merge: DB entries + calendar events, dedup by name+overlap.
 export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: string[] = []): MergedPto[] {
   const hidden = new Set(hiddenIds);
@@ -84,7 +93,9 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
   });
 
   (calEvents ?? []).forEach(c => {
-    if (usedCalIds.has(c.id) || hidden.has(c.id)) return;
+    // Suppress by id OR by stable content signature (person + dates), so an entry
+    // deleted here stays gone even if its title/id later changes (e.g. half-days).
+    if (usedCalIds.has(c.id) || hidden.has(c.id) || hidden.has(calSig(resolveAlias(c.name), c.start, c.end))) return;
     if (c.end < '2026-06-01') return;
     // Match the PTO dashboard exactly: only skip WFH/personal + non-PTO titles.
     // (Do NOT drop tag==='Other' — the dashboard keeps those.)

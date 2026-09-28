@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import EditGate from '@/components/EditGate';
-import { mergePto, resolveAlias, normName, workingDays, datesOverlap, EXCLUDED_TYPES, EXCLUDED_TITLE } from '@/lib/pto';
+import { mergePto, resolveAlias, normName, workingDays, datesOverlap, calSig, EXCLUDED_TYPES, EXCLUDED_TITLE } from '@/lib/pto';
 
 interface PtoEntry {
   id: string; employee: string; start_date: string; end_date: string;
@@ -187,7 +187,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         });
         const data = await res.json();
         if (Array.isArray(data.entries)) setEntries(data.entries);
-        await hideCalId(calEditRow.calId ?? calEditRow.key);
+        await hideCalId(calEditRow.calId ?? calEditRow.key, calEditRow.employee, calEditRow.start, calEditRow.end);
         closeEdit();
         showToast('Saved to report (edited from Outlook; original kept in Outlook)');
         return;
@@ -210,9 +210,13 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   // Permanently hide a calendar event id so re-syncing/reconnecting never
   // brings it back. Persisted in app_settings (survives disconnect/reconnect).
-  async function hideCalId(calId: string) {
-    if (!calId || hiddenCalIds.has(calId)) return;
-    const next = new Set(hiddenCalIds); next.add(calId);
+  async function hideCalId(calId: string, employee?: string, start?: string, end?: string) {
+    const next = new Set(hiddenCalIds);
+    if (calId) next.add(calId);
+    // Also hide a stable person+dates signature so the entry stays gone even if
+    // its title (and content-hash id) changes later — e.g. a half-day annotation.
+    if (employee && start && end) next.add(calSig(employee, start, end));
+    if (next.size === hiddenCalIds.size) return;
     setHiddenCalIds(next);
     await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
   }
@@ -227,8 +231,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       if (res.ok) {
         setEntries(prev => prev.filter(e => e.id !== id));
         // If this entry also came from the calendar, hide that calendar copy too
-        // so it doesn't reappear as a "calendar" row on the next sync.
-        if (row.calId) await hideCalId(row.calId);
+        // (by id AND stable person+dates signature) so it can't reappear on the
+        // next sync even if the event's title/id later changes.
+        if (row.calId) await hideCalId(row.calId, row.employee, row.start, row.end);
         pushUndo({ label: `Delete PTO — ${dbEntry.employee}`, req: { url: '/api/pto', method: 'POST', body: { entries: [{ employee: dbEntry.employee, type: dbEntry.type, start_date: dbEntry.start_date, end_date: dbEntry.end_date, days: dbEntry.days, notes: dbEntry.notes ?? '' }] } } });
         // Undo also restores the prior hidden list (un-hides the calendar copy).
         if (row.calId) pushUndo({ label: 'Restore calendar entry', req: { url: '/api/connections', method: 'PATCH', body: { hidden_cal_ids: before } } });
@@ -237,8 +242,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       return;
     }
     // Calendar-only entry → hide from the report only (Outlook is untouched).
+    // Hide by id AND by stable person+dates signature so it can't come back if the
+    // event's title (and content-hash id) changes later — e.g. a half-day.
     const before = [...hiddenCalIds];
-    const next = new Set(hiddenCalIds); next.add(id);
+    const next = new Set(hiddenCalIds); next.add(id); next.add(calSig(row.employee, row.start, row.end));
     setHiddenCalIds(next);
     await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden_cal_ids: [...next] }) });
     pushUndo({ label: 'Restore calendar entry', req: { url: '/api/connections', method: 'PATCH', body: { hidden_cal_ids: before } } });
