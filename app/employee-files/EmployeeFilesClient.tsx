@@ -426,6 +426,14 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     await loadRsvp();
     showToast('Survey entry deleted');
   }
+  // Admin edit of a person's RSVP answer (e.g. flip Yes↔No, or record on their
+  // behalf). Updates the most recent entry for this person in the current event.
+  async function setRsvpResponse(profileId: string, patch: Record<string, string>) {
+    const row = rsvpRows.find(r => r.profile_id === profileId);
+    if (!row) { showToast('Send the RSVP to this person first'); return; }
+    setRsvpRows(rows => rows.map(r => r.id === row.id ? { ...r, status: 'Completed', answers: { ...(r.answers ?? {}), ...patch } } : r));
+    await fetch('/api/rsvp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set-response', id: row.id, answers: patch }) });
+  }
   // Download the RSVP responses as a CSV report.
   function downloadRsvpReport() {
     if (!rsvpEvent) return;
@@ -1187,7 +1195,12 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   {profiles.filter(p => !p.offboarded && String(p.email ?? '').trim()).map(p => {
                     const email = String(p.email ?? '').trim();
                     const st = rsvpStatus[p.id];
-                    const ans = rsvpDone.find(r => r.profile_id === p.id)?.answers;
+                    const row = rsvpRows.find(r => r.profile_id === p.id);
+                    const ans = row?.answers;
+                    const cur = attendQ ? String(ans?.[attendQ.id] ?? '') : '';
+                    const isYes = ynYes(cur), isNo = ynNo(cur);
+                    // A tiny Yes/No editor so HR can set or correct a response.
+                    const stop = (e: any) => { e.preventDefault(); e.stopPropagation(); };
                     return (
                       <label key={p.id} className={`flex items-center gap-3 px-2 py-1.5 rounded-ctrl ${email ? 'hover:bg-canvas cursor-pointer' : 'opacity-50'}`}>
                         <input type="checkbox" disabled={!email} checked={rsvpSel.has(p.id)} onChange={() => toggleRsvpSel(p.id)} className="w-4 h-4 accent-[#1b2a3d]" />
@@ -1195,15 +1208,25 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                           <span className="text-sm font-medium text-text-primary">{p.name}</span>
                           <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
                         </span>
-                        {st === 'Completed'
-                          ? (ynYes(attOf({ answers: ans }))
-                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">{`✓ Yes${plusQ && ynYes(ans?.[plusQ.id]) ? ' +1' : ''}`}</span>
-                              : ynNo(attOf({ answers: ans }))
-                                ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>
-                                : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">✓ Submitted</span>)
-                          : st ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f7efe1] text-[#b07d2a]">⏳ Awaiting</span>
-                          : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
-                        {st && <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeRsvpEntry(p.id, p.name); }} title="Delete this survey entry (resets to Not sent)" className="shrink-0 text-text-muted hover:text-litred-alt text-xs px-1">✕</button>}
+                        {!st && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
+                        {st && attendQ && (
+                          <span className="flex items-center gap-0.5 shrink-0" title="Click to set or change this response">
+                            <button onClick={e => { stop(e); setRsvpResponse(p.id, { [attendQ.id]: 'Yes' }); }}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isYes ? 'bg-[#2f7d5b] text-white border-[#2f7d5b]' : 'bg-white text-[#2f7d5b] border-[#bfe0cc] hover:bg-[#eef5f1]'}`}>Yes</button>
+                            <button onClick={e => { stop(e); setRsvpResponse(p.id, { [attendQ.id]: 'No' }); }}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isNo ? 'bg-[#6e2b3e] text-white border-[#6e2b3e]' : 'bg-white text-[#6e2b3e] border-[#e0b9c6] hover:bg-[#f6ecef]'}`}>No</button>
+                            {plusQ && isYes && (
+                              <button onClick={e => { stop(e); setRsvpResponse(p.id, { [plusQ.id]: ynYes(ans?.[plusQ.id]) ? 'No' : 'Yes' }); }}
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ml-0.5 ${ynYes(ans?.[plusQ.id]) ? 'bg-[#a97d24] text-white border-[#a97d24]' : 'bg-white text-[#a97d24] border-[#e3cd97] hover:bg-[#f7efe1]'}`}
+                                title="Bringing a plus-one?">+1</button>
+                            )}
+                          </span>
+                        )}
+                        {st && !attendQ && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : '⏳ Awaiting'}</span>
+                        )}
+                        {st && attendQ && st !== 'Completed' && <span className="text-[9px] text-text-faint shrink-0">awaiting</span>}
+                        {st && <button onClick={e => { stop(e); removeRsvpEntry(p.id, p.name); }} title="Delete this survey entry (resets to Not sent)" className="shrink-0 text-text-muted hover:text-litred-alt text-xs px-1">✕</button>}
                       </label>
                     );
                   })}

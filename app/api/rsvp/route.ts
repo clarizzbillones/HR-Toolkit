@@ -96,6 +96,18 @@ export async function POST(req: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const by = (session.user as any).email ?? null;
 
+  // Admin: set / correct a person's response (e.g. flip Yes↔No, record on their
+  // behalf). Merges the given answers and marks the entry Completed.
+  if (b.action === 'set-response') {
+    const id = String(b.id ?? '');
+    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    const [row] = await sql`SELECT id, answers FROM event_rsvps WHERE id = ${id}` as any[];
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const merged = { ...parse(row.answers), ...(b.answers && typeof b.answers === 'object' ? b.answers : {}) };
+    await sql`UPDATE event_rsvps SET answers = ${JSON.stringify(merged)}, status = 'Completed', submitted_at = COALESCE(submitted_at, NOW()) WHERE id = ${id}`;
+    return NextResponse.json({ ok: true, answers: merged });
+  }
+
   // ---- Form builder: create / update / delete custom forms ----
   if (b.action === 'create-event') {
     const title = String(b.title ?? '').trim();
