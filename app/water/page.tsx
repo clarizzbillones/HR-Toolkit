@@ -9,8 +9,9 @@ export default async function WaterPage() {
   await sql`CREATE TABLE IF NOT EXISTS water_deliveries (
     id TEXT PRIMARY KEY, supplier TEXT, scheduled_date TEXT, delivered_date TEXT,
     status TEXT DEFAULT 'Scheduled', quantity TEXT, notes TEXT,
-    sort_order INT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    sort_order BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  try { await sql`ALTER TABLE water_deliveries ALTER COLUMN sort_order TYPE BIGINT`; } catch { /* already bigint */ }
   const rows = await sql`SELECT * FROM water_deliveries ORDER BY scheduled_date ASC NULLS LAST, sort_order ASC, created_at ASC`;
   return (
     <ModuleLayout pendingTaskCount={n ?? 0}>

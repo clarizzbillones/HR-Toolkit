@@ -11,8 +11,11 @@ async function ensure() {
   await sql`CREATE TABLE IF NOT EXISTS water_deliveries (
     id TEXT PRIMARY KEY, supplier TEXT, scheduled_date TEXT, delivered_date TEXT,
     status TEXT DEFAULT 'Scheduled', quantity TEXT, notes TEXT,
-    sort_order INT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    sort_order BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  // A table created earlier may have sort_order as INT4, which overflows on a
+  // Date.now() value — widen it so inserts succeed.
+  try { await sql`ALTER TABLE water_deliveries ALTER COLUMN sort_order TYPE BIGINT`; } catch { /* already bigint */ }
 }
 const FIELDS = ['supplier', 'scheduled_date', 'delivered_date', 'status', 'quantity', 'notes', 'sort_order'] as const;
 
