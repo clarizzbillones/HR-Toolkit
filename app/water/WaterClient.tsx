@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 
@@ -8,6 +8,7 @@ interface Delivery {
   status: string; quantity: string; notes: string; sort_order?: number;
 }
 
+const SUPPLIERS = ['Primo', 'Culligan'];
 const STATUSES = ['Scheduled', 'Pending', 'Delivered', 'Missed'];
 const STATUS_STYLE: Record<string, string> = {
   Scheduled: 'bg-[#e9f0f5] text-[#3f6b8a] border-[#c5d8e6]',
@@ -26,8 +27,6 @@ export default function WaterClient({ initialRows }: { initialRows: Delivery[] }
   const { showToast } = useToast();
   const [rows, setRows] = useState<Delivery[]>(initialRows);
   const input = 'w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted/60 rounded-md px-2 py-1.5 border border-transparent transition-colors hover:border-border-light focus:outline-none focus:bg-white focus:border-ink/40 focus:ring-1 focus:ring-ink/20';
-
-  const suppliers = useMemo(() => Array.from(new Set(rows.map(r => (r.supplier ?? '').trim()).filter(Boolean))).sort(), [rows]);
 
   const setLocal = (id: string, patch: Partial<Delivery>) => setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   async function save(id: string, patch: Partial<Delivery>) {
@@ -70,14 +69,12 @@ export default function WaterClient({ initialRows }: { initialRows: Delivery[] }
         </div>
 
         {/* Quick add per supplier */}
-        {suppliers.length > 0 && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap text-xs">
-            <span className="text-text-muted font-semibold">Quick add for:</span>
-            {suppliers.map(s => (
-              <button key={s} onClick={() => addRow(s)} className="border border-border-light rounded-full px-3 py-1 font-semibold text-text-secondary hover:border-ink/40 hover:bg-white">+ {s}</button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 mb-4 flex-wrap text-xs">
+          <span className="text-text-muted font-semibold">Quick add for:</span>
+          {SUPPLIERS.map(s => (
+            <button key={s} onClick={() => addRow(s)} className="border border-border-light rounded-full px-3 py-1 font-semibold text-text-secondary hover:border-ink/40 hover:bg-white">+ {s}</button>
+          ))}
+        </div>
 
         <div className="bg-white border border-border rounded-card overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -106,9 +103,11 @@ export default function WaterClient({ initialRows }: { initialRows: Delivery[] }
                   return (
                     <tr key={d.id} className={clsx('border-b border-border-light', i % 2 ? 'bg-canvas/40' : 'bg-white')}>
                       <td className="px-2.5 py-2 align-top">
-                        <input list="water-suppliers" value={d.supplier ?? ''} placeholder="Supplier name"
-                          onChange={e => setLocal(d.id, { supplier: e.target.value })} onBlur={e => save(d.id, { supplier: e.target.value })}
-                          className={input} />
+                        <select value={d.supplier ?? ''} onChange={e => edit(d.id, { supplier: e.target.value })} className={clsx(input, 'cursor-pointer')}>
+                          <option value="">Select supplier…</option>
+                          {SUPPLIERS.map(s => <option key={s} value={s}>{s}</option>)}
+                          {d.supplier && !SUPPLIERS.includes(d.supplier) && <option value={d.supplier}>{d.supplier}</option>}
+                        </select>
                       </td>
                       <td className="px-2.5 py-2 align-top">
                         <input type="date" value={(d.scheduled_date ?? '').slice(0, 10)} onChange={e => edit(d.id, { scheduled_date: e.target.value })} className={input} />
@@ -143,7 +142,6 @@ export default function WaterClient({ initialRows }: { initialRows: Delivery[] }
             </table>
           </div>
         </div>
-        <datalist id="water-suppliers">{suppliers.map(s => <option key={s} value={s} />)}</datalist>
       </div>
     </div>
   );
