@@ -1,6 +1,7 @@
 import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import DashboardClient from './DashboardClient';
+import { positionBreakdown, type PositionCount } from '@/lib/positions';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,10 @@ async function getStats() {
   } catch { /* staffing table not created yet */ }
   let onboarding = 0;
   try { const [{ n }] = await sql`SELECT COUNT(*)::int as n FROM onboardees WHERE status <> 'Complete'`; onboarding = n ?? 0; } catch { /* table not created yet */ }
+
+  // Headcount by role (attorneys, law clerks, etc.) from the Staffing directory.
+  let roleBreakdown: PositionCount[] = [];
+  try { roleBreakdown = positionBreakdown(await sql`SELECT position FROM staff_directory` as any[]); } catch { /* table not created yet */ }
 
   // This-month birthdays & work anniversaries from the Staffing directory
   let birthdays: { name: string; dob: string }[] = [];
@@ -98,6 +103,7 @@ async function getStats() {
     birthdays,
     anniversaries,
     allStaff,
+    roleBreakdown,
     deadlines: deadlines.slice(0, 8),
   };
 }

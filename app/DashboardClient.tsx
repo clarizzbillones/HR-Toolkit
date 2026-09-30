@@ -25,6 +25,7 @@ interface Props {
   birthdays: { name: string; dob: string }[];
   anniversaries: { name: string; years: number; date: string }[];
   allStaff: { name: string; dob: string | null; start_date: string | null }[];
+  roleBreakdown: { label: string; count: number }[];
   deadlines: { label: string; date: string; days: number; kind: string }[];
 }
 
@@ -197,6 +198,20 @@ export default function DashboardClient(props: Props) {
       </header>
 
       <div className="flex-1 overflow-auto p-8">
+        {/* Headcount by role — attorneys, law clerks, etc. */}
+        {!restricted && props.roleBreakdown.length > 0 && (
+          <div className="mb-6 bg-white border border-border rounded-card p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2.5">Headcount by role</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {props.roleBreakdown.map(b => (
+                <span key={b.label} className="inline-flex items-center gap-1.5 bg-canvas border border-border-light rounded-full pl-3 pr-1.5 py-1 text-xs">
+                  <span className="font-medium text-text-secondary">{b.label}</span>
+                  <span className="font-bold text-white bg-[#2f7d5b] rounded-full px-2 py-0.5 leading-none">{b.count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         {/* KPI strip — boxes flash red when a deadline is almost missed (≤3 days / overdue) */}
         {!restricted && (() => {
           const payrollDays = props.payrollDaysLeft;
