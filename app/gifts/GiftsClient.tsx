@@ -46,6 +46,56 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
   const total = rows.length;
   const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
 
+  // Print / Save as PDF — opens a clean, branded table in a new window and
+  // triggers the browser's print dialog (which offers "Save as PDF").
+  function printPdf() {
+    const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const tierLabel: Record<string, string> = { '$': 'Modest', '$$': 'Mid', '$$$': 'Premium' };
+    const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    const body = rows.map(r => `<tr>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.relationship)}</td>
+      <td>${esc(r.address)}</td>
+      <td>${esc(r.phone)}</td>
+      <td>${esc(r.tier ? `${r.tier} ${tierLabel[r.tier] ?? ''}`.trim() : '')}</td>
+      <td class="c">${r.ordered ? '✓' : '—'}</td>
+      <td>${esc(r.ordered_note)}</td>
+      <td class="c">${r.mailed ? '✓' : '—'}</td>
+      <td>${esc(r.notes)}</td>
+    </tr>`).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Gift Tracker</title>
+      <style>
+        @page { size: landscape; margin: 0.5in; }
+        * { box-sizing: border-box; }
+        body { font-family: Georgia, 'Times New Roman', serif; color: #1b2a3d; margin: 0; }
+        .head { border-top: 3px solid #c9a24a; padding: 10px 0 12px; margin-bottom: 14px; border-bottom: 1px solid #e6ddcd; }
+        .brand { font-size: 13px; font-weight: 700; letter-spacing: 4px; color: #c9a24a; }
+        h1 { font-size: 20px; margin: 4px 0 2px; }
+        .sub { font-size: 11px; color: #666; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        th { background: #1b2a3d; color: #fff; text-align: left; padding: 6px 7px; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+        td { padding: 6px 7px; border-bottom: 1px solid #e6ddcd; vertical-align: top; }
+        td.c, th.c { text-align: center; }
+        tr:nth-child(even) td { background: #faf8f4; }
+      </style></head><body>
+      <div class="head">
+        <div class="brand">LITSON PLLC</div>
+        <h1>🎁 Gift Tracker</h1>
+        <div class="sub">${dateStr} · ${total} recipients · ${orderedN} ordered · ${mailedN} mailed</div>
+      </div>
+      <table><thead><tr>
+        <th>Recipient</th><th>Relationship / Company</th><th>Address</th><th>Phone</th><th>Tier</th>
+        <th class="c">Ordered</th><th>What was purchased</th><th class="c">Mailed</th><th>Notes</th>
+      </tr></thead><tbody>${body || '<tr><td colspan="9">No recipients yet.</td></tr>'}</tbody></table>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to print / save the PDF'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 300);
+  }
+
   // Small pill toggle used for the Ordered / Mailed columns.
   function StatusToggle({ on, onClick, doneLabel, todoLabel, tone }: {
     on: boolean; onClick: () => void; doneLabel: string; todoLabel: string; tone: 'green' | 'gold';
@@ -77,7 +127,10 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
           </div>
           <p className="text-sm text-text-muted mt-0.5">Clients &amp; vendors for holiday gifts</p>
         </div>
-        <button onClick={addRow} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark shadow-sm">+ Add recipient</button>
+        <div className="flex items-center gap-2">
+          <button onClick={printPdf} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas shadow-sm">🖨 Print / Save PDF</button>
+          <button onClick={addRow} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark shadow-sm">+ Add recipient</button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-auto px-8 py-6">
