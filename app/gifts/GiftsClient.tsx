@@ -73,8 +73,8 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
         h1 { font-size: 20px; margin: 4px 0 2px; color: #1b2a3d; }
         .sub { font-size: 11px; color: #6b6250; }
         table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-        th { background: #f6efe0; color: #000; font-weight: 700; text-align: left; padding: 7px 7px; font-size: 10px;
-             text-transform: uppercase; letter-spacing: .03em; border-top: 2px solid #1b2a3d; border-bottom: 2px solid #c9a24a; }
+        th { background: #1b2a3d; color: #fff; font-weight: 700; text-align: left; padding: 8px 7px; font-size: 10px;
+             text-transform: uppercase; letter-spacing: .03em; border-bottom: 2px solid #c9a24a; }
         td { padding: 6px 7px; border-bottom: 1px solid #e6ddcd; vertical-align: top; color: #1b2a3d; }
         td.c, th.c { text-align: center; }
         tr:nth-child(even) td { background: #faf6ee; }
