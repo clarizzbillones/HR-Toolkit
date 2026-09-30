@@ -25,6 +25,7 @@ export const SECTIONS: { key: string; label: string }[] = [
   { key: '/documents', label: 'Company Documents' },
   { key: '/reports', label: 'Reports' },
   { key: '/design', label: 'Graphic Design' },
+  { key: '/water', label: 'Water Delivery' },
 ];
 
 // Report sub-tabs — keys match the Reports tab keys.

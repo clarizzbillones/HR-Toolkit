@@ -28,6 +28,7 @@ const navItems = [
   { href: '/sop',       label: 'SOP Builder' },
   { href: '/staffing',  label: 'Staffing' },
   { href: '/trips',     label: 'Trip Help Desk' },
+  { href: '/water',     label: 'Water Delivery' },
 ];
 
 function initials(name: string) {
