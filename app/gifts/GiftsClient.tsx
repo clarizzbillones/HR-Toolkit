@@ -66,17 +66,18 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Gift Tracker</title>
       <style>
         @page { size: landscape; margin: 0.5in; }
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body { font-family: Georgia, 'Times New Roman', serif; color: #1b2a3d; margin: 0; }
-        .head { border-top: 3px solid #c9a24a; padding: 10px 0 12px; margin-bottom: 14px; border-bottom: 1px solid #e6ddcd; }
+        .head { border-top: 4px solid #c9a24a; padding: 10px 0 12px; margin-bottom: 14px; border-bottom: 1px solid #e6ddcd; }
         .brand { font-size: 13px; font-weight: 700; letter-spacing: 4px; color: #c9a24a; }
-        h1 { font-size: 20px; margin: 4px 0 2px; }
-        .sub { font-size: 11px; color: #666; }
+        h1 { font-size: 20px; margin: 4px 0 2px; color: #1b2a3d; }
+        .sub { font-size: 11px; color: #6b6250; }
         table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-        th { background: #1b2a3d; color: #fff; text-align: left; padding: 6px 7px; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
-        td { padding: 6px 7px; border-bottom: 1px solid #e6ddcd; vertical-align: top; }
+        th { background: #f6efe0; color: #000; font-weight: 700; text-align: left; padding: 7px 7px; font-size: 10px;
+             text-transform: uppercase; letter-spacing: .03em; border-top: 2px solid #1b2a3d; border-bottom: 2px solid #c9a24a; }
+        td { padding: 6px 7px; border-bottom: 1px solid #e6ddcd; vertical-align: top; color: #1b2a3d; }
         td.c, th.c { text-align: center; }
-        tr:nth-child(even) td { background: #faf8f4; }
+        tr:nth-child(even) td { background: #faf6ee; }
       </style></head><body>
       <div class="head">
         <div class="brand">LITSON PLLC</div>
