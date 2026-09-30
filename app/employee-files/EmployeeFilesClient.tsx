@@ -326,6 +326,12 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   const [rsvpEventId, setRsvpEventId] = useState(EVENTS[0]?.id ?? '');
   const [rsvpSel, setRsvpSel] = useState<Set<string>>(new Set());
   const [rsvpRows, setRsvpRows] = useState<any[]>([]);
+  // Toggle: allow HR to edit Yes/No responses inline (off = read-only badges).
+  const [rsvpEditMode, setRsvpEditMode] = useState(false);
+  useEffect(() => { try { setRsvpEditMode(localStorage.getItem('rsvp-edit-mode') === '1'); } catch { /* ignore */ } }, []);
+  function toggleRsvpEditMode() {
+    setRsvpEditMode(v => { const n = !v; try { localStorage.setItem('rsvp-edit-mode', n ? '1' : '0'); } catch { /* ignore */ } return n; });
+  }
   const rsvpEvent = rsvpEvents.find(e => e.id === rsvpEventId) ?? rsvpEvents[0];
   const rsvpStatus: Record<string, string> = {};
   for (const r of rsvpRows) { if (!r.profile_id) continue; if (rsvpStatus[r.profile_id] === 'Completed') continue; if (r.status === 'Completed') rsvpStatus[r.profile_id] = 'Completed'; else if (!rsvpStatus[r.profile_id]) rsvpStatus[r.profile_id] = r.status || 'Sent'; }
@@ -1190,6 +1196,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                   <button onClick={() => setRsvpSel(new Set(sendableEmployees().map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Select all with email</button>
                   <button onClick={() => setRsvpSel(new Set(sendableEmployees().filter(p => rsvpStatus[p.id] !== 'Completed').map(p => p.id)))} className="text-[#3f6b8a] hover:underline">Only non-responders</button>
                   <button onClick={() => setRsvpSel(new Set())} className="text-text-muted hover:underline">Clear</button>
+                  <button onClick={toggleRsvpEditMode} title="When on, click Yes/No on a person to set or correct their response" className={`ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-colors ${rsvpEditMode ? 'bg-[#eef5f1] text-[#2f7d5b] border-[#bfe0cc]' : 'bg-white text-text-muted border-border-light hover:border-ink/30'}`}>
+                    <span className={`w-2 h-2 rounded-full ${rsvpEditMode ? 'bg-[#2f7d5b]' : 'bg-text-muted/40'}`} />
+                    ✎ Edit responses {rsvpEditMode ? 'ON' : 'OFF'}
+                  </button>
                 </div>
                 <div className="flex-1 overflow-auto p-3 space-y-0.5">
                   {profiles.filter(p => !p.offboarded && String(p.email ?? '').trim()).map(p => {
@@ -1209,7 +1219,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                           <span className="text-xs text-text-muted ml-2">{email || 'no email on file'}</span>
                         </span>
                         {!st && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f3f0ea] text-text-muted">Not sent</span>}
-                        {st && attendQ && (
+                        {/* Edit mode ON + a Yes/No question → editable buttons */}
+                        {st && attendQ && rsvpEditMode && (
                           <span className="flex items-center gap-0.5 shrink-0" title="Click to set or change this response">
                             <button onClick={e => { stop(e); setRsvpResponse(p.id, { [attendQ.id]: 'Yes' }); }}
                               className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isYes ? 'bg-[#2f7d5b] text-white border-[#2f7d5b]' : 'bg-white text-[#2f7d5b] border-[#bfe0cc] hover:bg-[#eef5f1]'}`}>Yes</button>
@@ -1222,10 +1233,16 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                             )}
                           </span>
                         )}
-                        {st && !attendQ && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st === 'Completed' ? 'bg-[#eef5f1] text-[#2f7d5b]' : 'bg-[#f7efe1] text-[#b07d2a]'}`}>{st === 'Completed' ? '✓ Submitted' : '⏳ Awaiting'}</span>
+                        {/* Edit mode OFF (or no Yes/No question) → read-only status badge */}
+                        {st && (!attendQ || !rsvpEditMode) && (
+                          st === 'Completed'
+                            ? (attendQ && isYes
+                                ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">{`✓ Yes${plusQ && ynYes(ans?.[plusQ.id]) ? ' +1' : ''}`}</span>
+                                : attendQ && isNo
+                                  ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f6ecef] text-[#6e2b3e]">✗ No</span>
+                                  : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#eef5f1] text-[#2f7d5b]">✓ Submitted</span>)
+                            : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-[#f7efe1] text-[#b07d2a]">⏳ Awaiting</span>
                         )}
-                        {st && attendQ && st !== 'Completed' && <span className="text-[9px] text-text-faint shrink-0">awaiting</span>}
                         {st && <button onClick={e => { stop(e); removeRsvpEntry(p.id, p.name); }} title="Delete this survey entry (resets to Not sent)" className="shrink-0 text-text-muted hover:text-litred-alt text-xs px-1">✕</button>}
                       </label>
                     );
