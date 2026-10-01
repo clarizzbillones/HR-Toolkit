@@ -602,14 +602,25 @@ function MonthlyTab({ data }: { data: any }) {
   const reviewOf = (k: string) => {
     const emps = reviews ?? [];
     const out: { name: string; role: string; type: string; date: string | null; status: string }[] = [];
+    const seen = new Set<string>(); // de-dupe by person + date (one review event/day)
+    const add = (name: string, role: string, type: string, date: string | null, status: string) => {
+      if (!date || ymOf(date) !== k) return;
+      const key = `${String(name).toLowerCase().trim()}|${String(date).slice(0, 10)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ name, role, type, date, status });
+    };
     for (const e of emps) {
-      for (const h of parseHistory(e.review_history)) {
-        if (h.date && ymOf(h.date) === k) out.push({ name: e.name, role: e.role ?? '', type: 'Performance Review', date: h.date, status: 'Complete' });
-      }
+      // Completed reviews logged in history
+      for (const h of parseHistory(e.review_history)) add(e.name, e.role ?? '', 'Performance Review', h.date, 'Complete');
+      // Completed/scheduled 6-month & 1-year reviews on their own date fields
+      add(e.name, e.role ?? '', '6-month review', e.review_6mo_date, e.review_6mo_status || 'Complete');
+      add(e.name, e.role ?? '', '1-year review', e.review_1yr_date, e.review_1yr_status || 'Complete');
+      // A logged last-review date (if not already captured above)
+      add(e.name, e.role ?? '', 'Performance Review', e.last_review_date, 'Complete');
     }
-    for (const r of reviewRows(emps)) {
-      if (r.date && ymOf(r.date) === k) out.push({ name: r.name, role: r.role, type: r.type, date: r.date, status: r.status });
-    }
+    // Upcoming/scheduled next review dated in this month
+    for (const r of reviewRows(emps)) add(r.name, r.role, r.type, r.date, r.status);
     return out.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
   };
   const cashoutOf = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
