@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { mergePto } from '@/lib/pto';
-import { reviewRows } from '@/lib/reviews';
+import { reviewRows, parseHistory } from '@/lib/reviews';
 import { mapTripRows } from '@/lib/trips';
 
 // Travel date (from the imported report) shown after the traveler name
@@ -595,7 +595,23 @@ function MonthlyTab({ data }: { data: any }) {
   const ptoOf = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k);
   const tripOf = (k: string) => (trips ?? []).filter((t: any) => tripInMonth(t, k));
   const contractorOf = (k: string) => (contractors ?? []).filter((c: any) => ymOf(cDate(c)) === k);
-  const reviewOf = (k: string) => reviewRows(reviews ?? []).filter(r => r.date && ymOf(r.date) === k).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  // Every performance review that falls in month k — completed ones from each
+  // employee's review history PLUS any upcoming/scheduled review whose next date
+  // lands in that month. So a past month counts the reviews that actually
+  // happened then (history), not just what's currently "due".
+  const reviewOf = (k: string) => {
+    const emps = reviews ?? [];
+    const out: { name: string; role: string; type: string; date: string | null; status: string }[] = [];
+    for (const e of emps) {
+      for (const h of parseHistory(e.review_history)) {
+        if (h.date && ymOf(h.date) === k) out.push({ name: e.name, role: e.role ?? '', type: 'Performance Review', date: h.date, status: 'Complete' });
+      }
+    }
+    for (const r of reviewRows(emps)) {
+      if (r.date && ymOf(r.date) === k) out.push({ name: r.name, role: r.role, type: r.type, date: r.date, status: r.status });
+    }
+    return out.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  };
   const cashoutOf = (k: string) => (cashout ?? []).filter((c: any) => ymOf(c.date) === k).sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
   const cashTotalOf = (k: string) => cashoutOf(k).reduce((s: number, c: any) => s + num(c.amount), 0);
   const reimbOf = (k: string) => (reimbursements ?? []).filter((r: any) => ymOf(r.payout_date) === k).sort((a: any, b: any) => (a.payout_date ?? '').localeCompare(b.payout_date ?? ''));
@@ -635,7 +651,7 @@ function MonthlyTab({ data }: { data: any }) {
     { label: 'Contractor $', color: '#6b4f8a', money: true, thisV: contractorOf(thisKey).reduce((s: number, c: any) => s + num(c.amount), 0), lastV: contractorOf(lastKey).reduce((s: number, c: any) => s + num(c.amount), 0) },
     { label: 'Reimbursements $', color: '#2f7d5b', money: true, thisV: reimbTotalOf(thisKey), lastV: reimbTotalOf(lastKey) },
     { label: 'Insurance Premiums', color: '#6b4f8a', money: true, thisV: insuranceTotalOf(thisKey), lastV: insuranceTotalOf(lastKey) },
-    { label: 'Reviews Due', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).filter(r => r.status !== 'Complete').length, lastV: reviewOf(lastKey).filter(r => r.status !== 'Complete').length },
+    { label: 'Reviews', color: '#b07d2a', money: false, thisV: reviewOf(thisKey).length, lastV: reviewOf(lastKey).length },
     { label: 'Birthdays', color: '#c9a24a', money: false, thisV: birthdaysOf(thisM).length, lastV: birthdaysOf(lastM).length },
     { label: 'Anniversaries', color: '#8a6d3b', money: false, thisV: anniversariesOf(thisM, thisY).length, lastV: anniversariesOf(lastM, lastY).length },
   ];
