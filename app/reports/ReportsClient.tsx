@@ -233,9 +233,10 @@ function TripsReportTab() {
   }
 
   const filtered = trips.filter((t: any) => {
-    // Filter on the travel date (falls back to created date if not set)
-    const d = (t.travel_start ?? t.created_at ?? '').slice(0, 10);
-    const dEnd = (t.travel_end ?? t.travel_start ?? t.created_at ?? '').slice(0, 10);
+    // Filter on the travel date — same resolver the Monthly Pack uses (travel_start,
+    // else a date parsed from details, else the import date) so counts match.
+    const d = tripTravelDate(t);
+    const dEnd = (t.travel_end ?? '').slice(0, 10) || d;
     if (from && dEnd < from) return false;
     if (to && d > to) return false;
     if (q) {
@@ -486,23 +487,28 @@ function num(v: any) { const n = Number(String(v ?? '').replace(/[$,]/g, '')); r
 // A trip's month comes from its travel dates in the free-text detail
 // (e.g. "Jul 7 – Jul 9", "8/3/2026"), falling back to when it was logged.
 const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-function tripMonthKey(t: any): string {
-  // Prefer the explicit travel date captured on import
-  const ts = (t.travel_start ?? '').slice(0, 7);
-  if (/^\d{4}-\d{2}$/.test(ts)) return ts;
+// Single source of truth for a trip's travel date (YYYY-MM-DD). Prefer the
+// explicit travel_start; else parse a date out of the details text; else fall
+// back to the import/created date. Used by BOTH the Monthly Pack and the Trips
+// tab so their counts always agree.
+function tripTravelDate(t: any): string {
+  const ts = (t.travel_start ?? '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ts)) return ts;
   const detail = String(t.detail ?? '');
-  const created = ymOf(t.created_at);
+  const created = (t.created_at ?? '').slice(0, 10);
   const cy = created ? created.slice(0, 4) : String(new Date().getFullYear());
-  const mName = detail.toLowerCase().match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}/);
-  if (mName) { const mi = MON3.indexOf(mName[1]); if (mi >= 0) return `${cy}-${String(mi + 1).padStart(2, '0')}`; }
+  const mName = detail.toLowerCase().match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})/);
+  if (mName) { const mi = MON3.indexOf(mName[1]); if (mi >= 0) return `${cy}-${String(mi + 1).padStart(2, '0')}-${String(parseInt(mName[2])).padStart(2, '0')}`; }
   const mNum = detail.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
   if (mNum) {
     const mm = String(Math.min(12, Math.max(1, parseInt(mNum[1])))).padStart(2, '0');
+    const dd = String(Math.min(31, Math.max(1, parseInt(mNum[2])))).padStart(2, '0');
     const yy = mNum[3] ? (mNum[3].length === 2 ? '20' + mNum[3] : mNum[3]) : cy;
-    return `${yy}-${mm}`;
+    return `${yy}-${mm}-${dd}`;
   }
   return created;
 }
+function tripMonthKey(t: any): string { return tripTravelDate(t).slice(0, 7); }
 
 // Archive of saved report files: download a report, then re-upload the file
 // here to keep a record in the Reports tab. Self-contained (loads/uploads/lists).
