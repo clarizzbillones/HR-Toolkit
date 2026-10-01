@@ -233,11 +233,11 @@ function TripsReportTab() {
   }
 
   const filtered = trips.filter((t: any) => {
-    // Filter on the travel date — same resolver the Monthly Pack uses (travel_start,
-    // else a date parsed from details, else the import date) so counts match.
+    // Filter on the trip's travel date — the SAME single date the Monthly Pack
+    // buckets by (travel_start, else a date parsed from details, else import
+    // date). Using the one date (not range-overlap) keeps the two counts equal.
     const d = tripTravelDate(t);
-    const dEnd = (t.travel_end ?? '').slice(0, 10) || d;
-    if (from && dEnd < from) return false;
+    if (from && d < from) return false;
     if (to && d > to) return false;
     if (q) {
       const s = q.toLowerCase();
