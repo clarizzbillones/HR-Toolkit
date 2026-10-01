@@ -589,7 +589,11 @@ function MonthlyTab({ data }: { data: any }) {
   const cName = (c: any) => c.contractor ?? c.name ?? '—';
   const cDate = (c: any) => (c.pay_date ?? c.due_date ?? '');
   const cNote = (c: any) => c.notes ?? c.note ?? '';
-  const tripInMonth = (t: any, k: string) => tripMonthKey(t) === k || ymOf(t.created_at) === k;
+  // Count a trip in the month of its actual travel date. tripMonthKey already
+  // falls back to the import/created date only when a trip has no travel date,
+  // so we must NOT also match created_at here — doing so counted every trip
+  // imported in a month as a trip for that month, inflating the number.
+  const tripInMonth = (t: any, k: string) => tripMonthKey(t) === k;
 
   // Month-parameterized row generators (single source per category)
   const ptoOf = (k: string) => (pto ?? []).filter((e: any) => ymOf(e.start_date) === k);
