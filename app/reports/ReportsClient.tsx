@@ -269,6 +269,23 @@ function TripsReportTab() {
         <input type="date" value={to} onChange={e => setTo(e.target.value)}
           className="border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
         {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="text-xs font-semibold text-text-muted hover:text-text-primary underline">Clear</button>}
+        {/* Whole-month quick picks — set the exact first→last day so the count
+            matches the Monthly Pack (which always uses the full calendar month). */}
+        {[0, 1, 2, 3].map(off => {
+          const now = new Date();
+          const d = new Date(now.getFullYear(), now.getMonth() - off, 1);
+          const y = d.getFullYear(), m = d.getMonth();
+          const last = new Date(y, m + 1, 0).getDate();
+          const mm = String(m + 1).padStart(2, '0');
+          const start = `${y}-${mm}-01`, end = `${y}-${mm}-${String(last).padStart(2, '0')}`;
+          const on = from === start && to === end;
+          return (
+            <button key={off} onClick={() => { setFrom(start); setTo(end); }}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${on ? 'bg-ink text-white border-ink' : 'border-border-light text-text-secondary hover:border-ink/40 hover:bg-white'}`}>
+              {d.toLocaleDateString(undefined, { month: 'short' })}
+            </button>
+          );
+        })}
         <div className="relative ml-auto">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">🔍</span>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search traveler, client, status…"
