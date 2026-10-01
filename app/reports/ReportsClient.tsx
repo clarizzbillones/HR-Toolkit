@@ -504,6 +504,71 @@ function tripMonthKey(t: any): string {
   return created;
 }
 
+// Archive of saved report files: download a report, then re-upload the file
+// here to keep a record in the Reports tab. Self-contained (loads/uploads/lists).
+function SavedReports({ tab, title }: { tab: string; title: string }) {
+  const { showToast } = useToast();
+  const [rows, setRows] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { fetch(`/api/reports/files?tab=${tab}`).then(r => r.json()).then(d => setRows(d.rows ?? [])).catch(() => {}); }, [tab]);
+
+  function fmtSize(n: number) { return !n ? '' : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`; }
+  function fmtDate(s: string) { try { return new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); } catch { return ''; } }
+
+  async function upload(files: FileList | File[]) {
+    const list = Array.from(files); if (!list.length) return;
+    setBusy(true);
+    for (const file of list) {
+      if (file.size > 15 * 1024 * 1024) { showToast(`${file.name} is too large (max 15 MB)`); continue; }
+      try {
+        const dataUrl: string = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
+        const resp = await fetch('/api/reports/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tab, file_name: file.name, label: file.name, data: dataUrl }) });
+        if (resp.ok) { const { row } = await resp.json(); if (row) setRows(rs => [row, ...rs]); }
+      } catch { /* skip */ }
+    }
+    setBusy(false);
+    if (ref.current) ref.current.value = '';
+    showToast('Report saved to archive');
+  }
+  async function remove(id: string, label: string) {
+    if (!confirm(`Delete "${label}" from the saved reports?`)) return;
+    await fetch(`/api/reports/files?id=${id}`, { method: 'DELETE' });
+    setRows(rs => rs.filter(r => r.id !== id));
+    showToast('Deleted');
+  }
+
+  return (
+    <div className="bg-white border rounded-card overflow-hidden" style={{ borderTop: '3px solid #c9a24a' }}>
+      <div className="px-4 py-3 border-b border-border-light flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold text-text-primary">📁 {title}</div>
+          <div className="text-xs text-text-muted">Download a report above, then upload the saved file here to keep it on record.</div>
+        </div>
+        <input ref={ref} type="file" multiple className="hidden" onChange={e => { if (e.target.files) upload(e.target.files); }} />
+        <button onClick={() => ref.current?.click()} disabled={busy} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark disabled:opacity-60 shrink-0">{busy ? 'Uploading…' : '↑ Upload saved report'}</button>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-text-muted">No saved reports yet.</div>
+      ) : (
+        <div className="divide-y divide-border-light">
+          {rows.map(r => (
+            <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
+              <span className="text-lg">📄</span>
+              <div className="min-w-0 flex-1">
+                <a href={`/api/reports/files?download=${r.id}`} className="text-sm font-semibold text-text-primary hover:text-ink hover:underline break-words">{r.label || r.file_name}</a>
+                <div className="text-xs text-text-muted">{fmtDate(r.created_at)}{r.size ? ` · ${fmtSize(r.size)}` : ''}</div>
+              </div>
+              <a href={`/api/reports/files?download=${r.id}`} className="text-xs font-semibold text-ink hover:underline shrink-0">Download</a>
+              <button onClick={() => remove(r.id, r.label || r.file_name)} className="text-xs font-semibold text-litred-alt hover:underline shrink-0">Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MonthlyTab({ data }: { data: any }) {
   const { showToast } = useToast();
   if (!data) return <div className="py-8 text-center text-text-muted text-sm">Loading…</div>;
@@ -873,6 +938,9 @@ function MonthlyTab({ data }: { data: any }) {
           <button onClick={downloadCsvPack} className="bg-white border border-border-light text-text-muted text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">↓ Raw CSV</button>
         </div>
       </div>
+
+      {/* Saved reports archive */}
+      <SavedReports tab="monthly" title="Saved monthly reports" />
 
       {/* Comparison band — Current vs Previous split per metric */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

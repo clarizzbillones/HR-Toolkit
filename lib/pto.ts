@@ -31,6 +31,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(brent|bh|brent\s+hannafan)$/i, 'Brent Hannafan'],
   [/^(brittany|bb|brittany\s+brewer)$/i, 'Brittany Brewer'],
   [/^(ally|ally\s+foresman)$/i, 'Ally Foresman'],
+  [/^(bill|bill\s+abely|william\s+abely|william\s+"?bill"?\s+abely)$/i, 'William Abely'],
   [/^(amy\s+green)$/i, 'Amy Green'],
   [/^(amy\s+nelson)$/i, 'Amy Nelson'],
   [/^(alicia|avh|alicia\s+van[-\s]?huizen)$/i, 'Alicia Van Huizen'],
