@@ -183,6 +183,54 @@ function clerkOfferDraft(season: ClerkSeason, form: Form, salTitle: string, fall
   return lines.join('\n');
 }
 
+// Format a salary/rate figure with thousands separators (keeps non-numeric text).
+function money(n: string): string {
+  const v = String(n ?? '').replace(/[^0-9.]/g, '');
+  if (!v) return String(n ?? '');
+  const num = Number(v);
+  return isNaN(num) ? v : num.toLocaleString('en-US');
+}
+// Updated offer / salary-adjustment letter — e.g. an attorney passing the bar,
+// where the raise was contingent on bar admission. Same letterhead, signature
+// block and cc block as the clerk offer (the print composer appends the
+// "Very truly yours" + Alex signature).
+function salaryAdjustmentDraft(form: Form, salTitle: string, compBasis: 'annual' | 'monthly' | 'hourly'): string {
+  const greeting = offerGreeting(form.name, salTitle);
+  const role = form.role || 'Associate Attorney';
+  const eff = isoToLong(form.startDate) || '[effective date]';
+  const amt = money(form.salary || '');
+  const basis = compBasis === 'hourly'
+    ? `an hourly rate of $${amt || '[rate]'} per hour`
+    : compBasis === 'monthly'
+      ? `a monthly salary of $${amt || '[amount]'} per month`
+      : `an annual base salary of $${amt || '[amount]'}`;
+  const lines = [
+    `[DATE_CENTERED]${fmtLongDate(new Date())}`,
+    '',
+    ...(form.email ? [`Via Email: ${form.email}`] : ['Via Email']),
+    ...(form.name ? [form.name] : []),
+    '',
+    '    Re:    Updated Offer of Employment — Salary Adjustment',
+    '',
+    `Dear ${greeting},`,
+    '',
+    `Congratulations on your recent admission to the bar! We are delighted to recognize this important milestone in your legal career.`,
+    '',
+    `As contemplated in your original offer of employment with Litson PLLC, your compensation was subject to adjustment upon your admission to the bar. Accordingly, effective ${eff}, your title will be ${role} and you will be compensated at ${basis}, paid in accordance with the firm's regular payroll schedule. Your compensation may be adjusted further pursuant to firm policies, as in effect and amended from time to time.`,
+    '',
+    `All other terms and conditions of your employment, including the at-will nature of your employment with Litson PLLC, remain unchanged.`,
+    '',
+    `We are proud of your accomplishment and excited about your continued growth with the firm. If you wish to accept this updated offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`,
+    '',
+    '[CC_BLOCK]',
+    'cc:    Zack Lawson, Founding Partner',
+    '         Catie Toole, Director of Operations',
+    '[/CC_BLOCK]',
+    'Very truly yours,',
+  ];
+  return lines.join('\n');
+}
+
 export default function OffersClient() {
   const { showToast } = useToast();
   const [letterKind, setLetterKind] = useState<LetterKind>('offer');
@@ -192,6 +240,7 @@ export default function OffersClient() {
   const [compBasis, setCompBasis] = useState<'annual' | 'monthly' | 'hourly'>('annual');  // W-2 employee
   const [salTitle, setSalTitle] = useState('');
   const [clerkTpl, setClerkTpl] = useState<ClerkSeason | null>(null);  // which clerk template is loaded
+  const [salaryTpl, setSalaryTpl] = useState(false);  // bar-passage / salary-adjustment template loaded
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -376,17 +425,25 @@ export default function OffersClient() {
   }
 
   async function generate() {
+    // Salary-adjustment (bar passage) letter uses the firm template, not AI.
+    if (salaryTpl) {
+      setClerkTpl(null);
+      setDraft(salaryAdjustmentDraft(form, salTitle, compBasis));
+      showToast('Updated offer (salary adjustment) generated');
+      return;
+    }
     // Law-clerk offers use the exact firm template (deterministic), not the AI —
     // so "Generate" matches the Summer/Fall template wording every time.
     const roleL = form.role.toLowerCase();
     const clerkSeason: ClerkSeason | null =
       /summer/.test(roleL) ? 'summer' : /fall|autumn/.test(roleL) ? 'fall' : /clerk/.test(roleL) ? 'summer' : null;
     if (clerkSeason) {
-      setEmpType('employee'); setCompBasis('hourly'); setClerkTpl(clerkSeason);
+      setEmpType('employee'); setCompBasis('hourly'); setClerkTpl(clerkSeason); setSalaryTpl(false);
       setDraft(clerkOfferDraft(clerkSeason, form, salTitle, new Date().getFullYear() + 1));
       showToast(`${clerkSeason === 'summer' ? 'Summer' : 'Fall'} law clerk offer generated`);
       return;
     }
+    setSalaryTpl(false);
     setGenerating(true);
     try {
       const res = await fetch('/api/draft', {
@@ -738,8 +795,26 @@ ${bodyHtml}
     setCompBasis('hourly');
     setForm(next);
     setClerkTpl(season);
+    setSalaryTpl(false);
     setDraft(clerkOfferDraft(season, next, salTitle, y));
     showToast(`${season === 'summer' ? 'Summer' : 'Fall'} law clerk template loaded — edit anything below`);
+  }
+
+  // Drop an updated-offer / salary-adjustment (e.g. bar passage) letter into the
+  // draft. Defaults the role to Associate Attorney and comp to annual salary;
+  // everything stays editable afterward.
+  function useSalaryTemplate() {
+    const next: Form = {
+      ...form,
+      role: (!form.role || /clerk/i.test(form.role)) ? 'Associate Attorney' : form.role,
+    };
+    setEmpType('employee');
+    setCompBasis('annual');
+    setForm(next);
+    setClerkTpl(null);
+    setSalaryTpl(true);
+    setDraft(salaryAdjustmentDraft(next, salTitle, 'annual'));
+    showToast('Salary-adjustment (bar passage) template loaded — edit anything below');
   }
 
   const ready = !!(form.name && form.role && form.salary);
@@ -839,6 +914,17 @@ ${bodyHtml}
                 </button>
               </div>
               <p className="text-[11px] text-text-muted mt-1.5">Fills the letter with the part-time clerk wording ($/hour, weekly, at-will). Enter a name/rate/date first to have them dropped in — or edit the draft after.</p>
+            </div>
+
+            {/* Updated offer / salary adjustment (e.g. bar passage) */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Updated offer / raise</div>
+              <button type="button" onClick={useSalaryTemplate}
+                className={clsx('w-full py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                  salaryTpl ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
+                ⚖️ Bar Passage Raise
+              </button>
+              <p className="text-[11px] text-text-muted mt-1.5">Updated offer letter for a contingent pay increase (e.g. after passing the bar). Enter the person&rsquo;s name, new title, new salary, and the effective date (Start Date) — then edit the draft.</p>
             </div>
 
             {empType === 'contractor' && (
