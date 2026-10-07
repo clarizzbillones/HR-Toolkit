@@ -271,7 +271,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
       // Name + ", Esq." in gold
       c.fillStyle = '#c9a24a';
       c.font = `600 54px Georgia, serif`;
-      c.fillText(`${name || 'NAME'}, Esq.`, SIZE / 2, textStart + 346);
+      c.fillText(name || 'NAME', SIZE / 2, textStart + 346);
       // Greeting
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `25px Georgia, serif`;
