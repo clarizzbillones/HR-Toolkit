@@ -2,6 +2,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 type EventType = 'birthday' | 'anniversary' | 'bar';
+// Color presets for the bar-passage headline, so HR can pick the look that pops.
+type BarStyle = 'gold' | 'red' | 'whiteGold' | 'allWhite';
+const BAR_STYLES: Record<BarStyle, { congrats: string; line1: string; line2: string; name: string; label: string }> = {
+  gold:      { congrats: '#c9a24a', line1: '#ffffff', line2: '#ffffff', name: '#c9a24a', label: 'Gold script' },
+  red:       { congrats: '#c8102e', line1: '#ffffff', line2: '#ffffff', name: '#c9a24a', label: 'Red script' },
+  whiteGold: { congrats: '#ffffff', line1: '#ffffff', line2: '#c9a24a', name: '#c9a24a', label: 'White + gold “BAR”' },
+  allWhite:  { congrats: '#ffffff', line1: '#ffffff', line2: '#ffffff', name: '#c9a24a', label: 'All white' },
+};
 type PhotoLayout = 'classic' | 'spotlight' | 'banner';
 const SIZE = 1080;
 
@@ -195,6 +203,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
   const photoRef = useRef<HTMLInputElement>(null);
   const [eventType, setEventType] = useState<EventType>('birthday');
   const [photoLayout, setPhotoLayout] = useState<PhotoLayout>('classic');
+  const [barStyle, setBarStyle] = useState<BarStyle>('gold');
   const [name, setName] = useState('');
   const [greeting, setGreeting] = useState('Wishing you a wonderful birthday and a year ahead full of joy!');
   const [years, setYears] = useState('1');
@@ -256,20 +265,21 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
     function drawBarText(textStart: number) {
       c.textAlign = 'center';
+      const s = BAR_STYLES[barStyle] ?? BAR_STYLES.gold;
       // "Congratulations" in Spectral italic
-      c.fillStyle = '#ffffff';
+      c.fillStyle = s.congrats;
       c.font = `italic 600 80px 'Spectral', Georgia, serif`;
       c.fillText('Congratulations', SIZE / 2, textStart);
-      // "ON PASSING" in Anton (white)
-      c.fillStyle = '#ffffff';
+      // "ON PASSING" in Anton
+      c.fillStyle = s.line1;
       c.font = `400 128px 'Anton', Impact, sans-serif`;
       c.fillText('ON PASSING', SIZE / 2, textStart + 148);
-      // "THE BAR!" in Anton (white)
-      c.fillStyle = '#ffffff';
+      // "THE BAR!" in Anton
+      c.fillStyle = s.line2;
       c.font = `400 128px 'Anton', Impact, sans-serif`;
       c.fillText('THE BAR!', SIZE / 2, textStart + 270);
-      // Name in gold
-      c.fillStyle = '#c9a24a';
+      // Name
+      c.fillStyle = s.name;
       c.font = `600 54px Georgia, serif`;
       c.fillText(name || 'NAME', SIZE / 2, textStart + 346);
       // Greeting
@@ -472,7 +482,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
       }
       drawAnniversaryText(240);
     }
-  }, [name, eventType, photoUrl, photoLayout, years, greeting]);
+  }, [name, eventType, photoUrl, photoLayout, years, greeting, barStyle]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -561,6 +571,22 @@ export default function DesignClient({ employees }: { employees: { name: string 
                   {photoLayout === 'spotlight' && 'Full-card photo background with dark overlay'}
                   {photoLayout === 'banner' && 'Wide photo banner strip near the top'}
                 </p>
+              </div>
+            )}
+
+            {/* Headline style — bar-passage only */}
+            {eventType === 'bar' && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Headline style</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(BAR_STYLES) as BarStyle[]).map(k => (
+                    <button key={k} onClick={() => setBarStyle(k)}
+                      className={`py-2 rounded-ctrl text-xs font-semibold border transition-colors ${barStyle === k ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border-light hover:border-ink'}`}>
+                      {BAR_STYLES[k].label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-text-muted mt-1.5">Click to preview each look — the card updates live. The name is always gold.</p>
               </div>
             )}
 
