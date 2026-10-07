@@ -264,10 +264,10 @@ export default function DesignClient({ employees }: { employees: { name: string 
       c.fillStyle = '#ffffff';
       c.font = `400 128px 'Anton', Impact, sans-serif`;
       c.fillText('ON PASSING', SIZE / 2, textStart + 148);
-      // "THE BAR! 🎉" in Anton (gold) — emoji falls back to a color-emoji font
-      c.fillStyle = '#c9a24a';
-      c.font = `400 128px 'Anton', Impact, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif`;
-      c.fillText('THE BAR! 🎉', SIZE / 2, textStart + 270);
+      // "THE BAR!" in Anton (white)
+      c.fillStyle = '#ffffff';
+      c.font = `400 128px 'Anton', Impact, sans-serif`;
+      c.fillText('THE BAR!', SIZE / 2, textStart + 270);
       // Name in gold
       c.fillStyle = '#c9a24a';
       c.font = `600 54px Georgia, serif`;
