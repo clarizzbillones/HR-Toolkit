@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-type EventType = 'birthday' | 'anniversary';
+type EventType = 'birthday' | 'anniversary' | 'bar';
 type PhotoLayout = 'classic' | 'spotlight' | 'banner';
 const SIZE = 1080;
 
@@ -181,6 +181,14 @@ const ANNIVERSARY_GREETINGS = [
   'Happy work anniversary! We appreciate everything you do and look forward to many more years ahead.',
   'Grateful for your loyalty and all the ways you help us grow. Here’s to celebrating you!',
 ];
+const BAR_GREETINGS = [
+  'Congratulations on passing the bar exam! All your hard work has paid off — we couldn’t be prouder.',
+  'You did it! Welcome to the bar, Counselor. We’re so excited for everything ahead.',
+  'Congratulations on this incredible achievement. The firm is proud to call you one of our attorneys!',
+  'Passing the bar is no small feat — congratulations on earning it. Here’s to your bright legal career!',
+  'All that dedication, late nights, and determination led to this moment. Congratulations, Esq.!',
+  'We always knew you had it in you. Congratulations on passing the bar — welcome to the next chapter!',
+];
 
 export default function DesignClient({ employees }: { employees: { name: string }[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -205,14 +213,14 @@ export default function DesignClient({ employees }: { employees: { name: string 
   const filteredNames = name.trim() ? nameOptions.filter(nm => nm.toLowerCase().includes(name.trim().toLowerCase())) : nameOptions;
 
   useEffect(() => {
-    setGreeting(eventType === 'birthday' ? BIRTHDAY_GREETINGS[0] : ANNIVERSARY_GREETINGS[0]);
+    setGreeting(eventType === 'birthday' ? BIRTHDAY_GREETINGS[0] : eventType === 'bar' ? BAR_GREETINGS[0] : ANNIVERSARY_GREETINGS[0]);
     if (eventType === 'anniversary') setPhotoUrl(null);
   }, [eventType]);
 
   // Swap in a different ready-made greeting for the current event type. Picks a
   // random one that isn't the current text, so each click actually changes it.
   function suggestGreeting() {
-    const list = eventType === 'birthday' ? BIRTHDAY_GREETINGS : ANNIVERSARY_GREETINGS;
+    const list = eventType === 'birthday' ? BIRTHDAY_GREETINGS : eventType === 'bar' ? BAR_GREETINGS : ANNIVERSARY_GREETINGS;
     const others = list.filter(g => g !== greeting.trim());
     const pool = others.length ? others : list;
     setGreeting(pool[Math.floor(Math.random() * pool.length)]);
@@ -244,6 +252,30 @@ export default function DesignClient({ employees }: { employees: { name: string 
       c.fillStyle = 'rgba(255,255,255,0.6)';
       c.font = `26px Georgia, serif`;
       wrapText(c, greeting, SIZE / 2, 820, 42, textStart + 358);
+    }
+
+    function drawBarText(textStart: number) {
+      c.textAlign = 'center';
+      // "Congratulations" in Spectral italic
+      c.fillStyle = '#ffffff';
+      c.font = `italic 600 80px 'Spectral', Georgia, serif`;
+      c.fillText('Congratulations', SIZE / 2, textStart);
+      // "YOU PASSED" in Anton (white)
+      c.fillStyle = '#ffffff';
+      c.font = `400 128px 'Anton', Impact, sans-serif`;
+      c.fillText('YOU PASSED', SIZE / 2, textStart + 148);
+      // "THE BAR" in Anton (gold)
+      c.fillStyle = '#c9a24a';
+      c.font = `400 128px 'Anton', Impact, sans-serif`;
+      c.fillText('THE BAR', SIZE / 2, textStart + 270);
+      // Name + ", Esq." in gold
+      c.fillStyle = '#c9a24a';
+      c.font = `600 54px Georgia, serif`;
+      c.fillText(`${name || 'NAME'}, Esq.`, SIZE / 2, textStart + 346);
+      // Greeting
+      c.fillStyle = 'rgba(255,255,255,0.6)';
+      c.font = `25px Georgia, serif`;
+      wrapText(c, greeting, SIZE / 2, 820, 40, textStart + 408);
     }
 
     function drawAnniversaryText(topY: number) {
@@ -341,6 +373,55 @@ export default function DesignClient({ employees }: { employees: { name: string 
       // No photo — center text vertically
       drawBirthdayText(300);
 
+    } else if (eventType === 'bar') {
+      // Passed the bar — mirrors the birthday layout with the bar wording.
+      if (photoUrl && photoLayout === 'spotlight') {
+        const img = new Image();
+        img.onload = () => {
+          c.save();
+          c.drawImage(img, 0, 0, SIZE, SIZE);
+          c.fillStyle = 'rgba(10,16,28,0.72)';
+          c.fillRect(0, 0, SIZE, SIZE);
+          c.restore();
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 6;
+          c.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+          drawConfetti(c); drawLitson(c); drawStars(c);
+          drawBarText(300);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      drawBackground(c); drawConfetti(c); drawLitson(c); drawStars(c);
+      if (photoUrl && photoLayout === 'banner') {
+        const img = new Image();
+        img.onload = () => {
+          c.save();
+          const bh = 210, by = 108;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          ctx.clip();
+          c.drawImage(img, 60, by, SIZE - 120, bh);
+          c.restore();
+          c.strokeStyle = '#c9a24a'; c.lineWidth = 4;
+          ctx.beginPath();
+          ctx.roundRect(60, by, SIZE - 120, bh, 12);
+          c.stroke();
+          drawBarText(400);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      if (photoUrl && photoLayout === 'classic') {
+        const img = new Image();
+        img.onload = () => {
+          drawCirclePhoto(c, img, SIZE / 2, 300, 130);
+          drawBarText(560);
+        };
+        img.src = photoUrl;
+        return;
+      }
+      drawBarText(280);
+
     } else {
       // Anniversary
       if (photoUrl && photoLayout === 'spotlight') {
@@ -419,7 +500,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
       <header className="px-8 py-5 bg-white border-b border-border flex-shrink-0 flex items-center">
         <div>
           <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Graphic Design</h1>
-          <p className="text-sm text-text-muted mt-0.5">Birthday &amp; anniversary greetings — upload, type, download</p>
+          <p className="text-sm text-text-muted mt-0.5">Birthday, anniversary &amp; bar-passage greetings — upload, type, download</p>
         </div>
         <div className="ml-auto flex gap-2">
           <button onClick={() => setEventType('birthday')}
@@ -430,6 +511,10 @@ export default function DesignClient({ employees }: { employees: { name: string 
             className={`flex items-center gap-2 px-5 py-2 rounded-ctrl text-sm font-semibold transition-colors ${eventType === 'anniversary' ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
             ★ Anniversary
           </button>
+          <button onClick={() => setEventType('bar')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-ctrl text-sm font-semibold transition-colors ${eventType === 'bar' ? 'bg-ink text-white' : 'bg-[#f1ece3] text-text-secondary hover:bg-[#e8e3da]'}`}>
+            ⚖️ Passed the Bar
+          </button>
         </div>
       </header>
 
@@ -437,8 +522,8 @@ export default function DesignClient({ employees }: { employees: { name: string 
         {/* Left form */}
         <div className="w-[340px] flex-shrink-0 border-r border-border bg-white overflow-auto">
           <div className="p-6 space-y-6">
-            {/* Photo upload — birthday only */}
-            {eventType === 'birthday' && (
+            {/* Photo upload — birthday & bar-passage */}
+            {eventType !== 'anniversary' && (
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
                   1 · PHOTO <span className="font-normal normal-case">(optional)</span>
@@ -459,8 +544,8 @@ export default function DesignClient({ employees }: { employees: { name: string 
               </div>
             )}
 
-            {/* Photo layout — birthday only */}
-            {eventType === 'birthday' && photoUrl && (
+            {/* Photo layout — birthday & bar-passage */}
+            {eventType !== 'anniversary' && photoUrl && (
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Photo Layout</div>
                 <div className="flex gap-2">
@@ -481,7 +566,7 @@ export default function DesignClient({ employees }: { employees: { name: string 
 
             {/* Details */}
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">{eventType === 'birthday' ? '2 · DETAILS' : '1 · DETAILS'}</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">{eventType !== 'anniversary' ? '2 · DETAILS' : '1 · DETAILS'}</div>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-text-primary mb-1.5">Name</label>
