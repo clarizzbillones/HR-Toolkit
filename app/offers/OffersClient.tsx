@@ -190,13 +190,14 @@ function money(n: string): string {
   const num = Number(v);
   return isNaN(num) ? v : num.toLocaleString('en-US');
 }
-// Updated offer / salary-adjustment letter — e.g. an attorney passing the bar,
-// where the raise was contingent on bar admission. Same letterhead, signature
-// block and cc block as the clerk offer (the print composer appends the
-// "Very truly yours" + Alex signature).
-function salaryAdjustmentDraft(form: Form, salTitle: string, compBasis: 'annual' | 'monthly' | 'hourly'): string {
+// Salary-adjustment letters. 'bar' = raise contingent on bar admission; 'merit'
+// = a general merit raise for strong performance. Same letterhead, signature and
+// cc block as the clerk offer (the print composer appends "Very truly yours" +
+// the Alex signature).
+type AdjKind = 'bar' | 'merit';
+function salaryAdjustmentDraft(form: Form, salTitle: string, compBasis: 'annual' | 'monthly' | 'hourly', kind: AdjKind): string {
   const greeting = offerGreeting(form.name, salTitle);
-  const role = form.role || 'Associate Attorney';
+  const role = form.role || (kind === 'bar' ? 'Associate Attorney' : '');
   const eff = isoToLong(form.startDate) || '[effective date]';
   const amt = money(form.salary || '');
   const basis = compBasis === 'hourly'
@@ -204,23 +205,34 @@ function salaryAdjustmentDraft(form: Form, salTitle: string, compBasis: 'annual'
     : compBasis === 'monthly'
       ? `a monthly salary of $${amt || '[amount]'} per month`
       : `an annual base salary of $${amt || '[amount]'}`;
+  const titleClause = role ? `your title will be ${role} and ` : '';
+  const re = kind === 'bar' ? 'Updated Offer of Employment — Salary Adjustment' : 'Salary Adjustment';
+  const opening = kind === 'bar'
+    ? `Congratulations on your recent admission to the bar! We are delighted to recognize this important milestone in your legal career.`
+    : `Thank you for your continued hard work and the impressive contributions you have made to Litson PLLC. Your strong performance has not gone unnoticed, and we are pleased to recognize it with an adjustment to your compensation.`;
+  const adjustSentence = kind === 'bar'
+    ? `As contemplated in your original offer of employment with Litson PLLC, your compensation was subject to adjustment upon your admission to the bar. Accordingly, effective ${eff}, ${titleClause}you will be compensated at ${basis}, paid in accordance with the firm's regular payroll schedule. Your compensation may be adjusted further pursuant to firm policies, as in effect and amended from time to time.`
+    : `Effective ${eff}, ${titleClause}you will be compensated at ${basis}, paid in accordance with the firm's regular payroll schedule. Your compensation may be adjusted further pursuant to firm policies, as in effect and amended from time to time.`;
+  const closing = kind === 'bar'
+    ? `We are proud of your accomplishment and excited about your continued growth with the firm. If you wish to accept this updated offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`
+    : `We greatly value your dedication and look forward to your continued success with the firm. If you have any questions, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`;
   const lines = [
     `[DATE_CENTERED]${fmtLongDate(new Date())}`,
     '',
     ...(form.email ? [`Via Email: ${form.email}`] : ['Via Email']),
     ...(form.name ? [form.name] : []),
     '',
-    '    Re:    Updated Offer of Employment — Salary Adjustment',
+    `    Re:    ${re}`,
     '',
     `Dear ${greeting},`,
     '',
-    `Congratulations on your recent admission to the bar! We are delighted to recognize this important milestone in your legal career.`,
+    opening,
     '',
-    `As contemplated in your original offer of employment with Litson PLLC, your compensation was subject to adjustment upon your admission to the bar. Accordingly, effective ${eff}, your title will be ${role} and you will be compensated at ${basis}, paid in accordance with the firm's regular payroll schedule. Your compensation may be adjusted further pursuant to firm policies, as in effect and amended from time to time.`,
+    adjustSentence,
     '',
     `All other terms and conditions of your employment, including the at-will nature of your employment with Litson PLLC, remain unchanged.`,
     '',
-    `We are proud of your accomplishment and excited about your continued growth with the firm. If you wish to accept this updated offer, please respond in writing confirming your acceptance. If you have any questions or concerns, please do not hesitate to contact Zack Lawson at zack@litson.co or 865-719-4067, or contact me directly.`,
+    closing,
     '',
     '[CC_BLOCK]',
     'cc:    Zack Lawson, Founding Partner',
@@ -240,7 +252,7 @@ export default function OffersClient() {
   const [compBasis, setCompBasis] = useState<'annual' | 'monthly' | 'hourly'>('annual');  // W-2 employee
   const [salTitle, setSalTitle] = useState('');
   const [clerkTpl, setClerkTpl] = useState<ClerkSeason | null>(null);  // which clerk template is loaded
-  const [salaryTpl, setSalaryTpl] = useState(false);  // bar-passage / salary-adjustment template loaded
+  const [adjTpl, setAdjTpl] = useState<AdjKind | null>(null);  // which salary-adjustment template is loaded
   const [form, setForm] = useState<Form>(EMPTY);
   const [draft, setDraft] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -425,11 +437,11 @@ export default function OffersClient() {
   }
 
   async function generate() {
-    // Salary-adjustment (bar passage) letter uses the firm template, not AI.
-    if (salaryTpl) {
+    // Salary-adjustment letters use the firm template, not AI.
+    if (adjTpl) {
       setClerkTpl(null);
-      setDraft(salaryAdjustmentDraft(form, salTitle, compBasis));
-      showToast('Updated offer (salary adjustment) generated');
+      setDraft(salaryAdjustmentDraft(form, salTitle, compBasis, adjTpl));
+      showToast(adjTpl === 'bar' ? 'Updated offer (bar passage) generated' : 'Salary adjustment letter generated');
       return;
     }
     // Law-clerk offers use the exact firm template (deterministic), not the AI —
@@ -438,12 +450,12 @@ export default function OffersClient() {
     const clerkSeason: ClerkSeason | null =
       /summer/.test(roleL) ? 'summer' : /fall|autumn/.test(roleL) ? 'fall' : /clerk/.test(roleL) ? 'summer' : null;
     if (clerkSeason) {
-      setEmpType('employee'); setCompBasis('hourly'); setClerkTpl(clerkSeason); setSalaryTpl(false);
+      setEmpType('employee'); setCompBasis('hourly'); setClerkTpl(clerkSeason); setAdjTpl(null);
       setDraft(clerkOfferDraft(clerkSeason, form, salTitle, new Date().getFullYear() + 1));
       showToast(`${clerkSeason === 'summer' ? 'Summer' : 'Fall'} law clerk offer generated`);
       return;
     }
-    setSalaryTpl(false);
+    setAdjTpl(null);
     setGenerating(true);
     try {
       const res = await fetch('/api/draft', {
@@ -795,26 +807,26 @@ ${bodyHtml}
     setCompBasis('hourly');
     setForm(next);
     setClerkTpl(season);
-    setSalaryTpl(false);
+    setAdjTpl(null);
     setDraft(clerkOfferDraft(season, next, salTitle, y));
     showToast(`${season === 'summer' ? 'Summer' : 'Fall'} law clerk template loaded — edit anything below`);
   }
 
-  // Drop an updated-offer / salary-adjustment (e.g. bar passage) letter into the
-  // draft. Defaults the role to Associate Attorney and comp to annual salary;
-  // everything stays editable afterward.
-  function useSalaryTemplate() {
+  // Drop a salary-adjustment letter into the draft. 'bar' = raise contingent on
+  // bar passage (defaults role to Associate Attorney); 'merit' = general raise
+  // for strong performance (keeps the current role). Everything stays editable.
+  function useAdjTemplate(kind: AdjKind) {
     const next: Form = {
       ...form,
-      role: (!form.role || /clerk/i.test(form.role)) ? 'Associate Attorney' : form.role,
+      role: kind === 'bar' ? ((!form.role || /clerk/i.test(form.role)) ? 'Associate Attorney' : form.role) : form.role,
     };
     setEmpType('employee');
     setCompBasis('annual');
     setForm(next);
     setClerkTpl(null);
-    setSalaryTpl(true);
-    setDraft(salaryAdjustmentDraft(next, salTitle, 'annual'));
-    showToast('Salary-adjustment (bar passage) template loaded — edit anything below');
+    setAdjTpl(kind);
+    setDraft(salaryAdjustmentDraft(next, salTitle, 'annual', kind));
+    showToast(kind === 'bar' ? 'Bar-passage raise template loaded — edit anything below' : 'Merit raise template loaded — edit anything below');
   }
 
   const ready = !!(form.name && form.role && form.salary);
@@ -916,15 +928,22 @@ ${bodyHtml}
               <p className="text-[11px] text-text-muted mt-1.5">Fills the letter with the part-time clerk wording ($/hour, weekly, at-will). Enter a name/rate/date first to have them dropped in — or edit the draft after.</p>
             </div>
 
-            {/* Updated offer / salary adjustment (e.g. bar passage) */}
+            {/* Salary-adjustment / raise templates */}
             <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Updated offer / raise</div>
-              <button type="button" onClick={useSalaryTemplate}
-                className={clsx('w-full py-2 text-sm font-semibold rounded-ctrl border transition-colors',
-                  salaryTpl ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
-                ⚖️ Bar Passage Raise
-              </button>
-              <p className="text-[11px] text-text-muted mt-1.5">Updated offer letter for a contingent pay increase (e.g. after passing the bar). Enter the person&rsquo;s name, new title, new salary, and the effective date (Start Date) — then edit the draft.</p>
+              <div className="text-xs font-bold uppercase tracking-wider text-gold-muted mb-2">Salary adjustment / raise</div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => useAdjTemplate('bar')}
+                  className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                    adjTpl === 'bar' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
+                  ⚖️ Bar Passage Raise
+                </button>
+                <button type="button" onClick={() => useAdjTemplate('merit')}
+                  className={clsx('flex-1 py-2 text-sm font-semibold rounded-ctrl border transition-colors',
+                    adjTpl === 'merit' ? 'bg-ink text-white border-ink' : 'bg-white text-text-secondary border-border hover:border-ink hover:text-text-primary')}>
+                  ⭐ Merit Raise
+                </button>
+              </div>
+              <p className="text-[11px] text-text-muted mt-1.5">A pay-increase letter. <b>Bar Passage</b> ties the raise to passing the bar; <b>Merit</b> recognizes strong work. Enter the name, new salary, and the effective date (Start Date) — plus a new title if it changes — then edit the draft.</p>
             </div>
 
             {empType === 'contractor' && (
