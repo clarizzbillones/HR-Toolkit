@@ -357,6 +357,12 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
   const [statusFilter, setStatusFilter] = useState<ReviewStatus | 'All'>('All');
+  const [statusMenuFor, setStatusMenuFor] = useState<string | null>(null); // employee id whose status dropdown is open
+  // Manually set (or clear) a person's review status. null → back to automatic.
+  async function setStatusOverride(id: string, value: string | null) {
+    setStatusMenuFor(null);
+    await patchEmployee(id, { review_status_override: value });
+  }
   const [cohortFilter, setCohortFilter] = useState<'All' | 'apr_oct' | 'jan_jul' | 'none'>('All');
   const [search, setSearch] = useState('');
 
@@ -681,9 +687,40 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
                     })()}
                   </td>
                   <td className="px-5 py-3">
-                    {c.status
-                      ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_PILL[c.status]}`}>{c.status}</span>
-                      : <span className="text-text-muted text-xs">—</span>}
+                    {readOnly ? (
+                      c.status
+                        ? <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_PILL[c.status]}`}>{c.status}</span>
+                        : <span className="text-text-muted text-xs">—</span>
+                    ) : (
+                      <div className="relative inline-block">
+                        <button type="button" onClick={() => setStatusMenuFor(statusMenuFor === e.id ? null : e.id)}
+                          title="Click to change the status"
+                          className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${c.status ? STATUS_PILL[c.status] : 'bg-[#f3f0ea] text-text-muted'} hover:ring-1 hover:ring-ink/20`}>
+                          {c.status || 'Set status'}
+                          <span className="opacity-50 text-[9px]">▾</span>
+                        </button>
+                        {statusMenuFor === e.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setStatusMenuFor(null)} />
+                            <div className="absolute z-20 mt-1 left-0 min-w-[150px] bg-white border border-border-light rounded-ctrl shadow-lg overflow-hidden py-1">
+                              <button onClick={() => setStatusOverride(e.id, null)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-canvas flex items-center gap-2">
+                                <span>⟳ Automatic</span>
+                                {!e.review_status_override && <span className="ml-auto text-[#2f7d5b]">✓</span>}
+                              </button>
+                              <div className="border-t border-border-light my-1" />
+                              {REVIEW_STATUSES.map(s => (
+                                <button key={s} onClick={() => setStatusOverride(e.id, s)}
+                                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-canvas flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded-full ${STATUS_PILL[s]}`}>{s}</span>
+                                  {e.review_status_override === s && <span className="ml-auto text-[#2f7d5b]">✓</span>}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
                     {readOnly ? (
