@@ -1185,12 +1185,33 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
       const d = await res.json();
       if (!res.ok) { alert(d.error ?? 'Upload failed'); return; }
       setDocs(prev => [{ which: d.which, name: d.name, doc_date: d.doc_date ?? docDate }, ...prev]);
-      // Past/today date → log a completed review (advance last review, auto +6mo).
-      // Future date → schedule the next review on that date (reads Not started).
-      if (docDate) {
-        if (docDate <= today) { if (!lastRev || docDate > lastRev) setLastRev(docDate); setNextRev(''); setStatusOv(''); }
-        else { setNextRev(docDate); setStatusOv(''); }
+      // Future-dated doc → just schedule the next review on that date.
+      if (docDate && docDate > today) {
+        setNextRev(docDate); setStatusOv('');
+        return;
       }
+      // Otherwise uploading the completed review auto-completes it: the review
+      // date is the upload date (or a past doc date if entered), the status is
+      // marked Complete, and the next review recomputes to the nearest cohort
+      // season (Apr/Oct or Jan/Jul). Persisted immediately — no Save needed.
+      const reviewDate = (docDate && docDate <= today) ? docDate : today;
+      const existing = history.filter(h => h.date !== reviewDate);
+      const rebuilt = [...existing, { date: reviewDate, peer_reviewers: [], notes: summary }]
+        .sort((a, b) => a.date.localeCompare(b.date));
+      setLastRev(reviewDate); setNextRev(''); setStatusOv('Complete');
+      await onSave({
+        name: name.trim() || employee.name,
+        role: role.trim() || employee.role,
+        dept: dept.trim() || employee.dept,
+        hire_date: hire || null,
+        last_review_date: reviewDate,
+        review_history: JSON.stringify(rebuilt),
+        next_review_override: null,
+        review_status_override: 'Complete',
+        review_cohort: cohort || null,
+        review_notes: summary || null,
+      });
+      showToast('Review marked complete — next review scheduled to the nearest cohort season');
     } catch { alert('Upload failed'); }
     setUploading(false);
   }
