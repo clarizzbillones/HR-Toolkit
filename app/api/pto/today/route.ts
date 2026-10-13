@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 // Single source of truth for name aliasing + PTO filters, shared with the PTO
 // dashboard, report, and EOD modal so a name merge is fixed in exactly one place.
-import { resolveAlias, EXCLUDED_TYPES, EXCLUDED_TITLE, workingDays } from '@/lib/pto';
+import { resolveAlias, EXCLUDED_TYPES, EXCLUDED_TITLE, workingDays, calSig } from '@/lib/pto';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +52,11 @@ export async function GET(req: Request) {
   }
 
   for (const c of calEvents) {
-    if (c.id && hidden.has(c.id)) continue; // removed from the report — stays removed everywhere
+    // Removed from the report — stays removed everywhere. Match BOTH the event
+    // id and the content signature (person + dates), since a deleted entry is
+    // stored both ways and the id can change when the event's title changes.
+    if (c.id && hidden.has(c.id)) continue;
+    if (hidden.has(calSig(resolveAlias(c.name), c.start, c.end))) continue;
     if (c.start > today || c.end < today) continue;
     if (EXCLUDED_TYPES.test(c.tag)) {
       debugExcluded.push({ source: 'cal', employee: c.name, type: c.tag, reason: 'excluded tag' });
