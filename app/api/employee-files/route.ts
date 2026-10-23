@@ -123,6 +123,28 @@ export async function GET(req: Request) {
     const docs = await sql`SELECT * FROM employee_files WHERE profile_id = ${id} ORDER BY doc_date DESC NULLS LAST, created_at DESC`;
     return NextResponse.json({ profile, docs: (docs as any[]).map(stripDoc) });
   }
+  // Full export: every profile with its tools/accounts and document titles, for
+  // a one-click CSV/report of everyone's data.
+  if (new URL(req.url).searchParams.get('export')) {
+    await autoMergeKnownDuplicates();
+    const profiles = await sql`
+      SELECT p.*,
+        (SELECT s.worker_type FROM staff_directory s WHERE lower(s.name) = lower(p.name) AND COALESCE(NULLIF(TRIM(s.worker_type), ''), '') <> '' LIMIT 1) AS staff_worker_type
+      FROM employee_profiles p ORDER BY p.name ASC` as any[];
+    const accounts = await sql`SELECT profile_id, system, account, access_level, status, source FROM employee_accounts ORDER BY lower(system) ASC` as any[];
+    const docs = await sql`SELECT profile_id, title, category, doc_date FROM employee_files ORDER BY doc_date DESC NULLS LAST, created_at DESC` as any[];
+    const byProfileAcc = new Map<string, any[]>();
+    for (const a of accounts) { const l = byProfileAcc.get(a.profile_id) ?? []; l.push(a); byProfileAcc.set(a.profile_id, l); }
+    const byProfileDoc = new Map<string, any[]>();
+    for (const d of docs) { const l = byProfileDoc.get(d.profile_id) ?? []; l.push(d); byProfileDoc.set(d.profile_id, l); }
+    const rows = profiles.map(({ staff_worker_type, ...p }) => ({
+      ...p,
+      worker_type: staff_worker_type ?? p.worker_type,
+      accounts: byProfileAcc.get(p.id) ?? [],
+      docs: byProfileDoc.get(p.id) ?? [],
+    }));
+    return NextResponse.json({ rows });
+  }
   // Combine known duplicates before listing (one-off, self-clearing).
   await autoMergeKnownDuplicates();
   // List: profiles with a doc count for the tiles. The Employees/Contractors

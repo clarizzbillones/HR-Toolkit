@@ -464,6 +464,44 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     showToast('Report downloaded');
   }
 
+  // Export every employee's data (profile fields + the tools/systems they can
+  // access + their document titles) as a CSV.
+  const [exporting, setExporting] = useState(false);
+  async function exportAll() {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/employee-files?export=1');
+      const d = await res.json();
+      const rows: any[] = d.rows ?? [];
+      if (!rows.length) { showToast('No employees to export'); return; }
+      const csvCell = (v: any) => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
+      const headers = ['Name', 'Position', 'Department', 'Worker type', 'Email', 'Phone', 'Address', 'Start date', 'DOB', 'Salary',
+        'Status', 'Tools & access (count)', 'Tools & access', 'Documents (count)', 'Documents'];
+      const lines = [headers.map(csvCell).join(',')];
+      for (const r of rows) {
+        const accts = (r.accounts ?? []) as any[];
+        const toolsStr = accts.map(a => {
+          const lvl = [a.access_level, a.status].filter(Boolean).join(' · ');
+          return `${a.system || a.account || 'Account'}${lvl ? ` (${lvl})` : ''}`;
+        }).join('; ');
+        const docsStr = (r.docs ?? []).map((x: any) => `${x.title || x.category || 'Document'}${x.doc_date ? ` [${String(x.doc_date).slice(0, 10)}]` : ''}`).join('; ');
+        lines.push([
+          r.name, r.position, r.department, r.worker_type, r.email, r.phone, r.address,
+          r.start_date ? String(r.start_date).slice(0, 10) : '', r.dob, r.salary,
+          r.offboarded ? 'Offboarded' : 'Active',
+          String(accts.length), toolsStr, String((r.docs ?? []).length), docsStr,
+        ].map(csvCell).join(','));
+      }
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Employee-Files-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      showToast(`Exported ${rows.length} employee${rows.length === 1 ? '' : 's'}`);
+    } catch { showToast('Export failed'); }
+    finally { setExporting(false); }
+  }
+
   const [syncing, setSyncing] = useState(false);
   async function syncStaffing() {
     setSyncing(true);
@@ -931,6 +969,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
           {!readOnly && <button onClick={openNewForm} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Create a new fillable RSVP / survey form">＋ New form</button>}
+          <button onClick={exportAll} disabled={exporting} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Download a CSV of every employee's details plus the tools/systems they have access to">{exporting ? 'Exporting…' : '⬇ Export data'}</button>
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
