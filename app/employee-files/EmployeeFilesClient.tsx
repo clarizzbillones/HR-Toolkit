@@ -464,40 +464,131 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     showToast('Report downloaded');
   }
 
-  // Export every employee's data (profile fields + the tools/systems they can
-  // access + their document titles) as a CSV.
+  // ---- Export: a branded printable report + an itemized spreadsheet ----
   const [exporting, setExporting] = useState(false);
-  async function exportAll() {
-    setExporting(true);
+  const [exportOpen, setExportOpen] = useState(false);
+  async function fetchExportRows(): Promise<any[]> {
+    const res = await fetch('/api/employee-files?export=1');
+    const d = await res.json();
+    return (d.rows ?? []) as any[];
+  }
+  // Status pill colors for a tool/account (Active / Needs review / Closed).
+  function statusTone(s: any) {
+    const t = String(s ?? '').toLowerCase();
+    if (/close/.test(t)) return { bg: '#ececee', fg: '#6b7280' };
+    if (/need|review|pend/.test(t)) return { bg: '#faf3e6', fg: '#b07d2a' };
+    return { bg: '#eef5f1', fg: '#2f7d5b' };
+  }
+
+  // Branded, print-ready report: one clean section per employee with their tools
+  // itemized in a table. Opens in a new window and triggers the print dialog
+  // (choose "Save as PDF").
+  async function exportReport() {
+    setExportOpen(false); setExporting(true);
     try {
-      const res = await fetch('/api/employee-files?export=1');
-      const d = await res.json();
-      const rows: any[] = d.rows ?? [];
+      const rows = await fetchExportRows();
       if (!rows.length) { showToast('No employees to export'); return; }
-      const csvCell = (v: any) => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
-      const headers = ['Name', 'Position', 'Department', 'Worker type', 'Email', 'Phone', 'Address', 'Start date', 'DOB', 'Salary',
-        'Status', 'Tools & access (count)', 'Tools & access', 'Documents (count)', 'Documents'];
-      const lines = [headers.map(csvCell).join(',')];
-      for (const r of rows) {
+      const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      const activeCount = rows.filter(r => !r.offboarded).length;
+      const detail = (label: string, val: any) => val ? `<div class="f"><span class="l">${esc(label)}</span><span class="v">${esc(val)}</span></div>` : '';
+      const sections = rows.map(r => {
         const accts = (r.accounts ?? []) as any[];
-        const toolsStr = accts.map(a => {
-          const lvl = [a.access_level, a.status].filter(Boolean).join(' · ');
-          return `${a.system || a.account || 'Account'}${lvl ? ` (${lvl})` : ''}`;
-        }).join('; ');
-        const docsStr = (r.docs ?? []).map((x: any) => `${x.title || x.category || 'Document'}${x.doc_date ? ` [${String(x.doc_date).slice(0, 10)}]` : ''}`).join('; ');
-        lines.push([
-          r.name, r.position, r.department, r.worker_type, r.email, r.phone, r.address,
-          r.start_date ? String(r.start_date).slice(0, 10) : '', r.dob, r.salary,
-          r.offboarded ? 'Offboarded' : 'Active',
-          String(accts.length), toolsStr, String((r.docs ?? []).length), docsStr,
-        ].map(csvCell).join(','));
+        const docs = (r.docs ?? []) as any[];
+        const wt = r.worker_type || 'Employee';
+        const toolsTable = accts.length ? `
+          <table class="tools"><thead><tr><th style="width:52%">Tool / System</th><th>Access level</th><th>Status</th></tr></thead><tbody>
+          ${accts.map((a, i) => { const tone = statusTone(a.status); return `<tr><td>${i + 1}. ${esc(a.system || a.account || 'Account')}</td><td>${esc(a.access_level || '')}</td><td><span class="pill" style="background:${tone.bg};color:${tone.fg}">${esc(a.status || '—')}</span></td></tr>`; }).join('')}
+          </tbody></table>` : `<div class="none">No tools / systems on file.</div>`;
+        const docList = docs.length ? `<ul class="docs">${docs.map(d => `<li>${esc(d.title || d.category || 'Document')}${d.doc_date ? ` <span class="dt">${esc(String(d.doc_date).slice(0, 10))}</span>` : ''}</li>`).join('')}</ul>` : `<div class="none">No documents on file.</div>`;
+        return `<section class="emp">
+          <div class="emp-head">
+            <div class="who"><h2>${esc(r.name)}</h2><div class="role">${esc(r.position || '—')}</div></div>
+            <div class="tags"><span class="tag ${/contract/i.test(wt) ? 'con' : 'emp'}">${esc(wt)}</span><span class="tag ${r.offboarded ? 'off' : 'act'}">${r.offboarded ? 'Offboarded' : 'Active'}</span></div>
+          </div>
+          <div class="grid">
+            ${detail('Email', r.email)}${detail('Phone', r.phone)}${detail('Address', r.address)}
+            ${detail('Start date', r.start_date ? String(r.start_date).slice(0, 10) : '')}${detail('Date of birth', r.dob)}${detail('Salary', r.salary)}
+          </div>
+          <div class="sub">Tools &amp; Access <span class="cnt">${accts.length}</span></div>
+          ${toolsTable}
+          <div class="sub">Documents <span class="cnt">${docs.length}</span></div>
+          ${docList}
+        </section>`;
+      }).join('');
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Employee Directory & Access Report</title>
+      <style>
+        @page { margin: 0.6in; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Georgia, 'Times New Roman', serif; color:#1b2a3d; margin:0; }
+        .head { border-top:4px solid #c9a24a; padding:12px 0 14px; margin-bottom:18px; border-bottom:1px solid #e6ddcd; }
+        .brand { font-size:13px; font-weight:700; letter-spacing:4px; color:#c9a24a; }
+        h1 { font-size:22px; margin:4px 0 2px; }
+        .sub-head { font-size:11px; color:#6b6250; }
+        section.emp { border:1px solid #e6ddcd; border-radius:8px; padding:14px 16px; margin-bottom:14px; page-break-inside:avoid; }
+        .emp-head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #eee3d0; padding-bottom:8px; margin-bottom:10px; }
+        .who h2 { font-size:17px; margin:0; } .role { font-size:11px; color:#6b6250; margin-top:2px; }
+        .tags { display:flex; gap:6px; flex-shrink:0; }
+        .tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+        .tag.emp { background:#eef5f1; color:#2f7d5b; } .tag.con { background:#f7efe1; color:#b07d2a; }
+        .tag.act { background:#eef2f7; color:#3f5a76; } .tag.off { background:#f6ecef; color:#6e2b3e; }
+        .grid { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin-bottom:6px; }
+        .f { font-size:11px; display:flex; gap:6px; } .f .l { color:#8a8474; min-width:88px; } .f .v { color:#1b2a3d; }
+        .sub { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:12px 0 6px; display:flex; align-items:center; gap:8px; }
+        .cnt { background:#1b2a3d; color:#fff; border-radius:20px; font-size:9px; padding:1px 7px; }
+        table.tools { width:100%; border-collapse:collapse; font-size:10.5px; }
+        table.tools th { background:#1b2a3d; color:#fff; text-align:left; padding:5px 8px; font-size:9px; text-transform:uppercase; letter-spacing:.03em; }
+        table.tools td { padding:4px 8px; border-bottom:1px solid #eee3d0; vertical-align:top; }
+        table.tools tr:nth-child(even) td { background:#faf6ee; }
+        .pill { font-weight:700; font-size:9px; padding:1px 7px; border-radius:20px; }
+        .docs { margin:2px 0 0; padding-left:18px; font-size:10.5px; } .docs li { margin:1px 0; } .docs .dt { color:#8a8474; font-size:9px; }
+        .none { font-size:10.5px; color:#9a9384; font-style:italic; }
+      </style></head><body>
+      <div class="head"><div class="brand">LITSON PLLC</div><h1>Employee Directory &amp; Access Report</h1>
+      <div class="sub-head">${dateStr} · ${rows.length} people · ${activeCount} active</div></div>
+      ${sections}
+      </body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) { showToast('Allow pop-ups to open the report'); return; }
+      w.document.write(html); w.document.close(); w.focus();
+      setTimeout(() => w.print(), 400);
+      showToast(`Report ready — ${rows.length} people`);
+    } catch { showToast('Export failed'); }
+    finally { setExporting(false); }
+  }
+
+  // Itemized spreadsheet — one row per employee-tool (opens in Excel).
+  async function exportExcel() {
+    setExportOpen(false); setExporting(true);
+    try {
+      const rows = await fetchExportRows();
+      if (!rows.length) { showToast('No employees to export'); return; }
+      const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const headers = ['Employee', 'Position', 'Worker type', 'Status', 'Email', 'Tool / System', 'Access level', 'Tool status', 'Source'];
+      const trs: string[] = [];
+      for (const r of rows) {
+        const status = r.offboarded ? 'Offboarded' : 'Active';
+        const base = [r.name, r.position, r.worker_type, status, r.email];
+        const accts = (r.accounts ?? []) as any[];
+        if (!accts.length) {
+          trs.push(`<tr>${[...base, '', '', '', ''].map(c => `<td>${esc(c)}</td>`).join('')}</tr>`);
+        } else {
+          for (const a of accts) {
+            trs.push(`<tr>${[...base, a.system || a.account || 'Account', a.access_level, a.status, a.source].map(c => `<td>${esc(c)}</td>`).join('')}</tr>`);
+          }
+        }
       }
-      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>
+        <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">
+          <tr>${headers.map(h => `<td style="background:#1b2a3d;color:#ffffff;font-weight:bold">${esc(h)}</td>`).join('')}</tr>
+          ${trs.join('')}
+        </table></body></html>`;
+      const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `Employee-Files-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `Employee-Tools-Access-${new Date().toISOString().slice(0, 10)}.xls`;
       a.click();
-      showToast(`Exported ${rows.length} employee${rows.length === 1 ? '' : 's'}`);
+      showToast(`Exported ${rows.length} employees (itemized)`);
     } catch { showToast('Export failed'); }
     finally { setExporting(false); }
   }
@@ -969,7 +1060,24 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
           {!readOnly && <button onClick={openNewForm} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Create a new fillable RSVP / survey form">＋ New form</button>}
-          <button onClick={exportAll} disabled={exporting} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Download a CSV of every employee's details plus the tools/systems they have access to">{exporting ? 'Exporting…' : '⬇ Export data'}</button>
+          <div className="relative">
+            <button onClick={() => setExportOpen(o => !o)} disabled={exporting} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Export everyone's details plus the tools/systems they can access">{exporting ? 'Exporting…' : '⬇ Export ▾'}</button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 z-20 mt-1 w-64 bg-white border border-border-light rounded-ctrl shadow-lg py-1">
+                  <button onClick={exportReport} className="w-full text-left px-3 py-2 text-sm hover:bg-canvas">
+                    <div className="font-semibold text-text-primary">🖨 Printable report (PDF)</div>
+                    <div className="text-xs text-text-muted">Branded, per-employee with tools listed</div>
+                  </button>
+                  <button onClick={exportExcel} className="w-full text-left px-3 py-2 text-sm hover:bg-canvas border-t border-border-light">
+                    <div className="font-semibold text-text-primary">⬇ Itemized spreadsheet (Excel)</div>
+                    <div className="text-xs text-text-muted">One row per employee &amp; tool</div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {!readOnly && <button onClick={() => { setEmpForm({ ...EMPTY_P }); setShowAddEmp(true); }} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-ink-dark">+ Add employee</button>}
         </div>
       </header>
