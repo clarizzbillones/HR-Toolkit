@@ -353,6 +353,16 @@ export default function OffersClient() {
     if (first) b = b.replace(/\[First Name\]/g, first);
     if (String(cert.startDate ?? '').trim()) b = b.replace(/\[Start Date\]/g, String(cert.startDate).trim());
     if (String(cert.role ?? '').trim()) b = b.replace(/\[Role\]/g, String(cert.role).trim());
+    // Pronouns (cert.pronoun holds the possessive: her / his / their).
+    const p = cert.pronoun;
+    const subj = p === 'his' ? 'he' : p === 'their' ? 'they' : 'she';
+    const poss = p === 'his' ? 'his' : p === 'their' ? 'their' : 'her';
+    const obj = p === 'his' ? 'him' : p === 'their' ? 'them' : 'her';
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    b = b.replace(/\[He\/She\/They\]/g, cap(subj))
+      .replace(/\[he\/she\/they\]/g, subj)
+      .replace(/\[his\/her\/their\]/g, poss)
+      .replace(/\[him\/her\/them\]/g, obj);
     return b;
   })();
 
@@ -1658,18 +1668,29 @@ ${bodyHtml}
               // Verification-letter style (employment / engagement): custom RE,
               // closing and a full signer block.
               <>
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Role / Title</label>
-                  <input type="text" value={cert.role} onChange={e => setC('role', e.target.value)}
-                    placeholder="e.g. Personal Assistant"
-                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Role / Title</label>
+                    <input type="text" value={cert.role} onChange={e => setC('role', e.target.value)}
+                      placeholder="e.g. Personal Assistant"
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Pronouns</label>
+                    <select value={cert.pronoun} onChange={e => setC('pronoun', e.target.value)}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                      <option value="her">She / her</option>
+                      <option value="his">He / his</option>
+                      <option value="their">They / their</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Engagement / employment start date</label>
                   <input type="text" value={cert.startDate} onChange={e => setC('startDate', e.target.value)}
                     placeholder="e.g. February 25, 2025"
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-                  <p className="text-[11px] text-text-muted mt-1">Fills <span className="font-mono">[Role]</span> and <span className="font-mono">[Start Date]</span> in the letter (<span className="font-mono">[Full Name]</span> / <span className="font-mono">[First Name]</span> come from the Name above).</p>
+                  <p className="text-[11px] text-text-muted mt-1">Fills <span className="font-mono">[Role]</span>, <span className="font-mono">[Start Date]</span>, name and pronouns (<span className="font-mono">[He/She/They]</span>, <span className="font-mono">[his/her/their]</span>) in the letter.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">RE line</label>
