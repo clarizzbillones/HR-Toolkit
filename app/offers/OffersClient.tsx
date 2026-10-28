@@ -352,6 +352,7 @@ export default function OffersClient() {
     if (full) b = b.replace(/\[Full Name\]/g, full);
     if (first) b = b.replace(/\[First Name\]/g, first);
     if (String(cert.startDate ?? '').trim()) b = b.replace(/\[Start Date\]/g, String(cert.startDate).trim());
+    if (String(cert.role ?? '').trim()) b = b.replace(/\[Role\]/g, String(cert.role).trim());
     return b;
   })();
 
@@ -1658,11 +1659,17 @@ ${bodyHtml}
               // closing and a full signer block.
               <>
                 <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Role / Title</label>
+                  <input type="text" value={cert.role} onChange={e => setC('role', e.target.value)}
+                    placeholder="e.g. Personal Assistant"
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Engagement / employment start date</label>
                   <input type="text" value={cert.startDate} onChange={e => setC('startDate', e.target.value)}
                     placeholder="e.g. February 25, 2025"
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-                  <p className="text-[11px] text-text-muted mt-1">Fills the <span className="font-mono">[Start Date]</span> in the letter (and <span className="font-mono">[Full Name]</span> / <span className="font-mono">[First Name]</span> come from the Name above).</p>
+                  <p className="text-[11px] text-text-muted mt-1">Fills <span className="font-mono">[Role]</span> and <span className="font-mono">[Start Date]</span> in the letter (<span className="font-mono">[Full Name]</span> / <span className="font-mono">[First Name]</span> come from the Name above).</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">RE line</label>
