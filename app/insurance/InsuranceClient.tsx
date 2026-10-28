@@ -10,6 +10,28 @@ interface Policy {
 }
 interface FollowUp { id: string; kind: string; item: string; detail: string; sort_order?: number }
 
+// 2026 BCBS of Tennessee medical plan monthly premiums per covered person, by
+// age (Blue Network P). [Age, Silver 147P, Gold 117P]. Updated at renewal.
+const MED_RATES: [string, string, string][] = [
+  ['0–14', '$405.85', '$468.83'], ['15', '$441.92', '$510.50'], ['16', '$455.72', '$526.44'],
+  ['17', '$469.51', '$542.37'], ['18', '$484.36', '$559.53'], ['19', '$499.22', '$576.69'],
+  ['20', '$514.60', '$594.46'], ['21', '$530.52', '$612.85'], ['22', '$530.52', '$612.85'],
+  ['23', '$530.52', '$612.85'], ['24', '$530.52', '$612.85'], ['25', '$532.64', '$615.30'],
+  ['26', '$543.25', '$627.56'], ['27', '$555.98', '$642.27'], ['28', '$576.68', '$666.17'],
+  ['29', '$593.65', '$685.78'], ['30', '$602.14', '$695.58'], ['31', '$614.87', '$710.29'],
+  ['32', '$627.61', '$725.00'], ['33', '$635.56', '$734.19'], ['34', '$644.05', '$744.00'],
+  ['35', '$648.30', '$748.90'], ['36', '$652.54', '$753.81'], ['37', '$656.78', '$758.71'],
+  ['38', '$661.03', '$763.61'], ['39', '$669.52', '$773.42'], ['40', '$678.00', '$783.22'],
+  ['41', '$690.74', '$797.93'], ['42', '$702.94', '$812.03'], ['43', '$719.92', '$831.64'],
+  ['44', '$741.14', '$856.15'], ['45', '$766.07', '$884.96'], ['46', '$795.78', '$919.28'],
+  ['47', '$829.20', '$957.88'], ['48', '$867.40', '$1,002.01'], ['49', '$905.07', '$1,045.52'],
+  ['50', '$947.51', '$1,094.55'], ['51', '$989.42', '$1,142.97'], ['52', '$1,035.58', '$1,196.28'],
+  ['53', '$1,082.26', '$1,250.21'], ['54', '$1,132.66', '$1,308.43'], ['55', '$1,183.06', '$1,366.66'],
+  ['56', '$1,237.70', '$1,429.78'], ['57', '$1,292.88', '$1,493.52'], ['58', '$1,351.76', '$1,561.54'],
+  ['59', '$1,380.94', '$1,595.25'], ['60', '$1,439.83', '$1,663.27'], ['61', '$1,490.76', '$1,722.11'],
+  ['62', '$1,524.18', '$1,760.72'], ['63', '$1,566.10', '$1,809.13'], ['64+', '$1,591.56', '$1,838.55'],
+];
+
 const POLICY_FIELDS: [keyof Policy, string][] = [
   ['ins_type', 'Insurance type'], ['carrier', 'Carrier'], ['policy_number', 'Policy number'],
   ['broker', 'Broker / agency'], ['broker_contact', 'Broker contact'], ['contact_info', 'Contact info'],
@@ -76,6 +98,7 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
   const [followups, setFollowups] = useState<FollowUp[]>(initialFollowups);
   const [editing, setEditing] = useState<Policy | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [showRates, setShowRates] = useState(false);
 
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const catsPresent = categories.filter(c => policies.some(p => p.category === c)).concat(
@@ -373,6 +396,52 @@ ${catBlocks}${openHtml}${exclHtml}
             ))}
             {excluded.length === 0 && <div className="px-5 py-4 text-sm text-text-muted">Nothing excluded.</div>}
           </div>
+        </div>
+
+        {/* Medical plan rates by age */}
+        <div className="bg-white border border-border rounded-card overflow-hidden">
+          <button onClick={() => setShowRates(v => !v)} className="w-full px-5 py-3 border-b border-border flex items-center justify-between gap-2 text-left hover:bg-canvas">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">2026 Medical Plan Rates by Age</div>
+              <div className="text-xs text-text-muted mt-0.5">BCBS of Tennessee · Blue Network P · monthly premium per covered person</div>
+            </div>
+            <span className="text-text-muted text-sm shrink-0">{showRates ? '▾ Hide' : '▸ Show'}</span>
+          </button>
+          {showRates && (
+            <div className="p-5">
+              <div className="grid md:grid-cols-2 gap-3 mb-4">
+                <div className="border border-border-light rounded-ctrl px-4 py-3">
+                  <div className="text-sm font-bold text-text-primary">Silver 147P <span className="font-normal text-text-muted">($4,600 / $8,550 / 60%)</span></div>
+                  <div className="text-xs text-text-muted mt-1">Rx $10 / $75 / $150 · Office visit $65 / $125 · Teladoc 100% · Urgent care $125 · ER $750 + Ded/Coins</div>
+                </div>
+                <div className="border border-border-light rounded-ctrl px-4 py-3">
+                  <div className="text-sm font-bold text-text-primary">Gold 117P <span className="font-normal text-text-muted">($3,500 / $5,500 / 80%)</span></div>
+                  <div className="text-xs text-text-muted mt-1">Rx $10 / $35 / $50 · Office visit $25 / $75 · Teladoc 100% · Urgent care $50 · ER $750 + Ded/Coins</div>
+                </div>
+              </div>
+              <div className="overflow-x-auto border border-border-light rounded-ctrl">
+                <table className="w-full text-sm border-separate border-spacing-0" style={{ minWidth: 420 }}>
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(180deg,#243449 0%,#1b2a3d 100%)' }}>
+                      {['Age', 'Silver 147P', 'Gold 117P'].map((h, i) => (
+                        <th key={h} className={`px-4 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-[#c9d3e0] ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MED_RATES.map(([age, silver, gold], i) => (
+                      <tr key={age + i} className={i % 2 ? 'bg-canvas/40' : 'bg-white'}>
+                        <td className="px-4 py-1.5 border-b border-border-light font-semibold text-text-primary">{age}</td>
+                        <td className="px-4 py-1.5 border-b border-border-light text-right text-text-secondary">{silver}</td>
+                        <td className="px-4 py-1.5 border-b border-border-light text-right text-text-secondary">{gold}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-text-muted mt-2">Full monthly premium per covered person by age, effective Jan 1, 2026. Litson PLLC covers $600/month toward the premium; the remainder is the employee&rsquo;s responsibility. Rates are set by the carrier and updated at each renewal.</p>
+            </div>
+          )}
         </div>
       </div>
 
