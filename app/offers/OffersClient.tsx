@@ -80,6 +80,11 @@ interface CertForm {
   date: string; name: string; email: string; shortName: string; pronoun: string;
   role: string; engagement: string; startDate: string; hours: string;
   duties: string; purpose: string; signer: string; signerTitle: string; body: string;
+  // Optional "verification letter" style (employment / engagement confirmation):
+  // a custom RE line, closing, and a full typed signer block. When signerBlock is
+  // set, the letter renders "TO WHOM IT MAY CONCERN" + RE and the signer's own
+  // block instead of the structured Certificate-of-Employment layout.
+  re?: string; closing?: string; signerBlock?: string;
 }
 const CERT_DEFAULT_DUTIES = [
   'Client Intake – Conducting initial client intake processes, gathering necessary information, and ensuring accurate and timely entry of client data into firm systems.',
@@ -95,7 +100,57 @@ const CERT_EMPTY: CertForm = {
   duties: CERT_DEFAULT_DUTIES,
   purpose: 'submission to their academic institution and for no other purpose',
   signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', body: '',
+  re: '', closing: '', signerBlock: '',
 };
+
+// Clarizz's HR signer block used on verification letters.
+const HR_SIGNER_BLOCK = [
+  'Clarizz Ann Billones',
+  'HR & Administrative Specialist',
+  'Litson PLLC',
+  '54 Music Square East, Suite 300',
+  'Nashville, TN 37203',
+  'United States',
+  'Email: clarizz@litson.co',
+  'Phone: [Your Work Phone Number]',
+].join('\n');
+
+// Built-in verification-letter templates (employment / engagement). These use
+// the free-text `body` plus a custom RE line, "Sincerely," closing and the HR
+// signer block — the format HR uses for visa / verification requests.
+const CERT_BUILTINS: Record<string, CertForm> = {
+  'Letter of Engagement (contractor)': {
+    ...CERT_EMPTY, date: fmtLongDate(new Date()), engagement: 'an independent contractor',
+    re: 'CONFIRMATION OF INDEPENDENT CONTRACTOR ENGAGEMENT – [FULL NAME]',
+    closing: 'Sincerely,', signerBlock: HR_SIGNER_BLOCK,
+    body: [
+      'This letter is to confirm that **[Full Name]** provides services to Litson PLLC as a **[Role] on an independent contractor basis**. [He/She/They] is based in [City, Country], and has been engaged with our firm since **[Start Date]**.',
+      '',
+      '[First Name] provides [administrative and personal assistance] services to the firm in accordance with the terms of [his/her/their] independent contractor arrangement.',
+      '',
+      'We understand that [First Name] plans to visit [the United States] from **[Start Date] through [End Date]**, for [purpose, e.g. a wedding and personal vacation]. During this visit, [he/she/they] will not perform any work or provide services for Litson PLLC.',
+      '',
+      'Following [his/her/their] visit, [First Name] is expected to return to [Country] and resume [his/her/their] regular contractual services with Litson PLLC in accordance with [his/her/their] existing arrangement.',
+      '',
+      'This letter is issued at [First Name]’s request to confirm [his/her/their] ongoing contractual relationship with our firm and to support [his/her/their] U.S. visa application. Should you require any additional information or verification, please feel free to contact me using the details below.',
+    ].join('\n'),
+  },
+  'Letter of Employment (employee)': {
+    ...CERT_EMPTY, date: fmtLongDate(new Date()), engagement: 'a full-time employee',
+    re: 'CONFIRMATION OF EMPLOYMENT – [FULL NAME]',
+    closing: 'Sincerely,', signerBlock: HR_SIGNER_BLOCK,
+    body: [
+      'This letter is to confirm that **[Full Name]** is employed by Litson PLLC as a **[Role]** on a full-time basis. [He/She/They] has been employed with our firm since **[Start Date]**.',
+      '',
+      '[First Name] performs [description of role / duties] for the firm in accordance with the terms of [his/her/their] employment.',
+      '',
+      'We understand that [First Name] plans to visit [the United States] from **[Start Date] through [End Date]**, for [purpose]. During this visit, [he/she/they] will [not perform any work / continue regular duties remotely] for Litson PLLC.',
+      '',
+      'This letter is issued at [First Name]’s request to confirm [his/her/their] ongoing employment with our firm and to support [his/her/their] U.S. visa application. Should you require any additional information or verification, please feel free to contact me using the details below.',
+    ].join('\n'),
+  },
+};
+
 // Compose the certificate body from the fields (bold name + duty titles).
 function composeCert(f: CertForm): string {
   const who = f.shortName.trim() || f.name.trim() || 'the employee';
@@ -315,9 +370,9 @@ export default function OffersClient() {
     showToast('Template saved');
   }
   function loadCertTemplate(name: string) {
-    const t = certTemplates[name];
+    const t = CERT_BUILTINS[name] ?? certTemplates[name];
     if (!t) { setCertTplName(''); return; }
-    setCert({ ...t });
+    setCert({ ...CERT_EMPTY, ...t, date: t.date || fmtLongDate(new Date()) });
     setCertTplName(name);
     showToast(`Loaded “${name}”`);
   }
@@ -733,13 +788,18 @@ ${ackHtml}
     const win = window.open('', '_blank');
     if (!win) return;
     const esc = (s: string) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const letterStyle = !!String(cert.signerBlock ?? '').trim();
     const bodyHtml = certBody.split('\n').map(l => {
       const t = l.trim();
       if (t === '') return `<div style="height:11pt"></div>`;
       if (/^[•\-]\s*/.test(t)) {
         return `<div style="margin-left:2.2em;text-indent:-1.1em;margin-bottom:4pt">&bull;&nbsp;&nbsp;${fmtInline(t.replace(/^[•\-]\s*/, ''))}</div>`;
       }
-      return `<div style="text-align:justify;text-indent:0.5in;margin-bottom:0">${fmtInline(l)}</div>`;
+      // Verification letters use block paragraphs; the structured certificate
+      // keeps the justified, first-line-indented style.
+      return letterStyle
+        ? `<div style="text-align:justify;margin-bottom:9pt">${fmtInline(l)}</div>`
+        : `<div style="text-align:justify;text-indent:0.5in;margin-bottom:0">${fmtInline(l)}</div>`;
     }).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Certificate of Employment${cert.name ? ' – ' + esc(cert.name) : ''}</title>
@@ -749,30 +809,46 @@ ${ackHtml}
   body{font-family:${BODY_FONT};color:#1a1a2e;font-size:11pt;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style></head><body>
+${(() => {
+  const isLetter = !!String(cert.signerBlock ?? '').trim();
+  const reText = String(cert.re ?? '').trim() || `Certificate of Employment${cert.name ? ' – ' + cert.name : ''}`;
+  const closing = String(cert.closing ?? '').trim() || 'Very truly yours,';
+  const header = `
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20pt">
   <img src="${LOGO_B64}" width="175" height="58" alt="Litson"/>
-  <div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">
-    J. Alex Little<br>615.985.8189<br>alex@litson.co
-  </div>
+  ${isLetter ? '' : `<div style="text-align:right;font-size:8.5pt;color:#333;line-height:1.65;font-family:Arial,sans-serif;margin-top:2pt">J. Alex Little<br>615.985.8189<br>alex@litson.co</div>`}
 </div>
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14pt">
-  <div style="text-decoration:underline;font-weight:bold">Via Email</div>
+  <div style="${isLetter ? '' : 'text-decoration:underline;font-weight:bold'}">${isLetter ? '' : 'Via Email'}</div>
   <div>${esc(cert.date)}</div>
-</div>
-${cert.name ? `<div style="font-weight:bold">${esc(cert.name)}</div>` : ''}
-${cert.email ? `<div style="color:#2f5fa0">${esc(cert.email)}</div>` : ''}
-<div style="margin:14pt 0;margin-left:0.5in"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">Certificate of Employment${cert.name ? ' – ' + esc(cert.name) : ''}</span></div>
-<div style="margin-bottom:11pt">To whom it may concern,</div>
+</div>`;
+  const addressee = isLetter
+    ? `<div style="font-weight:bold;margin-bottom:12pt">TO WHOM IT MAY CONCERN</div>`
+    : `${cert.name ? `<div style="font-weight:bold">${esc(cert.name)}</div>` : ''}${cert.email ? `<div style="color:#2f5fa0">${esc(cert.email)}</div>` : ''}`;
+  const reBlock = isLetter
+    ? `<div style="margin:0 0 14pt"><span style="font-weight:bold">RE:</span><span style="margin-left:0.8em;font-weight:bold">${esc(reText)}</span></div>`
+    : `<div style="margin:14pt 0;margin-left:0.5in"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">${esc(reText)}</span></div>`;
+  const salutation = isLetter ? '' : `<div style="margin-bottom:11pt">To whom it may concern,</div>`;
+  const signBlock = isLetter
+    ? `<div style="text-align:left">
+        <div>${esc(closing)}</div>
+        <div style="height:30pt"></div>
+        ${String(cert.signerBlock ?? '').split('\n').map((l, i) => `<div${i === 0 ? ' style="font-weight:bold"' : ''}>${esc(l)}</div>`).join('')}
+      </div>`
+    : `<div style="text-align:left">
+        <div>${esc(closing)}</div>
+        <div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:3pt 0 1pt" alt=""/></div>
+        <div>${esc(cert.signer)}</div>
+        ${cert.signerTitle ? `<div>${esc(cert.signerTitle)}</div>` : ''}
+      </div>`;
+  return `${header}
+${addressee}
+${reBlock}
+${salutation}
 ${bodyHtml}
 <div style="height:20pt"></div>
-<div style="display:flex;justify-content:flex-end">
-  <div style="text-align:left">
-    <div>Very truly yours,</div>
-    <div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:3pt 0 1pt" alt=""/></div>
-    <div>${esc(cert.signer)}</div>
-    ${cert.signerTitle ? `<div>${esc(cert.signerTitle)}</div>` : ''}
-  </div>
-</div>
+<div style="display:flex;justify-content:${isLetter ? 'flex-start' : 'flex-end'}">${signBlock}</div>`;
+})()}
 <div style="margin-top:16pt;padding-top:5pt;border-top:0.5pt solid #aaa;font-family:Arial,sans-serif;font-size:8pt;color:#888">
   Litson PLLC<br>54 Music Square E Ste 300, Nashville, TN 37203<br>(615) 985-8205<br>www.litson.co
 </div>
@@ -1471,8 +1547,15 @@ ${bodyHtml}
               <div className="flex items-center gap-1.5">
                 <select value={certTplName} onChange={e => loadCertTemplate(e.target.value)}
                   className="flex-1 min-w-0 border border-border-light rounded-ctrl px-2.5 py-2 text-sm bg-white focus:outline-none focus:border-ink">
-                  <option value="">Saved templates…</option>
-                  {Object.keys(certTemplates).sort((a, b) => a.localeCompare(b)).map(n => <option key={n} value={n}>{n}</option>)}
+                  <option value="">Templates…</option>
+                  <optgroup label="Built-in">
+                    {Object.keys(CERT_BUILTINS).map(n => <option key={n} value={n}>{n}</option>)}
+                  </optgroup>
+                  {Object.keys(certTemplates).length > 0 && (
+                    <optgroup label="Saved">
+                      {Object.keys(certTemplates).sort((a, b) => a.localeCompare(b)).map(n => <option key={n} value={n}>{n}</option>)}
+                    </optgroup>
+                  )}
                 </select>
                 <button onClick={saveCertTemplate} title="Save the current letter as a template"
                   className="shrink-0 text-sm font-semibold text-ink border border-border-light px-3 py-2 rounded-ctrl hover:bg-canvas">💾 Save</button>
@@ -1550,18 +1633,42 @@ ${bodyHtml}
               <input type="text" value={cert.purpose} onChange={e => setC('purpose', e.target.value)}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Signed by</label>
-                <input type="text" value={cert.signer} onChange={e => setC('signer', e.target.value)}
-                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+            {String(cert.signerBlock ?? '').trim() ? (
+              // Verification-letter style (employment / engagement): custom RE,
+              // closing and a full signer block.
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">RE line</label>
+                  <input type="text" value={cert.re ?? ''} onChange={e => setC('re', e.target.value)}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Closing</label>
+                  <input type="text" value={cert.closing ?? ''} onChange={e => setC('closing', e.target.value)}
+                    placeholder="Sincerely,"
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Signer block</label>
+                  <textarea value={cert.signerBlock ?? ''} onChange={e => setC('signerBlock', e.target.value)} rows={8}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink resize-y" />
+                  <p className="text-[11px] text-text-muted mt-1">First line is bold (the signer&rsquo;s name). Edit the title, email and phone as needed. Clear this box to switch back to the standard Certificate of Employment layout.</p>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Signed by</label>
+                  <input type="text" value={cert.signer} onChange={e => setC('signer', e.target.value)}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
+                  <input type="text" value={cert.signerTitle} onChange={e => setC('signerTitle', e.target.value)}
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
-                <input type="text" value={cert.signerTitle} onChange={e => setC('signerTitle', e.target.value)}
-                  className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
-              </div>
-            </div>
+            )}
             <button onClick={() => setCert({ ...CERT_EMPTY, date: fmtLongDate(new Date()) })}
               className="w-full text-sm font-semibold text-text-muted hover:text-text-primary py-2 rounded-ctrl hover:bg-canvas border border-transparent hover:border-border transition-colors">
               Reset
@@ -1582,35 +1689,55 @@ ${bodyHtml}
               </div>
 
               {/* Body */}
-              <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
-                <div className="flex items-start justify-between mb-4">
-                  <span className="font-bold underline">Via Email</span>
-                  <span>{cert.date}</span>
-                </div>
-                {cert.name && <p className="font-bold">{cert.name}</p>}
-                {cert.email && <p className="text-[#2f5fa0]">{cert.email}</p>}
-                <p className="mt-4 mb-4" style={{ marginLeft: '0.5in' }}><span className="font-bold">Re:</span><span className="font-bold ml-6">Certificate of Employment{cert.name ? ` – ${cert.name}` : ''}</span></p>
-                <p className="mb-3">To whom it may concern,</p>
-                <div className="space-y-0">
-                  {certBody.split('\n').map((l, i) => {
-                    const t = l.trim();
-                    if (t === '') return <div key={i} style={{ height: '10px' }} />;
-                    if (/^[•\-]\s*/.test(t)) return <p key={i} className="mb-1" style={{ marginLeft: '2em', textIndent: '-1.1em' }} dangerouslySetInnerHTML={{ __html: '&bull;&nbsp;&nbsp;' + fmtInline(t.replace(/^[•\-]\s*/, '')) }} />;
-                    return <p key={i} style={{ textAlign: 'justify', textIndent: '0.5in' }} dangerouslySetInnerHTML={{ __html: fmtInline(l) }} />;
-                  })}
-                </div>
-              </div>
+              {(() => {
+                const isLetter = !!String(cert.signerBlock ?? '').trim();
+                const reText = String(cert.re ?? '').trim() || `Certificate of Employment${cert.name ? ` – ${cert.name}` : ''}`;
+                return (
+                  <div className="px-8 pt-6 pb-2 text-[13px] leading-[1.6] text-text-primary" style={{ fontFamily: BODY_FONT }}>
+                    <div className="flex items-start justify-between mb-4">
+                      <span className={isLetter ? '' : 'font-bold underline'}>{isLetter ? '' : 'Via Email'}</span>
+                      <span>{cert.date}</span>
+                    </div>
+                    {isLetter
+                      ? <p className="font-bold mb-3">TO WHOM IT MAY CONCERN</p>
+                      : <>{cert.name && <p className="font-bold">{cert.name}</p>}{cert.email && <p className="text-[#2f5fa0]">{cert.email}</p>}</>}
+                    <p className={isLetter ? 'mb-4' : 'mt-4 mb-4'} style={isLetter ? undefined : { marginLeft: '0.5in' }}><span className="font-bold">RE:</span><span className={`font-bold ${isLetter ? 'ml-2' : 'ml-6'}`}>{reText}</span></p>
+                    {!isLetter && <p className="mb-3">To whom it may concern,</p>}
+                    <div className="space-y-0">
+                      {certBody.split('\n').map((l, i) => {
+                        const t = l.trim();
+                        if (t === '') return <div key={i} style={{ height: '10px' }} />;
+                        if (/^[•\-]\s*/.test(t)) return <p key={i} className="mb-1" style={{ marginLeft: '2em', textIndent: '-1.1em' }} dangerouslySetInnerHTML={{ __html: '&bull;&nbsp;&nbsp;' + fmtInline(t.replace(/^[•\-]\s*/, '')) }} />;
+                        return <p key={i} className={isLetter ? 'mb-2' : ''} style={{ textAlign: 'justify', textIndent: isLetter ? 0 : '0.5in' }} dangerouslySetInnerHTML={{ __html: fmtInline(l) }} />;
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Closing + signature */}
-              <div className="px-8 pb-5 flex justify-end">
-                <div className="text-left">
-                  <p className="text-[13px]" style={{ fontFamily: BODY_FONT }}>Very truly yours,</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
-                  <p className="text-[13px]" style={{ fontFamily: BODY_FONT }}>{cert.signer}</p>
-                  {cert.signerTitle && <p className="text-[13px]" style={{ fontFamily: BODY_FONT }}>{cert.signerTitle}</p>}
-                </div>
-              </div>
+              {(() => {
+                const isLetter = !!String(cert.signerBlock ?? '').trim();
+                const closing = String(cert.closing ?? '').trim() || 'Very truly yours,';
+                return (
+                  <div className={`px-8 pb-5 flex ${isLetter ? 'justify-start' : 'justify-end'}`}>
+                    <div className="text-left" style={{ fontFamily: BODY_FONT }}>
+                      <p className="text-[13px]">{closing}</p>
+                      {isLetter
+                        ? <>
+                            <div style={{ height: '34px' }} />
+                            {String(cert.signerBlock ?? '').split('\n').map((l, i) => <p key={i} className={`text-[13px] ${i === 0 ? 'font-bold' : ''}`}>{l}</p>)}
+                          </>
+                        : <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
+                            <p className="text-[13px]">{cert.signer}</p>
+                            {cert.signerTitle && <p className="text-[13px]">{cert.signerTitle}</p>}
+                          </>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Footer */}
               <div className="px-8 pt-3 pb-5 border-t border-[#ccc]">
