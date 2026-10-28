@@ -303,6 +303,60 @@ async function fixBenefitsPremiumWording() {
   await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'benefits_premium_note_v2', '1')`;
 }
 
+// One-time, non-destructive: add a "2026 Medical Plan Rates by Age" section
+// (Silver 147P vs Gold 117P, full monthly premium per covered person by age) to
+// every benefits overview guide. Idempotent — skips any guide that already has
+// the section, and guarded by a meta flag so later edits/rates stay.
+const MED_RATE_ROWS: [string, string, string][] = [
+  ['0–14', '$405.85', '$468.83'], ['15', '$441.92', '$510.50'], ['16', '$455.72', '$526.44'],
+  ['17', '$469.51', '$542.37'], ['18', '$484.36', '$559.53'], ['19', '$499.22', '$576.69'],
+  ['20', '$514.60', '$594.46'], ['21', '$530.52', '$612.85'], ['22', '$530.52', '$612.85'],
+  ['23', '$530.52', '$612.85'], ['24', '$530.52', '$612.85'], ['25', '$532.64', '$615.30'],
+  ['26', '$543.25', '$627.56'], ['27', '$555.98', '$642.27'], ['28', '$576.68', '$666.17'],
+  ['29', '$593.65', '$685.78'], ['30', '$602.14', '$695.58'], ['31', '$614.87', '$710.29'],
+  ['32', '$627.61', '$725.00'], ['33', '$635.56', '$734.19'], ['34', '$644.05', '$744.00'],
+  ['35', '$648.30', '$748.90'], ['36', '$652.54', '$753.81'], ['37', '$656.78', '$758.71'],
+  ['38', '$661.03', '$763.61'], ['39', '$669.52', '$773.42'], ['40', '$678.00', '$783.22'],
+  ['41', '$690.74', '$797.93'], ['42', '$702.94', '$812.03'], ['43', '$719.92', '$831.64'],
+  ['44', '$741.14', '$856.15'], ['45', '$766.07', '$884.96'], ['46', '$795.78', '$919.28'],
+  ['47', '$829.20', '$957.88'], ['48', '$867.40', '$1,002.01'], ['49', '$905.07', '$1,045.52'],
+  ['50', '$947.51', '$1,094.55'], ['51', '$989.42', '$1,142.97'], ['52', '$1,035.58', '$1,196.28'],
+  ['53', '$1,082.26', '$1,250.21'], ['54', '$1,132.66', '$1,308.43'], ['55', '$1,183.06', '$1,366.66'],
+  ['56', '$1,237.70', '$1,429.78'], ['57', '$1,292.88', '$1,493.52'], ['58', '$1,351.76', '$1,561.54'],
+  ['59', '$1,380.94', '$1,595.25'], ['60', '$1,439.83', '$1,663.27'], ['61', '$1,490.76', '$1,722.11'],
+  ['62', '$1,524.18', '$1,760.72'], ['63', '$1,566.10', '$1,809.13'], ['64+', '$1,591.56', '$1,838.55'],
+];
+const MED_RATE_TITLE = '2026 Medical Plan Rates by Age';
+function medRateBody(): string {
+  const table = ['[TABLE]', 'Age | Silver 147P | Gold 117P', ...MED_RATE_ROWS.map(([a, s, g]) => `${a} | ${s} | ${g}`), '[/TABLE]'].join('\n');
+  return [
+    'Monthly premium rates for the two Blue Cross Blue Shield of Tennessee plans (Blue Network P), effective **January 1, 2026**. Rates are set by the carrier and reviewed annually.',
+    '',
+    '• **Silver 147P** ($4,600 / $8,550 / 60%) — Rx $10 / $75 / $150; Office visit $65 / $125 copay; Teladoc 100%; Urgent care $125; ER $750 + Ded/Coins',
+    '• **Gold 117P** ($3,500 / $5,500 / 80%) — Rx $10 / $35 / $50; Office visit $25 / $75 copay; Teladoc 100%; Urgent care $50; ER $750 + Ded/Coins',
+    '',
+    table,
+    '',
+    'Figures are the **full monthly premium per covered person** by age. Litson PLLC’s contribution is described above under "Effective date & premiums." These are the 2026 rates and will be updated at the next plan renewal.',
+  ].join('\n');
+}
+async function addMedicalRateTables() {
+  const done = await sql`SELECT 1 FROM onboarding_items WHERE kind = 'meta' AND title = 'benefits_med_rates_2026_v1' LIMIT 1`;
+  if (done.length) return;
+  // Every guide that has a benefits overview section (matched by content, so it
+  // reaches renamed guides too).
+  const guides = await sql`SELECT DISTINCT guide FROM onboarding_items
+    WHERE kind = 'section' AND (body LIKE '%Position | Attorney%' OR body LIKE '%Position | Legal Support Staff%')` as any[];
+  for (const { guide } of guides) {
+    if (!guide) continue;
+    const exists = await sql`SELECT 1 FROM onboarding_items WHERE guide = ${guide} AND kind = 'section' AND title = ${MED_RATE_TITLE} LIMIT 1`;
+    if (exists.length) continue;
+    await sql`INSERT INTO onboarding_items (id, guide, kind, title, body, sort_order)
+      VALUES (${cuid()}, ${guide}, 'section', ${MED_RATE_TITLE}, ${medRateBody()}, ${7})`;
+  }
+  await sql`INSERT INTO onboarding_items (id, kind, title, body) VALUES (${cuid()}, 'meta', 'benefits_med_rates_2026_v1', '1')`;
+}
+
 async function migrate() {
   const meta = await sql`SELECT body FROM onboarding_items WHERE kind = 'meta' AND title = 'seed_version' LIMIT 1`;
   const cur = meta.length ? parseInt((meta as any[])[0].body ?? '0') : 0;
@@ -412,6 +466,7 @@ export async function GET() {
   await ensureSupportBenefitsGuide();
   await patchBenefitsPremiumNote();
   await fixBenefitsPremiumWording();
+  await addMedicalRateTables();
   await migratePaigeSopIntoGeneral();
   await ensureGuideToolsV1();
   const items = await sql`SELECT * FROM onboarding_items WHERE kind <> 'meta' ORDER BY sort_order ASC`;
