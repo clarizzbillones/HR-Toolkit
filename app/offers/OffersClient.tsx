@@ -103,16 +103,16 @@ const CERT_EMPTY: CertForm = {
   re: '', closing: '', signerBlock: '',
 };
 
-// Clarizz's HR signer block used on verification letters.
+// Signer block used on verification letters (Alex Little, with his signature).
 const HR_SIGNER_BLOCK = [
-  'Clarizz Ann Billones',
-  'HR & Administrative Specialist',
+  'Alex Little',
+  'Founding & Managing Partner',
   'Litson PLLC',
   '54 Music Square East, Suite 300',
   'Nashville, TN 37203',
   'United States',
-  'Email: clarizz@litson.co',
-  'Phone: [Your Work Phone Number]',
+  'Email: alex@litson.co',
+  'Phone: (615) 985-8189',
 ].join('\n');
 
 // Built-in verification-letter templates (employment / engagement). These use
@@ -832,7 +832,7 @@ ${(() => {
   const signBlock = isLetter
     ? `<div style="text-align:left">
         <div>${esc(closing)}</div>
-        <div style="height:30pt"></div>
+        <div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:3pt 0 1pt" alt=""/></div>
         ${String(cert.signerBlock ?? '').split('\n').map((l, i) => `<div${i === 0 ? ' style="font-weight:bold"' : ''}>${esc(l)}</div>`).join('')}
       </div>`
     : `<div style="text-align:left">
@@ -1725,7 +1725,8 @@ ${bodyHtml}
                       <p className="text-[13px]">{closing}</p>
                       {isLetter
                         ? <>
-                            <div style={{ height: '34px' }} />
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
                             {String(cert.signerBlock ?? '').split('\n').map((l, i) => <p key={i} className={`text-[13px] ${i === 0 ? 'font-bold' : ''}`}>{l}</p>)}
                           </>
                         : <>
