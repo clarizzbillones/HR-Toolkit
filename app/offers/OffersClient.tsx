@@ -1584,6 +1584,10 @@ ${bodyHtml}
                 placeholder="name@litson.co"
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
+            {/* Structured Certificate-of-Employment fields — hidden for the
+                free-text verification letters (employment / engagement). */}
+            {!String(cert.signerBlock ?? '').trim() && (
+            <>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Short name</label>
@@ -1633,6 +1637,8 @@ ${bodyHtml}
               <input type="text" value={cert.purpose} onChange={e => setC('purpose', e.target.value)}
                 className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
             </div>
+            </>
+            )}
             {String(cert.signerBlock ?? '').trim() ? (
               // Verification-letter style (employment / engagement): custom RE,
               // closing and a full signer block.
