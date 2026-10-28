@@ -340,6 +340,20 @@ export default function OffersClient() {
   function setC<K extends keyof CertForm>(k: K, v: CertForm[K]) { setCert(p => ({ ...p, [k]: v })); }
   // The certificate body: the user's edited text, or the live-composed text.
   const certBody = cert.body.trim() ? cert.body : composeCert(cert);
+  // For the verification letters, let the Name / Start date fields fill the
+  // matching placeholders in the body (preview + print only; the textarea keeps
+  // the placeholders so they stay editable).
+  const certIsLetter = !!String(cert.signerBlock ?? '').trim();
+  const certDisplayBody = (() => {
+    if (!certIsLetter) return certBody;
+    let b = certBody;
+    const full = String(cert.name ?? '').trim();
+    const first = full.split(/\s+/)[0] || '';
+    if (full) b = b.replace(/\[Full Name\]/g, full);
+    if (first) b = b.replace(/\[First Name\]/g, first);
+    if (String(cert.startDate ?? '').trim()) b = b.replace(/\[Start Date\]/g, String(cert.startDate).trim());
+    return b;
+  })();
 
   // Saved certificate templates (per browser).
   const [certTemplates, setCertTemplates] = useState<Record<string, CertForm>>({});
@@ -789,7 +803,7 @@ ${ackHtml}
     if (!win) return;
     const esc = (s: string) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const letterStyle = !!String(cert.signerBlock ?? '').trim();
-    const bodyHtml = certBody.split('\n').map(l => {
+    const bodyHtml = certDisplayBody.split('\n').map(l => {
       const t = l.trim();
       if (t === '') return `<div style="height:11pt"></div>`;
       if (/^[•\-]\s*/.test(t)) {
@@ -1644,6 +1658,13 @@ ${bodyHtml}
               // closing and a full signer block.
               <>
                 <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Engagement / employment start date</label>
+                  <input type="text" value={cert.startDate} onChange={e => setC('startDate', e.target.value)}
+                    placeholder="e.g. February 25, 2025"
+                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  <p className="text-[11px] text-text-muted mt-1">Fills the <span className="font-mono">[Start Date]</span> in the letter (and <span className="font-mono">[Full Name]</span> / <span className="font-mono">[First Name]</span> come from the Name above).</p>
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">RE line</label>
                   <input type="text" value={cert.re ?? ''} onChange={e => setC('re', e.target.value)}
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
@@ -1710,7 +1731,7 @@ ${bodyHtml}
                     <p className={isLetter ? 'mb-4' : 'mt-4 mb-4'} style={isLetter ? undefined : { marginLeft: '0.5in' }}><span className="font-bold">RE:</span><span className={`font-bold ${isLetter ? 'ml-2' : 'ml-6'}`}>{reText}</span></p>
                     {!isLetter && <p className="mb-3">To whom it may concern,</p>}
                     <div className="space-y-0">
-                      {certBody.split('\n').map((l, i) => {
+                      {certDisplayBody.split('\n').map((l, i) => {
                         const t = l.trim();
                         if (t === '') return <div key={i} style={{ height: '10px' }} />;
                         if (/^[•\-]\s*/.test(t)) return <p key={i} className="mb-1" style={{ marginLeft: '2em', textIndent: '-1.1em' }} dangerouslySetInnerHTML={{ __html: '&bull;&nbsp;&nbsp;' + fmtInline(t.replace(/^[•\-]\s*/, '')) }} />;
