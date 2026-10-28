@@ -99,6 +99,16 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
   const [editing, setEditing] = useState<Policy | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [showRates, setShowRates] = useState(false);
+  const [rateAge, setRateAge] = useState('');
+  // Map a typed age to its rate band (0–14, each year 15–63, or 64+).
+  const rateBand = (() => {
+    const n = parseInt(rateAge, 10);
+    if (isNaN(n)) return '';
+    if (n <= 14) return '0–14';
+    if (n >= 64) return '64+';
+    return String(n);
+  })();
+  const ratesFiltered = rateBand ? MED_RATES.filter(r => r[0] === rateBand) : MED_RATES;
 
   const input = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink';
   const catsPresent = categories.filter(c => policies.some(p => p.category === c)).concat(
@@ -409,6 +419,16 @@ ${catBlocks}${openHtml}${exclHtml}
           </button>
           {showRates && (
             <div className="p-5">
+              {/* Age filter */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <span className="text-xs font-semibold text-text-muted">Find rate for age:</span>
+                <input type="number" min={0} value={rateAge} onChange={e => setRateAge(e.target.value)} placeholder="e.g. 42"
+                  className="w-24 border border-border-light rounded-ctrl px-3 py-1.5 text-sm focus:outline-none focus:border-ink" />
+                {rateBand && (
+                  <span className="text-xs text-text-secondary">Showing band <b>{rateBand}</b> · <button onClick={() => setRateAge('')} className="text-[#3f6b8a] hover:underline font-semibold">clear</button></span>
+                )}
+                {rateAge && !rateBand && <span className="text-xs text-litred-alt">Enter a valid age</span>}
+              </div>
               <div className="grid md:grid-cols-2 gap-3 mb-4">
                 <div className="border border-border-light rounded-ctrl px-4 py-3">
                   <div className="text-sm font-bold text-text-primary">Silver 147P <span className="font-normal text-text-muted">($4,600 / $8,550 / 60%)</span></div>
@@ -429,7 +449,10 @@ ${catBlocks}${openHtml}${exclHtml}
                     </tr>
                   </thead>
                   <tbody>
-                    {MED_RATES.map(([age, silver, gold], i) => (
+                    {ratesFiltered.length === 0 && (
+                      <tr><td colSpan={3} className="px-4 py-3 text-center text-text-muted">No rate for that age.</td></tr>
+                    )}
+                    {ratesFiltered.map(([age, silver, gold], i) => (
                       <tr key={age + i} className={i % 2 ? 'bg-canvas/40' : 'bg-white'}>
                         <td className="px-4 py-1.5 border-b border-border-light font-semibold text-text-primary">{age}</td>
                         <td className="px-4 py-1.5 border-b border-border-light text-right text-text-secondary">{silver}</td>
