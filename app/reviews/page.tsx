@@ -1,6 +1,7 @@
 import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import ReviewsClient from './ReviewsClient';
+import { normName } from '@/lib/employeeFiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,7 +138,20 @@ export default async function ReviewsPage() {
     }
   }
 
-  const employees = await sql`SELECT * FROM employees ORDER BY name`;
+  // Drop anyone who has been offboarded so they fall off the review roster
+  // automatically (matched by name against the Offboarding records).
+  const offNames = new Set<string>();
+  try {
+    const rows = await sql`SELECT name FROM offboarded_staff` as any[];
+    for (const r of rows) { const k = normName(r.name); if (k) offNames.add(k); }
+  } catch { /* table may not exist yet */ }
+  try {
+    const rows = await sql`SELECT name FROM employee_profiles WHERE offboarded = true` as any[];
+    for (const r of rows) { const k = normName(r.name); if (k) offNames.add(k); }
+  } catch { /* table/column may not exist yet */ }
+
+  const allEmployees = await sql`SELECT * FROM employees ORDER BY name` as any[];
+  const employees = allEmployees.filter(e => !offNames.has(normName(e.name)));
   return (
     <ModuleLayout pendingTaskCount={n ?? 0}>
       <ReviewsClient initialEmployees={employees as any[]} />
