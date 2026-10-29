@@ -1211,7 +1211,10 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
         review_cohort: cohort || null,
         review_notes: summary || null,
       });
-      showToast('Review marked complete — next review scheduled to the nearest cohort season');
+      // Confirm the resulting dates so it's clear the schedule advanced.
+      const nextDate = computeReview(hire || null, reviewDate, today, null, cohort || null).next;
+      const fmtD = (s: string | null) => s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      showToast(`Complete · last review ${fmtD(reviewDate)} · next review ${fmtD(nextDate)}`);
     } catch { alert('Upload failed'); }
     setUploading(false);
   }
@@ -1339,8 +1342,8 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wide">Review documents</label>
               {!readOnly && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-text-muted">Review date</span>
-                  <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)} title="The review date recorded with the document you upload" className="border border-border-light rounded-ctrl px-2 py-1 text-xs focus:outline-none focus:border-ink" />
+                  <span className="text-[11px] text-text-muted">Last review date</span>
+                  <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)} title="The date of this review. On upload it becomes the Last Review date, the review is marked Complete, and the Next Review advances to the schedule (e.g. April 1)." className="border border-border-light rounded-ctrl px-2 py-1 text-xs focus:outline-none focus:border-ink" />
                   <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs font-semibold text-ink hover:underline disabled:opacity-50">{uploading ? 'Uploading…' : '↑ Upload document'}</button>
                 </div>
               )}
