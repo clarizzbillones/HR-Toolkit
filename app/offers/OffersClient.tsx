@@ -85,6 +85,8 @@ interface CertForm {
   // set, the letter renders "TO WHOM IT MAY CONCERN" + RE and the signer's own
   // block instead of the structured Certificate-of-Employment layout.
   re?: string; closing?: string; signerBlock?: string;
+  // 'alex' = print Alex Little's signature image; 'blank' = leave a line to sign.
+  sigMode?: 'alex' | 'blank';
 }
 const CERT_DEFAULT_DUTIES = [
   'Client Intake – Conducting initial client intake processes, gathering necessary information, and ensuring accurate and timely entry of client data into firm systems.',
@@ -100,7 +102,7 @@ const CERT_EMPTY: CertForm = {
   duties: CERT_DEFAULT_DUTIES,
   purpose: 'submission to their academic institution and for no other purpose',
   signer: 'Alex Little', signerTitle: 'Founding & Managing Partner', body: '',
-  re: '', closing: '', signerBlock: '',
+  re: '', closing: '', signerBlock: '', sigMode: 'alex',
 };
 
 // Signer block used on verification letters (Alex Little, with his signature).
@@ -854,8 +856,8 @@ ${(() => {
     ? `<div style="margin:0 0 14pt"><span style="font-weight:bold">RE:</span><span style="margin-left:0.8em;font-weight:bold">${esc(reText)}</span></div>`
     : `<div style="margin:14pt 0;margin-left:0.5in"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">${esc(reText)}</span></div>`;
   const salutation = isLetter ? '' : `<div style="margin-bottom:11pt">To whom it may concern,</div>`;
-  // Only Alex's letters carry his signature image; anyone else gets a blank line to sign.
-  const sigIsAlex = /alex\s+little/i.test(String(cert.signerBlock ?? '').split('\n')[0] || '');
+  // HR chooses whether to print Alex's signature image or leave a line to sign.
+  const sigIsAlex = (cert.sigMode ?? 'alex') === 'alex';
   const signBlock = isLetter
     ? `<div style="text-align:left">
         <div>${esc(closing)}</div>
@@ -1699,11 +1701,21 @@ ${bodyHtml}
                   <input type="text" value={cert.re ?? ''} onChange={e => setC('re', e.target.value)}
                     className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Closing</label>
-                  <input type="text" value={cert.closing ?? ''} onChange={e => setC('closing', e.target.value)}
-                    placeholder="Sincerely,"
-                    className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Closing</label>
+                    <input type="text" value={cert.closing ?? ''} onChange={e => setC('closing', e.target.value)}
+                      placeholder="Sincerely,"
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm focus:outline-none focus:border-ink" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Signature</label>
+                    <select value={cert.sigMode ?? 'alex'} onChange={e => setC('sigMode', e.target.value as 'alex' | 'blank')}
+                      className="w-full border border-border-light rounded-ctrl px-3 py-2 text-sm bg-white focus:outline-none focus:border-ink">
+                      <option value="alex">Alex Little&rsquo;s signature</option>
+                      <option value="blank">Blank line (sign by hand)</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Signer block</label>
@@ -1782,7 +1794,7 @@ ${bodyHtml}
                       <p className="text-[13px]">{closing}</p>
                       {isLetter
                         ? <>
-                            {/alex\s+little/i.test(String(cert.signerBlock ?? '').split('\n')[0] || '')
+                            {(cert.sigMode ?? 'alex') === 'alex'
                               // eslint-disable-next-line @next/next/no-img-element
                               ? <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
                               : <div style={{ height: '34px' }} />}
