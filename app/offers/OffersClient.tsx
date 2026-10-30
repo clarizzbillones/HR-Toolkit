@@ -854,10 +854,12 @@ ${(() => {
     ? `<div style="margin:0 0 14pt"><span style="font-weight:bold">RE:</span><span style="margin-left:0.8em;font-weight:bold">${esc(reText)}</span></div>`
     : `<div style="margin:14pt 0;margin-left:0.5in"><span style="font-weight:bold">Re:</span><span style="margin-left:1.5em;font-weight:bold">${esc(reText)}</span></div>`;
   const salutation = isLetter ? '' : `<div style="margin-bottom:11pt">To whom it may concern,</div>`;
+  // Only Alex's letters carry his signature image; anyone else gets a blank line to sign.
+  const sigIsAlex = /alex\s+little/i.test(String(cert.signerBlock ?? '').split('\n')[0] || '');
   const signBlock = isLetter
     ? `<div style="text-align:left">
         <div>${esc(closing)}</div>
-        <div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:3pt 0 1pt" alt=""/></div>
+        ${sigIsAlex ? `<div><img src="${SIG_B64}" width="148" height="49" style="display:block;margin:3pt 0 1pt" alt=""/></div>` : `<div style="height:38pt"></div>`}
         ${String(cert.signerBlock ?? '').split('\n').map((l, i) => `<div${i === 0 ? ' style="font-weight:bold"' : ''}>${esc(l)}</div>`).join('')}
       </div>`
     : `<div style="text-align:left">
@@ -1780,8 +1782,10 @@ ${bodyHtml}
                       <p className="text-[13px]">{closing}</p>
                       {isLetter
                         ? <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
+                            {/alex\s+little/i.test(String(cert.signerBlock ?? '').split('\n')[0] || '')
+                              // eslint-disable-next-line @next/next/no-img-element
+                              ? <img src={SIG_B64} alt="signature" width={130} height={43} className="block my-1" />
+                              : <div style={{ height: '34px' }} />}
                             {String(cert.signerBlock ?? '').split('\n').map((l, i) => <p key={i} className={`text-[13px] ${i === 0 ? 'font-bold' : ''}`}>{l}</p>)}
                           </>
                         : <>
