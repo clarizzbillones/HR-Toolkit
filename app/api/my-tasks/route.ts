@@ -14,8 +14,12 @@ import { parseDoc as parseOffDoc } from '@/lib/offboardingDoc';
 // local part, their session name, and their Access Control name.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  const email = (session?.user?.email ?? '').toLowerCase();
-  if (!email) return NextResponse.json({ tasks: [] });
+  // Must be signed in, but DON'T require an email: Microsoft/Azure AD sign-in
+  // often omits the email claim, in which case we still identify the viewer by
+  // their display name (e.g. "Clarizz Ann Billones") rather than returning
+  // nothing — which would silently empty the dashboard panel for SSO users.
+  if (!session?.user) return NextResponse.json({ tasks: [] });
+  const email = (session.user.email ?? '').toLowerCase();
 
   // Build the set of names that count as "me". Assignees are first-name labels
   // (Catie, Clarizz, Caitlin, Matthew, Ryan…), so we add the full normalized
@@ -25,9 +29,10 @@ export async function GET() {
   // or "Billones, Clarizz" — still resolves to the "Clarizz" assignee.
   const keys = new Set<string>();
   const add = (s: any) => { const n = normName(s); if (!n) return; keys.add(n); for (const w of n.split(' ')) if (w.length >= 2) keys.add(w); };
-  add(email.split('@')[0]);
-  add(session?.user?.name);
-  try { const [g] = await sql`SELECT name FROM access_grants WHERE email = ${email}` as any[]; if (g?.name) add(g.name); } catch { /* ignore */ }
+  if (email) add(email.split('@')[0]);
+  add(session.user.name);
+  if (email) { try { const [g] = await sql`SELECT name FROM access_grants WHERE email = ${email}` as any[]; if (g?.name) add(g.name); } catch { /* ignore */ } }
+  if (keys.size === 0) return NextResponse.json({ tasks: [] });
   const isMine = (assignee: any) => { const n = normName(assignee); if (!n) return false; if (keys.has(n)) return true; const first = n.split(' ')[0]; return !!first && keys.has(first); };
   // A task is still "open" (needs action) until it is fully signed off — both an
   // initial AND a date — which mirrors the docProgress/cellDone "done" rule in
