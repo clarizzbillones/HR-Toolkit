@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { BENEFITS, BENEFIT_STATUSES, BENEFIT_PROVIDERS, benefitStatusChip, type Enrollment, type Benefit } from '@/lib/benefits';
+import { BENEFITS, BENEFIT_STATUSES, BENEFIT_PROVIDERS, BENEFIT_ACCENTS, benefitStatusChip, type Enrollment, type Benefit } from '@/lib/benefits';
 import { formatDate } from '@/lib/formatDate';
 
 // Benefits enrollment UI, shared by the Insurance tile (firm-wide roster) and
@@ -90,9 +90,9 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
           const e = find(personName ?? '', benefit);
           return (
             <div key={benefit} className="flex items-center gap-3 rounded-ctrl border border-border-light px-3 py-2">
-              <span className="w-28 shrink-0">
-                <span className="block text-xs font-bold uppercase tracking-wide text-text-muted">{benefit}</span>
-                <span className="block text-[10px] text-text-faint truncate">{BENEFIT_PROVIDERS[benefit as Benefit]}</span>
+              <span className="w-28 shrink-0 border-l-2 pl-2" style={{ borderColor: BENEFIT_ACCENTS[benefit as Benefit] }}>
+                <span className="block text-xs font-bold uppercase tracking-wide" style={{ color: BENEFIT_ACCENTS[benefit as Benefit] }}>{benefit}</span>
+                <span className="block text-[10px] text-text-muted truncate">{BENEFIT_PROVIDERS[benefit as Benefit]}</span>
               </span>
               <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${benefitStatusChip(e?.status ?? '')}`}>{e?.status || '—'}</span>
               <span className="flex-1 min-w-0 text-xs text-text-muted truncate">
@@ -114,15 +114,15 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
   const roster = [...employees.map(e => ({ name: e.name, position: e.position })), ...[...new Set(extraNames)].map(n => ({ name: n, position: null }))];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm min-w-[720px]">
+    <div className="overflow-auto max-h-[60vh] rounded-ctrl border border-border-light">
+      <table className="w-full text-sm min-w-[720px] border-separate border-spacing-0">
         <thead>
-          <tr className="border-b border-[#f1ece3] text-xs font-bold uppercase tracking-wider text-text-muted">
-            <th className="text-left px-4 py-3 sticky left-0 bg-white">Employee</th>
+          <tr className="text-xs font-bold uppercase tracking-wider">
+            <th className="text-left px-4 py-3 sticky top-0 left-0 z-20 bg-canvas text-text-secondary border-b border-border-light">Employee</th>
             {BENEFITS.map(b => (
-              <th key={b} className="text-left px-3 py-3">
-                <div>{b}</div>
-                <div className="text-[10px] font-medium normal-case tracking-normal text-text-faint">{BENEFIT_PROVIDERS[b as Benefit]}</div>
+              <th key={b} className="text-left px-3 py-3 sticky top-0 z-10 bg-canvas border-b border-border-light" style={{ boxShadow: `inset 0 -2px 0 ${BENEFIT_ACCENTS[b as Benefit]}` }}>
+                <div style={{ color: BENEFIT_ACCENTS[b as Benefit] }}>{b}</div>
+                <div className="text-[10px] font-semibold normal-case tracking-normal text-text-muted">{BENEFIT_PROVIDERS[b as Benefit]}</div>
               </th>
             ))}
           </tr>
@@ -131,7 +131,7 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
           {roster.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-text-muted">No employees found</td></tr>}
           {roster.map(r => (
             <tr key={r.name} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
-              <td className="px-4 py-2 sticky left-0 bg-white">
+              <td className="px-4 py-2 sticky left-0 z-10 bg-white">
                 <div className="font-semibold text-text-primary whitespace-nowrap">{r.name}</div>
                 {r.position && <div className="text-[11px] text-text-muted whitespace-nowrap">{r.position}</div>}
               </td>

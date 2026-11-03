@@ -16,6 +16,14 @@ export const BENEFIT_PROVIDERS: Record<Benefit, string> = {
   Life: 'Principal',
 };
 
+// On-brand accent per benefit, so the column headers read clearly (not pale).
+export const BENEFIT_ACCENTS: Record<Benefit, string> = {
+  Medical: '#2f7d5b', // green
+  Dental: '#3f6b8a',  // blue
+  Vision: '#6b5b8a',  // purple
+  Life: '#b07d2a',    // gold
+};
+
 // Election status. '' = not recorded yet.
 export const BENEFIT_STATUSES = ['Enrolled', 'Declined', 'Waived', 'Pending', 'Not eligible'] as const;
 export type BenefitStatus = '' | typeof BENEFIT_STATUSES[number];
