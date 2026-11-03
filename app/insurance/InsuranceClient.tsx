@@ -291,6 +291,16 @@ ${catBlocks}${openHtml}${exclHtml}
         </div>
         <p className="text-[11px] text-text-faint -mt-3">Known annual premium sums only the policies with a numeric premium (TBD / N/A / roster-rated are excluded).</p>
 
+        {/* Benefits enrollment roster — who has elected Medical / Dental / Vision / Life */}
+        <div className="bg-white border border-border rounded-card p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-spectral text-[17px] font-semibold text-text-primary">Benefits Enrollment</h2>
+            <span className="text-[11px] text-text-muted">Group plans via Ease · click a cell to record an election</span>
+          </div>
+          <p className="text-xs text-text-muted mb-3">Who has enrolled in, declined, or waived each group benefit. Shared with each person&rsquo;s Employee File.</p>
+          <BenefitsEnrollment mode="roster" canEdit={editable} />
+        </div>
+
         {/* Upcoming renewals banner */}
         {upcoming.length > 0 && (
           <div className="bg-[#fdf6e9] border border-[#e0c48a] rounded-card px-5 py-4">
@@ -361,16 +371,6 @@ ${catBlocks}${openHtml}${exclHtml}
           </div>
           );
         })}
-
-        {/* Benefits enrollment roster — who has elected Medical / Dental / Vision / Life */}
-        <div className="bg-white border border-border rounded-card p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-spectral text-[17px] font-semibold text-text-primary">Benefits Enrollment</h2>
-            <span className="text-[11px] text-text-muted">Group plans via Ease · click a cell to record an election</span>
-          </div>
-          <p className="text-xs text-text-muted mb-3">Who has enrolled in, declined, or waived each group benefit. Shared with each person&rsquo;s Employee File.</p>
-          <BenefitsEnrollment mode="roster" canEdit={editable} />
-        </div>
 
         {/* Open items */}
         <div className="bg-white border border-border rounded-card overflow-hidden">
