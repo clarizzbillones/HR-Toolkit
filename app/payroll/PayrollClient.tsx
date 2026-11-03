@@ -112,6 +112,9 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
   const [contractorsLoaded, setContractorsLoaded] = useState(false);
   const [showAddContractor, setShowAddContractor] = useState(false);
   const [newC, setNewC] = useState({ contractor: '', amount: '', pay_date: '', method: 'ACH', notes: '' });
+  // Inline edit of an existing contractor payment row.
+  const [editingC, setEditingC] = useState<string | null>(null);
+  const [editC, setEditC] = useState({ contractor: '', amount: '', pay_date: '', method: 'ACH', status: 'Pending', notes: '' });
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
   const [summaryPeriod, setSummaryPeriod] = useState('');
@@ -249,6 +252,27 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
     await fetch('/api/payroll/contractors', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     setContractors(prev => prev.filter(c => c.id !== id));
     showToast('Deleted');
+  }
+
+  function startEditContractor(c: Contractor) {
+    setEditingC(c.id);
+    setEditC({
+      contractor: c.contractor ?? '', amount: c.amount ?? '', pay_date: (c.pay_date ?? '').slice(0, 10),
+      method: c.method || 'ACH', status: c.status || 'Pending', notes: c.notes ?? '',
+    });
+  }
+
+  async function saveEditContractor(id: string) {
+    if (!editC.contractor.trim() || !editC.pay_date) return showToast('Contractor and payment date are required');
+    const res = await fetch('/api/payroll/contractors', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      // amount "TBD" is a valid placeholder, so default an empty amount back to it.
+      body: JSON.stringify({ id, contractor: editC.contractor.trim(), amount: editC.amount.trim() || 'TBD', pay_date: editC.pay_date, method: editC.method, status: editC.status, notes: editC.notes }),
+    });
+    const { row } = await res.json().catch(() => ({ row: null }));
+    if (row) setContractors(prev => prev.map(c => c.id === id ? row : c));
+    setEditingC(null);
+    showToast('Payment updated');
   }
 
   // ---- Unified payroll deadlines (regular periods only; contractors live in their own tab) ----
@@ -529,7 +553,46 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                 {contractors.length === 0 && (
                   <tr><td colSpan={7} className="px-5 py-8 text-center text-text-muted text-sm">No contractor payments yet</td></tr>
                 )}
-                {contractors.map(c => (
+                {contractors.map(c => editingC === c.id ? (
+                  <tr key={c.id} className="border-b border-[#f1ece3] last:border-0 bg-canvas">
+                    <td className="px-5 py-2.5">
+                      <input value={editC.contractor} onChange={e => setEditC(v => ({ ...v, contractor: e.target.value }))}
+                        className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white" />
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <input value={editC.amount} onChange={e => setEditC(v => ({ ...v, amount: e.target.value }))}
+                        placeholder="e.g. $1,500.00"
+                        className="w-28 border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white" />
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <input type="date" value={editC.pay_date} onChange={e => setEditC(v => ({ ...v, pay_date: e.target.value }))}
+                        className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white" />
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <select value={editC.method} onChange={e => setEditC(v => ({ ...v, method: e.target.value }))}
+                        className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white">
+                        {['ACH', 'Check', 'Wire', 'Zelle', 'Other'].map(m => <option key={m}>{m}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <select value={editC.status} onChange={e => setEditC(v => ({ ...v, status: e.target.value }))}
+                        className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white">
+                        {['Pending', 'Paid'].map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <input value={editC.notes} onChange={e => setEditC(v => ({ ...v, notes: e.target.value }))}
+                        placeholder="Notes"
+                        className="w-full border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink bg-white" />
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <div className="flex gap-3 justify-end">
+                        <button onClick={() => saveEditContractor(c.id)} className="text-xs font-semibold text-[#2f7d5b] hover:underline">Save</button>
+                        <button onClick={() => setEditingC(null)} className="text-xs text-text-muted hover:underline">Cancel</button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
                   <tr key={c.id} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
                     <td className="px-5 py-3.5 font-semibold text-text-primary">{c.contractor}</td>
                     <td className="px-5 py-3.5 text-text-primary font-medium">{usd(c.amount)}</td>
@@ -541,6 +604,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                     <td className="px-5 py-3.5 text-text-muted text-xs">{c.notes ?? '—'}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex gap-3 justify-end">
+                        <button onClick={() => startEditContractor(c)} className="text-xs text-ink font-semibold hover:underline">Edit</button>
                         {c.status !== 'Paid' && (
                           <button onClick={() => markContractorPaid(c.id)} className="text-xs text-[#2f7d5b] font-semibold hover:underline">Mark paid</button>
                         )}
