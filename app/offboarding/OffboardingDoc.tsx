@@ -38,6 +38,8 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   }
   const persist = () => onSave(ref.current);
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
+  // Short, timezone-safe date label for the "Due …" deadline badge.
+  const fmtDate = (s?: string) => { const t = (s ?? '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return ''; const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
 
   function removeAssignee(n: string) {
     if (!window.confirm(`Remove "${n}" from the assignee list for every offboarding?`)) return;
@@ -92,13 +94,14 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     setSelIds(new Set());
   }
 
-  // One editable cell (Assigned To / Initial / Date / Notes).
+  // One editable cell (Assigned To / Deadline / Initial / Date done / Notes).
   function CellFields({ get, set }: { get: () => Cell; set: (patch: Partial<Cell>, commit: boolean) => void }) {
     const c = get();
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-[130px_70px_140px_1fr] gap-x-2 gap-y-1 mt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-[130px_140px_70px_140px_1fr] gap-x-2 gap-y-1 mt-2">
         {/* Column captions so the fields read clearly */}
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Assigned to</span>
+        <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#b07d2a]">Deadline</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Initials</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-[#2f7d5b]">Date done</span>
         <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-text-faint">Notes</span>
@@ -114,6 +117,8 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
           {assigneeList.map(a => <option key={a} value={a}>{a}</option>)}
           {!assignRO && <option value="__add__">➕ Add name…</option>}
         </select>
+        <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
+          className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary" />
         <input disabled={cellRO} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
         <input disabled={cellRO} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)}
@@ -163,6 +168,7 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
                 <span className={`mt-1.5 text-sm ${complete ? 'text-[#2f7d5b]' : 'text-text-faint'}`}>{complete ? '✓' : '○'}</span>
                 <input disabled={assignRO} value={a.label} onChange={e => apply(d => { d[listKey][i].label = e.target.value; })} onBlur={persist}
                   placeholder={placeholder} className="flex-1 min-w-0 text-sm font-medium text-text-primary bg-transparent border border-transparent hover:border-border-light focus:border-ink rounded px-1.5 py-0.5 focus:outline-none disabled:hover:border-transparent" />
+                {!complete && a.cell.deadline && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#f7efe1] text-[#b07d2a]" title="Deadline">Due {fmtDate(a.cell.deadline)}</span>}
                 {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); persist(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
               </div>
               {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}

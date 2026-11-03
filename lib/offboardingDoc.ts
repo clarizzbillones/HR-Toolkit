@@ -64,7 +64,7 @@ export const BENEFITS_REF: { benefit: string; ends: string; notes: string }[] = 
   { benefit: 'Life insurance', ends: 'Last day of employment', notes: 'N/A' },
 ];
 
-export interface Cell { assignee?: string; initial?: string; date?: string; notes?: string }
+export interface Cell { assignee?: string; deadline?: string; initial?: string; date?: string; notes?: string }
 // Every section is now an editable list of rows (so rows can be renamed, added,
 // removed, reordered, and moved between sections), mirroring the onboarding doc.
 export interface DocRow { id: string; label: string; hint?: string; cell: Cell }

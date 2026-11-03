@@ -274,6 +274,7 @@ export async function offboardingDocPdfDataUrl(rec: any): Promise<string> {
     if (hint) d.para(hint, { size: 9.5, color: MUTED, indent: 8 });
     const parts = [
       `Assigned: ${c?.assignee || '—'}`,
+      `Deadline: ${c?.deadline ? fmtD(c.deadline) : '________'}`,
       `Initials: ${(c?.initial || '____').toUpperCase()}`,
       `Date: ${c?.date ? fmtD(c.date) : '________'}`,
     ];

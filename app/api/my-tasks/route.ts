@@ -68,7 +68,7 @@ export async function GET() {
       for (const [section, list] of sections) {
         for (const row of list) {
           if (!isMine(row.cell?.assignee) || !open(row.cell)) continue;
-          tasks.push({ source: 'offboarding', personId: r.id, personName: r.name, section, label: row.label, deadline: '', assignee: (row.cell?.assignee ?? '').toString() });
+          tasks.push({ source: 'offboarding', personId: r.id, personName: r.name, section, label: row.label, deadline: (row.cell?.deadline ?? '').toString(), assignee: (row.cell?.assignee ?? '').toString() });
         }
       }
     }
