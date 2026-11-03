@@ -5,6 +5,7 @@ import { useAccess } from '@/components/AccessProvider';
 import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems';
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
+import BenefitsEnrollment from '@/components/BenefitsEnrollment';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -907,6 +908,15 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                 )}
               </div>
               <datalist id="firm-systems">{FIRM_SYSTEMS.map(s => <option key={s} value={s} />)}</datalist>
+            </div>
+
+            {/* Benefits enrollment */}
+            <div>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Benefits enrollment</h2>
+                <span className="text-[11px] text-text-muted">Medical · Dental · Vision · Life — shared with the Insurance tile</span>
+              </div>
+              <BenefitsEnrollment mode="person" personName={selected.name} canEdit={!readOnly} />
             </div>
 
             {/* Documents */}

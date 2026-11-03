@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { formatDate } from '@/lib/formatDate';
+import BenefitsEnrollment from '@/components/BenefitsEnrollment';
 
 interface Policy {
   id: string; category: string; ins_type: string; carrier: string; policy_number: string;
@@ -466,6 +467,16 @@ ${catBlocks}${openHtml}${exclHtml}
               <p className="text-[11px] text-text-muted mt-2">Full monthly premium per covered person by age, effective Jan 1, 2026. Litson PLLC covers $600/month toward the premium; the remainder is the employee&rsquo;s responsibility. Rates are set by the carrier and updated at each renewal.</p>
             </div>
           )}
+
+          {/* Benefits enrollment roster — who has elected Medical / Dental / Vision / Life */}
+          <div className="bg-white border border-border rounded-card p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-spectral text-[17px] font-semibold text-text-primary">Benefits Enrollment</h2>
+              <span className="text-[11px] text-text-muted">Group plans via Ease · click a cell to record an election</span>
+            </div>
+            <p className="text-xs text-text-muted mb-3">Who has enrolled in, declined, or waived each group benefit. Shared with each person&rsquo;s Employee File.</p>
+            <BenefitsEnrollment mode="roster" canEdit={editable} />
+          </div>
         </div>
       </div>
 
