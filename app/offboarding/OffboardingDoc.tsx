@@ -5,6 +5,7 @@ import {
   docProgress, docSignedOff, newRow,
   type OffboardingDoc as Doc, type Cell,
 } from '@/lib/offboardingDoc';
+import { formatDate } from '@/lib/formatDate';
 
 interface RecLite { id: string; name: string; position: string | null; separation_date: string | null; doc: Doc }
 
@@ -38,8 +39,8 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
   }
   const persist = () => onSave(ref.current);
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
-  // Short, timezone-safe date label for the "Due …" deadline badge.
-  const fmtDate = (s?: string) => { const t = (s ?? '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return ''; const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  // Short date label (house format) for the "Due …" deadline badge.
+  const fmtDate = (s?: string) => formatDate(s);
 
   function removeAssignee(n: string) {
     if (!window.confirm(`Remove "${n}" from the assignee list for every offboarding?`)) return;

@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { formatDate } from '@/lib/formatDate';
 import { sql } from '@/lib/db';
 import { sendMailAsApp } from '@/lib/graph';
 import { ensureInsurance, renewalDate, daysUntilRenewal } from '@/lib/insurance';
@@ -10,7 +11,7 @@ const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
 // Days-out marks that trigger an email so it isn't a daily nag.
 const TARGET_DAYS = [60, 30, 14, 7, 3, 1];
 const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const fmt = (d: Date) => formatDate(d);
 
 function emailBody(rows: { p: any; days: number; date: Date }[], sample = false): string {
   const items = rows.map(({ p, days, date }, i) => {

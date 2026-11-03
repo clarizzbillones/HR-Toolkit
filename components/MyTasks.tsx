@@ -1,16 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { formatDate } from '@/lib/formatDate';
 
 interface Task { source: 'onboarding' | 'offboarding'; personId: string; personName: string; section: string; label: string; deadline: string; assignee: string }
 
-// Short, timezone-safe label for a YYYY-MM-DD deadline (e.g. "Nov 6, 2026").
-function fmtDeadline(s: string) {
-  const t = (s ?? '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return s;
-  const [y, m, d] = t.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+// House-format label for a YYYY-MM-DD deadline (e.g. "Nov. 6, 2026").
+const fmtDeadline = (s: string) => formatDate(s);
 
 // Dashboard panel: the onboarding/offboarding document tasks assigned to the
 // person viewing it, not yet done. Clicking a task opens that person's document.

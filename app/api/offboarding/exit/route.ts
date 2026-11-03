@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
+import { formatDate } from '@/lib/formatDate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
       const { attachPdfToEmployeeFile } = await import('@/lib/employeeFiles');
       const now = new Date();
       const sent = row.created_at ? new Date(row.created_at) : null;
-      const fmt = (d: Date | null) => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const fmt = (d: Date | null) => d ? formatDate(d) : '';
       const dataUrl = await exitInterviewPdfDataUrl(row.employee_name, EXIT_QUESTIONS.map(q => ({ q: q.label, a: exitAnswerLabel(q, answers[q.id]) })), { sent: fmt(sent), completed: fmt(now) });
       await attachPdfToEmployeeFile({ name: row.employee_name, category: 'Remark / Timeline', title: 'Exit interview', docDate: now.toISOString().slice(0, 10), attName: `Exit-interview-${String(row.employee_name).replace(/[^\w]+/g, '-')}.pdf`, dataUrl, sourceRef: `exit:${row.id}`, summary: `Completed exit interview — sent ${fmt(sent) || '—'}, completed ${fmt(now)}.` });
     } catch { /* best-effort */ }

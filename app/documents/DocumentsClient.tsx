@@ -18,10 +18,8 @@ function fmtSize(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
-function fmtDate(s: string) {
-  try { return new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return ''; }
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(s: string) { return formatDate(s); }
 function iconFor(mime: string, fname: string) {
   const f = `${mime} ${fname}`.toLowerCase();
   if (/pdf/.test(f)) return '📕';

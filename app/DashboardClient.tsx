@@ -45,9 +45,8 @@ function anniversariesForMonth(staff: Props['allStaff'], month: number, year: nu
 }
 const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-function fmtDate(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string) { return formatDate(iso); }
 
 function greeting(name: string) {
   const h = new Date().getHours();
@@ -269,7 +268,7 @@ export default function DashboardClient(props: Props) {
                     {r.days < 0 ? `${Math.abs(r.days)}d overdue` : r.days === 0 ? 'due today' : `in ${r.days}d`}
                   </span>
                   <span className="font-medium text-text-primary">{r.ins_type}</span>
-                  <span className="text-text-muted">· {r.carrier}{r.date ? ` · renews ${r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</span>
+                  <span className="text-text-muted">· {r.carrier}{r.date ? ` · renews ${formatDate(r.date)}` : ''}</span>
                 </Link>
               ))}
             </div>

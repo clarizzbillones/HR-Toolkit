@@ -4,6 +4,7 @@ import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { useAccess } from '@/components/AccessProvider';
 import { computeReview, parseHistory, addMonths, REVIEW_STATUSES, REVIEW_COHORTS, cohortDef, normalizeCohort, type ReviewStatus, type ReviewHistoryEntry } from '@/lib/reviews';
+import { formatDate } from '@/lib/formatDate';
 
 interface Employee {
   id: string; name: string; role: string; dept: string; hire_date: string | null;
@@ -48,9 +49,6 @@ function relLabel(days: number): string {
   return `in ${days}d`;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
 
 // Pill colors for each review status (spec §6).
 const STATUS_PILL: Record<ReviewStatus, string> = {
@@ -263,8 +261,7 @@ export default function ReviewsClient({ initialEmployees }: { initialEmployees: 
     const st = staff.find(s => sameName(s.name, e.name));
     const raw = (st?.start_date && st.start_date.trim()) ? st.start_date : (e.hire_date || '');
     if (!raw) return '—';
-    const d = new Date(raw.slice(0, 10) + 'T12:00:00');
-    return isNaN(d.getTime()) ? raw : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatDate(raw) || raw;
   }
 
   async function connectDash() {
@@ -1213,7 +1210,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
       });
       // Confirm the resulting dates so it's clear the schedule advanced.
       const nextDate = computeReview(hire || null, reviewDate, today, null, cohort || null).next;
-      const fmtD = (s: string | null) => s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const fmtD = (s: string | null) => formatDate(s) || '—';
       showToast(`Complete · last review ${fmtD(reviewDate)} · next review ${fmtD(nextDate)}`);
     } catch { alert('Upload failed'); }
     setUploading(false);
@@ -1354,7 +1351,7 @@ function EmployeeDetail({ employee, resolvedHire, today, linkedUrl, readOnly, on
               <div className="space-y-1.5">
                 {docs.map(d => (
                   <div key={d.which} className="flex items-center gap-2 border border-border-light rounded-ctrl px-3 py-2 text-sm bg-canvas">
-                    <span className="flex-1 truncate">📄 {d.name}{d.doc_date && <span className="text-text-muted"> · {new Date(d.doc_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}</span>
+                    <span className="flex-1 truncate">📄 {d.name}{d.doc_date && <span className="text-text-muted"> · {formatDate(d.doc_date)}</span>}</span>
                     <a href={`/api/reviews/docs?id=${employee.id}&which=${encodeURIComponent(d.which)}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#3f6b8a] hover:underline">View</a>
                     {!readOnly && <button onClick={() => removeDoc(d.which)} className="text-xs font-semibold text-litred-alt hover:underline">Remove</button>}
                   </div>

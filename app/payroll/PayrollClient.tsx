@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { formatDate } from '@/lib/formatDate';
 import { useUndo } from '@/components/UndoProvider';
 
 function money(n: number) { return `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
@@ -322,7 +323,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
             {nextDate && (
               <div className="flex items-center gap-3 bg-ink text-white rounded-card px-4 py-3">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Next run</span>
-                <span className="font-spectral text-lg font-semibold">{nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <span className="font-spectral text-lg font-semibold">{formatDate(nextDate)}</span>
                 <span className="text-xs font-semibold bg-white/15 px-2 py-0.5 rounded-full">
                   {daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'in 1 day' : daysLeft && daysLeft > 0 ? `in ${daysLeft} days` : 'Past'}
                 </span>
@@ -386,7 +387,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                   const p = r.period;
                   const isEditing = p && editingId === p.id;
                   const overdue = r.status !== 'Processed' && r.status !== 'Paid' && r.deadline && r.deadline < todayIso;
-                  const fmt = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                  const fmt = (d: string) => formatDate(d) || '—';
                   return (
                     <tr key={r.key} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
                       <td className="px-5 py-3.5">
@@ -596,7 +597,7 @@ export default function PayrollClient({ initialPeriods, initialSettings }: { ini
                   <tr key={c.id} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
                     <td className="px-5 py-3.5 font-semibold text-text-primary">{c.contractor}</td>
                     <td className="px-5 py-3.5 text-text-primary font-medium">{usd(c.amount)}</td>
-                    <td className="px-5 py-3.5 text-text-muted">{new Date(c.pay_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td className="px-5 py-3.5 text-text-muted">{formatDate(c.pay_date)}</td>
                     <td className="px-5 py-3.5 text-text-muted">{c.method}</td>
                     <td className="px-5 py-3.5">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusChip(c.status)}`}>{c.status}</span>

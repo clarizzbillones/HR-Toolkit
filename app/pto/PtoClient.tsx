@@ -5,6 +5,7 @@ import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import EditGate from '@/components/EditGate';
 import { mergePto, resolveAlias, normName, workingDays, datesOverlap, calSig, EXCLUDED_TYPES, EXCLUDED_TITLE } from '@/lib/pto';
+import { formatDate } from '@/lib/formatDate';
 
 interface PtoEntry {
   id: string; employee: string; start_date: string; end_date: string;
@@ -59,9 +60,7 @@ const SOURCE_LABEL: Record<Source, string> = {
 // overlap all come from lib/pto — the single source of truth shared with the
 // PTO report, the /api/pto/today endpoint, and the EOD modal.
 
-function fmtShort(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+function fmtShort(iso: string) { return formatDate(iso); }
 
 function mapPtoRows(rows: Record<string, string>[]): Omit<PtoEntry, 'id' | 'status'>[] {
   if (!rows.length) return [];

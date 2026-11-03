@@ -18,11 +18,8 @@ const EMPTY = {
   signatories: [] as Signatory[], follow_up_date: '', status: 'Draft',
 };
 
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 const STATUS_PILL: Record<string, string> = {
   Draft: 'bg-[#f1ece3] text-[#8b8478]', Sent: 'bg-[#eef2f7] text-[#3f5a76]', Signed: 'bg-[#eef5f1] text-[#2f7d5b]',
 };

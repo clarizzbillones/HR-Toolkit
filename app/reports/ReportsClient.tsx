@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
+import { formatDate } from '@/lib/formatDate';
 import { mergePto } from '@/lib/pto';
 import { reviewRows, parseHistory } from '@/lib/reviews';
 import { mapTripRows } from '@/lib/trips';
@@ -537,7 +538,7 @@ function SavedReports({ tab, title }: { tab: string; title: string }) {
   useEffect(() => { fetch(`/api/reports/files?tab=${tab}`).then(r => r.json()).then(d => setRows(d.rows ?? [])).catch(() => {}); }, [tab]);
 
   function fmtSize(n: number) { return !n ? '' : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`; }
-  function fmtDate(s: string) { try { return new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); } catch { return ''; } }
+  function fmtDate(s: string) { return formatDate(s); }
 
   async function upload(files: FileList | File[]) {
     const list = Array.from(files); if (!list.length) return;

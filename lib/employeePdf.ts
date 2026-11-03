@@ -5,6 +5,7 @@
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import { parseSignatories, fmtLong } from './coachingDoc';
 import { BENEFITS_REF, type OffboardingDoc, type Cell } from './offboardingDoc';
+import { formatDate } from './formatDate';
 import { ONB_BENEFITS_REF, type OnboardingDoc, type Cell as OnbCell } from './onboardingDoc';
 
 const GREEN = rgb(0.18, 0.49, 0.36);
@@ -260,7 +261,7 @@ export async function exitInterviewPdfDataUrl(name: string, qa: { q: string; a: 
 // employee's Employee File when the document is fully signed off.
 export async function offboardingDocPdfDataUrl(rec: any): Promise<string> {
   const doc: OffboardingDoc = rec.doc;
-  const fmtD = (s: any) => { if (!s) return ''; const dt = new Date(String(s) + 'T12:00:00'); return isNaN(+dt) ? String(s) : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const fmtD = (s: any) => formatDate(s);
   const d = await Doc.create('Employee Offboarding Checklist', '');
   const bold = (d as any).bold as PDFFont;
   d.label('Employee name', String(rec.name ?? ''));
@@ -312,7 +313,7 @@ export async function offboardingDocPdfDataUrl(rec: any): Promise<string> {
 
 export async function onboardingDocPdfDataUrl(rec: any): Promise<string> {
   const doc: OnboardingDoc = rec.doc;
-  const fmtD = (s: any) => { if (!s) return ''; const dt = new Date(String(s) + 'T12:00:00'); return isNaN(+dt) ? String(s) : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+  const fmtD = (s: any) => formatDate(s);
   const d = await Doc.create('Employee Onboarding Checklist', '');
   const bold = (d as any).bold as PDFFont;
   d.label('Employee name', String(rec.name ?? ''));

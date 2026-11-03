@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import { HR_FORMS, HR_FORM_PARTS, hrFormDocHtml } from '@/lib/hrForms';
+import { formatDate } from '@/lib/formatDate';
 import { HANDBOOK_REFS, HANDBOOK_ISSUES, citationText } from '@/lib/handbook';
 import Lb0489Fill from './Lb0489Fill';
 import SeveranceCalc from './SeveranceCalc';
@@ -30,10 +31,7 @@ export default function HrFormsClient() {
   const isDateToken = (t: string) => (/\bdate\b/i.test(t) && !/\bdates\b/i.test(t)) || /mm\/dd\/yyyy/i.test(t);
   // Render an ISO date value as a friendly long date; pass anything else through.
   function fmtMaybeDate(v: string) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-      const d = new Date(v + 'T12:00:00');
-      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return formatDate(v);
     return v;
   }
   function applyFills() {

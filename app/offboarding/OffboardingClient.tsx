@@ -22,11 +22,8 @@ interface Emp { name: string; position: string | null; dob: string | null; start
 const STATUS_PILL: Record<string, string> = {
   'Complete': 'bg-[#eef5f1] text-[#2f7d5b]', 'In progress': 'bg-[#f7efe1] text-[#b07d2a]', 'Not started': 'bg-[#f1ece3] text-[#8b8478]',
 };
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 export default function OffboardingClient() {

@@ -6,11 +6,8 @@ export const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
 // so there is prep time before the review itself.
 export const PREP_BUFFER_DAYS = 2;
 
-export function fmtDate(iso: string) {
-  if (!iso) return '';
-  const d = new Date(iso.slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from './formatDate';
+export function fmtDate(iso: string) { return formatDate(iso); }
 
 // Shift a YYYY-MM-DD date by n days, returning a YYYY-MM-DD string.
 export function shiftDays(iso: string, n: number): string {

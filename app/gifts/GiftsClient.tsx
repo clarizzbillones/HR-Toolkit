@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
+import { formatDate } from '@/lib/formatDate';
 
 interface Gift {
   id: string; name: string; relationship: string; address: string; phone: string;
@@ -51,7 +52,7 @@ export default function GiftsClient({ initialRows }: { initialRows: Gift[] }) {
   function printPdf() {
     const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const tierLabel: Record<string, string> = { '$': 'Modest', '$$': 'Mid', '$$$': 'Premium' };
-    const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = formatDate(new Date());
     const body = rows.map(r => `<tr>
       <td>${esc(r.name)}</td>
       <td>${esc(r.relationship)}</td>

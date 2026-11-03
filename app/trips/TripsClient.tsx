@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/Toast';
 import EditGate from '@/components/EditGate';
+import { formatDate } from '@/lib/formatDate';
 import { mapTripRows } from '@/lib/trips';
 
 interface Trip {
@@ -24,8 +25,8 @@ function statusChip(status: string): string {
 function tripDate(t: Trip): string {
   const s = (t.travel_start ?? '').slice(0, 10);
   const e = (t.travel_end ?? '').slice(0, 10);
-  if (s && e && s !== e) return `${s} → ${e}`;
-  if (s) return s;
+  if (s && e && s !== e) return `${formatDate(s)} → ${formatDate(e)}`;
+  if (s) return formatDate(s);
   return '—';
 }
 

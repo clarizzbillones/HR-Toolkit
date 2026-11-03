@@ -9,11 +9,8 @@ import {
 
 interface RecLite { id: string; name: string; position: string | null; start_date: string | null; doc: Doc }
 
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 function esc(s: any) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // Catie's streamlined onboarding document: HR → Ops → IT, each task assigned to

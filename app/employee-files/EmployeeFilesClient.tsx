@@ -59,11 +59,8 @@ function fileToDataUrl(f: File): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f); });
 }
 function initials(name: string) { return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(); }
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 // A label that refers to pay/salary/compensation, so its value shows as money.
 const isSalaryLabel = (l: any) => /salar|compensation|\bpay\b|wage/i.test(String(l ?? ''));
 // Format a salary-ish value as "$120,000". Leaves non-numeric text (e.g. "TBD")
@@ -489,7 +486,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       const rows = await fetchExportRows();
       if (!rows.length) { showToast('No employees to export'); return; }
       const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateStr = formatDate(new Date());
       const activeCount = rows.filter(r => !r.offboarded).length;
       const detail = (label: string, val: any) => val ? `<div class="f"><span class="l">${esc(label)}</span><span class="v">${esc(val)}</span></div>` : '';
       const sections = rows.map(r => {

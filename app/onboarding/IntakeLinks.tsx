@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { formatDate } from '@/lib/formatDate';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { INTAKE_ROLES, roleLabel, intakeFields, intakeUploads, REQUIRED_FIELDS, type IntakeRole } from '@/lib/onboardingIntake';
@@ -218,7 +219,7 @@ export default function IntakeLinks() {
             <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-text-primary">{viewing ? (viewing.name || 'Submission') : 'Loading…'}</div>
-                {viewing && <div className="text-xs text-text-muted mt-0.5">{viewing.roleLabel} onboarding intake{viewing.submitted_at ? ` · submitted ${new Date(viewing.submitted_at).toLocaleDateString()}` : ''}</div>}
+                {viewing && <div className="text-xs text-text-muted mt-0.5">{viewing.roleLabel} onboarding intake{viewing.submitted_at ? ` · submitted ${formatDate(viewing.submitted_at)}` : ''}</div>}
               </div>
               <button onClick={() => setViewing(null)} className="text-text-muted hover:text-text-primary text-xl leading-none">×</button>
             </div>

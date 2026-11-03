@@ -4,6 +4,7 @@
 
 import { sql } from './db';
 import { listPortalAdmins } from './adminGrants';
+import { formatDate } from './formatDate';
 import { accessAdminList, hrAdminList } from './access';
 import { sendMailAsApp } from './graph';
 
@@ -86,7 +87,7 @@ function notifyHtml(firstName: string, employeeName: string, kindLabel: string, 
     <p style="font-size:12px;color:#666">Please complete your part and mark it done in the document.</p>
   </div>`;
 }
-function fmtDate(s: any) { if (!s) return ''; const d = new Date(String(s).slice(0, 10) + 'T12:00:00'); return isNaN(+d) ? String(s) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+function fmtDate(s: any) { return formatDate(s); }
 
 export interface NotifyGroup { assignee: string; tasks: { label: string; deadline?: string }[] }
 

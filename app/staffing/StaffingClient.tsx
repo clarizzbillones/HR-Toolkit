@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { positionBreakdown } from '@/lib/positions';
+import { formatDate } from '@/lib/formatDate';
 
 interface Staff {
   id: string; name: string; worker_type?: string | null; position: string | null; dialpad: string | null;
@@ -424,7 +425,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       const k = c.key!;
       if (k === 'email' && r.email) return <a href={`mailto:${r.email}`} className="text-[#3f6b8a] hover:underline">{r.email}</a>;
       if (k === 'worker_type') return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(r.worker_type ?? 'Employee') === 'Contractor' ? 'bg-[#f7efe1] text-[#b07d2a]' : 'bg-[#eef5f1] text-[#2f7d5b]'}`}>{r.worker_type ?? 'Employee'}</span>;
-      if (k === 'dob') return toMMDDYYYY(r.dob) || '—';
+      if (k === 'dob') return formatDate(r.dob) || '—';
+      if (k === 'start_date') return formatDate(r.start_date) || '—';
     }
     const raw = c.custom ? extraVal(r, c.id) : (r as any)[c.key!];
     if (isMoney(c)) return fmtMoney(raw);

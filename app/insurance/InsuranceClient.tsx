@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
+import { formatDate } from '@/lib/formatDate';
 
 interface Policy {
   id: string; category: string; ins_type: string; carrier: string; policy_number: string;
@@ -72,7 +73,7 @@ function daysUntil(dt: Date | null): number | null {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return Math.round((dt.getTime() - today.getTime()) / 86400000);
 }
-const fmtDate = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const fmtDate = (dt: Date) => formatDate(dt);
 
 // Distinct, on-brand accent per category (bar = solid header, tint = light bg).
 const CAT_PALETTE = [
@@ -154,7 +155,7 @@ body{font-family:Georgia,'Times New Roman',serif;color:#1b2a3d;-webkit-print-col
   <div><div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON</div>
     <div style="font-size:7.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fb0c4;margin-top:2px">PLLC &middot; Human Resources</div>
     <div style="font-size:18px;font-weight:700;color:#fff;margin-top:8px">Insurance Master List</div></div>
-  <div style="text-align:right;color:#9fb0c4;font-size:9px">${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium<br>Generated ${e(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }))}</div>
+  <div style="text-align:right;color:#9fb0c4;font-size:9px">${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium<br>Generated ${e(formatDate(new Date()))}</div>
 </div>
 ${catBlocks}${openHtml}${exclHtml}
 <script>var i=document.images,n=i.length,d=0;function go(){if(++d>=n)window.print()}if(!n){window.print()}else{for(var k=0;k<n;k++){i[k].complete?go():(i[k].onload=go,i[k].onerror=go)}}</script>
@@ -179,7 +180,7 @@ ${catBlocks}${openHtml}${exclHtml}
 
     const rows: any[][] = [];
     rows.push([cell('Litson PLLC — Insurance Master List', titleStyle), ...Array(NC - 1).fill(cell('', titleStyle))]);
-    rows.push([cell(`Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} · ${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium`, subStyle), ...Array(NC - 1).fill(cell('', subStyle))]);
+    rows.push([cell(`Generated ${formatDate(new Date())} · ${policies.length} policies · ${fmtUSD(totalPremium)} known annual premium`, subStyle), ...Array(NC - 1).fill(cell('', subStyle))]);
     rows.push([]);
     rows.push(header.map(h => cell(h, headStyle)));
     const catRowIdx: number[] = [];

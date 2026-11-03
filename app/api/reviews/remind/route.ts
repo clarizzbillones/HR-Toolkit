@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { formatDate } from '@/lib/formatDate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
@@ -19,10 +20,7 @@ function daysUntil(dateStr: string): number {
 }
 
 const SANS = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-function fmtDate(iso: string) {
-  const d = new Date(iso.slice(0, 10) + 'T12:00:00');
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-}
+function fmtDate(iso: string) { return formatDate(iso); }
 function emailBody(rows: { name: string; role: string; type: string; date: string; days: number }[]) {
   return `<div style="font-family:${SANS};font-size:14px;line-height:1.65;color:#2a2a2a">
     <p>Hi Clarizz,</p>

@@ -17,11 +17,8 @@ const STATUS_STYLE: Record<string, string> = {
   Missed: 'bg-[#f6ecef] text-[#6e2b3e] border-[#e0b9c6]',
 };
 
-function fmtDate(s: string | null) {
-  if (!s) return '';
-  try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
-  catch { return s; }
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(s: string | null) { return formatDate(s); }
 
 export default function WaterClient({ initialRows }: { initialRows: Delivery[] }) {
   const { showToast } = useToast();

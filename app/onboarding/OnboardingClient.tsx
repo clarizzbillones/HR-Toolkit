@@ -164,11 +164,8 @@ function todosOf(person: any): Todo[] {
   try { const t = JSON.parse(person?.todos ?? '[]'); return Array.isArray(t) ? t : []; } catch { return []; }
 }
 
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(String(iso).length <= 10 ? iso + 'T12:00:00' : iso);
-  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+import { formatDate } from '@/lib/formatDate';
+function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 // Effective onboarding date: a person's start date, or — for a re-hire with no
 // start date yet — their rehire date. '' when neither is set.
 function effectiveStart(p: any): string {
