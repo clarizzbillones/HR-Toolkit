@@ -16,7 +16,7 @@ const navItems = [
   { href: '/gifts',     label: 'Gift Tracker' },
   { href: '/design',    label: 'Graphic Design' },
   { href: '/hr-forms',  label: 'HR Forms' },
-  { href: '/insurance', label: 'Insurance' },
+  { href: '/insurance', label: 'Insurance & Benefits' },
   { href: '/offers',    label: 'Letters' },
   { href: '/offboarding', label: 'Offboarding' },
   { href: '/onboarding', label: 'Onboarding', badgeKey: 'onboarding' },

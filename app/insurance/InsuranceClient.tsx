@@ -260,8 +260,8 @@ ${catBlocks}${openHtml}${exclHtml}
     <div className="flex flex-col h-full overflow-hidden">
       <header className="px-8 py-5 bg-white border-b border-border flex items-center justify-between gap-4 flex-shrink-0">
         <div>
-          <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Insurance</h1>
-          <p className="text-sm text-text-muted mt-0.5">Litson PLLC insurance master list — policies, carriers, renewals &amp; open items.</p>
+          <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Insurance &amp; Benefits</h1>
+          <p className="text-sm text-text-muted mt-0.5">Litson PLLC insurance master list — policies, carriers, renewals, open items &amp; benefits enrollment.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={exportExcel} className="text-sm font-semibold text-ink border border-border-light px-4 py-2 rounded-ctrl hover:bg-canvas">⤓ Excel</button>

@@ -34,7 +34,7 @@ export const REPORT_TABS: { key: string; label: string }[] = [
   { key: 'trips', label: 'Trips' },
   { key: 'pto', label: 'PTO' },
   { key: 'reviews', label: 'Performance Reviews' },
-  { key: 'insurance', label: 'Insurance' },
+  { key: 'insurance', label: 'Insurance & Benefits' },
   { key: 'reimbursements', label: 'Reimbursements' },
   { key: 'cashout', label: 'Cash Out' },
 ];

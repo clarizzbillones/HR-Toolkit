@@ -17,7 +17,7 @@ export const BENEFIT_PROVIDERS: Record<Benefit, string> = {
 };
 
 // Election status. '' = not recorded yet.
-export const BENEFIT_STATUSES = ['Enrolled', 'Declined', 'Waived', 'Pending'] as const;
+export const BENEFIT_STATUSES = ['Enrolled', 'Declined', 'Waived', 'Pending', 'Not eligible'] as const;
 export type BenefitStatus = '' | typeof BENEFIT_STATUSES[number];
 
 export interface Enrollment {
@@ -36,6 +36,7 @@ export function benefitStatusChip(s: string): string {
     case 'Declined': return 'bg-[#f3e9e7] text-[#b0412f]';   // red
     case 'Waived':   return 'bg-[#f1ece3] text-[#8b8478]';   // neutral
     case 'Pending':  return 'bg-[#f7efe1] text-[#b07d2a]';   // amber
+    case 'Not eligible': return 'bg-[#eceef2] text-[#5a6b82]'; // slate
     default:         return 'bg-[#f6f4f0] text-text-faint';  // unset
   }
 }
