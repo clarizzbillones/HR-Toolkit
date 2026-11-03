@@ -24,7 +24,13 @@ export async function GET() {
   add(session?.user?.name);
   try { const [g] = await sql`SELECT name FROM access_grants WHERE email = ${email}` as any[]; if (g?.name) add(g.name); } catch { /* ignore */ }
   const isMine = (assignee: any) => { const n = normName(assignee); return !!n && (keys.has(n) || keys.has(n.split(' ')[0])); };
-  const open = (cell: any) => !((cell?.date ?? '').toString().trim());
+  // A task is still "open" (needs action) until it is fully signed off — both an
+  // initial AND a date — which mirrors the docProgress/cellDone "done" rule in
+  // the onboarding/offboarding docs. A date on its own (e.g. a scheduled/target
+  // date typed in before the task is actually completed and initialed) must NOT
+  // close the task, otherwise assigned work silently disappears from the
+  // dashboard before anyone has done it.
+  const open = (cell: any) => !((cell?.initial ?? '').toString().trim() && (cell?.date ?? '').toString().trim());
 
   const tasks: any[] = [];
 
