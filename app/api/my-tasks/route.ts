@@ -17,13 +17,18 @@ export async function GET() {
   const email = (session?.user?.email ?? '').toLowerCase();
   if (!email) return NextResponse.json({ tasks: [] });
 
-  // Build the set of names that count as "me".
+  // Build the set of names that count as "me". Assignees are first-name labels
+  // (Catie, Clarizz, Caitlin, Matthew, Ryan…), so we add the full normalized
+  // value AND every individual word of it — the viewer's email local part, their
+  // session name, and their Access Control name. Matching on any word (not just
+  // the first) means a display name stored in any order — "Clarizz Ann Billones"
+  // or "Billones, Clarizz" — still resolves to the "Clarizz" assignee.
   const keys = new Set<string>();
-  const add = (s: any) => { const n = normName(s); if (!n) return; keys.add(n); const first = n.split(' ')[0]; if (first) keys.add(first); };
+  const add = (s: any) => { const n = normName(s); if (!n) return; keys.add(n); for (const w of n.split(' ')) if (w.length >= 2) keys.add(w); };
   add(email.split('@')[0]);
   add(session?.user?.name);
   try { const [g] = await sql`SELECT name FROM access_grants WHERE email = ${email}` as any[]; if (g?.name) add(g.name); } catch { /* ignore */ }
-  const isMine = (assignee: any) => { const n = normName(assignee); return !!n && (keys.has(n) || keys.has(n.split(' ')[0])); };
+  const isMine = (assignee: any) => { const n = normName(assignee); if (!n) return false; if (keys.has(n)) return true; const first = n.split(' ')[0]; return !!first && keys.has(first); };
   // A task is still "open" (needs action) until it is fully signed off — both an
   // initial AND a date — which mirrors the docProgress/cellDone "done" rule in
   // the onboarding/offboarding docs. A date on its own (e.g. a scheduled/target
