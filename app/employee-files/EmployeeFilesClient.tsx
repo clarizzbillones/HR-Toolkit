@@ -6,6 +6,7 @@ import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
+import { BENEFITS } from '@/lib/benefits';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -555,6 +556,76 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     finally { setExporting(false); }
   }
 
+  // One Excel file with three tabs: Employees (all data), Tools Used, and
+  // Insurance & Benefits. Uses the Office worksheet XML trick so a single .xls
+  // opens with real, separate tabs — no library needed.
+  async function exportWorkbook() {
+    setExportOpen(false); setExporting(true);
+    try {
+      const [rows, benefitsRes] = await Promise.all([
+        fetchExportRows(),
+        fetch('/api/benefits').then(r => r.json()).catch(() => ({ enrollments: [] })),
+      ]);
+      if (!rows.length) { showToast('No employees to export'); return; }
+      const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const key = (s: any) => String(s ?? '').trim().toLowerCase();
+      const statusOf = (r: any) => r.offboarded ? 'Offboarded' : 'Active';
+
+      // Benefits lookup: person -> benefit -> enrollment.
+      const benByName = new Map<string, Record<string, any>>();
+      for (const e of (benefitsRes.enrollments ?? []) as any[]) {
+        const k = key(e.person_name); if (!k) continue;
+        const m = benByName.get(k) ?? {}; m[e.benefit] = e; benByName.set(k, m);
+      }
+      const benCell = (enr: any) => {
+        if (!enr) return '';
+        const parts = [enr.status, enr.plan, enr.enrolled_date ? fmtDate(enr.enrolled_date) : ''].filter(Boolean);
+        return parts.join(' · ');
+      };
+
+      // Sheet 1 — Employees (all data).
+      const empHeaders = ['Name', 'Position', 'Department', 'Worker type', 'Status', 'Email', 'Phone', 'Address', 'Start date', 'Date of birth', 'Salary'];
+      const empRows = rows.map(r => [r.name, r.position, r.department, r.worker_type || 'Employee', statusOf(r),
+        r.email, r.phone, r.address, r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', r.salary]);
+
+      // Sheet 2 — Tools used (one row per employee-tool).
+      const toolHeaders = ['Employee', 'Position', 'Tool / System', 'Account', 'Access level', 'Status', 'Source'];
+      const toolRows: any[][] = [];
+      for (const r of rows) {
+        const accts = (r.accounts ?? []) as any[];
+        if (!accts.length) toolRows.push([r.name, r.position, '—', '', '', '', '']);
+        else for (const a of accts) toolRows.push([r.name, r.position, a.system || a.account || 'Account', a.account, a.access_level, a.status, a.source]);
+      }
+
+      // Sheet 3 — Insurance & Benefits (one row per employee; a column each for
+      // Medical / Dental / Vision / Life, showing status · plan · enrolled date).
+      const benHeaders = ['Employee', 'Position', ...BENEFITS];
+      const benRows = rows.map(r => { const m = benByName.get(key(r.name)) ?? {}; return [r.name, r.position, ...BENEFITS.map(b => benCell(m[b]))]; });
+
+      const sheetTable = (headers: string[], data: any[][]) => {
+        const head = `<tr>${headers.map(h => `<td style="background:#1b2a3d;color:#ffffff;font-weight:bold">${esc(h)}</td>`).join('')}</tr>`;
+        const body = data.map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+        return `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">${head}${body}</table>`;
+      };
+      const sheets = [
+        { name: 'Employees', table: sheetTable(empHeaders, empRows) },
+        { name: 'Tools Used', table: sheetTable(toolHeaders, toolRows) },
+        { name: 'Insurance & Benefits', table: sheetTable(benHeaders, benRows) },
+      ];
+      const worksheetXml = sheets.map(s => `<x:ExcelWorksheet><x:Name>${esc(s.name)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>`).join('');
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">`
+        + `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>${worksheetXml}</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->`
+        + `</head><body>${sheets.map(s => s.table).join('')}</body></html>`;
+      const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Litson-Employees-${new Date().toISOString().slice(0, 10)}.xls`;
+      a.click();
+      showToast(`Exported ${rows.length} employees · 3 tabs`);
+    } catch { showToast('Export failed'); }
+    finally { setExporting(false); }
+  }
+
   // Itemized spreadsheet — one row per employee-tool (opens in Excel).
   async function exportExcel() {
     setExportOpen(false); setExporting(true);
@@ -1072,8 +1143,12 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
             {exportOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-                <div className="absolute right-0 z-20 mt-1 w-64 bg-white border border-border-light rounded-ctrl shadow-lg py-1">
-                  <button onClick={exportReport} className="w-full text-left px-3 py-2 text-sm hover:bg-canvas">
+                <div className="absolute right-0 z-20 mt-1 w-72 bg-white border border-border-light rounded-ctrl shadow-lg py-1">
+                  <button onClick={exportWorkbook} className="w-full text-left px-3 py-2 text-sm hover:bg-canvas">
+                    <div className="font-semibold text-text-primary">⬇ Full workbook (Excel · 3 tabs)</div>
+                    <div className="text-xs text-text-muted">Employees · Tools used · Insurance &amp; benefits</div>
+                  </button>
+                  <button onClick={exportReport} className="w-full text-left px-3 py-2 text-sm hover:bg-canvas border-t border-border-light">
                     <div className="font-semibold text-text-primary">🖨 Printable report (PDF)</div>
                     <div className="text-xs text-text-muted">Branded, per-employee with tools listed</div>
                   </button>
