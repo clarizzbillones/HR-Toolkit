@@ -567,7 +567,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         fetch('/api/benefits').then(r => r.json()).catch(() => ({ enrollments: [] })),
       ]);
       if (!rows.length) { showToast('No employees to export'); return; }
-      const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const key = (s: any) => String(s ?? '').trim().toLowerCase();
       const statusOf = (r: any) => r.offboarded ? 'Offboarded' : 'Active';
 
@@ -577,50 +576,51 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         const k = key(e.person_name); if (!k) continue;
         const m = benByName.get(k) ?? {}; m[e.benefit] = e; benByName.set(k, m);
       }
-      const benCell = (enr: any) => {
-        if (!enr) return '';
-        const parts = [enr.status, enr.plan, enr.enrolled_date ? fmtDate(enr.enrolled_date) : ''].filter(Boolean);
-        return parts.join(' · ');
-      };
+      const benCell = (enr: any) => enr ? [enr.status, enr.plan, enr.enrolled_date ? fmtDate(enr.enrolled_date) : ''].filter(Boolean).join(' · ') : '';
 
-      // Sheet 1 — Employees (all data).
+      const XLSX: any = await import('xlsx-js-style');
+      const headStyle = { fill: { fgColor: { rgb: '1B2A3D' } }, font: { bold: true, color: { rgb: 'FFFFFF' } }, alignment: { vertical: 'center' } };
+      const hdr = (arr: string[]) => arr.map(h => ({ v: h, t: 's', s: headStyle }));
+      const S = (v: any) => v ?? '';
+
+      // Sheet 1 — Employees (all data, one row each).
       const empHeaders = ['Name', 'Position', 'Department', 'Worker type', 'Status', 'Email', 'Phone', 'Address', 'Start date', 'Date of birth', 'Salary'];
-      const empRows = rows.map(r => [r.name, r.position, r.department, r.worker_type || 'Employee', statusOf(r),
-        r.email, r.phone, r.address, r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', r.salary]);
+      const ws1 = XLSX.utils.aoa_to_sheet([hdr(empHeaders), ...rows.map(r => [
+        S(r.name), S(r.position), S(r.department), r.worker_type || 'Employee', statusOf(r),
+        S(r.email), S(r.phone), S(r.address), r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', S(r.salary)])]);
+      ws1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 16 }, { wch: 13 }, { wch: 11 }, { wch: 26 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
 
       // Sheet 2 — Tools used (one row per employee-tool).
       const toolHeaders = ['Employee', 'Position', 'Tool / System', 'Account', 'Access level', 'Status', 'Source'];
-      const toolRows: any[][] = [];
+      const toolAoa: any[][] = [hdr(toolHeaders)];
       for (const r of rows) {
         const accts = (r.accounts ?? []) as any[];
-        if (!accts.length) toolRows.push([r.name, r.position, '—', '', '', '', '']);
-        else for (const a of accts) toolRows.push([r.name, r.position, a.system || a.account || 'Account', a.account, a.access_level, a.status, a.source]);
+        if (!accts.length) toolAoa.push([S(r.name), S(r.position), '—', '', '', '', '']);
+        else for (const a of accts) toolAoa.push([S(r.name), S(r.position), a.system || a.account || 'Account', S(a.account), S(a.access_level), S(a.status), S(a.source)]);
       }
+      const ws2 = XLSX.utils.aoa_to_sheet(toolAoa);
+      ws2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 26 }, { wch: 18 }, { wch: 12 }, { wch: 14 }];
 
       // Sheet 3 — Insurance & Benefits (one row per employee; a column each for
       // Medical / Dental / Vision / Life, showing status · plan · enrolled date).
       const benHeaders = ['Employee', 'Position', ...BENEFITS];
-      const benRows = rows.map(r => { const m = benByName.get(key(r.name)) ?? {}; return [r.name, r.position, ...BENEFITS.map(b => benCell(m[b]))]; });
+      const ws3 = XLSX.utils.aoa_to_sheet([hdr(benHeaders), ...rows.map(r => {
+        const m = benByName.get(key(r.name)) ?? {};
+        return [S(r.name), S(r.position), ...BENEFITS.map(b => benCell(m[b]))];
+      })]);
+      ws3['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }];
 
-      const sheetTable = (headers: string[], data: any[][]) => {
-        const head = `<tr>${headers.map(h => `<td style="background:#1b2a3d;color:#ffffff;font-weight:bold">${esc(h)}</td>`).join('')}</tr>`;
-        const body = data.map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
-        return `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">${head}${body}</table>`;
-      };
-      const sheets = [
-        { name: 'Employees', table: sheetTable(empHeaders, empRows) },
-        { name: 'Tools Used', table: sheetTable(toolHeaders, toolRows) },
-        { name: 'Insurance & Benefits', table: sheetTable(benHeaders, benRows) },
-      ];
-      const worksheetXml = sheets.map(s => `<x:ExcelWorksheet><x:Name>${esc(s.name)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>`).join('');
-      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">`
-        + `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>${worksheetXml}</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->`
-        + `</head><body>${sheets.map(s => s.table).join('')}</body></html>`;
-      const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws1, 'Employees');
+      XLSX.utils.book_append_sheet(wb, ws2, 'Tools Used');
+      XLSX.utils.book_append_sheet(wb, ws3, 'Insurance & Benefits');
+      const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `Litson-Employees-${new Date().toISOString().slice(0, 10)}.xls`;
+      a.download = `Litson-Employees-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
+      URL.revokeObjectURL(a.href);
       showToast(`Exported ${rows.length} employees · 3 tabs`);
     } catch { showToast('Export failed'); }
     finally { setExporting(false); }
