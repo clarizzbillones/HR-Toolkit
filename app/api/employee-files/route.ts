@@ -42,6 +42,34 @@ const stripDoc = (d: any) => ({ ...d, attachment_data: undefined, has_attachment
 
 // Merge one profile into another: move all documents/records, fill the target's
 // blank fields, then delete the source. Returns the target profile.
+// Collapse duplicate tools (same system) on one profile's Accounts & Access list
+// down to a single row each. Canonical row = an open/active one over a closed
+// one, then the earliest created; its blank fields are filled from the copies
+// that are removed. Idempotent — safe to run any time, not just on merge.
+async function dedupeAccounts(profileId: string): Promise<number> {
+  const rows = await sql`SELECT * FROM employee_accounts WHERE profile_id = ${profileId} ORDER BY created_at ASC NULLS FIRST, id ASC` as any[];
+  const isClosed = (r: any) => String(r.status ?? '').trim().toLowerCase() === 'closed';
+  const canonical = new Map<string, any>();
+  const order: string[] = [];
+  for (const r of rows) {
+    const k = String(r.system ?? '').trim().toLowerCase();
+    if (!k) continue;
+    if (!canonical.has(k)) { canonical.set(k, r); order.push(k); continue; }
+    const kept = canonical.get(k);
+    // Prefer an active row over the currently-kept closed one.
+    const winner = (isClosed(kept) && !isClosed(r)) ? r : kept;
+    const loser = winner === kept ? r : kept;
+    const patch: Record<string, any> = {};
+    for (const c of ['account', 'access_level', 'status', 'source', 'notes']) {
+      if (!String(winner[c] ?? '').trim() && String(loser[c] ?? '').trim()) patch[c] = loser[c];
+    }
+    if (winner !== kept) canonical.set(k, winner);
+    if (Object.keys(patch).length) { await sql`UPDATE employee_accounts SET ${sql(patch)} WHERE id = ${winner.id}`; Object.assign(winner, patch); }
+    await sql`DELETE FROM employee_accounts WHERE id = ${loser.id}`;
+  }
+  return rows.length - order.length;
+}
+
 async function mergeProfiles(src: string, tgt: string): Promise<any | null> {
   const [s] = await sql`SELECT * FROM employee_profiles WHERE id = ${src}` as any[];
   const [t] = await sql`SELECT * FROM employee_profiles WHERE id = ${tgt}` as any[];
@@ -50,6 +78,13 @@ async function mergeProfiles(src: string, tgt: string): Promise<any | null> {
   for (const tbl of ['employee_accounts', 'info_requests', 'event_rsvps', 'tools_surveys']) {
     try { await sql`UPDATE ${sql(tbl)} SET profile_id = ${tgt} WHERE profile_id = ${src}`; } catch { /* table may not exist */ }
   }
+  // After moving the Accounts & Access lists together, collapse duplicate tools
+  // so a system the person already had (or that both profiles listed) shows only
+  // once. Keep one row per system — preferring an open/active row over a closed
+  // one, then the earliest — and fill its blank fields from the dropped copies.
+  try {
+    await dedupeAccounts(tgt);
+  } catch { /* best-effort — never block the merge */ }
   const cols = ['email', 'phone', 'position', 'department', 'start_date', 'details', ...EXTRA_COLS];
   const fill: Record<string, any> = {};
   for (const c of cols) { const tv = String((t as any)[c] ?? '').trim(); const sv = (s as any)[c]; if (!tv && sv != null && String(sv).trim()) fill[c] = sv; }
