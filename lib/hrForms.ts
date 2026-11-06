@@ -458,7 +458,7 @@ If anything here is unclear, please reach out. I am glad to help however I can.
 
 All the best,
 [YOUR NAME]
-[YOUR TITLE], Litson PLLC`,
+HR Admin Specialist, Litson PLLC`,
   },
   {
     id: "f2", part: "Part F — Offboarding Coverage Notices", title: "F2 — Attorney Offboarding: Coverage & Benefits Summary",
