@@ -367,24 +367,26 @@ Job title — Age — Selected for separation?
 
 Hi [FIRST NAME],
 
-I wanted to follow up with information about your health coverage, including a few time-sensitive deadlines.
+I'm following up with information about your health coverage, including a few time-sensitive deadlines.
 
 Your coverage under the firm's plan ends on [COVERAGE END DATE]. Continuation coverage is not available through our plan, so you will need to arrange new coverage directly.
 
-There are two deadlines worth noting, and the shorter one catches people off guard:
+There are two deadlines to keep in mind:
 
 Spouse's or partner's employer plan — if this is an option, you generally have only 30 days from the loss of coverage to enroll. This is often the least expensive route.
 
-Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period. You can enroll at HealthCare.gov or by calling 1-800-318-2596. Depending on income, you may qualify for premium subsidies that significantly reduce the cost.
+Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period. You can enroll at HealthCare.gov or by calling 1-800-318-2596. Depending on income, you may qualify for premium subsidies that reduce the cost.
 
-It is also worth checking TennCare eligibility at tn.gov/tenncare, though eligibility in Tennessee is limited.
+You may also want to check TennCare eligibility at tn.gov/tenncare, though eligibility in Tennessee is limited and generally depends on household situation, not just income.
 
-Most enrollments require proof that your prior coverage ended. I have enclosed a letter confirming your coverage dates so you have it ready.
+Most enrollments require proof that your prior coverage ended, so I've enclosed a letter confirming your coverage dates.
 
-If anything here is unclear, please reach out. I am glad to help however I can.
+If you have questions about any of this, please let me know.
 
-All the best,
-[YOUR NAME]`,
+Best regards,
+[YOUR NAME]
+HR Admin Specialist
+Litson PLLC`,
   },
   {
     id: "e2", part: "Part E — Health Coverage Notices", title: "E2 — Health Coverage Notice: COBRA Available",
@@ -602,6 +604,5 @@ export function hrFormDocHtml(title: string, body: string): string {
       <div style="font-size:18px;font-weight:700;color:#fff;margin-top:9px">${esc(title)}</div>
     </div>
     <div style="font-size:13.5px;line-height:1.6">${lines}</div>
-    <div style="margin-top:18px;padding-top:8px;border-top:1px solid #e6ddcd;font-size:10px;font-style:italic;color:#8a8474">Replace every [bracketed] field before use. Severance and release documents must be reviewed and approved by counsel before first use.</div>
   </div>`;
 }
