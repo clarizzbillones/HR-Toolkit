@@ -375,7 +375,7 @@ There are two deadlines to keep in mind:
 
 Spouse's or partner's employer plan — if this is an option, you generally have only 30 days from the loss of coverage to enroll. This is often the least expensive route.
 
-Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period. You can enroll at HealthCare.gov or by calling 1-800-318-2596. Depending on income, you may qualify for premium subsidies that reduce the cost.
+Health Insurance Marketplace — losing job-based coverage opens a 60-day special enrollment period, and you can apply up to 60 days before your coverage ends. If you enroll by [COVERAGE END DATE], your new coverage can start the next day with no gap. Enroll at HealthCare.gov or call 1-800-318-2596. Depending on income, you may qualify for premium subsidies that lower the cost.
 
 You may also want to check TennCare eligibility at tn.gov/tenncare, though eligibility in Tennessee is limited and generally depends on household situation, not just income.
 
