@@ -255,7 +255,6 @@ export default function OffboardingClient() {
   <div style="margin-top:10px;font-size:13px;color:#8a8474">${done} of ${total} steps complete${rec.offer_severance ? '' : ' · severance section not applicable'}</div>
   ${sections}
   ${rec.notes ? `<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#8a8474">Notes</div><div style="font-size:13px;white-space:pre-wrap;margin-top:4px">${esc(rec.notes)}</div></div>` : ''}
-  <div style="margin-top:20px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Built from the LITSON PLLC HR Compliance &amp; Risk Management Manual. Severance &amp; release steps require a lawyer's review before use.</div>
 </div>
 <script>window.onload=function(){window.print()}</script></body></html>`);
     win.document.close();
@@ -291,7 +290,6 @@ export default function OffboardingClient() {
   <div style="background:#1b2a3d;border-top:3px solid #c9a24a;border-radius:10px;padding:16px 18px">
     <div style="font-size:15px;font-weight:700;letter-spacing:4px;color:#c9a24a">LITSON PLLC</div>
     <div style="font-size:19px;font-weight:700;color:#fff;margin-top:8px">Employee Offboarding Checklist</div>
-    <div style="font-size:10px;color:#9fb0c4;margin-top:3px">Complete in order: Pre-Offboarding first, then Tools, then IT. Each item is signed off with initials and a date as it's completed.</div>
   </div>
   <div style="display:flex;gap:22px;flex-wrap:wrap;padding:14px 2px;border-bottom:1px solid #e6ddcd">
     ${meta('Employee name', rec.name)}${meta('Position / Title', rec.position || '')}${meta('Last day of employment', fmtDate(rec.separation_date))}
@@ -301,7 +299,6 @@ export default function OffboardingClient() {
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#8a6d3b;margin-top:10px">Accounts / tools to close</div>${table(d.accounts.map(a => cellRow(a.label, a.hint, a.cell)).join(''))}
   ${sectionHead('Section 3 — IT', 'Final technical shutdown and confirmation. Complete only after Sections 1 and 2 are signed off.')}${table(d.it.map(r => cellRow(r.label, r.hint, r.cell)).join(''))}
   ${signoff}
-  <div style="margin-top:18px;font-size:11px;font-style:italic;color:#8a8474;border-top:1px solid #e6ddcd;padding-top:8px">Offboarding is complete only once Catie has signed off all three sections. File the completed document in the employee's Employee File (HR Hub).</div>
 </div>
 <script>window.onload=function(){window.print()}</script></body></html>`);
     win.document.close();
