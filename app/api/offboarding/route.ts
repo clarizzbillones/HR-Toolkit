@@ -159,6 +159,57 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ row: parse(row), synced: accts.length });
   }
 
+  // Atomic single-cell update: read the latest document, change just this one
+  // cell field, and write it back. Concurrency-safe — two people filling in
+  // different tasks (or the same checklist from different tabs/devices) no
+  // longer overwrite each other, which was wiping assigned people's initials,
+  // dates, and notes when a stale whole-document save landed on top.
+  if (b.action === 'cell') {
+    const section = String(b.section ?? '');
+    const field = String(b.field ?? '');
+    const rowId = String(b.rowId ?? '');
+    const value = typeof b.value === 'string' ? b.value : String(b.value ?? '');
+    if (!['hr', 'accounts', 'it', 'signoff'].includes(section) || !['assignee', 'deadline', 'initial', 'date', 'notes'].includes(field) || !rowId) {
+      return NextResponse.json({ error: 'Bad cell update' }, { status: 400 });
+    }
+    const [rec] = await sql`SELECT offboarded, name, separation_date, doc FROM offboarding WHERE id = ${b.id}` as any[];
+    if (!rec) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const doc = parseDoc(rec.doc);
+    if (section === 'signoff') {
+      if (!['hr', 'ops', 'it'].includes(rowId)) return NextResponse.json({ error: 'Bad sign-off cell' }, { status: 400 });
+      (doc.signoff as any)[rowId] = { ...((doc.signoff as any)[rowId] ?? {}), [field]: value };
+    } else {
+      const arr = (doc as any)[section] as any[];
+      const row = Array.isArray(arr) ? arr.find((r: any) => r.id === rowId) : null;
+      // The row may have been removed/renamed by a structural edit elsewhere; if
+      // it's gone, don't recreate it — just hand back the current document so the
+      // client resyncs rather than resurrecting a stale row.
+      if (!row) { const [cur] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[]; return NextResponse.json({ row: parse(cur) }); }
+      row.cell = { ...(row.cell ?? {}), [field]: value };
+    }
+    await sql`UPDATE offboarding SET doc = ${JSON.stringify(doc)} WHERE id = ${b.id}`;
+    // A cell edit can complete Catie's sign-off — mirror the whole-document
+    // save's auto-complete (move to Offboarded + file the signed PDF) on the
+    // transition only, so it doesn't re-file on every later cell edit.
+    const signed = docSignedOff(doc);
+    if (signed && !rec.offboarded) {
+      await sql`UPDATE offboarding SET offboarded = true WHERE id = ${b.id}`;
+      await setOffboarded(rec.name, true, rec.separation_date ?? null);
+      try {
+        const [full] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+        const dataUrl = await offboardingDocPdfDataUrl(parse(full));
+        await attachPdfToEmployeeFile({
+          name: rec.name, category: 'Offboarding', title: 'Offboarding Checklist (signed)',
+          docDate: rec.separation_date ?? null, attName: `Offboarding-${String(rec.name).replace(/[^\w]+/g, '-')}.pdf`,
+          dataUrl, sourceRef: `offboarding:${b.id}`,
+          summary: 'Signed offboarding document — HR, Ops, and IT complete and signed off by Catie.', author: 'Catie',
+        });
+      } catch { /* best-effort — never block the save */ }
+    }
+    const [row] = await sql`SELECT * FROM offboarding WHERE id = ${b.id}` as any[];
+    return NextResponse.json({ row: parse(row) });
+  }
+
   const updates: Record<string, any> = {};
   for (const k of ['name', 'position', 'manager', 'separation_date', 'separation_type', 'prepared_by', 'notes', 'dob', 'hire_date'] as const) {
     if (k in b) updates[k] = b[k] ?? null;

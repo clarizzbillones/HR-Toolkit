@@ -11,12 +11,17 @@ interface RecLite { id: string; name: string; position: string | null; separatio
 
 // Catie's streamlined offboarding document: Pre-Offboarding → Tools → IT, each
 // task assigned to a person who initials + dates it, then Catie signs off.
-export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onRemoveAssignee, onSave }: {
+export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignees, onAddAssignee, onRemoveAssignee, onSave, onSaveCell }: {
   rec: RecLite; readOnly?: boolean; lockAssignment?: boolean;
   assignees?: string[];
   onAddAssignee?: (name: string) => void;
   onRemoveAssignee?: (name: string) => void;
   onSave: (doc: Doc) => void;
+  // Atomic, concurrency-safe save of a single cell field. When provided, cell
+  // edits (assignee / deadline / initials / date / notes) go through this
+  // instead of rewriting the whole document, so two people filling in different
+  // tasks on the same checklist can't overwrite each other's entries.
+  onSaveCell?: (section: 'hr' | 'accounts' | 'it' | 'signoff', rowId: string, field: string, value: string) => void;
 }) {
   // When lockAssignment is on (anyone who isn't a full-access admin), assigning
   // tasks and adding/removing/reordering rows are locked — they can only fill in
@@ -38,6 +43,13 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
     mut(next); ref.current = next; setDoc(next); return next;
   }
   const persist = () => onSave(ref.current);
+  // Persist a committed cell change. Prefer the atomic single-cell save (which
+  // merges with other people's concurrent edits on the same document); fall back
+  // to a whole-document save only when no cell handler is wired.
+  const saveCellPatch = (section: 'hr' | 'accounts' | 'it' | 'signoff', rowId: string, patch: Partial<Cell>) => {
+    if (onSaveCell) { for (const [field, value] of Object.entries(patch)) onSaveCell(section, rowId, field, String(value ?? '')); }
+    else persist();
+  };
   const done = (c?: Cell) => !!(c && (c.initial ?? '').trim() && (c.date ?? '').trim());
   // Short date label (house format) for the "Due …" deadline badge.
   const fmtDate = (s?: string) => formatDate(s);
@@ -120,11 +132,11 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
         </select>
         <input disabled={assignRO} type="date" value={c.deadline ?? ''} onChange={e => set({ deadline: e.target.value }, true)} title="Deadline"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink disabled:bg-[#f6f4f0] disabled:text-text-secondary" />
-        <input disabled={cellRO} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={persist} placeholder="Initials"
+        <input disabled={cellRO} value={c.initial ?? ''} onChange={e => set({ initial: e.target.value }, false)} onBlur={e => set({ initial: e.target.value }, true)} placeholder="Initials"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink text-center uppercase" maxLength={6} />
         <input disabled={cellRO} type="date" value={c.date ?? ''} onChange={e => set({ date: e.target.value }, true)}
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />
-        <input disabled={cellRO} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={persist} placeholder="Notes"
+        <input disabled={cellRO} value={c.notes ?? ''} onChange={e => set({ notes: e.target.value }, false)} onBlur={e => set({ notes: e.target.value }, true)} placeholder="Notes"
           className="border border-border-light rounded-ctrl px-2 py-1.5 text-sm focus:outline-none focus:border-ink" />
       </div>
     );
@@ -173,7 +185,7 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
                 {!assignRO && <button onClick={() => { apply(d => { d[listKey].splice(i, 1); }); persist(); }} title="Remove row" className="text-text-muted hover:text-litred-alt text-sm shrink-0">✕</button>}
               </div>
               {a.hint && <div className="text-[11px] text-text-muted mt-0.5 ml-6">{a.hint}</div>}
-              {CellFields({ get: () => doc[listKey][i].cell, set: (p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) persist(); } })}
+              {CellFields({ get: () => doc[listKey][i].cell, set: (p, commit) => { apply(d => { d[listKey][i].cell = { ...d[listKey][i].cell, ...p }; }); if (commit) saveCellPatch(listKey, a.id, p); } })}
             </div>
           );
         })}
@@ -297,7 +309,7 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
           {([['hr', 'Pre-Offboarding — Section 1 complete'], ['ops', 'Tools — Section 2 complete'], ['it', 'IT — Section 3 complete']] as const).map(([key, label]) => (
             <div key={key}>{TaskRow({ label,
               get: () => doc.signoff[key] ?? {},
-              set: (p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) persist(); } })}</div>
+              set: (p, commit) => { apply(d => { d.signoff[key] = { ...(d.signoff[key] ?? {}), ...p }; }); if (commit) saveCellPatch('signoff', key, p); } })}</div>
           ))}
         </div>
       </Section>

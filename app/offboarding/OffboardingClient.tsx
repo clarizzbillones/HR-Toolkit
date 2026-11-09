@@ -147,6 +147,25 @@ export default function OffboardingClient() {
       if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
     } catch { showToast('Save failed'); }
   }
+
+  // Atomic single-cell save — concurrency-safe, so one person's entry on a
+  // shared offboarding checklist can't wipe another's. Updates only the one cell
+  // optimistically, then takes the server's merged document back.
+  async function saveCell(id: string, section: 'hr' | 'accounts' | 'it' | 'signoff', rowId: string, field: string, value: string) {
+    setRows(p => p.map(r => {
+      if (r.id !== id) return r;
+      const doc: any = JSON.parse(JSON.stringify((r as any).doc ?? {}));
+      if (section === 'signoff') { doc.signoff = doc.signoff ?? {}; doc.signoff[rowId] = { ...(doc.signoff[rowId] ?? {}), [field]: value }; }
+      else { const row = Array.isArray(doc[section]) ? doc[section].find((x: any) => x.id === rowId) : null; if (row) row.cell = { ...(row.cell ?? {}), [field]: value }; }
+      return { ...r, doc } as Rec;
+    }));
+    try {
+      const res = await fetch('/api/offboarding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'cell', section, rowId, field, value }) });
+      const d = await res.json();
+      if (d.row) setRows(p => p.map(r => r.id === id ? d.row : r));
+      else if (d.error) showToast(`Could not save: ${d.error}`);
+    } catch { showToast('Save failed — check your connection'); }
+  }
   // Pull the employee's current Accounts & Access into "Accounts to close",
   // for an offboarding created before their tools were listed. Keeps any
   // close-progress already entered.
@@ -393,7 +412,8 @@ export default function OffboardingClient() {
                   assignees={offAssigneeList}
                   onAddAssignee={name => { const n = name.trim(); if (n && !offAssigneeList.includes(n)) saveOffAssignees([...offAssignees, n]); }}
                   onRemoveAssignee={name => saveOffAssignees(offAssignees.filter(n => n !== name))}
-                  onSave={d => patch(rec.id, { doc: d } as any)} />
+                  onSave={d => patch(rec.id, { doc: d } as any)}
+                  onSaveCell={(section, rowId, field, value) => saveCell(rec.id, section, rowId, field, value)} />
                 {!restricted && (
                   <div className="flex items-center justify-end gap-3 flex-wrap">
                     <button onClick={() => resyncAccounts(rec.id)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Refresh “Accounts to close” from this person’s Employee File tools">↻ Pull tools from Employee File</button>
