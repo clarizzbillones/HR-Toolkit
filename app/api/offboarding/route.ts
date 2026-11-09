@@ -217,10 +217,25 @@ export async function PATCH(req: Request) {
   if (typeof b.offer_severance === 'boolean') updates.offer_severance = b.offer_severance;
   if (b.checklist && typeof b.checklist === 'object') updates.checklist = JSON.stringify(b.checklist);
   if (b.excluded && typeof b.excluded === 'object') updates.excluded = JSON.stringify(b.excluded);
-  // When Catie's document is provided, detect a full sign-off so we can
-  // auto-complete: move the employee to Offboarded and file the signed PDF.
-  const signed = b.doc && typeof b.doc === 'object' ? docSignedOff(parseDoc(b.doc)) : false;
-  if (b.doc && typeof b.doc === 'object') updates.doc = JSON.stringify(b.doc);
+  // A whole-document save is STRUCTURE-ONLY: it may reorder / add / remove rows,
+  // rename labels, change the Ops fields, or toggle the lock — but it must never
+  // carry cell data (assignee / initials / date / notes / deadline) or sign-off
+  // entries. Those are owned exclusively by the atomic cell path. So we take the
+  // incoming structure but keep the LATEST database cell for every row still
+  // present (matched by id); new rows start empty. This makes it impossible for
+  // a stale structural save to wipe someone's concurrent entries.
+  let signed = false;
+  if (b.doc && typeof b.doc === 'object') {
+    const incoming = parseDoc(b.doc);
+    const [curRow] = await sql`SELECT doc FROM offboarding WHERE id = ${b.id}` as any[];
+    const current = parseDoc(curRow?.doc);
+    const curCell = new Map<string, any>();
+    for (const sec of ['hr', 'accounts', 'it'] as const) for (const r of (current as any)[sec] ?? []) curCell.set(r.id, r.cell ?? {});
+    for (const sec of ['hr', 'accounts', 'it'] as const) for (const r of (incoming as any)[sec] ?? []) r.cell = curCell.get(r.id) ?? r.cell ?? {};
+    incoming.signoff = current.signoff ?? incoming.signoff;
+    signed = docSignedOff(incoming);
+    updates.doc = JSON.stringify(incoming);
+  }
   if (!Object.keys(updates).length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
   const [prev] = await sql`SELECT offboarded, name, separation_date FROM offboarding WHERE id = ${b.id}` as any[];

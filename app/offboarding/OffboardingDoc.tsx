@@ -56,11 +56,16 @@ export default function OffboardingDoc({ rec, readOnly, lockAssignment, assignee
 
   function removeAssignee(n: string) {
     if (!window.confirm(`Remove "${n}" from the assignee list for every offboarding?`)) return;
+    // Collect every row/sign-off cell that carried this assignee, then clear each
+    // through the atomic cell path so it can't clobber other people's edits.
+    const clears: Array<['hr' | 'accounts' | 'it' | 'signoff', string]> = [];
+    for (const key of ['hr', 'accounts', 'it'] as const) for (const r of ref.current[key]) if (r.cell.assignee === n) clears.push([key, r.id]);
+    for (const k of ['hr', 'ops', 'it'] as const) if ((ref.current.signoff as any)[k]?.assignee === n) clears.push(['signoff', k]);
     apply(d => {
       for (const key of ['hr', 'accounts', 'it'] as const) for (const r of d[key]) if (r.cell.assignee === n) r.cell.assignee = '';
       for (const k of ['hr', 'ops', 'it'] as const) if ((d.signoff as any)[k]?.assignee === n) (d.signoff as any)[k].assignee = '';
     });
-    persist();
+    for (const [section, rowId] of clears) saveCellPatch(section, rowId, { assignee: '' });
     onRemoveAssignee?.(n);
   }
   function toggleLock() { apply(d => { d.locked = !d.locked; }); persist(); }
