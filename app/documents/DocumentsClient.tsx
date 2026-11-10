@@ -4,13 +4,17 @@ import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { canEditSection } from '@/lib/access';
+import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 
 interface Doc {
   id: string; name: string; category: string; file_name: string;
   mime: string; size: number; uploaded_by: string | null; created_at: string;
 }
 
-const MAX = 15 * 1024 * 1024;
+// With Blob storage on, files go straight to storage (50 MB). Without it, they
+// are base64'd through the API and bound by the serverless body limit.
+const MAX = BLOB_ENABLED ? BLOB_MAX_BYTES : 15 * 1024 * 1024;
+const MAX_LABEL = BLOB_ENABLED ? '50 MB' : '15 MB';
 
 function fmtSize(n: number) {
   if (!n) return '';
@@ -86,13 +90,22 @@ export default function DocumentsClient() {
     setBusy(true);
     let ok = 0, fail = 0;
     for (const file of list) {
-      if (file.size > MAX) { showToast(`${file.name} is too large (max 15 MB)`); fail++; continue; }
+      if (file.size > MAX) { showToast(`${file.name} is too large (max ${MAX_LABEL})`); fail++; continue; }
       try {
-        const dataUrl = await fileToDataUrl(file);
-        const res = await fetch('/api/documents', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: dataUrl, file_name: file.name, name: file.name, category: uploadCat.trim() }),
-        });
+        let res: Response;
+        if (BLOB_ENABLED) {
+          const { pathname, mime, size } = await uploadToBlob(file, 'company-documents');
+          res = await fetch('/api/documents', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ blob_pathname: pathname, mime, size, file_name: file.name, name: file.name, category: uploadCat.trim() }),
+          });
+        } else {
+          const dataUrl = await fileToDataUrl(file);
+          res = await fetch('/api/documents', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: dataUrl, file_name: file.name, name: file.name, category: uploadCat.trim() }),
+          });
+        }
         if (res.ok) { const { row } = await res.json(); if (row) setRows(rs => [row, ...rs]); ok++; }
         else { fail++; }
       } catch { fail++; }

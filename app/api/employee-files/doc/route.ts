@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql, cuid } from '@/lib/db';
+import { isBlobRef, parseBlobRef, makeBlobRef, signedDownloadUrl, deleteBlobQuietly } from '@/lib/blob';
+
+export const runtime = 'nodejs';
 
 async function requireHrAdmin() {
   const session = await getServerSession(authOptions);
@@ -22,6 +25,13 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: 'Missing file id' }, { status: 400 });
   const [row] = await sql`SELECT attachment_name, attachment_data FROM employee_files WHERE id = ${id}` as any[];
   if (!row?.attachment_data) return NextResponse.json({ error: 'No attachment' }, { status: 404 });
+  // Blob-stored attachment → redirect to a short-lived signed URL.
+  if (isBlobRef(row.attachment_data)) {
+    const ref = parseBlobRef(row.attachment_data);
+    if (!ref) return NextResponse.json({ error: 'Bad attachment' }, { status: 500 });
+    try { return NextResponse.redirect(await signedDownloadUrl(ref.p), { status: 302 }); }
+    catch { return NextResponse.json({ error: 'Storage unavailable' }, { status: 503 }); }
+  }
   const dataUrl = String(row.attachment_data);
   const comma = dataUrl.indexOf(',');
   if (!dataUrl.startsWith('data:') || comma < 0) return NextResponse.json({ error: 'Bad attachment' }, { status: 500 });
@@ -40,8 +50,12 @@ export async function POST(req: Request) {
   if (!(await requireHrAdmin())) return FORBIDDEN();
   const b = await req.json();
   if (!b.profile_id) return NextResponse.json({ error: 'Missing profile_id' }, { status: 400 });
-  const attData = typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:') ? b.attachment_data : null;
-  const attName = attData ? String(b.attachment_name ?? 'document').slice(0, 200) : null;
+  const attName = (b.attachment_blob || (typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:'))) ? String(b.attachment_name ?? 'document').slice(0, 200) : null;
+  // A blob reference (large file already uploaded to storage) takes precedence
+  // over an inline data URL (small file sent in the body).
+  const attData = b.attachment_blob
+    ? makeBlobRef(String(b.attachment_blob), String(b.attachment_mime ?? 'application/octet-stream'), attName ?? undefined)
+    : (typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:') ? b.attachment_data : null);
   const id = cuid();
   await sql`INSERT INTO employee_files (id, profile_id, category, title, doc_date, summary, what_we_did, next_steps, author, attachment_name, attachment_data)
     VALUES (${id}, ${b.profile_id}, ${b.category ?? 'Remark'}, ${b.title ?? ''}, ${b.doc_date ?? null}, ${b.summary ?? ''}, ${b.what_we_did ?? ''}, ${b.next_steps ?? ''}, ${b.author ?? ''}, ${attName}, ${attData})`;
@@ -53,14 +67,21 @@ export async function PATCH(req: Request) {
   if (!(await requireHrAdmin())) return FORBIDDEN();
   const b = await req.json();
   if (!b.id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-  // Only replace the attachment when a new data URL is supplied.
-  const newAtt = typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:');
+  // Replace the attachment when a new blob reference or data URL is supplied.
+  const attName = String(b.attachment_name ?? 'document').slice(0, 200);
+  const newBlob = b.attachment_blob ? makeBlobRef(String(b.attachment_blob), String(b.attachment_mime ?? 'application/octet-stream'), attName) : null;
+  const newDataUrl = typeof b.attachment_data === 'string' && b.attachment_data.startsWith('data:') ? b.attachment_data : null;
   await sql`UPDATE employee_files SET
     category = ${b.category ?? 'Remark'}, title = ${b.title ?? ''}, doc_date = ${b.doc_date ?? null},
     summary = ${b.summary ?? ''}, what_we_did = ${b.what_we_did ?? ''}, next_steps = ${b.next_steps ?? ''}, author = ${b.author ?? ''}
     WHERE id = ${b.id}`;
-  if (newAtt) {
-    await sql`UPDATE employee_files SET attachment_name = ${String(b.attachment_name ?? 'document').slice(0, 200)}, attachment_data = ${b.attachment_data} WHERE id = ${b.id}`;
+  if (newBlob || newDataUrl || b.remove_attachment) {
+    // Clean up the previous blob if we're swapping or clearing it.
+    const [prev] = await sql`SELECT attachment_data FROM employee_files WHERE id = ${b.id}` as any[];
+    if (prev && isBlobRef(prev.attachment_data)) { const r = parseBlobRef(prev.attachment_data); if (r) await deleteBlobQuietly(r.p); }
+  }
+  if (newBlob || newDataUrl) {
+    await sql`UPDATE employee_files SET attachment_name = ${attName}, attachment_data = ${newBlob ?? newDataUrl} WHERE id = ${b.id}`;
   } else if (b.remove_attachment) {
     await sql`UPDATE employee_files SET attachment_name = NULL, attachment_data = NULL WHERE id = ${b.id}`;
   }
@@ -73,6 +94,8 @@ export async function DELETE(req: Request) {
   if (!(await requireHrAdmin())) return FORBIDDEN();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  const [row] = await sql`SELECT attachment_data FROM employee_files WHERE id = ${id}` as any[];
+  if (row && isBlobRef(row.attachment_data)) { const r = parseBlobRef(row.attachment_data); if (r) await deleteBlobQuietly(r.p); }
   await sql`DELETE FROM employee_files WHERE id = ${id}`;
   return NextResponse.json({ ok: true });
 }

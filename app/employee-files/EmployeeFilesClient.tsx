@@ -7,6 +7,7 @@ import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
 import { BENEFITS } from '@/lib/benefits';
+import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -56,7 +57,10 @@ const CAT_COLOR: Record<string, string> = {
   'Remark / Timeline': 'bg-[#fdeaea] text-[#b0412f]', 'Other': 'bg-[#f1ece3] text-[#8b8478]',
 };
 const MAX_PHOTO = 2 * 1024 * 1024;
-const MAX_FILE = 3.5 * 1024 * 1024;
+// With Blob storage on, document attachments go straight to storage (50 MB);
+// otherwise they are base64'd through the API (bound by the serverless limit).
+const MAX_FILE = BLOB_ENABLED ? BLOB_MAX_BYTES : 3.5 * 1024 * 1024;
+const MAX_FILE_LABEL = BLOB_ENABLED ? '50 MB' : '~3.5 MB';
 function fileToDataUrl(f: File): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(f); });
 }
@@ -722,10 +726,20 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
     setDocForm({ category: d.category, title: d.title ?? '', doc_date: d.doc_date ? String(d.doc_date).slice(0, 10) : '', summary: d.summary ?? '', what_we_did: d.what_we_did ?? '', next_steps: d.next_steps ?? '', author: d.author ?? '' });
     setDocFile(null); setEditDocId(d.id); setShowDocForm(true);
   }
+  // Build the attachment payload for a file: a Blob reference when storage is
+  // on (handles large files), otherwise an inline base64 data URL.
+  async function attachFor(file: File): Promise<any> {
+    if (BLOB_ENABLED) {
+      const { pathname, mime } = await uploadToBlob(file, `employee-files/${selected?.id ?? 'misc'}`);
+      return { attachment_name: file.name, attachment_blob: pathname, attachment_mime: mime };
+    }
+    return { attachment_name: file.name, attachment_data: await fileToDataUrl(file) };
+  }
+
   async function saveDoc() {
     if (!selected) return;
     let attach: any = {};
-    if (docFile) { if (docFile.size > MAX_FILE) { showToast('File too large (max ~3.5 MB)'); return; } attach = { attachment_name: docFile.name, attachment_data: await fileToDataUrl(docFile) }; }
+    if (docFile) { if (docFile.size > MAX_FILE) { showToast(`File too large (max ${MAX_FILE_LABEL})`); return; } attach = await attachFor(docFile); }
     if (editDocId) {
       const res = await fetch('/api/employee-files/doc', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editDocId, ...docForm, ...attach }) });
       const { doc } = await res.json();
@@ -742,10 +756,10 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   // you want to add a category, summary, etc.
   async function quickUpload(file: File) {
     if (!selected) return;
-    if (file.size > MAX_FILE) { showToast('File too large (max ~3.5 MB)'); return; }
+    if (file.size > MAX_FILE) { showToast(`File too large (max ${MAX_FILE_LABEL})`); return; }
     setUploading(true);
     try {
-      const attach = { attachment_name: file.name, attachment_data: await fileToDataUrl(file) };
+      const attach = await attachFor(file);
       const title = file.name.replace(/\.[^.]+$/, '');
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch('/api/employee-files/doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile_id: selected.id, category: 'Other', title, doc_date: today, summary: '', what_we_did: '', next_steps: '', author: '', ...attach }) });
