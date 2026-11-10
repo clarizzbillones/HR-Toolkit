@@ -612,7 +612,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         const m = benByName.get(key(r.name)) ?? {};
         return [S(r.name), S(r.position), ...BENEFITS.map(b => benCell(m[b]))];
       })]);
-      ws3['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }];
+      ws3['!cols'] = [{ wch: 22 }, { wch: 24 }, ...BENEFITS.map(() => ({ wch: 26 }))];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws1, 'Employees');

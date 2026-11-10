@@ -3,7 +3,7 @@
 // tile shows the firm-wide roster and each Employee File shows that person's
 // elections, both reading/writing the same `benefit_enrollments` table.
 
-export const BENEFITS = ['Medical', 'Dental', 'Vision', 'Life'] as const;
+export const BENEFITS = ['Medical', 'Dental', 'Vision', 'Life', 'Malpractice'] as const;
 export type Benefit = typeof BENEFITS[number];
 
 // Carriers for the enrollable group plans (Employee Health & Welfare, managed
@@ -14,14 +14,16 @@ export const BENEFIT_PROVIDERS: Record<Benefit, string> = {
   Dental: 'Guardian',
   Vision: 'Guardian (VSP network)',
   Life: 'Principal',
+  Malpractice: 'Hanover',
 };
 
 // On-brand accent per benefit, so the column headers read clearly (not pale).
 export const BENEFIT_ACCENTS: Record<Benefit, string> = {
-  Medical: '#2f7d5b', // green
-  Dental: '#3f6b8a',  // blue
-  Vision: '#6b5b8a',  // purple
-  Life: '#b07d2a',    // gold
+  Medical: '#2f7d5b',     // green
+  Dental: '#3f6b8a',      // blue
+  Vision: '#6b5b8a',      // purple
+  Life: '#b07d2a',        // gold
+  Malpractice: '#9c3b4e', // maroon
 };
 
 // Election status. '' = not recorded yet.
