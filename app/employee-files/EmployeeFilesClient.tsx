@@ -899,12 +899,20 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                         {selected.email && <div><span className="text-text-muted">Email:</span> {selected.email}</div>}
                         {selected.phone && <div><span className="text-text-muted">Phone:</span> {selected.phone}</div>}
                         {selected.start_date && <div><span className="text-text-muted">Start date:</span> {fmtDate(selected.start_date)}</div>}
+                        <div>
+                          <span className="text-text-muted">Salary:</span>{' '}
+                          {selected.salary
+                            ? <span className="font-semibold text-text-primary">{fmtMoney(selected.salary)}</span>
+                            : !readOnly
+                              ? <button onClick={() => setEditingProfile(true)} className="text-[#3f6b8a] hover:underline font-semibold">+ Add salary</button>
+                              : <span className="text-text-faint">—</span>}
+                        </div>
                       </div>
                       {selected.details && <p className="text-sm text-text-secondary mt-3 whitespace-pre-wrap">{selected.details}</p>}
                       {EXTRA_GROUPS.some(g => g.fields.some(([, k]) => selected[k])) && (
                         <div className="mt-4 space-y-3">
                           {EXTRA_GROUPS.map(g => {
-                            const shown = g.fields.filter(([, k]) => selected[k]);
+                            const shown = g.fields.filter(([, k]) => k !== 'salary' && selected[k]);
                             if (!shown.length) return null;
                             return (
                               <div key={g.heading}>
