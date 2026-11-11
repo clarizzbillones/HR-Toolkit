@@ -6,6 +6,7 @@ import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
+import { ActualCostCard } from '@/components/ActualCost';
 import { BENEFITS } from '@/lib/benefits';
 import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 import { fmtPay } from '@/lib/money';
@@ -1017,6 +1018,9 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
               </div>
               <BenefitsEnrollment mode="person" personName={selected.name} canEdit={!readOnly} />
             </div>
+
+            {/* Actual cost — renders only for Clarizz and Catie (the API refuses everyone else) */}
+            <ActualCostCard key={selected.id} name={selected.name} />
 
             {/* Documents */}
             <div>

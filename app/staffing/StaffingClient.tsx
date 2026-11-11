@@ -6,6 +6,8 @@ import { useUndo } from '@/components/UndoProvider';
 import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
 import { fmtPay } from '@/lib/money';
+import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal } from '@/components/ActualCost';
+import { usd } from '@/lib/actualCost';
 
 interface Staff {
   id: string; name: string; worker_type?: string | null; position: string | null; salary?: string | null; dialpad: string | null;
@@ -322,6 +324,12 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const fOff = applyView(offboarded.filter(r => searchHit(r, ['name', 'position', 'email'])), offCols, byName);
   const fVen = applyView(vendors.filter(r => searchHit(r, ['entity', 'name', 'email'])), venCols, byEntity);
   // Split the roster into 1099 contractors vs W-2 employees for the header count.
+  // Actual (fully loaded) cost — the API only answers for Clarizz and Catie.
+  const cost = useActualCost();
+  const costById = new Map(cost.rows.map(r => [r.id, r]));
+  const [costOpen, setCostOpen] = useState<string | null>(null);
+  const [costSettingsOpen, setCostSettingsOpen] = useState(false);
+  const costTotal = cost.rows.filter(r => !r.offboarded).reduce((a, r) => a + r.cost.total, 0);
   const contractorCount = rows.filter(r => /contractor|1099/i.test(r.worker_type ?? '')).length;
   const employeeCount = rows.length - contractorCount;
 
@@ -440,8 +448,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     return (raw ?? '—') || '—';
   }
   // Shared header row with drag + arrow reordering (used by all three tables).
-  function headerRow(opts: { columns: UCol[]; reorderable: boolean; pinnedFirstId?: string; field: OrderField; onAddColumn?: () => void; onRemoveCol?: (id: string) => void }) {
-    const { columns, reorderable, pinnedFirstId, field, onAddColumn, onRemoveCol } = opts;
+  function headerRow(opts: { columns: UCol[]; reorderable: boolean; pinnedFirstId?: string; field: OrderField; onAddColumn?: () => void; onRemoveCol?: (id: string) => void; extraTh?: React.ReactNode }) {
+    const { columns, reorderable, pinnedFirstId, field, onAddColumn, onRemoveCol, extraTh } = opts;
     const move = makeMove(field, columns, pinnedFirstId), drop = makeDrop(field, columns, pinnedFirstId);
     const firstMovable = pinnedFirstId ? 1 : 0;
     return (
@@ -473,6 +481,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
             </th>
           );
         })}
+        {extraTh}
         {onAddColumn
           ? <th className="px-2 py-3 sticky top-0 z-20" style={{ background: active.soft }}><button onClick={onAddColumn} title="Add a column" className="text-xs font-bold text-ink border border-border-light rounded-ctrl px-2 py-1 hover:bg-canvas whitespace-nowrap">+ Column</button></th>
           : <th className="px-4 py-3 sticky top-0 z-20" style={{ background: active.soft }} />}
@@ -488,6 +497,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               </th>
             );
           })}
+          {extraTh && <th className="px-2 pb-2 pt-0 sticky top-[42px] z-20" style={{ background: active.soft }} />}
           <th className="px-2 pb-2 pt-0 sticky top-[42px] z-20" style={{ background: active.soft }} />
         </tr>
       )}
@@ -495,11 +505,19 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     );
   }
   function StaffTable({ columns, data, kind }: { columns: UCol[]; data: Staff[]; kind: 'employees' | 'offboarded' }) {
+    const showCost = cost.allowed && kind === 'employees';
+    const costTh = showCost ? (
+      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider whitespace-nowrap sticky top-0 z-20" style={{ color: active.text, background: active.soft }}
+        title="Pay plus employer taxes, the firm's insurance share, 401(k) and other costs. Visible only to Clarizz and Catie.">
+        Actual cost {cost.settings?.year}
+        <button onClick={() => setCostSettingsOpen(true)} title="Tax rates and defaults" className="ml-1.5 text-text-muted hover:text-ink">⚙</button>
+      </th>
+    ) : undefined;
     return (
       <table className="w-full text-sm whitespace-nowrap">
         <thead style={{ background: active.soft }}>
           {headerRow({ columns, reorderable: true, pinnedFirstId: 'name', field: kind === 'employees' ? 'order' : 'offOrder',
-            onAddColumn: kind === 'employees' ? addCustomColumn : undefined, onRemoveCol: kind === 'employees' ? removeCustomColumn : undefined })}
+            onAddColumn: kind === 'employees' ? addCustomColumn : undefined, onRemoveCol: kind === 'employees' ? removeCustomColumn : undefined, extraTh: costTh })}
         </thead>
         <tbody>
           {data.map(r => (
@@ -511,13 +529,25 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                   {cellContent(kind, r, c)}
                 </td>
               ))}
+              {showCost && (() => {
+                const cr = costById.get(r.id);
+                return (
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {cr ? <button onClick={() => setCostOpen(r.id)} title="See the breakdown"
+                      className="font-semibold text-text-primary tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#2f7d5b]">
+                      {cr.cost.annualPay == null ? 'Add salary' : usd(cr.cost.total)}
+                    </button> : <span className="text-text-muted">—</span>}
+                    {cr && !cr.cost.contractor && cr.inputs.insuranceMonthly == null && cr.cost.annualPay != null && <span title="Firm's insurance share not entered yet" className="ml-1.5 text-[#b07d2a]">•</span>}
+                  </td>
+                );
+              })()}
               <td className="px-4 py-3 text-right whitespace-nowrap">
                 <button onClick={() => setEditStaff({ data: r, kind })} className="text-xs font-semibold text-ink border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-canvas">Edit</button>
                 <button onClick={() => delStaff(kind, r.id)} className="ml-1.5 text-xs font-semibold text-litred-alt border border-border-light px-2.5 py-1 rounded-ctrl hover:bg-[#fdeaea]">Delete</button>
               </td>
             </tr>
           ))}
-          {!data.length && <tr><td colSpan={columns.length + 1} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
+          {!data.length && <tr><td colSpan={columns.length + (showCost ? 2 : 1)} className="px-4 py-10 text-center text-text-muted">No records yet — upload your admin XLSX.</td></tr>}
         </tbody>
       </table>
     );
@@ -531,7 +561,8 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
             <span className="w-3 h-8 rounded-full" style={{ background: active.accent }} />
             <div>
               <h1 className="font-spectral text-[23px] font-semibold text-text-primary">Staffing &amp; Contacts</h1>
-              <p className="text-sm text-text-muted mt-0.5">{employeeCount} employees · {contractorCount} contractors · {vendors.length} vendors · {offboarded.length} offboarded</p>
+              <p className="text-sm text-text-muted mt-0.5">{employeeCount} employees · {contractorCount} contractors · {vendors.length} vendors · {offboarded.length} offboarded
+                {cost.allowed && cost.settings && <> · <span className="font-semibold text-text-secondary" title="Visible only to Clarizz and Catie">Actual cost {cost.settings.year}: {usd(costTotal)}</span></>}</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2.5">
@@ -615,6 +646,16 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       </div>
 
       {/* Staff modal */}
+      {costOpen && cost.settings && costById.get(costOpen) && (
+        <CostModal title={`Actual cost · ${costById.get(costOpen)!.name}`} onClose={() => setCostOpen(null)}>
+          <ActualCostDetail row={costById.get(costOpen)!} settings={cost.settings} onSave={v => cost.saveInputs(costOpen, v)} />
+        </CostModal>
+      )}
+      {costSettingsOpen && cost.settings && (
+        <CostModal title="Actual cost · tax rates and defaults" onClose={() => setCostSettingsOpen(false)}>
+          <CostSettingsForm settings={cost.settings} onSave={cost.saveSettings} onDone={() => setCostSettingsOpen(false)} />
+        </CostModal>
+      )}
       {editStaff && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6" onClick={() => setEditStaff(null)}>
           <div className="bg-white rounded-card w-full max-w-2xl max-h-[88vh] flex flex-col shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
