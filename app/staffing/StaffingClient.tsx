@@ -7,7 +7,7 @@ import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
 
 interface Staff {
-  id: string; name: string; worker_type?: string | null; position: string | null; dialpad: string | null;
+  id: string; name: string; worker_type?: string | null; position: string | null; salary?: string | null; dialpad: string | null;
   personal_phone: string | null; email: string | null; address?: string | null; start_date: string | null;
   dob: string | null; favorite_color: string | null; favorite_treat: string | null;
   note: string | null; ktn: string | null; marriott: string | null; delta: string | null;
@@ -22,6 +22,7 @@ interface Vendor {
 const WORKER_TYPES = ['Employee', 'Contractor'];
 const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'name', label: 'Name' }, { key: 'worker_type', label: 'Type' }, { key: 'position', label: 'Position' },
+  { key: 'salary', label: 'Salary' },
   { key: 'dialpad', label: 'Dialpad Number' }, { key: 'personal_phone', label: 'Personal Phone Number' },
   { key: 'email', label: 'Email' }, { key: 'address', label: 'Address' }, { key: 'start_date', label: 'Employment Start Date' },
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },
@@ -31,6 +32,7 @@ const EMP_COLUMNS: { key: keyof Staff; label: string }[] = [
 ];
 const OFF_COLUMNS: { key: keyof Staff; label: string }[] = [
   { key: 'name', label: 'Name' }, { key: 'worker_type', label: 'Type' }, { key: 'position', label: 'Position' },
+  { key: 'salary', label: 'Salary' },
   { key: 'dialpad', label: 'Dialpad Number' }, { key: 'personal_phone', label: 'Personal Phone Number' },
   { key: 'email', label: 'Email' }, { key: 'address', label: 'Address' }, { key: 'start_date', label: 'Employment Start Date' },
   { key: 'dob', label: 'DOB' }, { key: 'favorite_color', label: 'Favorite Color' },

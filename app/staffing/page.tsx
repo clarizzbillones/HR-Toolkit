@@ -24,6 +24,8 @@ export default async function StaffingPage() {
   )`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS southwest TEXT`;
   await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS southwest TEXT`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS salary TEXT`;
+  await sql`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS salary TEXT`;
   // Tidy Staffing before load: drop a duplicate custom "Address" column (moving
   // its data into the built-in Address), collapse duplicate person rows, and
   // backfill blank fields (esp. mailing address) from completed intake forms.

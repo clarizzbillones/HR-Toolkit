@@ -26,7 +26,7 @@ async function syncProfileFromStaff(oldName: string | null, staffRow: any) {
   } catch { /* best-effort */ }
 }
 
-const FIELDS = ['name','worker_type','position','dialpad','personal_phone','email','address','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','american','weight','extra'] as const;
+const FIELDS = ['name','worker_type','position','salary','dialpad','personal_phone','email','address','start_date','dob','favorite_color','favorite_treat','note','ktn','marriott','delta','southwest','american','weight','extra'] as const;
 
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS staff_directory (
@@ -54,6 +54,7 @@ async function ensureTable() {
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS offboarded BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS address TEXT`;
+  await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS salary TEXT`;
 }
 
 function rid() { return `st${Date.now()}${Math.random().toString(36).slice(2, 7)}`; }
@@ -76,8 +77,8 @@ export async function POST(req: Request) {
   if (body.replace) await sql`DELETE FROM staff_directory`;
   for (const r of clean) {
     const v = Object.fromEntries(FIELDS.map(f => [f, r[f] != null && r[f] !== '' ? String(r[f]) : null]));
-    await sql`INSERT INTO staff_directory (id,name,worker_type,position,dialpad,personal_phone,email,address,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,weight,extra)
-      VALUES (${rid()},${v.name},${v.worker_type ?? 'Employee'},${v.position},${v.dialpad},${v.personal_phone},${v.email},${v.address},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.southwest},${v.american},${v.weight},${v.extra})`;
+    await sql`INSERT INTO staff_directory (id,name,worker_type,position,salary,dialpad,personal_phone,email,address,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,weight,extra)
+      VALUES (${rid()},${v.name},${v.worker_type ?? 'Employee'},${v.position},${v.salary ?? null},${v.dialpad},${v.personal_phone},${v.email},${v.address},${v.start_date},${v.dob},${v.favorite_color},${v.favorite_treat},${v.note},${v.ktn},${v.marriott},${v.delta},${v.southwest},${v.american},${v.weight},${v.extra})`;
   }
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;
   return NextResponse.json({ rows, inserted: clean.length });

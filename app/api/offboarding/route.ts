@@ -30,7 +30,7 @@ async function ensureOffboardedStaff() {
     start_date TEXT, dob TEXT, favorite_color TEXT, favorite_treat TEXT, note TEXT, ktn TEXT, marriott TEXT,
     delta TEXT, offboarded TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
-  for (const c of ['southwest', 'worker_type', 'american']) await sql.unsafe(`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS ${c} TEXT`);
+  for (const c of ['southwest', 'worker_type', 'american', 'salary', 'address']) await sql.unsafe(`ALTER TABLE offboarded_staff ADD COLUMN IF NOT EXISTS ${c} TEXT`);
 }
 const gid = (p: string) => `${p}${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
 
@@ -49,16 +49,16 @@ async function setOffboarded(name: string, on: boolean, date: string | null) {
       const [r] = await sql`SELECT * FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
       if (r) {
         const [ex] = await sql`SELECT id FROM offboarded_staff WHERE lower(name) = ${key} LIMIT 1` as any[];
-        if (!ex) await sql`INSERT INTO offboarded_staff (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,offboarded)
-          VALUES (${gid('of')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null},${date ?? ''})`;
+        if (!ex) await sql`INSERT INTO offboarded_staff (id,name,worker_type,position,salary,address,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american,offboarded)
+          VALUES (${gid('of')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.salary ?? null},${r.address ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null},${date ?? ''})`;
         await sql`DELETE FROM staff_directory WHERE lower(name) = ${key}`;
       }
     } else {
       const [r] = await sql`SELECT * FROM offboarded_staff WHERE lower(name) = ${key} LIMIT 1` as any[];
       if (r) {
         const [ex] = await sql`SELECT id FROM staff_directory WHERE lower(name) = ${key} LIMIT 1` as any[];
-        if (!ex) await sql`INSERT INTO staff_directory (id,name,worker_type,position,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american)
-          VALUES (${gid('st')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null})`;
+        if (!ex) await sql`INSERT INTO staff_directory (id,name,worker_type,position,salary,address,dialpad,personal_phone,email,start_date,dob,favorite_color,favorite_treat,note,ktn,marriott,delta,southwest,american)
+          VALUES (${gid('st')},${r.name},${r.worker_type ?? 'Employee'},${r.position ?? null},${r.salary ?? null},${r.address ?? null},${r.dialpad ?? null},${r.personal_phone ?? null},${r.email ?? null},${r.start_date ?? null},${r.dob ?? null},${r.favorite_color ?? null},${r.favorite_treat ?? null},${r.note ?? null},${r.ktn ?? null},${r.marriott ?? null},${r.delta ?? null},${r.southwest ?? null},${r.american ?? null})`;
         await sql`DELETE FROM offboarded_staff WHERE lower(name) = ${key}`;
       }
     }
