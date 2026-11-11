@@ -113,7 +113,33 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
   const extraNames = enrollments.map(e => e.person_name).filter(n => n && !names.has(n));
   const roster = [...employees.map(e => ({ name: e.name, position: e.position })), ...[...new Set(extraNames)].map(n => ({ name: n, position: null }))];
 
+  // Enrollment summary: counts per benefit by status (headline = Enrolled).
+  const summary = BENEFITS.map(b => {
+    const counts: Record<string, number> = { Enrolled: 0, Declined: 0, Waived: 0, Pending: 0, 'Not eligible': 0 };
+    for (const e of enrollments) if (e.benefit === b) { const s = String(e.status ?? '').trim(); if (s in counts) counts[s] += 1; }
+    const enrolledNames = enrollments.filter(e => e.benefit === b && String(e.status ?? '').trim() === 'Enrolled').map(e => e.person_name).sort();
+    return { benefit: b as Benefit, counts, enrolledNames };
+  });
+
   return (
+    <div className="space-y-4">
+      {/* Summary — how many people are enrolled in each benefit */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {summary.map(s => (
+          <div key={s.benefit} className="rounded-ctrl border border-border-light bg-white p-3" style={{ borderTop: `3px solid ${BENEFIT_ACCENTS[s.benefit]}` }}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BENEFIT_ACCENTS[s.benefit] }}>{s.benefit}</span>
+              <span className="text-[20px] font-semibold text-text-primary leading-none">{s.counts.Enrolled}</span>
+            </div>
+            <div className="text-[10px] text-text-muted mt-0.5">enrolled{s.enrolledNames.length ? ` · ${s.enrolledNames.join(', ')}` : ''}</div>
+            <div className="text-[10px] text-text-faint mt-1">
+              {[['Declined', s.counts.Declined], ['Waived', s.counts.Waived], ['Pending', s.counts.Pending], ['N/A', s.counts['Not eligible']]]
+                .filter(([, n]) => (n as number) > 0).map(([l, n]) => `${n} ${l}`).join(' · ') || '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+
     <div className="overflow-auto max-h-[60vh] rounded-ctrl border border-border-light">
       <table className="w-full text-sm min-w-[720px] border-separate border-spacing-0">
         <thead>
@@ -128,7 +154,7 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
           </tr>
         </thead>
         <tbody>
-          {roster.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-text-muted">No employees found</td></tr>}
+          {roster.length === 0 && <tr><td colSpan={BENEFITS.length + 1} className="px-4 py-8 text-center text-text-muted">No employees found</td></tr>}
           {roster.map(r => (
             <tr key={r.name} className="border-b border-[#f1ece3] last:border-0 hover:bg-canvas">
               <td className="px-4 py-2 sticky left-0 z-10 bg-white">
@@ -141,6 +167,7 @@ export default function BenefitsEnrollment({ mode, personName, canEdit = true }:
         </tbody>
       </table>
       {edit && Editor()}
+    </div>
     </div>
   );
 
