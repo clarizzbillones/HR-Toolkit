@@ -8,6 +8,7 @@ import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
 import { BENEFITS } from '@/lib/benefits';
 import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
+import { fmtPay } from '@/lib/money';
 
 interface Profile {
   id: string; name: string; photo: string | null; position: string | null; department: string | null;
@@ -69,14 +70,8 @@ import { formatDate } from '@/lib/formatDate';
 function fmtDate(iso: string | null | undefined) { return formatDate(iso); }
 // A label that refers to pay/salary/compensation, so its value shows as money.
 const isSalaryLabel = (l: any) => /salar|compensation|\bpay\b|wage/i.test(String(l ?? ''));
-// Format a salary-ish value as "$120,000". Leaves non-numeric text (e.g. "TBD")
-// and already-formatted ("$120k") values untouched.
-function fmtMoney(v: any): string {
-  const s = String(v ?? '').trim();
-  if (!s || s.startsWith('$') || !/\d/.test(s)) return s;
-  const n = Number(s.replace(/[^0-9.]/g, ''));
-  return isFinite(n) ? '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : s;
-}
+// Salary/pay formatter (understands hourly "$50/hr" vs annual "$120,000").
+const fmtMoney = (v: any): string => fmtPay(v);
 const EMPTY_P = { name: '', position: '', department: '', email: '', phone: '', start_date: '', details: '', photo: '' };
 const EMPTY_D = { category: 'Remark / Timeline', title: '', doc_date: '', summary: '', what_we_did: '', next_steps: '', author: '' };
 
@@ -880,7 +875,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
                             {g.fields.map(([l, k]) => (
                               <div key={k}>
                                 <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">{l}</label>
-                                <input type={k === 'dob' ? 'date' : 'text'} value={(selected[k] as string) ?? ''} onChange={e => setSelected(p => p ? { ...p, [k]: e.target.value } : p)} className={input} />
+                                <input type={k === 'dob' ? 'date' : 'text'} value={(selected[k] as string) ?? ''} placeholder={k === 'salary' ? 'e.g. 120000, or 50/hr for hourly' : undefined} onChange={e => setSelected(p => p ? { ...p, [k]: e.target.value } : p)} className={input} />
                               </div>
                             ))}
                           </div>

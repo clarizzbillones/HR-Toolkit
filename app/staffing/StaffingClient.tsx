@@ -5,6 +5,7 @@ import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
 import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
+import { fmtPay } from '@/lib/money';
 
 interface Staff {
   id: string; name: string; worker_type?: string | null; position: string | null; salary?: string | null; dialpad: string | null;
@@ -224,11 +225,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
 
   // Money columns (by name) show a $ and thousands separators.
   function isMoney(c: UCol) { return /salary|wage|\bpay\b|payrate|\brate\b|amount|compensation|\bincome\b|\$/i.test(c.label); }
-  function fmtMoney(v: any) {
-    const s = String(v ?? '').trim(); if (!s) return '—';
-    const n = Number(s.replace(/[^0-9.\-]/g, ''));
-    return isNaN(n) ? s : '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  }
+  function fmtMoney(v: any) { return fmtPay(v) || '—'; }
 
   // Inline (click-to-edit) cell handling for all three tables.
   function startCell(table: TabKey, r: any, c: UCol) {
