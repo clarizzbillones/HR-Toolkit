@@ -506,7 +506,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           </div>
           <div class="grid">
             ${detail('Email', r.email)}${detail('Phone', r.phone)}${detail('Address', r.address)}
-            ${detail('Start date', r.start_date ? String(r.start_date).slice(0, 10) : '')}${detail('Date of birth', r.dob)}${detail('Salary', r.salary)}
+            ${detail('Start date', r.start_date ? String(r.start_date).slice(0, 10) : '')}${detail('Date of birth', r.dob)}${detail('Salary', fmtPay(r.salary))}
           </div>
           <div class="sub">Tools &amp; Access <span class="cnt">${accts.length}</span></div>
           ${toolsTable}
@@ -582,11 +582,22 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       const hdr = (arr: string[]) => arr.map(h => ({ v: h, t: 's', s: headStyle }));
       const S = (v: any) => v ?? '';
 
+      // Salary cell: a plain annual figure becomes a real number with a
+      // thousands format ("150,000", summable); hourly ("$50.00/hr") or text
+      // stays a formatted string.
+      const salaryCell = (v: any): any => {
+        const s = String(v ?? '').trim();
+        if (!s) return '';
+        if (/[a-z]/i.test(s)) return fmtPay(s); // "50/hr", "Check employee files"
+        const n = Number(s.replace(/[^0-9.]/g, ''));
+        return (/\d/.test(s) && isFinite(n)) ? { v: n, t: 'n', z: '#,##0' } : fmtPay(s);
+      };
+
       // Sheet 1 — Employees (all data, one row each).
       const empHeaders = ['Name', 'Position', 'Department', 'Worker type', 'Status', 'Email', 'Phone', 'Address', 'Start date', 'Date of birth', 'Salary'];
       const ws1 = XLSX.utils.aoa_to_sheet([hdr(empHeaders), ...rows.map(r => [
         S(r.name), S(r.position), S(r.department), r.worker_type || 'Employee', statusOf(r),
-        S(r.email), S(r.phone), S(r.address), r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', S(r.salary)])]);
+        S(r.email), S(r.phone), S(r.address), r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', salaryCell(r.salary)])]);
       ws1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 16 }, { wch: 13 }, { wch: 11 }, { wch: 26 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
 
       // Sheet 2 — Tools used (one row per employee-tool).
@@ -636,7 +647,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       const trs: string[] = [];
       for (const r of rows) {
         const status = r.offboarded ? 'Offboarded' : 'Active';
-        const base = [r.name, r.position, r.worker_type, status, r.salary, r.email];
+        const base = [r.name, r.position, r.worker_type, status, fmtPay(r.salary), r.email];
         const accts = (r.accounts ?? []) as any[];
         if (!accts.length) {
           trs.push(`<tr>${[...base, '', '', '', ''].map(c => `<td>${esc(c)}</td>`).join('')}</tr>`);
