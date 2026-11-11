@@ -637,11 +637,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       const rows = await fetchExportRows();
       if (!rows.length) { showToast('No employees to export'); return; }
       const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const headers = ['Employee', 'Position', 'Worker type', 'Status', 'Email', 'Tool / System', 'Access level', 'Tool status', 'Source'];
+      const headers = ['Employee', 'Position', 'Worker type', 'Status', 'Salary', 'Email', 'Tool / System', 'Access level', 'Tool status', 'Source'];
       const trs: string[] = [];
       for (const r of rows) {
         const status = r.offboarded ? 'Offboarded' : 'Active';
-        const base = [r.name, r.position, r.worker_type, status, r.email];
+        const base = [r.name, r.position, r.worker_type, status, r.salary, r.email];
         const accts = (r.accounts ?? []) as any[];
         if (!accts.length) {
           trs.push(`<tr>${[...base, '', '', '', ''].map(c => `<td>${esc(c)}</td>`).join('')}</tr>`);
