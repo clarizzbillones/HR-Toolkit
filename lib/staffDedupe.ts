@@ -71,7 +71,50 @@ export async function dedupeAddressColumn(): Promise<void> {
   } catch { /* best-effort */ }
 }
 
-const DUP_COLS = ['worker_type', 'position', 'dialpad', 'personal_phone', 'email', 'address', 'start_date', 'dob', 'favorite_color', 'favorite_treat', 'note', 'ktn', 'marriott', 'delta', 'southwest', 'american', 'weight'] as const;
+// Custom column labels that duplicate the built-in `salary` field.
+const SALARY_LIKE = new Set(['salary', 'annualsalary', 'basesalary', 'basepay', 'annualpay', 'payrate', 'hourlyrate', 'compensation', 'annualcompensation', 'wage', 'wages']);
+
+// Same self-heal as dedupeAddressColumn, for a custom "Annual Salary" / "Salary"
+// column that duplicates the built-in `salary` field. Moves each row's custom
+// value into `salary` (only when blank — never overwrites), strips it from
+// `extra`, and drops the custom column from the saved config. Idempotent.
+export async function dedupeSalaryColumn(): Promise<void> {
+  try {
+    await sql`CREATE TABLE IF NOT EXISTS app_settings (id TEXT PRIMARY KEY)`;
+    for (const c of ['staff_columns', 'staff_col_order', 'staff_col_labels'])
+      await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ${sql(c)} TEXT`;
+    const [cfg] = await sql`SELECT staff_columns, staff_col_order, staff_col_labels FROM app_settings WHERE id = 'singleton'` as any[];
+    if (!cfg) return;
+    const columns = parseArr(cfg.staff_columns);
+    const order = parseArr(cfg.staff_col_order);
+    const labels = parseMap(cfg.staff_col_labels);
+    const dupCols = columns.filter(id => SALARY_LIKE.has(normLabel(labels[id] ?? id)));
+    if (!dupCols.length) return;
+
+    await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS salary TEXT`;
+    await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS extra TEXT`;
+    const rows = await sql`SELECT id, salary, extra FROM staff_directory` as any[];
+    for (const r of rows) {
+      let obj: Record<string, any> = {};
+      try { obj = r.extra ? JSON.parse(r.extra) : {}; } catch { obj = {}; }
+      let custom = '';
+      for (const dc of dupCols) { const v = String(obj[dc] ?? '').trim(); if (v) { custom = v; break; } }
+      let extraChanged = false;
+      for (const dc of dupCols) { if (dc in obj) { delete obj[dc]; extraChanged = true; } }
+      const builtin = String(r.salary ?? '').trim();
+      const newSalary = builtin || custom || r.salary;
+      if (extraChanged || newSalary !== r.salary) {
+        await sql`UPDATE staff_directory SET salary = ${newSalary}, extra = ${JSON.stringify(obj)} WHERE id = ${r.id}`;
+      }
+    }
+    const drop = new Set(dupCols);
+    const newLabels: Record<string, string> = {};
+    for (const [k, v] of Object.entries(labels)) if (!drop.has(k)) newLabels[k] = v;
+    await sql`UPDATE app_settings SET staff_columns = ${JSON.stringify(columns.filter(id => !drop.has(id)))}, staff_col_order = ${JSON.stringify(order.filter(id => !drop.has(id)))}, staff_col_labels = ${JSON.stringify(newLabels)} WHERE id = 'singleton'`;
+  } catch { /* best-effort */ }
+}
+
+const DUP_COLS = ['worker_type', 'position', 'salary', 'dialpad', 'personal_phone', 'email', 'address', 'start_date', 'dob', 'favorite_color', 'favorite_treat', 'note', 'ktn', 'marriott', 'delta', 'southwest', 'american', 'weight'] as const;
 
 export async function autoMergeDuplicateStaff(): Promise<void> {
   try {

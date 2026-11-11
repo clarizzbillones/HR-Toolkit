@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { staffToProfile } from '@/lib/employeeProfile';
 import { normName } from '@/lib/employeeFiles';
-import { autoMergeDuplicateStaff, dedupeAddressColumn } from '@/lib/staffDedupe';
+import { autoMergeDuplicateStaff, dedupeAddressColumn, dedupeSalaryColumn } from '@/lib/staffDedupe';
 import { backfillStaffFromCompletedIntakes } from '@/lib/intakeSync';
 
 // Mirror a Staffing row's fields — built-in AND custom columns (e.g. "Personal
@@ -62,6 +62,7 @@ function rid() { return `st${Date.now()}${Math.random().toString(36).slice(2, 7)
 export async function GET() {
   await ensureTable();
   await dedupeAddressColumn();
+  await dedupeSalaryColumn();
   await autoMergeDuplicateStaff();
   await backfillStaffFromCompletedIntakes();
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;

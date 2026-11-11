@@ -1,7 +1,7 @@
 import { sql } from '@/lib/db';
 import ModuleLayout from '@/components/ModuleLayout';
 import StaffingClient from './StaffingClient';
-import { autoMergeDuplicateStaff, dedupeAddressColumn } from '@/lib/staffDedupe';
+import { autoMergeDuplicateStaff, dedupeAddressColumn, dedupeSalaryColumn } from '@/lib/staffDedupe';
 import { backfillStaffFromCompletedIntakes } from '@/lib/intakeSync';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +30,7 @@ export default async function StaffingPage() {
   // its data into the built-in Address), collapse duplicate person rows, and
   // backfill blank fields (esp. mailing address) from completed intake forms.
   await dedupeAddressColumn();
+  await dedupeSalaryColumn();
   await autoMergeDuplicateStaff();
   await backfillStaffFromCompletedIntakes();
   const rows = await sql`SELECT * FROM staff_directory ORDER BY name ASC`;
