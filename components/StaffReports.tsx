@@ -19,8 +19,14 @@ function parseDay(v: any): Date | null {
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
   m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
   if (m) { let y = +m[3]; if (y < 100) y += y < 50 ? 2000 : 1900; return new Date(y, +m[1] - 1, +m[2]); }
+  // Free text like "April 31, 2026" or "Offboarded - Last day of work Jan 5, 2025".
+  m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/i);
+  if (m) { const mo = 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(m[1].toLowerCase()) / 3; return new Date(+m[3], mo, Math.min(+m[2], new Date(+m[3], mo + 1, 0).getDate())); }
+  m = s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/) || s.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if (m) return m[1].length === 4 ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(+m[3], +m[1] - 1, +m[2]);
   return null;
 }
+const fmtDay = (d: Date | null) => (d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -191,7 +197,7 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       .sort((a, b) => b.value - a.value);
     return { year, active, emps, contractors, off, offThisYear: off.filter(p => parseDay(p.offboarded_date)?.getFullYear() === year),
       statusOf, k401, benefitRows, tenures, bands, startYears: byYear(active, 'start_date'), offYears: byYear(off, 'offboarded_date'),
-      topRoles, costRows, ytdByLine,
+      topRoles, costRows, ytdByLine, offUndated: off.filter(p => !parseDay(p.offboarded_date)).length,
       costEmployees: (cost?.rows ?? []).filter(c => !c.offboarded && (c.worker_type || 'Employee') !== 'Contractor') };
   }, [data, cost]);
 
@@ -264,10 +270,31 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
             <Card title="Start year" note="Active team, by year they started">
               <Columns tipOn={on} items={r.startYears} />
             </Card>
-            <Card title="Offboarded by year" note={`${r.off.length} people`}>
+            <Card title="Offboarded by year" note={`${r.off.length} people${r.offUndated ? ` · ${r.offUndated} without a last-day date` : ''}`}>
               <Columns tipOn={on} items={r.offYears} />
             </Card>
           </div>
+
+          <Card title="Offboarded" note={`${r.off.length} people · most recent first`}>
+            {r.off.length ? (
+              <div className="overflow-x-auto border border-border-light rounded-card">
+                <table className="w-full text-sm">
+                  <thead className="bg-canvas"><tr><th className={th}>Name</th><th className={th}>Position</th><th className={th}>Type</th><th className={th}>Start date</th><th className={th}>Last day</th><th className={`${th} text-right`}>Time at Litson</th></tr></thead>
+                  <tbody>{[...r.off].sort((a, b) => (parseDay(b.offboarded_date)?.getTime() ?? 0) - (parseDay(a.offboarded_date)?.getTime() ?? 0)).map(p => {
+                    const s0 = parseDay(p.start_date), e0 = parseDay(p.offboarded_date);
+                    const yrs = s0 && e0 && e0 >= s0 ? (e0.getTime() - s0.getTime()) / (365.25 * 864e5) : null;
+                    const raw = String(p.offboarded_date ?? '').trim();
+                    return (
+                      <tr key={p.id} className="border-t border-[#f1ece3] hover:bg-canvas">
+                        <td className={`${td} font-semibold text-text-primary`}>{p.name}</td><td className={`${td} text-text-secondary`}>{p.position || ''}</td>
+                        <td className={`${td} text-text-secondary`}>{p.worker_type || 'Employee'}</td><td className={`${td} tabular-nums`}>{fmtDay(s0)}</td>
+                        <td className={`${td} tabular-nums`} title={raw}>{e0 ? fmtDay(e0) : <span className="text-[#b07d2a]">Not recorded</span>}</td>
+                        <td className={`${td} text-right tabular-nums`}>{yrs == null ? '—' : yrs < 1 ? `${Math.max(1, Math.round(yrs * 12))} mo` : `${yrs.toFixed(1)} yrs`}</td>
+                      </tr>); })}</tbody>
+                </table>
+              </div>
+            ) : <p className="text-sm text-text-muted">No one offboarded.</p>}
+          </Card>
 
           {cost && (
             <>
