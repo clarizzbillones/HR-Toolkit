@@ -96,7 +96,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
   };
   const L = v.ledger;
   const matchLabel = v.retirement_plan === 'roth' ? 'Roth 401(k) company match' : v.retirement_plan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
-  const lines = LEDGER_LINES.filter(x => x.group !== 'employee' && (!c.contractor || x.group === 'pay' || x.key === 'other'));
+  const employerLines = LEDGER_LINES.filter(x => x.group === 'employer' && (!c.contractor || x.key === 'other'));
   const employee = c.contractor ? [] : LEDGER_LINES.filter(x => x.group === 'employee');
   const sum = (col: LedgerColumn, keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L[col]?.[x.key] ?? 0), 0);
   const yearSum = (keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L.total?.[x.key] ?? L.ytd?.[x.key] ?? 0), 0);
@@ -113,7 +113,6 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         {COLS.map(col => <td key={col.key} className={`${td} !py-2.5 font-bold ${col.key === 'total' ? 'border-t-2 border-text-primary' : ''}`}>{money2(col.key === 'total' ? yearSum(keys) : sum(col.key, keys))}</td>)}</tr>
     </>
   );
-  const payLines = lines.filter(x => x.group === 'pay'), employerLines = lines.filter(x => x.group === 'employer');
   return (
     <div className="grid gap-5 md:grid-cols-[1fr_230px]">
       <div className="text-sm min-w-0">
@@ -122,7 +121,6 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
             <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Liability</th>
               {COLS.map(col => <th key={col.key} className={th}>{col.label(settings.year, L.checks)}</th>)}</tr></thead>
             <tbody>
-              {section('Pay', payLines, 'Pay')}
               {section('Employer', employerLines, 'Employer cost')}
             </tbody>
           </table>
@@ -130,7 +128,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         {employee.length > 0 && (
           <div className="border border-border-light rounded-card overflow-x-auto mt-4">
             <table className="w-full">
-              <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Employee deductions <span className="font-normal">· their own money, not a firm cost</span></th>
+              <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Employer deductions</th>
                 {COLS.map(col => <th key={col.key} className={th}>{col.label(settings.year, L.checks)}</th>)}</tr></thead>
               <tbody>
                 {employee.map(x => (
@@ -145,10 +143,10 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         )}
         <p className="text-[11px] text-text-muted mt-1.5">Click any amount to type it in. Until a {settings.year} total is entered, the total column uses year to date (greyed).</p>
         <div className="mt-4 space-y-0.5">
-          <div className="flex justify-between py-1.5"><span className="text-text-secondary">Pay</span><span className="tabular-nums">{usd(yearSum(payLines))}</span></div>
           <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer cost</span><span className="tabular-nums">{usd(yearSum(employerLines))}</span></div>
+          <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer deductions</span><span className="tabular-nums">{usd(yearSum(employee))}</span></div>
           <div className="flex justify-between border-t border-border-light mt-1 pt-2.5"><span className="font-bold text-text-primary">Actual cost for {settings.year}</span>
-            <span className="tabular-nums font-bold text-base">{usd(yearSum(payLines) + yearSum(employerLines))}</span></div>
+            <span className="tabular-nums font-bold text-base">{usd(yearSum(employerLines) + yearSum(employee))}</span></div>
         </div>
       </div>
       <div className="bg-canvas rounded-card p-4 space-y-3 text-sm self-start">
@@ -209,7 +207,7 @@ export function ActualCostCard({ name }: { name: string }) {
     <div>
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Actual cost · {settings.year}</h2>
-        <span className="text-[11px] text-text-muted">Pay + employer taxes + benefits + 401(k). Visible only to Clarizz and Catie.</span>
+        <span className="text-[11px] text-text-muted">Employer taxes, benefits, 401(k) and employer deductions. Visible only to Clarizz and Catie.</span>
       </div>
       {row
         ? <div className="bg-white border border-border-light rounded-card p-5"><ActualCostDetail row={row} settings={settings} onSave={v => saveInputs(row.id, v)} /></div>
