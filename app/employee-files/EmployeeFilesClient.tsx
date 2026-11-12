@@ -8,6 +8,7 @@ import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
 import { ActualCostCard, costSheet } from '@/components/ActualCost';
 import { styledSheet } from '@/lib/xlsxStyle';
+import { StaffReports } from '@/components/StaffReports';
 import { BENEFITS } from '@/lib/benefits';
 import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 import { fmtPay } from '@/lib/money';
@@ -466,6 +467,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
   // ---- Export: a branded printable report + an itemized spreadsheet ----
   const [exporting, setExporting] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   async function fetchExportRows(): Promise<any[]> {
     const res = await fetch('/api/employee-files?export=1');
@@ -1174,6 +1176,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
           {!readOnly && <button onClick={openNewForm} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Create a new fillable RSVP / survey form">＋ New form</button>}
+          <button onClick={() => setReportsOpen(true)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Charts and tables: headcount, tenure, benefits enrollment and cost">📊 Reports</button>
+          {reportsOpen && <StaffReports onClose={() => setReportsOpen(false)} />}
           <div className="relative">
             <button onClick={() => setExportOpen(o => !o)} disabled={exporting} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Export everyone's details plus the tools/systems they can access">{exporting ? 'Exporting…' : '⬇ Export ▾'}</button>
             {exportOpen && (

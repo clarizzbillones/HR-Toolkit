@@ -3,11 +3,11 @@ import { useState, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useToast } from '@/components/Toast';
 import { useUndo } from '@/components/UndoProvider';
-import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
 import { fmtPay } from '@/lib/money';
 import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal, costSheet } from '@/components/ActualCost';
 import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
+import { StaffReports } from '@/components/StaffReports';
 import { usd } from '@/lib/actualCost';
 
 interface Staff {
@@ -133,6 +133,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
   const { showToast } = useToast();
   const { pushUndo } = useUndo();
   const [tab, setTab] = useState<TabKey>('employees');
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [rows, setRows] = useState<Staff[]>(initialRows);
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
   const [offboarded, setOffboarded] = useState<Staff[]>(initialOffboarded);
@@ -612,22 +613,13 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
               </button>
             );
           })}
+          <button onClick={() => setReportsOpen(true)} title="Charts and tables: headcount, tenure, benefits enrollment and cost"
+            className="flex items-center gap-2 px-4 py-2 rounded-ctrl text-sm font-semibold border border-border-light bg-white text-ink hover:bg-canvas">📊 Reports</button>
         </div>
       </header>
+      {reportsOpen && <StaffReports onClose={() => setReportsOpen(false)} />}
 
       <div className="flex-1 min-h-0 px-8 py-6 flex flex-col">
-        {/* Role breakdown — how many attorneys, law clerks, etc. */}
-        {tab === 'employees' && rows.length > 0 && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted mr-1">By role:</span>
-            {positionBreakdown(rows).map(b => (
-              <span key={b.label} className="inline-flex items-center gap-1.5 bg-white border border-border-light rounded-full pl-3 pr-1.5 py-1 text-xs">
-                <span className="font-medium text-text-secondary">{b.label}</span>
-                <span className="font-bold text-white bg-[#2f7d5b] rounded-full px-2 py-0.5 leading-none">{b.count}</span>
-              </span>
-            ))}
-          </div>
-        )}
         <div className="bg-white border rounded-card overflow-hidden flex flex-col flex-1 min-h-0" style={{ borderColor: active.soft, borderTop: `3px solid ${active.accent}` }}>
           <div className="overflow-auto flex-1 min-h-0">
             {tab === 'employees' && StaffTable({ columns: empCols, data: fStaff, kind: 'employees' })}
