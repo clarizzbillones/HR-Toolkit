@@ -1,13 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { usd, RETIREMENT_PLANS, US_STATES, DEFAULT_STATE, stateName, LEDGER_LINES, type CostBreakdown, type CostInputs, type CostSettings, type Ledger, type LedgerColumn, type LineKey } from '@/lib/actualCost';
+import { usd, RETIREMENT_PLANS, LEDGER_COLUMNS, US_STATES, DEFAULT_STATE, stateName, LEDGER_LINES, type CostBreakdown, type CostInputs, type CostSettings, type Ledger, type LedgerColumn, type LineKey } from '@/lib/actualCost';
 
 // Actual (fully loaded) cost UI. Data comes from /api/staffing/cost, which only answers for the
 // cost viewers (Clarizz and Catie); for anyone else `allowed` stays false and nothing renders.
 // Nothing is estimated: every amount is typed in from ADP.
 
-export type CostInputValues = { retirement_plan: string; work_state: string; ledger: Ledger };
-const valuesFrom = (i: CostInputs): CostInputValues => ({ retirement_plan: i.retirementPlan ?? '', work_state: i.workState ?? '', ledger: JSON.parse(JSON.stringify(i.ledger ?? {})) });
+export type CostInputValues = { retirement_plan: string; work_state: string; work_state2: string; ledger: Ledger };
+const valuesFrom = (i: CostInputs): CostInputValues => ({ retirement_plan: i.retirementPlan ?? '', work_state: i.workState ?? '', work_state2: i.workState2 ?? '', ledger: JSON.parse(JSON.stringify(i.ledger ?? {})) });
 
 export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown }
 
@@ -96,7 +96,8 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
   };
   const L = v.ledger;
   const matchLabel = v.retirement_plan === 'roth' ? 'Roth 401(k) company match' : v.retirement_plan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
-  const employerLines = LEDGER_LINES.filter(x => x.group === 'employer' && (!c.contractor || x.key === 'other'));
+  const employerLines = LEDGER_LINES.filter(x => x.group === 'employer' && (!c.contractor || x.key === 'other')
+    && (x.key !== 'suta2' || !!v.work_state2 || LEDGER_COLUMNS.some(col => v.ledger[col]?.suta2 != null)));
   const sum = (col: LedgerColumn, keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L[col]?.[x.key] ?? 0), 0);
   const yearSum = (keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L.total?.[x.key] ?? L.ytd?.[x.key] ?? 0), 0);
   const section = (title: string, keys: readonly (typeof LEDGER_LINES[number])[], subtotal: string) => (
@@ -104,7 +105,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
       <tr><td colSpan={4} className="bg-canvas px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wider text-text-secondary border-y border-border-light">{title}</td></tr>
       {keys.map(x => (
         <tr key={x.key} className="border-b border-[#f1ece3]">
-          <td className="px-3 py-2"><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.key === 'suta' ? `${stateName(v.work_state)} unemployment` : x.label}</span>{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.key === 'suta' ? `${v.work_state || DEFAULT_STATE} SUI-ER` : x.code}</span>}</td>
+          <td className="px-3 py-2"><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.key === 'suta' ? `${stateName(v.work_state)} unemployment` : x.key === 'suta2' ? `${v.work_state2 ? stateName(v.work_state2) : 'Second state'} unemployment` : x.label}</span>{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.key === 'suta' ? `${v.work_state || DEFAULT_STATE} SUI-ER` : x.key === 'suta2' ? `${v.work_state2 || ''} SUI-ER`.trim() : x.code}</span>}</td>
           {COLS.map(col => <EditCell key={col.key} value={L[col.key]?.[x.key]} fallback={col.key === 'total' ? L.ytd?.[x.key] : undefined} onCommit={setAmount(col.key, x.key)} />)}
         </tr>
       ))}
@@ -137,6 +138,10 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         {!c.contractor && <label className="block"><span className="text-xs font-semibold text-text-secondary">Unemployment state</span>
           <select className={field} value={v.work_state || DEFAULT_STATE} onChange={e => commit({ ...v, work_state: e.target.value === DEFAULT_STATE ? '' : e.target.value })}>
             {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+          </select></label>}
+        {!c.contractor && <label className="block"><span className="text-xs font-semibold text-text-secondary">Second state <span className="font-normal text-text-muted">(moved mid-year)</span></span>
+          <select className={field} value={v.work_state2} onChange={e => commit({ ...v, work_state2: e.target.value })}>
+            <option value="">None</option>{US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
           </select></label>}
         {!c.contractor && <label className="block"><span className="text-xs font-semibold text-text-secondary">Retirement plan</span>
           <select className={field} value={v.retirement_plan} onChange={e => commit({ ...v, retirement_plan: e.target.value })}>

@@ -18,6 +18,7 @@ export const LEDGER_LINES = [
   { key: 'medicare', label: 'Medicare', code: 'FED MEDCARE-ER', group: 'employer' },
   { key: 'futa', label: 'Federal unemployment', code: 'FED FUTA', group: 'employer' },
   { key: 'suta', label: 'Tennessee unemployment', code: 'TN SUI-ER', group: 'employer' },
+  { key: 'suta2', label: 'Second state unemployment', code: 'SUI-ER', group: 'employer' }, // e.g. moved states mid-year
   { key: 'match', label: '401(k) company match', code: '401k $ plan cmp mtch', group: 'employer' },
   { key: 'catchupMatch', label: '401(k) catch-up match', code: '401k catch-up $ cmp mtch', group: 'employer' },
   { key: 'medical', label: 'Medical', code: 'firm’s share', group: 'employer' },
@@ -43,7 +44,7 @@ export const US_STATES: [string, string][] = [['AL','Alabama'],['AK','Alaska'],[
 export const DEFAULT_STATE = 'TN';
 export const stateName = (code?: string | null) => US_STATES.find(([c]) => c === (code || DEFAULT_STATE))?.[1] ?? 'Tennessee';
 
-export interface CostInputs { retirementPlan?: RetirementPlan | null; workState?: string | null; ledger?: Ledger | null }
+export interface CostInputs { retirementPlan?: RetirementPlan | null; workState?: string | null; workState2?: string | null; ledger?: Ledger | null }
 export interface CostStaff { salary?: string | null; worker_type?: string | null }
 
 export interface CostBreakdown {
