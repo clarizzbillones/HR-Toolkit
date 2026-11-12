@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { CostModal, type CostRow } from '@/components/ActualCost';
-import { LEDGER_LINES, RETIREMENT_PLANS, type CostSettings, type LineKey } from '@/lib/actualCost';
+import { LEDGER_LINES, type CostSettings, type LineKey } from '@/lib/actualCost';
 
 // Reports: headcount, tenure, benefits enrollment (who's on what) and — for the cost viewers
 // only — employer cost. Opened from Staffing and Employee Files. Charts are plain HTML bars in one
@@ -9,7 +9,7 @@ import { LEDGER_LINES, RETIREMENT_PLANS, type CostSettings, type LineKey } from 
 
 const BAR = '#2a78d6';      // data hue (single series)
 const TRACK = '#edf1f6';    // unfilled part of a bar
-const BENEFITS = ['Medical', 'Dental', 'Vision', 'Life', 'Malpractice'] as const;
+const BENEFITS = ['Medical', 'Dental', 'Vision', 'Life', 'Malpractice', '401(k)'] as const;
 const STATUSES = ['Enrolled', 'Pending', 'Declined', 'Waived', 'Not eligible'] as const;
 
 const norm = (s: any) => String(s ?? '').normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
@@ -141,16 +141,24 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
     for (const e of data.enrollments) { const k = norm(e.person_name); enr.set(k, { ...(enr.get(k) ?? {}), [e.benefit]: e.status || '' }); }
     const statusOf = (p: Person, b: string) => enr.get(norm(p.name))?.[b] || '';
     const costByName = new Map((cost?.rows ?? []).map(c => [norm(c.name), c]));
-    const planOf = (p: Person) => costByName.get(norm(p.name))?.inputs.retirementPlan ?? null;
+    // 401(k): yes when the Benefits roster says Enrolled OR an employer 401(k) match is entered in the
+    // cost view (cost viewers only). `conflict` = the roster says otherwise than the cost entries.
+    const matchEntered = (p: Person) => { const L = costByName.get(norm(p.name))?.inputs.ledger; if (!L) return false;
+      return (['check', 'ytd', 'total'] as const).some(c => (L[c]?.match ?? 0) > 0 || (L[c]?.catchupMatch ?? 0) > 0); };
+    const k401 = (p: Person) => {
+      const roster = statusOf(p, '401(k)'), fromCost = !!cost && matchEntered(p);
+      const yes = roster === 'Enrolled' || fromCost;
+      // Only flag people whose cost has been entered — otherwise a missing match just means "not entered yet".
+      const costEntered = !!costByName.get(norm(p.name))?.cost.entered;
+      const conflict = !!cost && costEntered && !!roster && roster !== 'Pending' && (roster === 'Enrolled') !== fromCost;
+      return { yes, roster, fromCost, conflict };
+    };
+    const statusFor = (p: Person, b: string) => (b === '401(k)' && k401(p).fromCost ? 'Enrolled' : statusOf(p, b));
     const benefitRows = [...BENEFITS.map(b => {
       const counts: Record<string, number> = Object.fromEntries([...STATUSES, ''].map(s => [s, 0]));
-      for (const p of emps) { const s = statusOf(p, b); counts[(STATUSES as readonly string[]).includes(s) ? s : '']++; }
+      for (const p of emps) { const s = statusFor(p, b); counts[(STATUSES as readonly string[]).includes(s) ? s : '']++; }
       return { label: b, counts, enrolled: counts.Enrolled };
-    }), ...(cost ? [(() => {
-      const counts: Record<string, number> = Object.fromEntries([...STATUSES, ''].map(s => [s, 0]));
-      for (const p of emps) { const pl = planOf(p); if (!pl) counts['']++; else if (pl === 'none') counts.Declined++; else counts.Enrolled++; }
-      return { label: '401(k)', counts, enrolled: counts.Enrolled };
-    })()] : [])];
+    })];
     // Tenure (employees + contractors who are active).
     const yearsIn = (p: Person) => { const d = parseDay(p.start_date); return d ? (now.getTime() - d.getTime()) / (365.25 * 864e5) : null; };
     const tenures = active.map(yearsIn).filter((n): n is number => n != null && n >= 0);
@@ -182,7 +190,7 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       value: Math.round(costRows.reduce((t, c) => t + (c.inputs.ledger?.ytd?.[x.key] ?? 0), 0) * 100) / 100 })).filter(x => x.value > 0)
       .sort((a, b) => b.value - a.value);
     return { year, active, emps, contractors, off, offThisYear: off.filter(p => parseDay(p.offboarded_date)?.getFullYear() === year),
-      statusOf, planOf, benefitRows, tenures, bands, startYears: byYear(active, 'start_date'), offYears: byYear(off, 'offboarded_date'),
+      statusOf, k401, benefitRows, tenures, bands, startYears: byYear(active, 'start_date'), offYears: byYear(off, 'offboarded_date'),
       topRoles, costRows, ytdByLine,
       costEmployees: (cost?.rows ?? []).filter(c => !c.offboarded && (c.worker_type || 'Employee') !== 'Contractor') };
   }, [data, cost]);
@@ -205,7 +213,7 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
           </div>
 
           {/* Benefits */}
-          <Card title="Benefits enrollment" note={`Employees only (${r.emps.length}) · from the Benefits roster${cost ? '; 401(k) from the cost view' : ''}`}>
+          <Card title="Benefits enrollment" note={`Employees only (${r.emps.length}) · from the Benefits roster${cost ? '; 401(k) also counts an employer match entered in cost' : ''}`}>
             <HBars tipOn={on} max={r.emps.length} items={r.benefitRows.map(b => ({
               label: b.label, value: b.enrolled, text: `${b.enrolled} of ${r.emps.length} · ${pct(b.enrolled, r.emps.length)}%`,
               tip: [b.label, ...STATUSES.filter(s => b.counts[s]).map(s => `${s}: ${b.counts[s]}`), ...(b.counts[''] ? [`Not recorded: ${b.counts['']}`] : [])],
@@ -222,19 +230,22 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
             </div>
           </Card>
 
-          <Card title="Who’s enrolled" note="✓ enrolled · – declined, waived or not eligible · blank = not recorded">
+          <Card title="Who’s enrolled" note={`✓ enrolled · – declined, waived or not eligible · blank = not recorded${cost ? ' · 401(k): ✓ from the roster or an employer match in cost; ⚠ = they disagree' : ''}`}>
             <div className="overflow-x-auto border border-border-light rounded-card max-h-[420px]">
               <table className="w-full text-sm">
                 <thead className="bg-canvas sticky top-0"><tr><th className={th}>Employee</th><th className={th}>Position</th>
-                  {BENEFITS.map(b => <th key={b} className={`${th} text-center`}>{b}</th>)}{cost && <th className={`${th} text-center`}>401(k)</th>}</tr></thead>
+                  {BENEFITS.map(b => <th key={b} className={`${th} text-center`}>{b}</th>)}</tr></thead>
                 <tbody>{r.emps.map(p => (
                   <tr key={p.id} className="border-t border-[#f1ece3] hover:bg-canvas">
                     <td className={`${td} font-semibold text-text-primary`}>{p.name}</td><td className={`${td} text-text-secondary`}>{p.position || ''}</td>
-                    {BENEFITS.map(b => { const s = r.statusOf(p, b); return (
+                    {BENEFITS.map(b => { if (b === '401(k)') { const k = r.k401(p); return (
+                      <td key={b} className={`${td} text-center ${k.yes ? 'text-[#2f7d5b] font-bold' : 'text-text-muted'}`}
+                        title={k.conflict ? `Check: Benefits roster says ${k.roster || 'not recorded'}, but ${k.fromCost ? 'an employer 401(k) match is entered in cost' : 'no employer 401(k) match is entered in cost'}`
+                          : k.fromCost && !k.roster ? 'Employer 401(k) match entered in cost; not on the Benefits roster yet' : k.roster || (k.yes ? 'Enrolled' : 'No 401(k)')}>
+                        {k.yes ? '✓' : '–'}{(k.conflict || (k.fromCost && !k.roster)) && <span className="ml-1 text-[#b07d2a]">{k.conflict ? '⚠' : '•'}</span>}</td>); }
+                      const s = r.statusOf(p, b); return (
                       <td key={b} title={s || 'Not recorded'} className={`${td} text-center ${s === 'Enrolled' ? 'text-[#2f7d5b] font-bold' : s === 'Pending' ? 'text-[#b07d2a]' : 'text-text-muted'}`}>
                         {s === 'Enrolled' ? '✓' : s === 'Pending' ? 'Pending' : s ? '–' : ''}</td>); })}
-                    {cost && (() => { const pl = r.planOf(p); return <td className={`${td} text-center ${pl && pl !== 'none' ? 'text-[#2f7d5b] font-semibold' : 'text-text-muted'}`}>
-                      {pl ? (pl === 'none' ? '–' : RETIREMENT_PLANS.find(x => x.key === pl)?.label) : ''}</td>; })()}
                   </tr>
                 ))}</tbody>
               </table>
