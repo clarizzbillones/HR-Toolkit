@@ -49,13 +49,21 @@ async function rowsWithCost(name?: string | null) {
   const staff = await sql`SELECT id, name, worker_type, position, salary, offboarded FROM staff_directory ORDER BY name ASC` as any[];
   const inputs = await sql`SELECT staff_id, retirement_plan, work_state, work_state2, ledger FROM staff_costs` as any[];
   const byId = new Map(inputs.map(i => [i.staff_id, i]));
+  // Medical / dental / vision status from the Benefits roster, so rows they're not on can be skipped.
+  let enr: any[] = [];
+  try { enr = await sql`SELECT person_name, benefit, status, plan FROM benefit_enrollments WHERE benefit IN ('Medical', 'Dental', 'Vision')` as any[]; } catch { /* no roster yet */ }
+  const benefitsFor = new Map<string, Record<string, { status: string; plan: string }>>();
+  for (const e of enr) {
+    const k = normName(e.person_name);
+    benefitsFor.set(k, { ...(benefitsFor.get(k) ?? {}), [e.benefit]: { status: e.status ?? '', plan: e.plan ?? '' } });
+  }
   const key = name ? normName(name) : null;
   return staff
     .filter(s => (key ? normName(s.name) === key : true))
     .map(s => {
       const i = byId.get(s.id);
       const inp = { retirementPlan: (i?.retirement_plan as RetirementPlan) ?? null, workState: (i?.work_state as string) ?? null, workState2: (i?.work_state2 as string) ?? null, ledger: parseJson(i?.ledger) as Ledger | null };
-      return { id: s.id, name: s.name, worker_type: s.worker_type, position: s.position, offboarded: !!s.offboarded, inputs: inp, cost: actualCost(s, inp) };
+      return { id: s.id, name: s.name, worker_type: s.worker_type, position: s.position, offboarded: !!s.offboarded, inputs: inp, cost: actualCost(s, inp), benefits: benefitsFor.get(normName(s.name)) ?? {} };
     });
 }
 

@@ -9,7 +9,8 @@ import { usd, RETIREMENT_PLANS, LEDGER_COLUMNS, US_STATES, DEFAULT_STATE, stateN
 export type CostInputValues = { retirement_plan: string; work_state: string; work_state2: string; ledger: Ledger };
 const valuesFrom = (i: CostInputs): CostInputValues => ({ retirement_plan: i.retirementPlan ?? '', work_state: i.workState ?? '', work_state2: i.workState2 ?? '', ledger: JSON.parse(JSON.stringify(i.ledger ?? {})) });
 
-export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown }
+export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown;
+  benefits?: Record<string, { status: string; plan: string }> } // from the Benefits roster
 
 export function useActualCost(name?: string) {
   const [allowed, setAllowed] = useState(false);
@@ -44,6 +45,16 @@ const field = 'w-full border border-border-light rounded-ctrl px-3 py-2 text-sm 
 const money2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const th = 'text-right font-semibold px-3 py-2 whitespace-nowrap';
 const td = 'px-3 py-1 text-right tabular-nums text-text-primary whitespace-nowrap';
+
+// Benefits roster status next to Medical / Dental / Vision: green when enrolled, grey when they
+// declined or aren't eligible (nothing to enter), amber when not recorded on the roster.
+function BenefitChip({ b }: { b: { status: string; plan: string } | null | undefined }) {
+  const s = b?.status || '';
+  const cls = s === 'Enrolled' ? 'bg-[#eef5f1] text-[#2f7d5b]' : s === 'Pending' ? 'bg-[#f7efe1] text-[#b07d2a]'
+    : s ? 'bg-[#f1ece3] text-[#8b8478]' : 'bg-[#f7efe1] text-[#b07d2a]';
+  return <span title={b?.plan ? `Plan: ${b.plan}` : 'From the Benefits roster'} className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`}>
+    {s ? (s === 'Enrolled' ? '✓ Enrolled' : s === 'Declined' ? 'Declined – skip' : s === 'Not eligible' ? 'Not eligible – skip' : s === 'Waived' ? 'Waived – skip' : s) : 'Not on roster'}</span>;
+}
 
 // A table amount: click and type. Enter or clicking away saves, Esc cancels, blank clears it.
 // `fallback` is shown greyed when nothing is typed (the year total falls back to year to date).
@@ -95,6 +106,10 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
     commit({ ...v, ledger: l });
   };
   const L = v.ledger;
+  // Benefits roster status for the insurance rows (null = not on the roster).
+  const benefitOf = (k: LineKey) => (k === 'medical' || k === 'dental' || k === 'vision'
+    ? (row.benefits?.[k[0].toUpperCase() + k.slice(1)] ?? null) : undefined);
+  const skip = (k: LineKey) => { const b = benefitOf(k); return !!b && !!b.status && b.status !== 'Enrolled' && b.status !== 'Pending'; };
   const matchLabel = v.retirement_plan === 'roth' ? 'Roth 401(k) company match' : v.retirement_plan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
   const employerLines = LEDGER_LINES.filter(x => x.group === 'employer' && (!c.contractor || x.key === 'other')
     && (x.key !== 'suta2' || !!v.work_state2 || LEDGER_COLUMNS.some(col => v.ledger[col]?.suta2 != null)));
@@ -105,7 +120,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
       <tr><td colSpan={4} className="bg-canvas px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wider text-text-secondary border-y border-border-light">{title}</td></tr>
       {keys.map(x => (
         <tr key={x.key} className="border-b border-[#f1ece3]">
-          <td className="px-3 py-2"><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.key === 'suta' ? `${stateName(v.work_state)} unemployment` : x.key === 'suta2' ? `${v.work_state2 ? stateName(v.work_state2) : 'Second state'} unemployment` : x.label}</span>{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.key === 'suta' ? `${v.work_state || DEFAULT_STATE} SUI-ER` : x.key === 'suta2' ? `${v.work_state2 || ''} SUI-ER`.trim() : x.code}</span>}</td>
+          <td className={`px-3 py-2 ${skip(x.key) ? 'opacity-50' : ''}`}><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.key === 'suta' ? `${stateName(v.work_state)} unemployment` : x.key === 'suta2' ? `${v.work_state2 ? stateName(v.work_state2) : 'Second state'} unemployment` : x.label}</span>{benefitOf(x.key) !== undefined && <BenefitChip b={benefitOf(x.key)} />}{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.key === 'suta' ? `${v.work_state || DEFAULT_STATE} SUI-ER` : x.key === 'suta2' ? `${v.work_state2 || ''} SUI-ER`.trim() : x.code}</span>}</td>
           {COLS.map(col => <EditCell key={col.key} value={L[col.key]?.[x.key]} fallback={col.key === 'total' ? L.ytd?.[x.key] : undefined} onCommit={setAmount(col.key, x.key)} />)}
         </tr>
       ))}
