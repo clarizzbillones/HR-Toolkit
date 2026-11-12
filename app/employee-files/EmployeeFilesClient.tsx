@@ -6,7 +6,7 @@ import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
-import { ActualCostCard } from '@/components/ActualCost';
+import { ActualCostCard, costExport } from '@/components/ActualCost';
 import { BENEFITS } from '@/lib/benefits';
 import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 import { fmtPay } from '@/lib/money';
@@ -562,9 +562,11 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
   async function exportWorkbook() {
     setExportOpen(false); setExporting(true);
     try {
-      const [rows, benefitsRes] = await Promise.all([
+      const [rows, benefitsRes, costRes] = await Promise.all([
         fetchExportRows(),
         fetch('/api/benefits').then(r => r.json()).catch(() => ({ enrollments: [] })),
+        // Actual cost: answers only for the cost viewers (Clarizz and Catie); everyone else gets no tab.
+        fetch('/api/staffing/cost').then(r => (r.ok ? r.json() : null)).catch(() => null),
       ]);
       if (!rows.length) { showToast('No employees to export'); return; }
       const key = (s: any) => String(s ?? '').trim().toLowerCase();
@@ -625,6 +627,20 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       XLSX.utils.book_append_sheet(wb, ws1, 'Employees');
       XLSX.utils.book_append_sheet(wb, ws2, 'Tools Used');
       XLSX.utils.book_append_sheet(wb, ws3, 'Insurance & Benefits');
+
+      // Sheet 4 — Actual cost (cost viewers only): every amount from the cost pop-up.
+      if (costRes?.rows) {
+        const ce = costExport(costRes.rows, costRes.settings?.year ?? new Date().getFullYear());
+        const costByName = new Map<string, any>((costRes.rows as any[]).map(c => [key(c.name), c]));
+        const money = (v: any) => (typeof v === 'number' ? { v, t: 'n', z: '#,##0.00' } : v);
+        const ws4 = XLSX.utils.aoa_to_sheet([hdr(['Employee', 'Position', 'Status', ...ce.headers]), ...rows.map(r => {
+          const c = costByName.get(key(r.name));
+          const vals = c ? ce.byId.get(c.id) ?? [] : [];
+          return [S(r.name), S(r.position), statusOf(r), ...ce.headers.map((_, i) => (i < 7 ? S(vals[i]) : money(vals[i] ?? '')))];
+        })]);
+        ws4['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 11 }, ...ce.headers.map((h, i) => ({ wch: i < 7 ? 18 : Math.min(30, Math.max(14, h.length)) }))];
+        XLSX.utils.book_append_sheet(wb, ws4, 'Actual cost');
+      }
       const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
       const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const a = document.createElement('a');
@@ -632,7 +648,7 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
       a.download = `Litson-Employees-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       URL.revokeObjectURL(a.href);
-      showToast(`Exported ${rows.length} employees · 3 tabs`);
+      showToast(`Exported ${rows.length} employees · ${costRes?.rows ? 4 : 3} tabs`);
     } catch { showToast('Export failed'); }
     finally { setExporting(false); }
   }

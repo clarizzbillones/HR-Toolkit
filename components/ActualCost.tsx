@@ -206,6 +206,31 @@ export function CostModal({ title, onClose, children, actions }: { title: string
   );
 }
 
+// Export columns: everything in the cost pop-up, one row per person. Amounts are numbers (blank
+// when not entered); the year total falls back to YTD, same as on screen.
+export function costExport(rows: CostRow[], year: number) {
+  const cols: [string, LedgerColumn][] = [['per paycheck', 'check'], ['YTD', 'ytd'], [`${year} total`, 'total']];
+  const lineName = (k: LineKey, label: string) => (k === 'suta' ? 'State unemployment (SUI)' : k === 'suta2' ? 'Second state unemployment (SUI)' : label);
+  const headers = ['Unemployment state', 'Second state', 'Retirement plan', 'Medical (Benefits roster)', 'Dental (Benefits roster)',
+    'Vision (Benefits roster)', 'Paychecks in YTD',
+    ...LEDGER_LINES.flatMap(x => cols.map(([c]) => `${lineName(x.key, x.label)} – ${c}`)),
+    ...cols.map(([c]) => `Employer cost – ${c}`), `Actual cost ${year}`];
+  const byId = new Map<string, (string | number)[]>();
+  for (const r of rows) {
+    const L = r.inputs.ledger ?? {};
+    const val = (col: LedgerColumn, k: LineKey) => (col === 'total' ? L.total?.[k] ?? L.ytd?.[k] : L[col]?.[k]);
+    const colSum = (col: LedgerColumn) => Math.round(LEDGER_LINES.reduce((t, x) => t + (val(col, x.key) ?? 0), 0) * 100) / 100;
+    const ben = (b: string) => r.benefits?.[b]?.status || '';
+    byId.set(r.id, [
+      stateName(r.inputs.workState), r.inputs.workState2 ? stateName(r.inputs.workState2) : '',
+      RETIREMENT_PLANS.find(p => p.key === r.inputs.retirementPlan)?.label ?? '', ben('Medical'), ben('Dental'), ben('Vision'), L.checks ?? '',
+      ...LEDGER_LINES.flatMap(x => cols.map(([, c]) => val(c, x.key) ?? '')),
+      ...cols.map(([, c]) => (r.cost.entered ? colSum(c) : '')), r.cost.entered ? r.cost.total : '',
+    ]);
+  }
+  return { headers, byId };
+}
+
 // Employee File card: one person's actual cost.
 export function ActualCostCard({ name }: { name: string }) {
   const { allowed, settings, rows, saveInputs } = useActualCost(name);

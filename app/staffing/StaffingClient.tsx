@@ -6,7 +6,7 @@ import { useUndo } from '@/components/UndoProvider';
 import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
 import { fmtPay } from '@/lib/money';
-import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal } from '@/components/ActualCost';
+import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal, costExport } from '@/components/ActualCost';
 import { usd } from '@/lib/actualCost';
 
 interface Staff {
@@ -417,8 +417,12 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
       const cols = tab === 'offboarded'
         ? OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))
         : empCols;
-      const body = data.map(r => cols.map(c => `"${String(c.custom ? extraVal(r, c.id) : ((r as any)[c.key as string] ?? '')).replace(/"/g, '""')}"`).join(','));
-      dl(`${tab}.csv`, [cols.map(c => c.label).join(','), ...body].join('\n'));
+      // Actual cost columns (only for the cost viewers — `cost.allowed`).
+      const ce = cost.allowed && cost.settings ? costExport(cost.rows, cost.settings.year) : null;
+      const q = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const body = data.map(r => [...cols.map(c => q(c.custom ? extraVal(r, c.id) : ((r as any)[c.key as string] ?? ''))),
+        ...(ce ? (ce.byId.get(r.id) ?? ce.headers.map(() => '')).map(q) : [])].join(','));
+      dl(`${tab}.csv`, [[...cols.map(c => q(c.label)), ...(ce ? ce.headers.map(q) : [])].join(','), ...body].join('\n'));
     }
     showToast('Exported');
   }
