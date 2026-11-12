@@ -71,7 +71,13 @@ export interface CostInputs {
   empDentalCheck?: number | null;
   empVisionCheck?: number | null;
   ytd?: YtdActuals | null;
+  // Amounts typed straight into the Employer table, replacing the calculated ones:
+  // `check` = one paycheck (also drives the paychecks still to come), `total` = the year total.
+  overrides?: CostOverrides | null;
 }
+export type TaxLine = 'socialSecurity' | 'medicare' | 'futa' | 'suta' | 'retirement' | 'catchup';
+export const OVERRIDE_LINES: TaxLine[] = ['socialSecurity', 'medicare', 'futa', 'suta', 'retirement', 'catchup'];
+export interface CostOverrides { check?: Partial<Record<TaxLine, number>>; total?: Partial<Record<TaxLine, number>> }
 
 export interface CostStaff {
   salary?: string | null; worker_type?: string | null; start_date?: string | null;
@@ -98,6 +104,7 @@ export interface CostBreakdown {
   total: number;
   // A regular paycheck (before the $7,000 FUTA/SUI bases are used up).
   perCheck: (EmployerLines & { gross: number; employerCost: number }) | null;
+  edited: { check: TaxLine[]; total: TaxLine[] }; // which amounts were typed in
   // Employee's own deductions per paycheck (informational — not a firm cost).
   employeeCheck: { k401: number; medical: number; dental: number; vision: number; total: number } | null;
   // When ADP year-to-date figures are entered: what's been paid and what's left.
@@ -159,7 +166,7 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
     return { contractor, annualPay: annual, hourly, fraction, salaryWages: round2(salaryWages), bonus: 0, wages: round2(wages),
       socialSecurity: 0, medicare: 0, futa: 0, suta: 0, taxes: 0, medical: 0, dental: 0, vision: 0, insurance: 0,
       retirementPlan: null, retirement: 0, matchPct: 0, catchup: 0, other, employerCost: other, total: round2(wages + other),
-      perCheck: null, employeeCheck: null, ytd: null, notes };
+      perCheck: null, employeeCheck: null, ytd: null, edited: { check: [], total: [] }, notes };
   }
 
   const plan = inputs.retirementPlan ?? null;
@@ -178,7 +185,13 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
     medical: round2(monthly(inputs.medicalMonthly) * 12 / periods), dental: round2(monthly(inputs.dentalMonthly) * 12 / periods),
     vision: round2(monthly(inputs.visionMonthly) * 12 / periods),
   };
+  const ovCheck = inputs.overrides?.check ?? {}, ovTotal = inputs.overrides?.total ?? {};
+  const edited = { check: OVERRIDE_LINES.filter(k => ovCheck[k] != null), total: OVERRIDE_LINES.filter(k => ovTotal[k] != null) };
+  for (const k of edited.check) check[k] = round2(ovCheck[k]!);
   const perCheck = { ...check, gross: round2(gross), employerCost: sumLines(check) };
+  // Year cap for each tax, in dollars of tax.
+  const capTax: Record<TaxLine, number> = { socialSecurity: s.ssWageBase * s.ssRate / 100, medicare: Infinity,
+    futa: s.futaWageBase * s.futaRate / 100, suta: s.sutaWageBase * s.sutaRate / 100, retirement: Infinity, catchup: Infinity };
   const k401 = round2(gross * (plan === 'none' ? 0 : inputs.emp401kPct ?? 0) / 100);
   const employeeCheck = { k401, medical: round2(inputs.empMedicalCheck ?? 0), dental: round2(inputs.empDentalCheck ?? 0), vision: round2(inputs.empVisionCheck ?? 0), total: 0 };
   employeeCheck.total = round2(k401 + employeeCheck.medical + employeeCheck.dental + employeeCheck.vision);
@@ -213,6 +226,10 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
       retirement: round2(check.retirement * remaining), catchup: round2(check.catchup * remaining),
       medical: round2(medical - paid.medical), dental: round2(dental - paid.dental), vision: round2(vision - paid.vision),
     };
+    // A typed per-paycheck amount: the remaining checks at that amount, up to what's left under the cap.
+    for (const k of edited.check) rest[k] = round2(Math.max(0, Math.min(check[k] * remaining, capTax[k] - paid[k])));
+    // A typed year total: the remaining checks are whatever's left after year to date.
+    for (const k of edited.total) rest[k] = round2(ovTotal[k]! - paid[k]);
     ytd = { checks, remaining, paid, rest, paidTotal: sumLines(paid), restTotal: sumLines(rest) };
     socialSecurity = round2(paid.socialSecurity + rest.socialSecurity); medicare = round2(paid.medicare + rest.medicare);
     futa = round2(paid.futa + rest.futa); suta = round2(paid.suta + rest.suta);
@@ -226,7 +243,13 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
     suta = round2(Math.min(wages, s.sutaWageBase) * s.sutaRate / 100);
     retirement = round2(salaryWages * matchPct / 100);
     catchup = round2(catchupYear * fraction);
+    const n = Math.round(periods * fraction);
+    const t: Record<TaxLine, number> = { socialSecurity, medicare, futa, suta, retirement, catchup };
+    for (const k of edited.check) t[k] = round2(Math.min(check[k] * n, capTax[k]));
+    for (const k of edited.total) t[k] = round2(ovTotal[k]!);
+    ({ socialSecurity, medicare, futa, suta, retirement, catchup } = t);
   }
+  if (edited.check.length || edited.total.length) notes.push('Some amounts were typed in by hand (marked ✎); ↺ puts the calculated amount back.');
   if (bonus) notes.push(`Includes ${usd(bonus)} bonus (taxed like pay; no 401(k) match on it).`);
   const taxes = round2(socialSecurity + medicare + futa + suta);
   const missing = [['medical', inputs.medicalMonthly], ['dental', inputs.dentalMonthly], ['vision', inputs.visionMonthly]].filter(([, v]) => v == null).map(([k]) => k);
@@ -234,7 +257,7 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
   const employerCost = round2(taxes + insurance + retirement + catchup + other);
   return { contractor, annualPay: annual, hourly, fraction, salaryWages: round2(salaryWages), bonus, wages: round2(wages),
     socialSecurity, medicare, futa, suta, taxes, medical, dental, vision, insurance, retirementPlan: plan, retirement, matchPct, catchup, other,
-    employerCost, total: round2(wages + employerCost), perCheck, employeeCheck, ytd, notes };
+    employerCost, total: round2(wages + employerCost), perCheck, employeeCheck, ytd, edited, notes };
 }
 
 export const usd = (n: number | null | undefined) =>

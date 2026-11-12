@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { usd, RETIREMENT_PLANS, YTD_FIELDS, type CostBreakdown, type CostInputs, type CostSettings, type EmployerLines } from '@/lib/actualCost';
+import { usd, RETIREMENT_PLANS, YTD_FIELDS, OVERRIDE_LINES, type CostBreakdown, type CostInputs, type CostSettings, type EmployerLines, type CostOverrides, type TaxLine } from '@/lib/actualCost';
 
 // Actual (fully loaded) cost UI. Data comes from /api/staffing/cost, which only answers for the
 // cost viewers (Clarizz and Catie); for anyone else `allowed` stays false and nothing renders.
@@ -8,7 +8,7 @@ import { usd, RETIREMENT_PLANS, YTD_FIELDS, type CostBreakdown, type CostInputs,
 // Form values for one person's inputs (strings, as typed).
 export type CostInputValues = { medical_monthly: string; dental_monthly: string; vision_monthly: string; retirement_plan: string;
   match_401k_pct: string; catchup_annual: string; other_annual: string; bonus_annual: string; emp_401k_pct: string;
-  emp_medical_check: string; emp_dental_check: string; emp_vision_check: string; ytd: Record<string, string> };
+  emp_medical_check: string; emp_dental_check: string; emp_vision_check: string; ytd: Record<string, string>; overrides: CostOverrides };
 const str = (n?: number | null) => n?.toString() ?? '';
 const valuesFrom = (i: CostInputs): CostInputValues => ({
   medical_monthly: str(i.medicalMonthly), dental_monthly: str(i.dentalMonthly), vision_monthly: str(i.visionMonthly),
@@ -16,6 +16,7 @@ const valuesFrom = (i: CostInputs): CostInputValues => ({
   bonus_annual: str(i.bonusAnnual), emp_401k_pct: str(i.emp401kPct), emp_medical_check: str(i.empMedicalCheck),
   emp_dental_check: str(i.empDentalCheck), emp_vision_check: str(i.empVisionCheck),
   ytd: Object.fromEntries(YTD_FIELDS.map(f => [f.key, str(i.ytd?.[f.key])])),
+  overrides: { check: { ...(i.overrides?.check ?? {}) }, total: { ...(i.overrides?.total ?? {}) } },
 });
 
 export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown }
@@ -68,6 +69,36 @@ const money2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits:
 const th = 'text-right font-semibold px-3 py-2 whitespace-nowrap';
 const td = 'px-3 py-2 text-right tabular-nums text-text-primary whitespace-nowrap';
 
+// A table amount you can click and retype. Enter or clicking away saves; Esc cancels; blank or ↺
+// goes back to the calculated amount.
+function EditCell({ value, edited, onCommit, className = '' }: { value: number; edited?: boolean; onCommit?: (n: number | null) => void; className?: string }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  if (!onCommit) return <td className={`${td} ${className}`}>{money2(value)}</td>;
+  const done = (save: boolean) => {
+    setEditing(false);
+    if (!save) return;
+    const t = text.replace(/[$,\s]/g, '');
+    if (t === '') return onCommit(null);
+    const n = Number(t);
+    if (Number.isFinite(n) && n >= 0 && Math.abs(n - value) >= 0.005) onCommit(Math.round(n * 100) / 100);
+  };
+  return (
+    <td className={`${td} ${className} !py-1`}>
+      {editing
+        ? <input autoFocus inputMode="decimal" value={text} onChange={e => setText(e.target.value)} onFocus={e => e.target.select()}
+            onBlur={() => done(true)} onKeyDown={e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); }}
+            className="w-24 text-right tabular-nums border border-ink rounded-ctrl px-1.5 py-1 text-sm focus:outline-none" />
+        : <span className="inline-flex items-center gap-1">
+            {edited && <button title="Put the calculated amount back" onClick={() => onCommit(null)} className="text-[11px] text-text-muted hover:text-litred-alt">↺</button>}
+            <button title="Click to edit" onClick={() => { setText(value.toFixed(2)); setEditing(true); }}
+              className={`tabular-nums rounded px-1.5 py-1 -mr-1.5 border border-transparent hover:border-border-light hover:bg-canvas ${edited ? 'text-gold-muted font-semibold' : ''}`}>
+              {edited && '✎ '}{money2(value)}</button>
+          </span>}
+    </td>
+  );
+}
+
 export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; settings: CostSettings; onSave: (v: CostInputValues) => Promise<unknown> }) {
   const c = row.cost;
   const [v, setV] = useState<CostInputValues>(valuesFrom(row.inputs));
@@ -78,6 +109,34 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
     setBusy(true); setMsg('');
     try { await onSave(v); setMsg('Saved'); } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   }
+  // Save straight from a table cell.
+  async function commit(next: CostInputValues) {
+    setV(next); setMsg('');
+    try { await onSave(next); setMsg('Saved'); } catch (e: any) { setMsg(e.message); setV(valuesFrom(row.inputs)); }
+  }
+  const periods = settings.payPeriods || 24;
+  const insKey = { medical: 'medical_monthly', dental: 'dental_monthly', vision: 'vision_monthly' } as const;
+  const ytdKey: Record<TaxLine, string> = { socialSecurity: 'socialSecurity', medicare: 'medicare', futa: 'futa', suta: 'suta', retirement: 'match', catchup: 'catchupMatch' };
+  const isTax = (k: keyof EmployerLines): k is TaxLine => (OVERRIDE_LINES as string[]).includes(k);
+  const setOv = (part: 'check' | 'total', k: TaxLine, n: number | null) => {
+    const o = { check: { ...v.overrides.check }, total: { ...v.overrides.total } };
+    if (n == null) delete o[part][k]; else o[part][k] = n;
+    // A paycheck amount and a year total for the same line would fight; the latest edit wins.
+    if (n != null) delete o[part === 'check' ? 'total' : 'check'][k];
+    return o;
+  };
+  const monthly = (n: number | null) => (n == null ? '' : String(Math.round(n * 100) / 100));
+  // Which column was edited → what gets saved.
+  const editCheck = (k: keyof EmployerLines) => (n: number | null) =>
+    isTax(k) ? commit({ ...v, overrides: setOv('check', k, n) }) : commit({ ...v, [insKey[k as keyof typeof insKey]]: monthly(n == null ? null : n * periods / 12) });
+  const editYtd = (k: keyof EmployerLines) => (n: number | null) => {
+    if (isTax(k)) return commit({ ...v, ytd: { ...v.ytd, [ytdKey[k]]: n == null ? '' : String(n) } });
+    const checks = c.ytd?.checks || 1;
+    return commit({ ...v, [insKey[k as keyof typeof insKey]]: monthly(n == null ? null : n / checks * periods / 12) });
+  };
+  const editTotal = (k: keyof EmployerLines, add = 0) => (n: number | null) =>
+    isTax(k) ? commit({ ...v, overrides: setOv('total', k, n == null ? null : Math.round((n + add) * 100) / 100) })
+      : commit({ ...v, [insKey[k as keyof typeof insKey]]: monthly(n == null ? null : (n + add) / 12 / Math.max(c.fraction, 0.01)) });
   const planLabel = RETIREMENT_PLANS.find(p => p.key === c.retirementPlan)?.label;
   const matchLabel = c.retirementPlan === 'roth' ? 'Roth 401(k) company match' : c.retirementPlan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
   const pc = c.perCheck, y = c.ytd;
@@ -103,7 +162,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
     ['Vision', 'pre-tax', ec.vision, iy?.empVision],
   ].filter(([, , per, ytd]) => per || ytd) as any : [];
   const empYtd = empLines.reduce((t, l) => t + (l[3] ?? 0), 0);
-  const inp = (k: keyof Omit<CostInputValues, 'ytd'>, label: string, ph = '') => (
+  const inp = (k: keyof Omit<CostInputValues, 'ytd' | 'overrides'>, label: string, ph = '') => (
     <label key={k} className="block"><span className="text-xs font-semibold text-text-secondary">{label}</span>
       <input className={field} inputMode="decimal" value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} placeholder={ph} /></label>
   );
@@ -125,10 +184,10 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
                 <tr key={what} className="border-b border-[#f1ece3]">
                   <td className="px-3 py-2"><span className="text-text-primary">{what}</span>{code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{code}</span>}
                     <div className="text-[11px] text-text-muted">{basis}</div></td>
-                  {pc && <td className={`${td} text-text-secondary`}>{key ? money2(pc[key]) : ''}</td>}
-                  {y && <td className={`${td} text-text-secondary`}>{key ? money2(y.paid[key]) : ''}</td>}
-                  {y && <td className={`${td} text-text-secondary`}>{key ? money2(y.rest[key]) : ''}</td>}
-                  <td className={td}>{money2(amt)}</td>
+                  {pc && (key ? <EditCell value={pc[key]} className="text-text-secondary" edited={isTax(key) && c.edited.check.includes(key)} onCommit={editCheck(key)} /> : <td />)}
+                  {y && (key ? <EditCell value={y.paid[key]} className="text-text-secondary" onCommit={editYtd(key)} /> : <td />)}
+                  {y && (key ? <EditCell value={y.rest[key]} className="text-text-secondary" onCommit={editTotal(key, y.paid[key])} /> : <td />)}
+                  {key ? <EditCell value={amt} edited={isTax(key) && c.edited.total.includes(key)} onCommit={editTotal(key)} /> : <td className={td}>{money2(amt)}</td>}
                 </tr>
               ))}
               <tr><td className="px-3 py-2.5 font-bold text-text-primary">Employer cost <span className="font-normal text-xs text-text-muted">taxes + benefits</span></td>
@@ -139,7 +198,8 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
             </tbody>
           </table>
         </div>
-        {pc && <p className="text-[11px] text-text-muted mt-1.5">Per paycheck = a regular {settings.payPeriods}-a-year check of {usd(pc.gross)}. FUTA and TN SUI stop once the first {usd(settings.futaWageBase)} of the year is paid.</p>}
+        {!c.contractor && <p className="text-[11px] text-text-muted mt-1.5">Click any amount to change it. Medical, dental and vision changes update the firm’s monthly share.</p>}
+        {pc && <p className="text-[11px] text-text-muted mt-0.5">Per paycheck = a regular {settings.payPeriods}-a-year check of {usd(pc.gross)}. FUTA and TN SUI stop once the first {usd(settings.futaWageBase)} of the year is paid.</p>}
         {empLines.length > 0 && (
           <div className="border border-border-light rounded-card overflow-x-auto mt-4">
             <div className="bg-canvas px-4 py-2 text-center text-xs font-bold uppercase tracking-wider text-text-secondary border-b border-border-light">Employee deductions <span className="normal-case font-normal tracking-normal text-text-muted">· their own money, not a firm cost</span></div>

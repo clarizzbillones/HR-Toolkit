@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { sql } from '@/lib/db';
 import { normName } from '@/lib/employeeFiles';
-import { actualCost, DEFAULT_COST_SETTINGS, RETIREMENT_PLANS, YTD_FIELDS, type CostSettings, type CostInputs, type RetirementPlan, type YtdActuals } from '@/lib/actualCost';
+import { actualCost, DEFAULT_COST_SETTINGS, RETIREMENT_PLANS, YTD_FIELDS, OVERRIDE_LINES, type CostSettings, type CostInputs, type RetirementPlan } from '@/lib/actualCost';
 
 // Actual (fully loaded) employee cost. Visible ONLY to the people in COST_VIEWERS (default:
 // Clarizz and Catie) — stricter than HR admin, so portal admins don't see it. Everyone else gets
@@ -42,7 +42,8 @@ async function ensure() {
   await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS emp_medical_check NUMERIC`;
   await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS emp_dental_check NUMERIC`;
   await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS emp_vision_check NUMERIC`;
-  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS ytd TEXT`; // ADP year-to-date figures (JSON)
+  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS ytd TEXT`;
+  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS overrides TEXT`; // amounts typed into the Employer table (JSON) // ADP year-to-date figures (JSON)
 }
 
 async function loadSettings(): Promise<CostSettings> {
@@ -52,14 +53,14 @@ async function loadSettings(): Promise<CostSettings> {
 }
 
 const num = (v: any) => (v === null || v === undefined || v === '' ? null : Number(String(v).replace(/[$,\s]/g, '')));
-function parseYtd(raw: any): YtdActuals | null {
+function parseJson(raw: any): any {
   try { const o = typeof raw === 'string' ? JSON.parse(raw) : raw; return o && typeof o === 'object' ? o : null; } catch { return null; }
 }
 
 async function rowsWithCost(settings: CostSettings, name?: string | null) {
   const staff = await sql`SELECT id, name, worker_type, position, salary, start_date, offboarded, offboarded_date FROM staff_directory ORDER BY name ASC` as any[];
   const inputs = await sql`SELECT staff_id, medical_monthly, dental_monthly, vision_monthly, retirement_plan, match_401k_pct, catchup_annual, other_annual,
-    bonus_annual, emp_401k_pct, emp_medical_check, emp_dental_check, emp_vision_check, ytd FROM staff_costs` as any[];
+    bonus_annual, emp_401k_pct, emp_medical_check, emp_dental_check, emp_vision_check, ytd, overrides FROM staff_costs` as any[];
   const byId = new Map(inputs.map(i => [i.staff_id, i]));
   const key = name ? normName(name) : null;
   return staff
@@ -69,7 +70,7 @@ async function rowsWithCost(settings: CostSettings, name?: string | null) {
       const inp: CostInputs = { medicalMonthly: num(i?.medical_monthly), dentalMonthly: num(i?.dental_monthly), visionMonthly: num(i?.vision_monthly),
         retirementPlan: (i?.retirement_plan as RetirementPlan) ?? null, match401kPct: num(i?.match_401k_pct), catchupAnnual: num(i?.catchup_annual), otherAnnual: num(i?.other_annual),
         bonusAnnual: num(i?.bonus_annual), emp401kPct: num(i?.emp_401k_pct), empMedicalCheck: num(i?.emp_medical_check),
-        empDentalCheck: num(i?.emp_dental_check), empVisionCheck: num(i?.emp_vision_check), ytd: parseYtd(i?.ytd) };
+        empDentalCheck: num(i?.emp_dental_check), empVisionCheck: num(i?.emp_vision_check), ytd: parseJson(i?.ytd), overrides: parseJson(i?.overrides) };
       return { id: s.id, name: s.name, worker_type: s.worker_type, position: s.position, offboarded: !!s.offboarded, inputs: inp, cost: actualCost(s, inp, settings) };
     });
 }
@@ -118,17 +119,26 @@ export async function PATCH(req: Request) {
   for (const f of YTD_FIELDS) { const n = num(b.ytd?.[f.key]); if (n != null) y[f.key] = n; }
   if (Object.values(y).some(v => !Number.isFinite(v) || v < 0)) return NextResponse.json({ error: 'Year-to-date amounts must be zero or more.' }, { status: 400 });
   const ytd = y.checks != null ? JSON.stringify(y) : null;
+  // Typed-in Employer amounts: known lines only, numbers ≥ 0.
+  const ov: Record<'check' | 'total', Record<string, number>> = { check: {}, total: {} };
+  for (const part of ['check', 'total'] as const) for (const k of OVERRIDE_LINES) {
+    const n = num(b.overrides?.[part]?.[k]);
+    if (n == null) continue;
+    if (!Number.isFinite(n) || n < 0) return NextResponse.json({ error: 'Amounts must be zero or more.' }, { status: 400 });
+    ov[part][k] = n;
+  }
+  const overrides = Object.keys(ov.check).length || Object.keys(ov.total).length ? JSON.stringify(ov) : null;
   if (Object.keys(y).length && y.checks == null) return NextResponse.json({ error: 'Enter how many paychecks are included in the year-to-date figures.' }, { status: 400 });
   const plan = RETIREMENT_PLANS.some(p => p.key === b.retirement_plan) ? String(b.retirement_plan) : null;
   if (Object.values(vals).some(v => v != null && (!Number.isFinite(v) || v < 0))) return NextResponse.json({ error: 'Amounts must be zero or more.' }, { status: 400 });
   await sql`INSERT INTO staff_costs (staff_id, medical_monthly, dental_monthly, vision_monthly, retirement_plan, match_401k_pct, catchup_annual, other_annual,
-      bonus_annual, emp_401k_pct, emp_medical_check, emp_dental_check, emp_vision_check, ytd, updated_by, updated_at)
+      bonus_annual, emp_401k_pct, emp_medical_check, emp_dental_check, emp_vision_check, ytd, overrides, updated_by, updated_at)
     VALUES (${id}, ${vals.medical_monthly}, ${vals.dental_monthly}, ${vals.vision_monthly}, ${plan}, ${vals.match_401k_pct}, ${vals.catchup_annual}, ${vals.other_annual},
-      ${vals.bonus_annual}, ${vals.emp_401k_pct}, ${vals.emp_medical_check}, ${vals.emp_dental_check}, ${vals.emp_vision_check}, ${ytd}, ${session?.user?.email ?? null}, NOW())
+      ${vals.bonus_annual}, ${vals.emp_401k_pct}, ${vals.emp_medical_check}, ${vals.emp_dental_check}, ${vals.emp_vision_check}, ${ytd}, ${overrides}, ${session?.user?.email ?? null}, NOW())
     ON CONFLICT (staff_id) DO UPDATE SET medical_monthly = EXCLUDED.medical_monthly, dental_monthly = EXCLUDED.dental_monthly,
       vision_monthly = EXCLUDED.vision_monthly, retirement_plan = EXCLUDED.retirement_plan, match_401k_pct = EXCLUDED.match_401k_pct,
       catchup_annual = EXCLUDED.catchup_annual, bonus_annual = EXCLUDED.bonus_annual, emp_401k_pct = EXCLUDED.emp_401k_pct,
-      emp_medical_check = EXCLUDED.emp_medical_check, emp_dental_check = EXCLUDED.emp_dental_check, emp_vision_check = EXCLUDED.emp_vision_check, ytd = EXCLUDED.ytd,
+      emp_medical_check = EXCLUDED.emp_medical_check, emp_dental_check = EXCLUDED.emp_dental_check, emp_vision_check = EXCLUDED.emp_vision_check, ytd = EXCLUDED.ytd, overrides = EXCLUDED.overrides,
       other_annual = EXCLUDED.other_annual, updated_by = EXCLUDED.updated_by, updated_at = NOW()`;
   const settings = await loadSettings();
   const [row] = (await rowsWithCost(settings)).filter(r => r.id === id);
