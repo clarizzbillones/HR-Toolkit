@@ -128,7 +128,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         {employee.length > 0 && (
           <div className="border border-border-light rounded-card overflow-x-auto mt-4">
             <table className="w-full">
-              <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Employer deductions</th>
+              <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Employer contributions</th>
                 {COLS.map(col => <th key={col.key} className={th}>{col.label(settings.year, L.checks)}</th>)}</tr></thead>
               <tbody>
                 {employee.map(x => (
@@ -144,7 +144,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
         <p className="text-[11px] text-text-muted mt-1.5">Click any amount to type it in. Until a {settings.year} total is entered, the total column uses year to date (greyed).</p>
         <div className="mt-4 space-y-0.5">
           <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer cost</span><span className="tabular-nums">{usd(yearSum(employerLines))}</span></div>
-          <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer deductions</span><span className="tabular-nums">{usd(yearSum(employee))}</span></div>
+          <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer contributions</span><span className="tabular-nums">{usd(yearSum(employee))}</span></div>
           <div className="flex justify-between border-t border-border-light mt-1 pt-2.5"><span className="font-bold text-text-primary">Actual cost for {settings.year}</span>
             <span className="tabular-nums font-bold text-base">{usd(yearSum(employerLines) + yearSum(employee))}</span></div>
         </div>
@@ -207,7 +207,7 @@ export function ActualCostCard({ name }: { name: string }) {
     <div>
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Actual cost · {settings.year}</h2>
-        <span className="text-[11px] text-text-muted">Employer taxes, benefits, 401(k) and employer deductions. Visible only to Clarizz and Catie.</span>
+        <span className="text-[11px] text-text-muted">Employer taxes, benefits, 401(k) and employer contributions. Visible only to Clarizz and Catie.</span>
       </div>
       {row
         ? <div className="bg-white border border-border-light rounded-card p-5"><ActualCostDetail row={row} settings={settings} onSave={v => saveInputs(row.id, v)} /></div>

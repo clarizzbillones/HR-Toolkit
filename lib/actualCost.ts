@@ -1,5 +1,5 @@
 // Actual cost of an employee to Litson: what the firm pays on top of their paycheck (employer payroll
-// taxes, 401(k) match, insurance, other costs) plus employer deductions. Pay itself is not included.
+// taxes, 401(k) match, insurance, other costs) plus employer contributions. Pay itself is not included.
 // Nothing is estimated —
 // every amount is typed in from ADP (per paycheck, year to date, and the year total once known).
 // Pure and DB-free so the server and the client add up the same way.
@@ -12,7 +12,7 @@ export const RETIREMENT_PLANS: { key: RetirementPlan; label: string }[] = [
   { key: '401k', label: '401(k)' }, { key: 'roth', label: 'Roth 401(k)' }, { key: 'both', label: '401(k) + Roth 401(k)' }, { key: 'none', label: 'Not enrolled' },
 ];
 
-export type LineGroup = 'employer' | 'employee'; // 'employee' = the Employer deductions section
+export type LineGroup = 'employer' | 'employee'; // 'employee' = the Employer contributions section
 export const LEDGER_LINES = [
   { key: 'socialSecurity', label: 'Social Security', code: 'FED SOCSEC-ER', group: 'employer' },
   { key: 'medicare', label: 'Medicare', code: 'FED MEDCARE-ER', group: 'employer' },
