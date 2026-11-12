@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { CostModal, type CostRow } from '@/components/ActualCost';
-import { LEDGER_LINES, type CostSettings, type LineKey } from '@/lib/actualCost';
+import { LEDGER_LINES, DEFAULT_STATE, stateName, type CostSettings, type LineKey } from '@/lib/actualCost';
 
 // Reports: headcount, tenure, benefits enrollment (who's on what) and — for the cost viewers
 // only — employer cost. Opened from Staffing and Employee Files. Charts are plain HTML bars in one
@@ -75,7 +75,7 @@ function HBars({ items, max, tipOn }: { items: { label: string; value: number; t
   return (
     <div className="space-y-1">
       {items.map(it => (
-        <div key={it.label} {...tipOn(it.tip)} className="grid grid-cols-[minmax(90px,190px)_1fr_auto] items-center gap-3 py-1 rounded hover:bg-canvas px-1 -mx-1 cursor-default">
+        <div key={it.label} {...tipOn(it.tip)} className="grid grid-cols-[minmax(90px,220px)_1fr_auto] items-center gap-3 py-1 rounded hover:bg-canvas px-1 -mx-1 cursor-default">
           <span className="text-sm text-text-secondary truncate">{it.label}</span>
           <div className="h-3.5 rounded-[4px]" style={{ background: TRACK }}>
             <div className="h-full rounded-[4px]" style={{ width: `${max ? Math.max(it.value ? 1.5 : 0, (it.value / max) * 100) : 0}%`, background: BAR }} />
@@ -192,9 +192,21 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       .map(x => [x.label, x.names] as [string, string[]]);
     // Cost.
     const costRows = (cost?.rows ?? []).filter(c => !c.offboarded && c.cost.entered);
-    const ytdByLine = LEDGER_LINES.map(x => ({ key: x.key as LineKey, label: x.key === 'suta' || x.key === 'suta2' ? (x.key === 'suta' ? 'State unemployment' : 'Second state unemployment') : x.label,
-      value: Math.round(costRows.reduce((t, c) => t + (c.inputs.ledger?.ytd?.[x.key] ?? 0), 0) * 100) / 100 })).filter(x => x.value > 0)
-      .sort((a, b) => b.value - a.value);
+    // YTD by cost line; unemployment (SUI) split by state — the person's state for the main SUI line,
+    // their second state for the second line. `who` = names behind each bar (for the tooltip).
+    const byLine = new Map<string, { label: string; value: number; who: string[] }>();
+    const add = (k: string, label: string, n: number, who: string) => {
+      if (!n) return; const cur = byLine.get(k) ?? { label, value: 0, who: [] };
+      cur.value = Math.round((cur.value + n) * 100) / 100; cur.who.push(who); byLine.set(k, cur);
+    };
+    for (const c of costRows) for (const x of LEDGER_LINES) {
+      const n = c.inputs.ledger?.ytd?.[x.key] ?? 0;
+      if (x.key === 'suta' || x.key === 'suta2') {
+        const code = (x.key === 'suta' ? c.inputs.workState : c.inputs.workState2) || DEFAULT_STATE;
+        add('sui-' + code, `${stateName(code)} unemployment`, n, c.name);
+      } else add(x.key, x.label, n, c.name);
+    }
+    const ytdByLine = [...byLine.values()].sort((a, b) => b.value - a.value);
     return { year, active, emps, contractors, off, offThisYear: off.filter(p => parseDay(p.offboarded_date)?.getFullYear() === year),
       statusOf, k401, benefitRows, tenures, bands, startYears: byYear(active, 'start_date'), offYears: byYear(off, 'offboarded_date'),
       topRoles, costRows, ytdByLine, offUndated: off.filter(p => !parseDay(p.offboarded_date)).length,
@@ -301,7 +313,7 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
               <Card title={`Employer cost by type · YTD ${cost.settings.year}`} note="Visible only to Clarizz and Catie · from amounts entered in the cost view">
                 {r.ytdByLine.length
                   ? <HBars tipOn={on} max={r.ytdByLine[0].value} items={r.ytdByLine.map(x => ({ label: x.label, value: x.value, text: money(x.value),
-                      tip: [x.label, `${money(x.value)} YTD`, `${pct(x.value, r.ytdByLine.reduce((t, y) => t + y.value, 0))}% of employer cost`] }))} />
+                      tip: [x.label, `${money(x.value)} YTD · ${pct(x.value, r.ytdByLine.reduce((t, y) => t + y.value, 0))}% of employer cost`, `${x.who.length} ${x.who.length === 1 ? 'person' : 'people'}`, ...x.who.slice(0, 8), ...(x.who.length > 8 ? [`+${x.who.length - 8} more`] : [])] }))} />
                   : <p className="text-sm text-text-muted">No YTD amounts entered yet.</p>}
               </Card>
               <Card title={`Actual cost by employee · ${cost.settings.year}`} note={`${r.costRows.length} of ${r.costEmployees.length} employees entered · total uses YTD until a year total is entered`}>
