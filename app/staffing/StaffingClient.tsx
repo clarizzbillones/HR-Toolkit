@@ -647,7 +647,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
 
       {/* Staff modal */}
       {costOpen && cost.settings && costById.get(costOpen) && (
-        <CostModal title={`Actual cost · ${costById.get(costOpen)!.name}`} onClose={() => setCostOpen(null)}>
+        <CostModal title={`Actual cost · ${costById.get(costOpen)!.name}`} onClose={() => setCostOpen(null)} actions={<CostNav ids={fStaff.map(s => s.id).filter(id => costById.has(id))} current={costOpen} onGo={setCostOpen} />}>
           <ActualCostDetail row={costById.get(costOpen)!} settings={cost.settings} onSave={v => cost.saveInputs(costOpen, v)} />
         </CostModal>
       )}
@@ -728,6 +728,30 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Previous / next employee in the cost pop-up (same order as the Staffing list). ← and → work too,
+// except while typing in a box.
+function CostNav({ ids, current, onGo }: { ids: string[]; current: string; onGo: (id: string) => void }) {
+  const i = ids.indexOf(current);
+  const prev = i > 0 ? ids[i - 1] : null, next = i >= 0 && i < ids.length - 1 ? ids[i + 1] : null;
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+      if (e.key === 'ArrowLeft' && prev) onGo(prev);
+      if (e.key === 'ArrowRight' && next) onGo(next);
+    };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, [prev, next, onGo]);
+  const btn = 'text-sm font-semibold px-3 py-1.5 rounded-ctrl border border-border-light hover:bg-canvas disabled:opacity-40 disabled:hover:bg-transparent';
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <button className={btn} disabled={!prev} onClick={() => prev && onGo(prev)} title="Previous employee (←)">‹ Prev</button>
+      <span className="text-xs text-text-muted tabular-nums">{i + 1} of {ids.length}</span>
+      <button className={btn} disabled={!next} onClick={() => next && onGo(next)} title="Next employee (→)">Next ›</button>
     </div>
   );
 }

@@ -174,13 +174,15 @@ export function CostSettingsForm({ settings, onSave, onDone }: { settings: CostS
   );
 }
 
-export function CostModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function CostModal({ title, onClose, children, actions }: { title: string; onClose: () => void; children: React.ReactNode; actions?: React.ReactNode }) {
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-card shadow-xl w-full max-w-5xl mt-10 p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 mb-4">
           <h2 className="font-spectral text-xl font-semibold text-text-primary">{title}</h2>
+          <div className="flex-1" />
+          {actions}
           <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-ink text-xl leading-none">×</button>
         </div>
         {children}
