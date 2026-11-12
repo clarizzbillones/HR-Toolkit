@@ -537,6 +537,7 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
                       className="font-semibold text-text-primary tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#2f7d5b]">
                       {cr.cost.annualPay == null ? 'Add salary' : usd(cr.cost.total)}
                     </button> : <span className="text-text-muted">—</span>}
+                    {cr && cr.cost.annualPay != null && !cr.cost.contractor && <div className="text-[11px] text-text-muted tabular-nums">{usd(cr.cost.employerCost)} employer</div>}
                     {cr && !cr.cost.contractor && (cr.inputs.medicalMonthly == null || cr.inputs.dentalMonthly == null || cr.inputs.visionMonthly == null) && cr.cost.annualPay != null && <span title="Medical, dental or vision share not entered yet" className="ml-1.5 text-[#b07d2a]">•</span>}
                   </td>
                 );

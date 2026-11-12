@@ -23,12 +23,19 @@ export const DEFAULT_COST_SETTINGS: CostSettings = {
   sutaRate: 2.7, sutaWageBase: 7000, match401kPct: 0, otherPct: 0, hoursPerYear: 2080,
 };
 
+export type RetirementPlan = '401k' | 'roth' | 'both' | 'none';
+export const RETIREMENT_PLANS: { key: RetirementPlan; label: string }[] = [
+  { key: '401k', label: '401(k)' }, { key: 'roth', label: 'Roth 401(k)' }, { key: 'both', label: '401(k) + Roth 401(k)' }, { key: 'none', label: 'Not enrolled' },
+];
+
 export interface CostInputs {
   // Firm's monthly share of each plan (employer contribution, not the employee's deduction)
   medicalMonthly?: number | null;
   dentalMonthly?: number | null;
   visionMonthly?: number | null;
-  match401kPct?: number | null;     // Overrides the firm-wide 401(k) %
+  retirementPlan?: RetirementPlan | null; // Which plan they contribute to (match is an employer cost either way)
+  match401kPct?: number | null;     // Company match, % of pay — overrides the firm-wide %
+  catchupAnnual?: number | null;    // Company match on catch-up contributions, $ per year
   otherAnnual?: number | null;      // Any other yearly cost for this person (phone stipend, licenses…)
 }
 
@@ -44,7 +51,9 @@ export interface CostBreakdown {
   fraction: number;          // share of the year employed (0–1)
   wages: number;             // pay for the part of the year employed
   socialSecurity: number; medicare: number; futa: number; suta: number; taxes: number;
-  medical: number; dental: number; vision: number; insurance: number; retirement: number; matchPct: number; other: number;
+  medical: number; dental: number; vision: number; insurance: number;
+  retirementPlan: RetirementPlan | null; retirement: number; matchPct: number; catchup: number; other: number;
+  employerCost: number; // everything the firm pays on top of pay (ADP's employer liability + benefits)
   total: number;
   notes: string[];
 }
@@ -96,7 +105,8 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
     notes.push('Contractor: no employer payroll taxes or benefits.');
     const other = round2(inputs.otherAnnual ?? 0);
     return { contractor, annualPay: annual, hourly, fraction, wages: round2(wages), socialSecurity: 0, medicare: 0, futa: 0, suta: 0, taxes: 0,
-      medical: 0, dental: 0, vision: 0, insurance: 0, retirement: 0, matchPct: 0, other, total: round2(wages + other), notes };
+      medical: 0, dental: 0, vision: 0, insurance: 0, retirementPlan: null, retirement: 0, matchPct: 0, catchup: 0, other,
+      employerCost: other, total: round2(wages + other), notes };
   }
 
   const socialSecurity = round2(Math.min(wages, s.ssWageBase) * s.ssRate / 100);
@@ -107,13 +117,17 @@ export function actualCost(staff: CostStaff, inputs: CostInputs, s: CostSettings
   const yearly = (m?: number | null) => round2((m ?? 0) * 12 * fraction);
   const medical = yearly(inputs.medicalMonthly), dental = yearly(inputs.dentalMonthly), vision = yearly(inputs.visionMonthly);
   const insurance = round2(medical + dental + vision);
-  const matchPct = inputs.match401kPct ?? s.match401kPct;
+  const plan = inputs.retirementPlan ?? null;
+  const matchPct = plan === 'none' ? 0 : inputs.match401kPct ?? s.match401kPct;
   const retirement = round2(wages * matchPct / 100);
+  const catchup = plan === 'none' ? 0 : round2(inputs.catchupAnnual ?? 0);
   const other = round2(wages * s.otherPct / 100 + (inputs.otherAnnual ?? 0));
   const missing = [['medical', inputs.medicalMonthly], ['dental', inputs.dentalMonthly], ['vision', inputs.visionMonthly]].filter(([, v]) => v == null).map(([k]) => k);
   if (missing.length) notes.push(`Firm’s ${missing.join(', ')} share not entered yet (enter 0 if they’re not enrolled).`);
   return { contractor, annualPay: annual, hourly, fraction, wages: round2(wages), socialSecurity, medicare, futa, suta, taxes,
-    medical, dental, vision, insurance, retirement, matchPct, other, total: round2(wages + taxes + insurance + retirement + other), notes };
+    medical, dental, vision, insurance, retirementPlan: plan, retirement, matchPct, catchup, other,
+    employerCost: round2(taxes + insurance + retirement + catchup + other),
+    total: round2(wages + taxes + insurance + retirement + catchup + other), notes };
 }
 
 export const usd = (n: number | null | undefined) =>

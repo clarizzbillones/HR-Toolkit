@@ -1,9 +1,17 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { usd, type CostBreakdown, type CostInputs, type CostSettings } from '@/lib/actualCost';
+import { usd, RETIREMENT_PLANS, type CostBreakdown, type CostInputs, type CostSettings } from '@/lib/actualCost';
 
 // Actual (fully loaded) cost UI. Data comes from /api/staffing/cost, which only answers for the
 // cost viewers (Clarizz and Catie); for anyone else `allowed` stays false and nothing renders.
+
+// Form values for one person's inputs (strings, as typed).
+export type CostInputValues = { medical_monthly: string; dental_monthly: string; vision_monthly: string; retirement_plan: string;
+  match_401k_pct: string; catchup_annual: string; other_annual: string };
+const valuesFrom = (i: CostInputs): CostInputValues => ({
+  medical_monthly: i.medicalMonthly?.toString() ?? '', dental_monthly: i.dentalMonthly?.toString() ?? '', vision_monthly: i.visionMonthly?.toString() ?? '',
+  retirement_plan: i.retirementPlan ?? '', match_401k_pct: i.match401kPct?.toString() ?? '', catchup_annual: i.catchupAnnual?.toString() ?? '', other_annual: i.otherAnnual?.toString() ?? '',
+});
 
 export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown }
 
@@ -19,7 +27,7 @@ export function useActualCost(name?: string) {
   }, [name]);
   useEffect(() => { load(); }, [load]);
 
-  async function saveInputs(staffId: string, v: { medical_monthly: string; dental_monthly: string; vision_monthly: string; match_401k_pct: string; other_annual: string }) {
+  async function saveInputs(staffId: string, v: CostInputValues) {
     const res = await fetch('/api/staffing/cost', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staff_id: staffId, ...v }) });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || 'Could not save');
@@ -49,46 +57,79 @@ function Line({ label, value, sub, strong }: { label: string; value: string; sub
 }
 
 // Breakdown + this person's inputs. Used in the Staffing pop-up and the Employee File card.
-export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; settings: CostSettings; onSave: (v: { medical_monthly: string; dental_monthly: string; vision_monthly: string; match_401k_pct: string; other_annual: string }) => Promise<unknown> }) {
+// Breakdown laid out like the Employer section of an ADP payroll register, plus this person's inputs.
+// Used in the Staffing pop-up and the Employee File card.
+export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; settings: CostSettings; onSave: (v: CostInputValues) => Promise<unknown> }) {
   const c = row.cost;
-  const [v, setV] = useState({ medical_monthly: row.inputs.medicalMonthly?.toString() ?? '', dental_monthly: row.inputs.dentalMonthly?.toString() ?? '', vision_monthly: row.inputs.visionMonthly?.toString() ?? '', match_401k_pct: row.inputs.match401kPct?.toString() ?? '', other_annual: row.inputs.otherAnnual?.toString() ?? '' });
+  const [v, setV] = useState<CostInputValues>(valuesFrom(row.inputs));
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState('');
-  useEffect(() => {
-    setV({ medical_monthly: row.inputs.medicalMonthly?.toString() ?? '', dental_monthly: row.inputs.dentalMonthly?.toString() ?? '', vision_monthly: row.inputs.visionMonthly?.toString() ?? '', match_401k_pct: row.inputs.match401kPct?.toString() ?? '', other_annual: row.inputs.otherAnnual?.toString() ?? '' });
-  }, [row.id, row.inputs.medicalMonthly, row.inputs.dentalMonthly, row.inputs.visionMonthly, row.inputs.match401kPct, row.inputs.otherAnnual]);
+  useEffect(() => { setV(valuesFrom(row.inputs)); }, [row.id, JSON.stringify(row.inputs)]);
   async function save() {
     setBusy(true); setMsg('');
     try { await onSave(v); setMsg('Saved'); } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   }
+  const planLabel = RETIREMENT_PLANS.find(p => p.key === c.retirementPlan)?.label;
+  const matchLabel = c.retirementPlan === 'roth' ? 'Roth 401(k) company match' : c.retirementPlan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
+  // [what it is, ADP code, basis, amount]
+  const lines: [string, string, string, number][] = c.contractor ? [] : [
+    ['Social Security', 'FED SOCSEC-ER', `${settings.ssRate}% up to ${usd(settings.ssWageBase)}`, c.socialSecurity],
+    ['Medicare', 'FED MEDCARE-ER', `${settings.medicareRate}%`, c.medicare],
+    ['Federal unemployment', 'FED FUTA', `${settings.futaRate}% of first ${usd(settings.futaWageBase)}`, c.futa],
+    ['Tennessee unemployment', 'TN SUI-ER', `${settings.sutaRate}% of first ${usd(settings.sutaWageBase)}`, c.suta],
+    [matchLabel, '401k $ plan cmp mtch', c.retirementPlan === 'none' ? 'not enrolled' : `${c.matchPct}% of pay`, c.retirement],
+    ['401(k) catch-up match', '401k catch-up $ cmp mtch', 'per year', c.catchup],
+    ['Medical', 'firm’s share', row.inputs.medicalMonthly != null ? `${usd(row.inputs.medicalMonthly)}/mo` : 'not entered', c.medical],
+    ['Dental', 'firm’s share', row.inputs.dentalMonthly != null ? `${usd(row.inputs.dentalMonthly)}/mo` : 'not entered', c.dental],
+    ['Vision', 'firm’s share', row.inputs.visionMonthly != null ? `${usd(row.inputs.visionMonthly)}/mo` : 'not entered', c.vision],
+  ];
+  if (c.other || c.contractor) lines.push(['Other costs', '', !c.contractor && settings.otherPct ? `${settings.otherPct}% of pay + per-person` : 'per-person', c.other]);
+  const money2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
-    <div className="grid gap-5 md:grid-cols-[1fr_260px]">
+    <div className="grid gap-5 md:grid-cols-[1fr_270px]">
       <div className="text-sm">
-        <Line label={c.hourly ? 'Pay (hourly, annualized)' : 'Salary'} value={usd(c.wages)} sub={c.fraction < 1 && c.fraction > 0 ? `${Math.round(c.fraction * 100)}% of ${usd(c.annualPay)}` : undefined} />
-        {!c.contractor && <>
-          <Line label="Social Security" sub={`${settings.ssRate}% up to ${usd(settings.ssWageBase)}`} value={usd(c.socialSecurity)} />
-          <Line label="Medicare" sub={`${settings.medicareRate}%`} value={usd(c.medicare)} />
-          <Line label="Federal unemployment (FUTA)" sub={`${settings.futaRate}% of first ${usd(settings.futaWageBase)}`} value={usd(c.futa)} />
-          <Line label="Tennessee unemployment (SUTA)" sub={`${settings.sutaRate}% of first ${usd(settings.sutaWageBase)}`} value={usd(c.suta)} />
-          {([['Medical', 'medicalMonthly', c.medical], ['Dental', 'dentalMonthly', c.dental], ['Vision', 'visionMonthly', c.vision]] as const).map(([label, k, amt]) => (
-            <Line key={k} label={`${label} (firm’s share)`} sub={row.inputs[k] != null ? `${usd(row.inputs[k])}/mo` : 'not entered'} value={usd(amt)} />
-          ))}
-          <Line label="401(k) contribution" sub={`${c.matchPct}% of pay`} value={usd(c.retirement)} />
-        </>}
-        <Line label="Other costs" sub={!c.contractor && settings.otherPct ? `${settings.otherPct}% of pay + per-person` : undefined} value={usd(c.other)} />
-        <Line label={`Actual cost for ${settings.year}`} value={usd(c.total)} strong />
-        {c.annualPay && !c.contractor && c.wages > 0 && <p className="text-xs text-text-muted mt-1">That’s {Math.round((c.total / c.wages - 1) * 100)}% on top of pay.</p>}
+        <div className="border border-border-light rounded-card overflow-hidden">
+          <div className="bg-canvas px-4 py-2 text-center text-xs font-bold uppercase tracking-wider text-text-secondary border-b border-border-light">Employer</div>
+          <table className="w-full">
+            <thead><tr className="border-b border-border-light text-xs text-text-muted"><th className="text-left font-semibold px-4 py-2">Liability</th><th className="text-right font-semibold px-4 py-2">Amount</th></tr></thead>
+            <tbody>
+              {lines.map(([what, code, basis, amt]) => (
+                <tr key={what} className="border-b border-[#f1ece3]">
+                  <td className="px-4 py-2"><span className="text-text-primary">{what}</span>{code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{code}</span>}
+                    <div className="text-[11px] text-text-muted">{basis}</div></td>
+                  <td className="px-4 py-2 text-right tabular-nums text-text-primary">{money2(amt)}</td>
+                </tr>
+              ))}
+              <tr><td className="px-4 py-2.5 font-bold text-text-primary">Employer cost <span className="font-normal text-xs text-text-muted">taxes + benefits</span></td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-bold text-text-primary border-t-2 border-text-primary">{money2(c.employerCost)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4">
+          <Line label={c.hourly ? 'Pay (hourly, annualized)' : 'Salary'} value={usd(c.wages)} sub={c.fraction < 1 && c.fraction > 0 ? `${Math.round(c.fraction * 100)}% of ${usd(c.annualPay)}` : undefined} />
+          <Line label="Employer cost" value={usd(c.employerCost)} />
+          <Line label={`Actual cost for ${settings.year}`} value={usd(c.total)} strong />
+          {!c.contractor && c.wages > 0 && <p className="text-xs text-text-muted mt-1">Employer cost adds {Math.round((c.employerCost / c.wages) * 100)}% on top of pay.{planLabel ? ` Retirement plan: ${planLabel}.` : ''}</p>}
+        </div>
         {c.notes.length > 0 && <ul className="mt-3 space-y-1">{c.notes.map(n => <li key={n} className="text-xs text-text-muted">• {n}</li>)}</ul>}
       </div>
       <div className="bg-canvas rounded-card p-4 space-y-3 text-sm self-start">
         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">This person’s costs</p>
-        {!row.cost.contractor && <>
+        {!c.contractor && <>
           <p className="text-[11px] text-text-muted -mb-1">Firm’s monthly share. Enter 0 if they’re not enrolled.</p>
           {([['medical_monthly', 'Medical ($/month)', 'e.g. 520'], ['dental_monthly', 'Dental ($/month)', 'e.g. 35'], ['vision_monthly', 'Vision ($/month)', 'e.g. 8']] as const).map(([k, label, ph]) => (
             <label key={k} className="block"><span className="text-xs font-semibold text-text-secondary">{label}</span>
               <input className={field} inputMode="decimal" value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} placeholder={ph} /></label>
           ))}
-          <label className="block"><span className="text-xs font-semibold text-text-secondary">401(k) contribution (%)</span>
-            <input className={field} inputMode="decimal" value={v.match_401k_pct} onChange={e => setV({ ...v, match_401k_pct: e.target.value })} placeholder={`Firm default: ${settings.match401kPct}%`} /></label>
+          <label className="block"><span className="text-xs font-semibold text-text-secondary">Retirement plan</span>
+            <select className={field} value={v.retirement_plan} onChange={e => setV({ ...v, retirement_plan: e.target.value })}>
+              <option value="">Not set</option>{RETIREMENT_PLANS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select></label>
+          {v.retirement_plan !== 'none' && <>
+            <label className="block"><span className="text-xs font-semibold text-text-secondary">Company match (% of pay)</span>
+              <input className={field} inputMode="decimal" value={v.match_401k_pct} onChange={e => setV({ ...v, match_401k_pct: e.target.value })} placeholder={`Firm default: ${settings.match401kPct}%`} /></label>
+            <label className="block"><span className="text-xs font-semibold text-text-secondary">Catch-up match ($/year)</span>
+              <input className={field} inputMode="decimal" value={v.catchup_annual} onChange={e => setV({ ...v, catchup_annual: e.target.value })} placeholder="0" /></label>
+          </>}
         </>}
         <label className="block"><span className="text-xs font-semibold text-text-secondary">Other yearly costs ($)</span>
           <input className={field} inputMode="decimal" value={v.other_annual} onChange={e => setV({ ...v, other_annual: e.target.value })} placeholder="Licenses, stipends…" /></label>
