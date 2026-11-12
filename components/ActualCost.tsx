@@ -1,13 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { usd, RETIREMENT_PLANS, LEDGER_LINES, type CostBreakdown, type CostInputs, type CostSettings, type Ledger, type LedgerColumn, type LineKey } from '@/lib/actualCost';
+import { usd, RETIREMENT_PLANS, US_STATES, DEFAULT_STATE, stateName, LEDGER_LINES, type CostBreakdown, type CostInputs, type CostSettings, type Ledger, type LedgerColumn, type LineKey } from '@/lib/actualCost';
 
 // Actual (fully loaded) cost UI. Data comes from /api/staffing/cost, which only answers for the
 // cost viewers (Clarizz and Catie); for anyone else `allowed` stays false and nothing renders.
 // Nothing is estimated: every amount is typed in from ADP.
 
-export type CostInputValues = { retirement_plan: string; ledger: Ledger };
-const valuesFrom = (i: CostInputs): CostInputValues => ({ retirement_plan: i.retirementPlan ?? '', ledger: JSON.parse(JSON.stringify(i.ledger ?? {})) });
+export type CostInputValues = { retirement_plan: string; work_state: string; ledger: Ledger };
+const valuesFrom = (i: CostInputs): CostInputValues => ({ retirement_plan: i.retirementPlan ?? '', work_state: i.workState ?? '', ledger: JSON.parse(JSON.stringify(i.ledger ?? {})) });
 
 export interface CostRow { id: string; name: string; worker_type: string | null; position: string | null; offboarded: boolean; inputs: CostInputs; cost: CostBreakdown }
 
@@ -104,7 +104,7 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
       <tr><td colSpan={4} className="bg-canvas px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wider text-text-secondary border-y border-border-light">{title}</td></tr>
       {keys.map(x => (
         <tr key={x.key} className="border-b border-[#f1ece3]">
-          <td className="px-3 py-2"><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.label}</span>{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.code}</span>}</td>
+          <td className="px-3 py-2"><span className="text-text-primary">{x.key === 'match' ? matchLabel : x.key === 'suta' ? `${stateName(v.work_state)} unemployment` : x.label}</span>{x.code && <span className="ml-2 text-[11px] text-text-muted uppercase tracking-wide">{x.key === 'suta' ? `${v.work_state || DEFAULT_STATE} SUI-ER` : x.code}</span>}</td>
           {COLS.map(col => <EditCell key={col.key} value={L[col.key]?.[x.key]} fallback={col.key === 'total' ? L.ytd?.[x.key] : undefined} onCommit={setAmount(col.key, x.key)} />)}
         </tr>
       ))}
@@ -134,6 +134,10 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
       <div className="bg-canvas rounded-card p-4 space-y-3 text-sm self-start">
         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Details</p>
         {c.staffingSalary && <p className="text-xs text-text-muted">Salary in Staffing: <span className="text-text-primary font-semibold">{c.staffingSalary}</span></p>}
+        {!c.contractor && <label className="block"><span className="text-xs font-semibold text-text-secondary">Unemployment state</span>
+          <select className={field} value={v.work_state || DEFAULT_STATE} onChange={e => commit({ ...v, work_state: e.target.value === DEFAULT_STATE ? '' : e.target.value })}>
+            {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+          </select></label>}
         {!c.contractor && <label className="block"><span className="text-xs font-semibold text-text-secondary">Retirement plan</span>
           <select className={field} value={v.retirement_plan} onChange={e => commit({ ...v, retirement_plan: e.target.value })}>
             <option value="">Not set</option>{RETIREMENT_PLANS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}

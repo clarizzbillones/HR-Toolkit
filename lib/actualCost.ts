@@ -32,7 +32,18 @@ export type LedgerColumn = typeof LEDGER_COLUMNS[number];
 // What's been typed in. `checks` = paychecks included in the YTD column.
 export interface Ledger { checks?: number | null; check?: Partial<Record<LineKey, number>>; ytd?: Partial<Record<LineKey, number>>; total?: Partial<Record<LineKey, number>> }
 
-export interface CostInputs { retirementPlan?: RetirementPlan | null; ledger?: Ledger | null }
+// State unemployment (SUI) is paid to the state the person works in. Default: Tennessee.
+export const US_STATES: [string, string][] = [['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],['CO','Colorado'],
+  ['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],
+  ['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],
+  ['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],
+  ['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],
+  ['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],
+  ['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming']];
+export const DEFAULT_STATE = 'TN';
+export const stateName = (code?: string | null) => US_STATES.find(([c]) => c === (code || DEFAULT_STATE))?.[1] ?? 'Tennessee';
+
+export interface CostInputs { retirementPlan?: RetirementPlan | null; workState?: string | null; ledger?: Ledger | null }
 export interface CostStaff { salary?: string | null; worker_type?: string | null }
 
 export interface CostBreakdown {
