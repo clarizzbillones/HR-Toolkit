@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 import { CostModal, type CostRow } from '@/components/ActualCost';
 import { LEDGER_LINES, DEFAULT_STATE, stateName, type CostSettings, type LineKey } from '@/lib/actualCost';
 
@@ -213,11 +214,73 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       costEmployees: (cost?.rows ?? []).filter(c => !c.offboarded && (c.worker_type || 'Employee') !== 'Contractor') };
   }, [data, cost]);
 
+  const box = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState('');
   if (!r) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const timeAt = (p: Person) => {
+    const s0 = parseDay(p.start_date), e0 = parseDay(p.offboarded_date);
+    const yrs = s0 && e0 && e0 >= s0 ? (e0.getTime() - s0.getTime()) / (365.25 * 864e5) : null;
+    return yrs == null ? '' : yrs < 1 ? `${Math.max(1, Math.round(yrs * 12))} mo` : `${yrs.toFixed(1)} yrs`;
+  };
+  const offSorted = [...r.off].sort((a, b) => (parseDay(b.offboarded_date)?.getTime() ?? 0) - (parseDay(a.offboarded_date)?.getTime() ?? 0));
+  const costSorted = [...r.costRows].sort((a, b) => b.cost.total - a.cost.total);
+  const ytdOf = (c: CostRow) => Math.round(LEDGER_LINES.reduce((t, x) => t + (c.inputs.ledger?.ytd?.[x.key] ?? 0), 0) * 100) / 100;
+
+  // Excel: one formatted tab per section (cost tabs only for the cost viewers).
+  async function exportExcel() {
+    setBusy('excel');
+    try {
+      const X: any = await import('xlsx-js-style');
+      const R = r!;
+      const sheets: [string, any][] = [];
+      const summary: [string, string | number][] = [['Employees', R.emps.length], ['Contractors', R.contractors.length], [`Offboarded ${R.year}`, R.offThisYear.length],
+        ['Offboarded (all time)', R.off.length], ['Vendors', data.vendors],
+        ['Average tenure (years)', R.tenures.length ? Number((R.tenures.reduce((a, b) => a + b, 0) / R.tenures.length).toFixed(1)) : ''],
+        ...BENEFITS.map(b => [`${b} enrolled`, `${R.benefitRows.find(x => x.label === b)?.enrolled ?? 0} of ${R.emps.length}`] as [string, string]),
+        ...(cost ? [[`Actual cost ${cost.settings.year}`, money(R.costRows.reduce((t, c) => t + c.cost.total, 0))], ['Employees with cost entered', `${R.costRows.length} of ${R.costEmployees.length}`]] as [string, string][] : [])];
+      sheets.push(['Summary', styledSheet(X, { headers: ['Measure', 'Value'], rows: summary, widths: [32, 22] })]);
+      sheets.push(['Benefits', styledSheet(X, { headers: ['Benefit', ...STATUSES, 'Not recorded', '% enrolled'], widths: [16, 11, 11, 11, 11, 13, 14, 12],
+        rows: R.benefitRows.map(b => [b.label, ...STATUSES.map(s => b.counts[s]), b.counts[''], `${pct(b.enrolled, R.emps.length)}%`]) })]);
+      sheets.push(["Who's enrolled", styledSheet(X, { headers: ['Employee', 'Position', ...BENEFITS], widths: [24, 28, ...BENEFITS.map(() => 14)],
+        rows: R.emps.map(p => [p.name, p.position || '', ...BENEFITS.map(b => (b === '401(k)' ? (R.k401(p).yes ? 'Yes' : 'No') : R.statusOf(p, b) || 'Not recorded'))]) })]);
+      sheets.push(['Team by role', styledSheet(X, { headers: ['Role', 'People', 'Names'], widths: [32, 9, 80], rows: R.topRoles.map(([l, n]) => [l, n.length, n.join(', ')]) })]);
+      sheets.push(['Tenure', styledSheet(X, { headers: ['Tenure', 'People'], widths: [18, 10], rows: R.bands.map(([l, f]) => [l, R.tenures.filter(f).length]) })]);
+      sheets.push(['Start year', styledSheet(X, { headers: ['Year', 'People', 'Names'], widths: [10, 9, 80], rows: R.startYears.map(y => [y.label, y.value, y.tip.slice(1).join(', ')]) })]);
+      sheets.push(['Offboarded', styledSheet(X, { headers: ['Name', 'Position', 'Type', 'Start date', 'Last day', 'Time at Litson'], widths: [24, 30, 12, 14, 16, 14],
+        rows: offSorted.map(p => [p.name, p.position || '', p.worker_type || 'Employee', fmtDay(parseDay(p.start_date)), fmtDay(parseDay(p.offboarded_date)) || 'Not recorded', timeAt(p)]) })]);
+      if (cost) {
+        sheets.push(['Employer cost by type', styledSheet(X, { headers: ['Type', `YTD ${cost.settings.year}`, 'People'], widths: [30, 16, 80], totals: true, money: i => i === 1,
+          rows: R.ytdByLine.map(x => [x.label, x.value, x.who.join(', ')]) })]);
+        sheets.push(['Actual cost by employee', styledSheet(X, { headers: ['Employee', 'Position', 'Employer cost YTD', `Actual cost ${cost.settings.year}`], widths: [24, 28, 18, 18], totals: true, money: i => i >= 2,
+          rows: costSorted.map(c => [c.name, c.position || '', ytdOf(c), c.cost.total]) })]);
+      }
+      downloadWorkbook(X, sheets, `Litson-Reports-${today}.xlsx`);
+    } finally { setBusy(''); }
+  }
+
+  // PDF: print the report as shown (charts included) from a clean window → "Save as PDF".
+  function exportPdf() {
+    const el = box.current; if (!el) return;
+    const w = window.open('', '_blank'); if (!w) return;
+    const css = [...document.querySelectorAll('style, link[rel="stylesheet"]')].map(n => n.outerHTML).join('');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Litson Reports ${today}</title>${css}
+      <style>body{background:#fff;padding:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.no-print{display:none!important}
+      .max-h-\\[420px\\]{max-height:none!important;overflow:visible!important}section{break-inside:avoid}@page{size:letter landscape;margin:12mm}</style></head>
+      <body><h1 style="font-family:Spectral,serif;font-size:22px;font-weight:600;margin:0 0 4px">Litson Reports</h1>
+      <p style="font-size:12px;color:#8b8478;margin:0 0 16px">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>${el.outerHTML}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 600);
+  }
+
   return (
     <>
       {node}
-        <div className="space-y-5">
+      <div className="flex justify-end gap-2 mb-4 no-print">
+        <button onClick={exportPdf} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Print or save the report as a PDF">⬇ PDF</button>
+        <button onClick={exportExcel} disabled={!!busy} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Every chart and table as Excel tabs">{busy ? 'Exporting…' : '⬇ Excel'}</button>
+      </div>
+        <div ref={box} className="space-y-5">
           {/* Headline numbers */}
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
             <Tile label="Employees" value={r.emps.length} />
