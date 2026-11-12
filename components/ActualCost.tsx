@@ -97,7 +97,6 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
   const L = v.ledger;
   const matchLabel = v.retirement_plan === 'roth' ? 'Roth 401(k) company match' : v.retirement_plan === 'both' ? '401(k) + Roth company match' : '401(k) company match';
   const employerLines = LEDGER_LINES.filter(x => x.group === 'employer' && (!c.contractor || x.key === 'other'));
-  const employee = c.contractor ? [] : LEDGER_LINES.filter(x => x.group === 'employee');
   const sum = (col: LedgerColumn, keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L[col]?.[x.key] ?? 0), 0);
   const yearSum = (keys: readonly { key: LineKey }[]) => keys.reduce((t, x) => t + (L.total?.[x.key] ?? L.ytd?.[x.key] ?? 0), 0);
   const section = (title: string, keys: readonly (typeof LEDGER_LINES[number])[], subtotal: string) => (
@@ -125,28 +124,11 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
             </tbody>
           </table>
         </div>
-        {employee.length > 0 && (
-          <div className="border border-border-light rounded-card overflow-x-auto mt-4">
-            <table className="w-full">
-              <thead><tr className="text-xs text-text-muted"><th className="text-left font-semibold px-3 py-2">Employer contributions</th>
-                {COLS.map(col => <th key={col.key} className={th}>{col.label(settings.year, L.checks)}</th>)}</tr></thead>
-              <tbody>
-                {employee.map(x => (
-                  <tr key={x.key} className="border-t border-[#f1ece3]"><td className="px-3 py-2">{x.key === 'emp401k' && v.retirement_plan === 'roth' ? 'Roth 401(k)' : x.label}</td>
-                    {COLS.map(col => <EditCell key={col.key} value={L[col.key]?.[x.key]} fallback={col.key === 'total' ? L.ytd?.[x.key] : undefined} onCommit={setAmount(col.key, x.key)} />)}</tr>
-                ))}
-                <tr><td className="px-3 py-2.5 font-bold">Total deductions</td>
-                  {COLS.map(col => <td key={col.key} className={`${td} !py-2.5 font-bold border-t-2 border-text-primary`}>{money2(col.key === 'total' ? yearSum(employee) : sum(col.key, employee))}</td>)}</tr>
-              </tbody>
-            </table>
-          </div>
-        )}
         <p className="text-[11px] text-text-muted mt-1.5">Click any amount to type it in. Until a {settings.year} total is entered, the total column uses year to date (greyed).</p>
         <div className="mt-4 space-y-0.5">
           <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer cost</span><span className="tabular-nums">{usd(yearSum(employerLines))}</span></div>
-          <div className="flex justify-between py-1.5"><span className="text-text-secondary">Employer contributions</span><span className="tabular-nums">{usd(yearSum(employee))}</span></div>
           <div className="flex justify-between border-t border-border-light mt-1 pt-2.5"><span className="font-bold text-text-primary">Actual cost for {settings.year}</span>
-            <span className="tabular-nums font-bold text-base">{usd(yearSum(employerLines) + yearSum(employee))}</span></div>
+            <span className="tabular-nums font-bold text-base">{usd(yearSum(employerLines))}</span></div>
         </div>
       </div>
       <div className="bg-canvas rounded-card p-4 space-y-3 text-sm self-start">
@@ -207,7 +189,7 @@ export function ActualCostCard({ name }: { name: string }) {
     <div>
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-widest text-gold-muted">Actual cost · {settings.year}</h2>
-        <span className="text-[11px] text-text-muted">Employer taxes, benefits, 401(k) and employer contributions. Visible only to Clarizz and Catie.</span>
+        <span className="text-[11px] text-text-muted">Employer taxes, 401(k) match and benefits. Visible only to Clarizz and Catie.</span>
       </div>
       {row
         ? <div className="bg-white border border-border-light rounded-card p-5"><ActualCostDetail row={row} settings={settings} onSave={v => saveInputs(row.id, v)} /></div>

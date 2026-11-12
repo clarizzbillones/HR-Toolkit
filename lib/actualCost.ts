@@ -1,5 +1,5 @@
 // Actual cost of an employee to Litson: what the firm pays on top of their paycheck (employer payroll
-// taxes, 401(k) match, insurance, other costs) plus employer contributions. Pay itself is not included.
+// taxes, 401(k) match, insurance, other costs). Pay itself is not included.
 // Nothing is estimated —
 // every amount is typed in from ADP (per paycheck, year to date, and the year total once known).
 // Pure and DB-free so the server and the client add up the same way.
@@ -12,7 +12,7 @@ export const RETIREMENT_PLANS: { key: RetirementPlan; label: string }[] = [
   { key: '401k', label: '401(k)' }, { key: 'roth', label: 'Roth 401(k)' }, { key: 'both', label: '401(k) + Roth 401(k)' }, { key: 'none', label: 'Not enrolled' },
 ];
 
-export type LineGroup = 'employer' | 'employee'; // 'employee' = the Employer contributions section
+export type LineGroup = 'employer';
 export const LEDGER_LINES = [
   { key: 'socialSecurity', label: 'Social Security', code: 'FED SOCSEC-ER', group: 'employer' },
   { key: 'medicare', label: 'Medicare', code: 'FED MEDCARE-ER', group: 'employer' },
@@ -24,11 +24,6 @@ export const LEDGER_LINES = [
   { key: 'dental', label: 'Dental', code: 'firm’s share', group: 'employer' },
   { key: 'vision', label: 'Vision', code: 'firm’s share', group: 'employer' },
   { key: 'other', label: 'Other costs', code: '', group: 'employer' },
-  { key: 'emp401k', label: '401(k) plan', code: '', group: 'employee' },
-  { key: 'empCatchup', label: '401(k) catch-up', code: '', group: 'employee' },
-  { key: 'empMedical', label: 'Employee medical', code: '', group: 'employee' },
-  { key: 'empDental', label: 'Dental', code: '', group: 'employee' },
-  { key: 'empVision', label: 'Vision', code: '', group: 'employee' },
 ] as const;
 export type LineKey = typeof LEDGER_LINES[number]['key'];
 export const LEDGER_COLUMNS = ['check', 'ytd', 'total'] as const;
@@ -48,7 +43,7 @@ export interface CostBreakdown {
   // Per column: sum of each group (only what was typed).
   sums: Record<LedgerColumn, Record<LineGroup, number>>;
   year: Record<LineKey, number | null>; // year total if typed, otherwise year to date
-  employerCost: number; deductions: number; total: number;
+  employerCost: number; total: number;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -56,7 +51,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function actualCost(staff: CostStaff, inputs: CostInputs): CostBreakdown {
   const l = inputs.ledger ?? {};
   const contractor = (staff.worker_type ?? 'Employee') === 'Contractor';
-  const sums = Object.fromEntries(LEDGER_COLUMNS.map(c => [c, { employer: 0, employee: 0 }])) as CostBreakdown['sums'];
+  const sums = Object.fromEntries(LEDGER_COLUMNS.map(c => [c, { employer: 0 }])) as CostBreakdown['sums'];
   const year = {} as Record<LineKey, number | null>;
   let entered = false;
   for (const line of LEDGER_LINES) {
@@ -67,9 +62,9 @@ export function actualCost(staff: CostStaff, inputs: CostInputs): CostBreakdown 
     year[line.key] = l.total?.[line.key] ?? l.ytd?.[line.key] ?? null;
   }
   const add = (g: LineGroup) => round2(LEDGER_LINES.filter(x => x.group === g).reduce((t, x) => t + (year[x.key] ?? 0), 0));
-  const employerCost = add('employer'), deductions = add('employee');
+  const employerCost = add('employer');
   return { contractor, staffingSalary: staff.salary?.toString().trim() || null, entered, retirementPlan: inputs.retirementPlan ?? null,
-    sums, year, employerCost, deductions, total: round2(employerCost + deductions) };
+    sums, year, employerCost, total: employerCost };
 }
 
 export const usd = (n: number | null | undefined) =>
