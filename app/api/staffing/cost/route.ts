@@ -32,6 +32,9 @@ async function ensure() {
   await sql`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS cost_settings TEXT`;
   await sql`INSERT INTO app_settings (id) VALUES ('singleton') ON CONFLICT (id) DO NOTHING`;
   await sql`ALTER TABLE staff_directory ADD COLUMN IF NOT EXISTS offboarded_date TEXT`;
+  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS medical_monthly NUMERIC`;
+  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS dental_monthly NUMERIC`;
+  await sql`ALTER TABLE staff_costs ADD COLUMN IF NOT EXISTS vision_monthly NUMERIC`;
 }
 
 async function loadSettings(): Promise<CostSettings> {
@@ -44,14 +47,15 @@ const num = (v: any) => (v === null || v === undefined || v === '' ? null : Numb
 
 async function rowsWithCost(settings: CostSettings, name?: string | null) {
   const staff = await sql`SELECT id, name, worker_type, position, salary, start_date, offboarded, offboarded_date FROM staff_directory ORDER BY name ASC` as any[];
-  const inputs = await sql`SELECT staff_id, insurance_monthly, match_401k_pct, other_annual FROM staff_costs` as any[];
+  const inputs = await sql`SELECT staff_id, medical_monthly, dental_monthly, vision_monthly, match_401k_pct, other_annual FROM staff_costs` as any[];
   const byId = new Map(inputs.map(i => [i.staff_id, i]));
   const key = name ? normName(name) : null;
   return staff
     .filter(s => (key ? normName(s.name) === key : true))
     .map(s => {
       const i = byId.get(s.id);
-      const inp: CostInputs = { insuranceMonthly: num(i?.insurance_monthly), match401kPct: num(i?.match_401k_pct), otherAnnual: num(i?.other_annual) };
+      const inp: CostInputs = { medicalMonthly: num(i?.medical_monthly), dentalMonthly: num(i?.dental_monthly), visionMonthly: num(i?.vision_monthly),
+        match401kPct: num(i?.match_401k_pct), otherAnnual: num(i?.other_annual) };
       return { id: s.id, name: s.name, worker_type: s.worker_type, position: s.position, offboarded: !!s.offboarded, inputs: inp, cost: actualCost(s, inp, settings) };
     });
 }
@@ -83,7 +87,7 @@ export async function PUT(req: Request) {
   return NextResponse.json({ settings: next, rows: await rowsWithCost(next) });
 }
 
-// PATCH: one person's inputs (firm's monthly insurance share, 401(k) % override, other yearly cost).
+// PATCH: one person's inputs (firm's monthly medical, dental and vision share, 401(k) % override, other yearly cost).
 export async function PATCH(req: Request) {
   const session = await getServerSession(authOptions);
   if (!(await allowed())) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -91,11 +95,13 @@ export async function PATCH(req: Request) {
   const b = await req.json().catch(() => ({}));
   const id = String(b.staff_id ?? '');
   if (!id) return NextResponse.json({ error: 'Missing staff_id' }, { status: 400 });
-  const vals = { insurance_monthly: num(b.insurance_monthly), match_401k_pct: num(b.match_401k_pct), other_annual: num(b.other_annual) };
+  const vals = { medical_monthly: num(b.medical_monthly), dental_monthly: num(b.dental_monthly), vision_monthly: num(b.vision_monthly),
+    match_401k_pct: num(b.match_401k_pct), other_annual: num(b.other_annual) };
   if (Object.values(vals).some(v => v != null && (!Number.isFinite(v) || v < 0))) return NextResponse.json({ error: 'Amounts must be zero or more.' }, { status: 400 });
-  await sql`INSERT INTO staff_costs (staff_id, insurance_monthly, match_401k_pct, other_annual, updated_by, updated_at)
-    VALUES (${id}, ${vals.insurance_monthly}, ${vals.match_401k_pct}, ${vals.other_annual}, ${session?.user?.email ?? null}, NOW())
-    ON CONFLICT (staff_id) DO UPDATE SET insurance_monthly = EXCLUDED.insurance_monthly, match_401k_pct = EXCLUDED.match_401k_pct,
+  await sql`INSERT INTO staff_costs (staff_id, medical_monthly, dental_monthly, vision_monthly, match_401k_pct, other_annual, updated_by, updated_at)
+    VALUES (${id}, ${vals.medical_monthly}, ${vals.dental_monthly}, ${vals.vision_monthly}, ${vals.match_401k_pct}, ${vals.other_annual}, ${session?.user?.email ?? null}, NOW())
+    ON CONFLICT (staff_id) DO UPDATE SET medical_monthly = EXCLUDED.medical_monthly, dental_monthly = EXCLUDED.dental_monthly,
+      vision_monthly = EXCLUDED.vision_monthly, match_401k_pct = EXCLUDED.match_401k_pct,
       other_annual = EXCLUDED.other_annual, updated_by = EXCLUDED.updated_by, updated_at = NOW()`;
   const settings = await loadSettings();
   const [row] = (await rowsWithCost(settings)).filter(r => r.id === id);

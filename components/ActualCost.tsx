@@ -19,7 +19,7 @@ export function useActualCost(name?: string) {
   }, [name]);
   useEffect(() => { load(); }, [load]);
 
-  async function saveInputs(staffId: string, v: { insurance_monthly: string; match_401k_pct: string; other_annual: string }) {
+  async function saveInputs(staffId: string, v: { medical_monthly: string; dental_monthly: string; vision_monthly: string; match_401k_pct: string; other_annual: string }) {
     const res = await fetch('/api/staffing/cost', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staff_id: staffId, ...v }) });
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || 'Could not save');
@@ -49,17 +49,13 @@ function Line({ label, value, sub, strong }: { label: string; value: string; sub
 }
 
 // Breakdown + this person's inputs. Used in the Staffing pop-up and the Employee File card.
-export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; settings: CostSettings; onSave: (v: { insurance_monthly: string; match_401k_pct: string; other_annual: string }) => Promise<unknown> }) {
+export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; settings: CostSettings; onSave: (v: { medical_monthly: string; dental_monthly: string; vision_monthly: string; match_401k_pct: string; other_annual: string }) => Promise<unknown> }) {
   const c = row.cost;
-  const [v, setV] = useState({
-    insurance_monthly: row.inputs.insuranceMonthly?.toString() ?? '',
-    match_401k_pct: row.inputs.match401kPct?.toString() ?? '',
-    other_annual: row.inputs.otherAnnual?.toString() ?? '',
-  });
+  const [v, setV] = useState({ medical_monthly: row.inputs.medicalMonthly?.toString() ?? '', dental_monthly: row.inputs.dentalMonthly?.toString() ?? '', vision_monthly: row.inputs.visionMonthly?.toString() ?? '', match_401k_pct: row.inputs.match401kPct?.toString() ?? '', other_annual: row.inputs.otherAnnual?.toString() ?? '' });
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState('');
   useEffect(() => {
-    setV({ insurance_monthly: row.inputs.insuranceMonthly?.toString() ?? '', match_401k_pct: row.inputs.match401kPct?.toString() ?? '', other_annual: row.inputs.otherAnnual?.toString() ?? '' });
-  }, [row.id, row.inputs.insuranceMonthly, row.inputs.match401kPct, row.inputs.otherAnnual]);
+    setV({ medical_monthly: row.inputs.medicalMonthly?.toString() ?? '', dental_monthly: row.inputs.dentalMonthly?.toString() ?? '', vision_monthly: row.inputs.visionMonthly?.toString() ?? '', match_401k_pct: row.inputs.match401kPct?.toString() ?? '', other_annual: row.inputs.otherAnnual?.toString() ?? '' });
+  }, [row.id, row.inputs.medicalMonthly, row.inputs.dentalMonthly, row.inputs.visionMonthly, row.inputs.match401kPct, row.inputs.otherAnnual]);
   async function save() {
     setBusy(true); setMsg('');
     try { await onSave(v); setMsg('Saved'); } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
@@ -73,7 +69,9 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
           <Line label="Medicare" sub={`${settings.medicareRate}%`} value={usd(c.medicare)} />
           <Line label="Federal unemployment (FUTA)" sub={`${settings.futaRate}% of first ${usd(settings.futaWageBase)}`} value={usd(c.futa)} />
           <Line label="Tennessee unemployment (SUTA)" sub={`${settings.sutaRate}% of first ${usd(settings.sutaWageBase)}`} value={usd(c.suta)} />
-          <Line label="Insurance (firm’s share)" sub={row.inputs.insuranceMonthly != null ? `${usd(row.inputs.insuranceMonthly)}/mo` : 'not entered'} value={usd(c.insurance)} />
+          {([['Medical', 'medicalMonthly', c.medical], ['Dental', 'dentalMonthly', c.dental], ['Vision', 'visionMonthly', c.vision]] as const).map(([label, k, amt]) => (
+            <Line key={k} label={`${label} (firm’s share)`} sub={row.inputs[k] != null ? `${usd(row.inputs[k])}/mo` : 'not entered'} value={usd(amt)} />
+          ))}
           <Line label="401(k) contribution" sub={`${c.matchPct}% of pay`} value={usd(c.retirement)} />
         </>}
         <Line label="Other costs" sub={!c.contractor && settings.otherPct ? `${settings.otherPct}% of pay + per-person` : undefined} value={usd(c.other)} />
@@ -84,9 +82,11 @@ export function ActualCostDetail({ row, settings, onSave }: { row: CostRow; sett
       <div className="bg-canvas rounded-card p-4 space-y-3 text-sm self-start">
         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">This person’s costs</p>
         {!row.cost.contractor && <>
-          <label className="block"><span className="text-xs font-semibold text-text-secondary">Firm’s insurance share ($/month)</span>
-            <input className={field} inputMode="decimal" value={v.insurance_monthly} onChange={e => setV({ ...v, insurance_monthly: e.target.value })} placeholder="e.g. 650" />
-            <span className="text-[11px] text-text-muted">Medical, dental, vision and life the firm pays.</span></label>
+          <p className="text-[11px] text-text-muted -mb-1">Firm’s monthly share. Enter 0 if they’re not enrolled.</p>
+          {([['medical_monthly', 'Medical ($/month)', 'e.g. 520'], ['dental_monthly', 'Dental ($/month)', 'e.g. 35'], ['vision_monthly', 'Vision ($/month)', 'e.g. 8']] as const).map(([k, label, ph]) => (
+            <label key={k} className="block"><span className="text-xs font-semibold text-text-secondary">{label}</span>
+              <input className={field} inputMode="decimal" value={v[k]} onChange={e => setV({ ...v, [k]: e.target.value })} placeholder={ph} /></label>
+          ))}
           <label className="block"><span className="text-xs font-semibold text-text-secondary">401(k) contribution (%)</span>
             <input className={field} inputMode="decimal" value={v.match_401k_pct} onChange={e => setV({ ...v, match_401k_pct: e.target.value })} placeholder={`Firm default: ${settings.match401kPct}%`} /></label>
         </>}
