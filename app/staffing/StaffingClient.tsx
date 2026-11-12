@@ -6,7 +6,8 @@ import { useUndo } from '@/components/UndoProvider';
 import { positionBreakdown } from '@/lib/positions';
 import { formatDate } from '@/lib/formatDate';
 import { fmtPay } from '@/lib/money';
-import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal, costExport } from '@/components/ActualCost';
+import { useActualCost, ActualCostDetail, CostSettingsForm, CostModal, costSheet } from '@/components/ActualCost';
+import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 import { usd } from '@/lib/actualCost';
 
 interface Staff {
@@ -407,24 +408,31 @@ export default function StaffingClient({ initialRows, initialVendors, initialOff
     showToast('Removed — Ctrl+Z to undo');
   }
 
-  function dl(name: string, csv: string) { const b = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); }
-  function exportCsv() {
-    if (tab === 'vendors') {
-      const body = fVen.map(r => VENDOR_COLUMNS.map(c => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','));
-      dl('vendors.csv', [VENDOR_COLUMNS.map(c => c.label).join(','), ...body].join('\n'));
-    } else {
-      const data = tab === 'offboarded' ? fOff : fStaff;
-      const cols = tab === 'offboarded'
-        ? OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))
-        : empCols;
-      // Actual cost columns (only for the cost viewers — `cost.allowed`).
-      const ce = cost.allowed && cost.settings ? costExport(cost.rows, cost.settings.year) : null;
-      const q = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const body = data.map(r => [...cols.map(c => q(c.custom ? extraVal(r, c.id) : ((r as any)[c.key as string] ?? ''))),
-        ...(ce ? (ce.byId.get(r.id) ?? ce.headers.map(() => '')).map(q) : [])].join(','));
-      dl(`${tab}.csv`, [[...cols.map(c => q(c.label)), ...(ce ? ce.headers.map(q) : [])].join(','), ...body].join('\n'));
-    }
-    showToast('Exported');
+  // Export the current tab as a formatted Excel file. Employees also gets an "Actual cost" tab
+  // for the cost viewers (Clarizz and Catie — `cost.allowed`).
+  async function exportCsv() {
+    try {
+      const X: any = await import('xlsx-js-style');
+      const date = new Date().toISOString().slice(0, 10);
+      const txt = (v: any) => String(v ?? '');
+      if (tab === 'vendors') {
+        downloadWorkbook(X, [['Vendors', styledSheet(X, { headers: VENDOR_COLUMNS.map(c => c.label), rows: fVen.map(r => VENDOR_COLUMNS.map(c => txt(r[c.key]))) })]],
+          `Litson-Vendors-${date}.xlsx`);
+      } else {
+        const data = tab === 'offboarded' ? fOff : fStaff;
+        const cols = tab === 'offboarded'
+          ? OFF_COLUMNS.map(c => ({ id: c.key as string, label: c.label, custom: false, key: c.key }))
+          : empCols;
+        const sheets: [string, any][] = [[tab === 'offboarded' ? 'Offboarded' : 'Employees', styledSheet(X, {
+          headers: cols.map(c => c.label), rows: data.map(r => cols.map(c => txt(c.custom ? extraVal(r, c.id) : (r as any)[c.key as string]))),
+        })]];
+        if (tab === 'employees' && cost.allowed && cost.settings) {
+          sheets.push(['Actual cost', costSheet(X, data.map(r => ({ id: r.id, name: r.name ?? '', position: r.position, status: 'Active' })), cost.rows, cost.settings.year)]);
+        }
+        downloadWorkbook(X, sheets, `Litson-${tab === 'offboarded' ? 'Offboarded' : 'Staffing'}-${date}.xlsx`);
+      }
+      showToast('Exported');
+    } catch { showToast('Export failed'); }
   }
 
   const BLANK_STAFF: Partial<Staff> = Object.fromEntries(EMP_COLUMNS.map(c => [c.key, ''])) as any;

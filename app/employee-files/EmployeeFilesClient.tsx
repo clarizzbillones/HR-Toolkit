@@ -6,7 +6,8 @@ import { FIRM_SYSTEMS, ACCOUNT_STATUSES, ACCESS_LEVELS } from '@/lib/firmSystems
 import { FIELDS as INFO_FIELDS, DEFAULT_FIELD_IDS, fieldsByIds, infoRequestEmail } from '@/lib/infoRequest';
 import { EVENTS, rsvpEmail } from '@/lib/rsvp';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
-import { ActualCostCard, costExport } from '@/components/ActualCost';
+import { ActualCostCard, costSheet } from '@/components/ActualCost';
+import { styledSheet } from '@/lib/xlsxStyle';
 import { BENEFITS } from '@/lib/benefits';
 import { BLOB_ENABLED, BLOB_MAX_BYTES, uploadToBlob } from '@/lib/blobClient';
 import { fmtPay } from '@/lib/money';
@@ -598,49 +599,36 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
 
       // Sheet 1 — Employees (all data, one row each).
       const empHeaders = ['Name', 'Position', 'Department', 'Worker type', 'Status', 'Email', 'Phone', 'Address', 'Start date', 'Date of birth', 'Salary'];
-      const ws1 = XLSX.utils.aoa_to_sheet([hdr(empHeaders), ...rows.map(r => [
+      const ws1 = styledSheet(XLSX, { headers: empHeaders, totals: true, money: i => i === 10, widths: [24, 26, 16, 13, 11, 28, 16, 30, 13, 13, 13], rows: rows.map(r => [
         S(r.name), S(r.position), S(r.department), r.worker_type || 'Employee', statusOf(r),
-        S(r.email), S(r.phone), S(r.address), r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', salaryCell(r.salary)])]);
-      ws1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 16 }, { wch: 13 }, { wch: 11 }, { wch: 26 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+        S(r.email), S(r.phone), S(r.address), r.start_date ? fmtDate(r.start_date) : '', r.dob ? fmtDate(r.dob) : '', salaryCell(r.salary)]) });
 
       // Sheet 2 — Tools used (one row per employee-tool).
       const toolHeaders = ['Employee', 'Position', 'Tool / System', 'Account', 'Access level', 'Status', 'Source'];
-      const toolAoa: any[][] = [hdr(toolHeaders)];
+      const toolAoa: any[][] = [];
       for (const r of rows) {
         const accts = (r.accounts ?? []) as any[];
         if (!accts.length) toolAoa.push([S(r.name), S(r.position), '—', '', '', '', '']);
         else for (const a of accts) toolAoa.push([S(r.name), S(r.position), a.system || a.account || 'Account', S(a.account), S(a.access_level), S(a.status), S(a.source)]);
       }
-      const ws2 = XLSX.utils.aoa_to_sheet(toolAoa);
-      ws2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 26 }, { wch: 26 }, { wch: 18 }, { wch: 12 }, { wch: 14 }];
+      const ws2 = styledSheet(XLSX, { headers: toolHeaders, rows: toolAoa, widths: [24, 26, 26, 28, 18, 13, 14] });
 
       // Sheet 3 — Insurance & Benefits (one row per employee; a column each for
       // Medical / Dental / Vision / Life, showing status · plan · enrolled date).
       const benHeaders = ['Employee', 'Position', ...BENEFITS];
-      const ws3 = XLSX.utils.aoa_to_sheet([hdr(benHeaders), ...rows.map(r => {
+      const ws3 = styledSheet(XLSX, { headers: benHeaders, widths: [24, 26, ...BENEFITS.map(() => 30)], rows: rows.map(r => {
         const m = benByName.get(key(r.name)) ?? {};
         return [S(r.name), S(r.position), ...BENEFITS.map(b => benCell(m[b]))];
-      })]);
-      ws3['!cols'] = [{ wch: 22 }, { wch: 24 }, ...BENEFITS.map(() => ({ wch: 26 }))];
-
+      }) });
+      
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws1, 'Employees');
       XLSX.utils.book_append_sheet(wb, ws2, 'Tools Used');
       XLSX.utils.book_append_sheet(wb, ws3, 'Insurance & Benefits');
 
       // Sheet 4 — Actual cost (cost viewers only): every amount from the cost pop-up.
-      if (costRes?.rows) {
-        const ce = costExport(costRes.rows, costRes.settings?.year ?? new Date().getFullYear());
-        const costByName = new Map<string, any>((costRes.rows as any[]).map(c => [key(c.name), c]));
-        const money = (v: any) => (typeof v === 'number' ? { v, t: 'n', z: '#,##0.00' } : v);
-        const ws4 = XLSX.utils.aoa_to_sheet([hdr(['Employee', 'Position', 'Status', ...ce.headers]), ...rows.map(r => {
-          const c = costByName.get(key(r.name));
-          const vals = c ? ce.byId.get(c.id) ?? [] : [];
-          return [S(r.name), S(r.position), statusOf(r), ...ce.headers.map((_, i) => (i < 7 ? S(vals[i]) : money(vals[i] ?? '')))];
-        })]);
-        ws4['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 11 }, ...ce.headers.map((h, i) => ({ wch: i < 7 ? 18 : Math.min(30, Math.max(14, h.length)) }))];
-        XLSX.utils.book_append_sheet(wb, ws4, 'Actual cost');
-      }
+      if (costRes?.rows) XLSX.utils.book_append_sheet(wb, costSheet(XLSX, rows.map(r => ({ name: String(r.name ?? ''), position: r.position, status: statusOf(r) })),
+        costRes.rows, costRes.settings?.year ?? new Date().getFullYear()), 'Actual cost');
       const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
       const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const a = document.createElement('a');

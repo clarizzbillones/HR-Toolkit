@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { styledSheet } from '@/lib/xlsxStyle';
 import { usd, RETIREMENT_PLANS, LEDGER_COLUMNS, US_STATES, DEFAULT_STATE, stateName, LEDGER_LINES, type CostBreakdown, type CostInputs, type CostSettings, type Ledger, type LedgerColumn, type LineKey } from '@/lib/actualCost';
 
 // Actual (fully loaded) cost UI. Data comes from /api/staffing/cost, which only answers for the
@@ -206,29 +207,37 @@ export function CostModal({ title, onClose, children, actions }: { title: string
   );
 }
 
-// Export columns: everything in the cost pop-up, one row per person. Amounts are numbers (blank
-// when not entered); the year total falls back to YTD, same as on screen.
-export function costExport(rows: CostRow[], year: number) {
-  const cols: [string, LedgerColumn][] = [['per paycheck', 'check'], ['YTD', 'ytd'], [`${year} total`, 'total']];
-  const lineName = (k: LineKey, label: string) => (k === 'suta' ? 'State unemployment (SUI)' : k === 'suta2' ? 'Second state unemployment (SUI)' : label);
-  const headers = ['Unemployment state', 'Second state', 'Retirement plan', 'Medical (Benefits roster)', 'Dental (Benefits roster)',
-    'Vision (Benefits roster)', 'Paychecks in YTD',
-    ...LEDGER_LINES.flatMap(x => cols.map(([c]) => `${lineName(x.key, x.label)} – ${c}`)),
-    ...cols.map(([c]) => `Employer cost – ${c}`), `Actual cost ${year}`];
-  const byId = new Map<string, (string | number)[]>();
-  for (const r of rows) {
-    const L = r.inputs.ledger ?? {};
-    const val = (col: LedgerColumn, k: LineKey) => (col === 'total' ? L.total?.[k] ?? L.ytd?.[k] : L[col]?.[k]);
-    const colSum = (col: LedgerColumn) => Math.round(LEDGER_LINES.reduce((t, x) => t + (val(col, x.key) ?? 0), 0) * 100) / 100;
-    const ben = (b: string) => r.benefits?.[b]?.status || '';
-    byId.set(r.id, [
-      stateName(r.inputs.workState), r.inputs.workState2 ? stateName(r.inputs.workState2) : '',
-      RETIREMENT_PLANS.find(p => p.key === r.inputs.retirementPlan)?.label ?? '', ben('Medical'), ben('Dental'), ben('Vision'), L.checks ?? '',
-      ...LEDGER_LINES.flatMap(x => cols.map(([, c]) => val(c, x.key) ?? '')),
-      ...cols.map(([, c]) => (r.cost.entered ? colSum(c) : '')), r.cost.entered ? r.cost.total : '',
-    ]);
-  }
-  return { headers, byId };
+// "Actual cost" sheet for exports: one row per person — details and totals first, then each cost
+// line (only lines someone has entered) grouped under a merged heading: per paycheck, YTD, total.
+// The year total falls back to YTD, same as on screen. Not-entered amounts stay blank.
+export function costSheet(X: any, people: { id?: string; name: string; position?: string | null; status: string }[], costRows: CostRow[], year: number) {
+  const byId = new Map(costRows.map(r => [r.id, r]));
+  const byName = new Map(costRows.map(r => [r.name.trim().toLowerCase(), r]));
+  const cols: [string, LedgerColumn][] = [['Per paycheck', 'check'], ['YTD', 'ytd'], [`${year} total`, 'total']];
+  const val = (r: CostRow | undefined, col: LedgerColumn, k: LineKey) => {
+    const L = r?.inputs.ledger ?? {};
+    return col === 'total' ? L.total?.[k] ?? L.ytd?.[k] : L[col]?.[k];
+  };
+  const used = LEDGER_LINES.filter(x => costRows.some(r => cols.some(([, c]) => val(r, c, x.key) != null)));
+  const lineName = (k: LineKey, label: string) => (k === 'suta' ? 'State unemployment (SUI)' : k === 'suta2' ? 'Second state SUI' : label);
+  const details = ['Employee', 'Position', 'Status', 'Unemployment state', 'Second state', 'Retirement plan', 'Medical', 'Dental', 'Vision', 'Paychecks in YTD'];
+  const headers = [...details, 'Employer cost YTD', `Actual cost ${year}`, ...used.flatMap(() => cols.map(([c]) => c))];
+  const rows = people.map(p => {
+    const r = (p.id && byId.get(p.id)) || byName.get(p.name.trim().toLowerCase());
+    const L = r?.inputs.ledger ?? {};
+    const ytdSum = r?.cost.entered ? Math.round(LEDGER_LINES.reduce((t, x) => t + (L.ytd?.[x.key] ?? 0), 0) * 100) / 100 : '';
+    const ben = (b: string) => r?.benefits?.[b]?.status || '';
+    return [p.name, p.position ?? '', p.status, r ? stateName(r.inputs.workState) : '', r?.inputs.workState2 ? stateName(r.inputs.workState2) : '',
+      RETIREMENT_PLANS.find(x => x.key === r?.inputs.retirementPlan)?.label ?? '', ben('Medical'), ben('Dental'), ben('Vision'), L.checks ?? '',
+      ytdSum, r?.cost.entered ? r.cost.total : '',
+      ...used.flatMap(x => cols.map(([, c]) => val(r, c, x.key) ?? ''))];
+  });
+  return styledSheet(X, {
+    headers, rows, totals: true,
+    money: i => i >= details.length,
+    groups: [{ label: 'Employee', span: details.length }, { label: 'Summary', span: 2 }, ...used.map(x => ({ label: lineName(x.key, x.label), span: 3 }))],
+    widths: [24, 26, 11, 16, 14, 16, 13, 13, 13, 11, 16, 16, ...used.flatMap(() => [13, 13, 13])],
+  });
 }
 
 // Employee File card: one person's actual cost.
