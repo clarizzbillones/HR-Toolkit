@@ -1176,7 +1176,6 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
           {!readOnly && <button onClick={openInfoModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Ask employees for personal details (e.g. personal email); answers update Staffing & their Employee File">✉ Request info</button>}
           {!readOnly && <button onClick={openRsvpModal} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Send an event RSVP form and track the headcount">🎉 Send RSVP</button>}
           {!readOnly && <button onClick={openNewForm} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Create a new fillable RSVP / survey form">＋ New form</button>}
-          <button onClick={() => setReportsOpen(true)} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas" title="Charts and tables: headcount, tenure, benefits enrollment and cost">📊 Reports</button>
           {reportsOpen && <StaffReports onClose={() => setReportsOpen(false)} />}
           <div className="relative">
             <button onClick={() => setExportOpen(o => !o)} disabled={exporting} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas disabled:opacity-50" title="Export everyone's details plus the tools/systems they can access">{exporting ? 'Exporting…' : '⬇ Export ▾'}</button>
@@ -1208,6 +1207,8 @@ export default function EmployeeFilesClient({ initialProfiles }: { initialProfil
         {([['employees', `Employees (${empCount})`], ['contractors', `Contractors (${conCount})`], ['offboarded', `Offboarded (${offCount})`]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 ${tab === k ? 'border-gold text-text-primary' : 'border-transparent text-text-muted hover:text-text-secondary'}`}>{l}</button>
         ))}
+        <button onClick={() => setReportsOpen(true)} title="Charts and tables: headcount, tenure, benefits enrollment and cost"
+          className="text-sm font-semibold px-4 py-2 rounded-t-ctrl border-b-2 border-transparent text-text-muted hover:text-text-secondary">📊 Reports</button>
       </div>
 
       <div className="flex-1 overflow-auto p-8">
