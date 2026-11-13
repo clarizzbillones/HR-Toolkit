@@ -32,14 +32,18 @@ export function styledSheet(X: any, spec: SheetSpec) {
   for (const r of rows) aoa.push(headers.map((_, i) => (r[i] === undefined || r[i] === null ? '' : r[i])));
   const firstData = top, lastData = top + rows.length - 1;
   if (totals && rows.length) {
-    aoa.push(headers.map((_, i) => (i === 0 ? 'Totals' : money(i) ? { f: `SUM(${colName(i)}${firstData + 1}:${colName(i)}${lastData + 1})` } : '')));
+    // Formula plus its value, so the total shows even where formulas aren't recalculated
+    // (Excel Protected View, previewers, mobile).
+    const numOf = (v: any) => (typeof v === 'number' ? v : v && typeof v === 'object' && v.t === 'n' && typeof v.v === 'number' ? v.v : 0);
+    aoa.push(headers.map((_, i) => (i === 0 ? 'Totals' : money(i)
+      ? { f: `SUM(${colName(i)}${firstData + 1}:${colName(i)}${lastData + 1})`, sum: Math.round(rows.reduce((t, r) => t + numOf(r[i]), 0) * 100) / 100 } : '')));
   }
   const ws = X.utils.aoa_to_sheet(aoa.map(r => r.map(v => (v && typeof v === 'object' && 'f' in v ? null : v))));
   // Formulas, styles.
   aoa.forEach((r, ri) => r.forEach((v, ci) => {
     const ref = colName(ci) + (ri + 1);
     const cell = ws[ref] ?? (ws[ref] = { t: 's', v: '' });
-    if (v && typeof v === 'object' && 'f' in v) { cell.f = v.f; cell.t = 'n'; delete cell.v; }
+    if (v && typeof v === 'object' && 'f' in v) { cell.f = v.f; cell.t = 'n'; cell.v = v.sum ?? 0; }
     const isGroup = groups && ri === 0, isHead = ri === top - 1, isTotal = totals && rows.length && ri === aoa.length - 1;
     if (isGroup) cell.s = { fill: { fgColor: { rgb: BAND } }, font: font({ bold: true }), alignment: { horizontal: 'center', vertical: 'center' }, border };
     else if (isHead) cell.s = { fill: { fgColor: { rgb: NAVY } }, font: font({ bold: true, color: { rgb: 'FFFFFF' } }),
@@ -59,7 +63,8 @@ export function styledSheet(X: any, spec: SheetSpec) {
     for (const grp of groups) { if (grp.span > 1) merges.push({ s: { r: 0, c }, e: { r: 0, c: c + grp.span - 1 } }); c += grp.span; }
     ws['!merges'] = merges;
   }
-  ws['!cols'] = headers.map((h, i) => ({ wch: widths?.[i] ?? Math.min(34, Math.max(money(i) ? 13 : 12, h.length + 2)) }));
+  // Wide enough for the header text plus the filter arrow.
+  ws['!cols'] = headers.map((h, i) => ({ wch: Math.max(widths?.[i] ?? Math.min(34, Math.max(money(i) ? 13 : 12, h.length + 2)), Math.min(40, h.length + 5)) }));
   ws['!rows'] = [...(groups ? [{ hpt: 20 }] : []), { hpt: 30 }];
   ws['!autofilter'] = { ref: `A${top}:${colName(headers.length - 1)}${top + rows.length}` };
   return ws;

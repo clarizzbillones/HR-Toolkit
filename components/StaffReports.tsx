@@ -250,9 +250,9 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       sheets.push(['Offboarded', styledSheet(X, { headers: ['Name', 'Position', 'Type', 'Start date', 'Last day', 'Time at Litson'], widths: [24, 30, 12, 14, 16, 14],
         rows: offSorted.map(p => [p.name, p.position || '', p.worker_type || 'Employee', fmtDay(parseDay(p.start_date)), fmtDay(parseDay(p.offboarded_date)) || 'Not recorded', timeAt(p)]) })]);
       if (cost) {
-        sheets.push(['Employer cost by type', styledSheet(X, { headers: ['Type', `YTD ${cost.settings.year}`, 'People'], widths: [30, 16, 80], totals: true, money: i => i === 1,
+        sheets.push(['Employer cost by type', styledSheet(X, { headers: ['Type', `YTD ${cost.settings.year}`, 'People'], widths: [32, 18, 80], totals: true, money: i => i === 1,
           rows: R.ytdByLine.map(x => [x.label, x.value, x.who.join(', ')]) })]);
-        sheets.push(['Actual cost by employee', styledSheet(X, { headers: ['Employee', 'Position', 'Employer cost YTD', `Actual cost ${cost.settings.year}`], widths: [24, 28, 18, 18], totals: true, money: i => i >= 2,
+        sheets.push(['Actual cost by employee', styledSheet(X, { headers: ['Employee', 'Position', 'Employer cost YTD', `Actual cost ${cost.settings.year}`], widths: [26, 32, 22, 22], totals: true, money: i => i >= 2,
           rows: costSorted.map(c => [c.name, c.position || '', ytdOf(c), c.cost.total]) })]);
       }
       downloadWorkbook(X, sheets, `Litson-Reports-${today}.xlsx`);
