@@ -242,7 +242,7 @@ export function ReportsBody({ data, cost }: { data: ReportData; cost: ReportCost
       sheets.push(['Summary', styledSheet(X, { headers: ['Measure', 'Value'], rows: summary, widths: [32, 22] })]);
       sheets.push(['Benefits', styledSheet(X, { headers: ['Benefit', ...STATUSES, 'Not recorded', '% enrolled'], widths: [16, 11, 11, 11, 11, 13, 14, 12],
         rows: R.benefitRows.map(b => [b.label, ...STATUSES.map(s => b.counts[s]), b.counts[''], `${pct(b.enrolled, R.emps.length)}%`]) })]);
-      sheets.push(["Who's enrolled", styledSheet(X, { headers: ['Employee', 'Position', ...BENEFITS], widths: [24, 28, ...BENEFITS.map(() => 14)],
+      sheets.push(['Enrollment by person', styledSheet(X, { headers: ['Employee', 'Position', ...BENEFITS], widths: [24, 28, ...BENEFITS.map(() => 14)],
         rows: R.emps.map(p => [p.name, p.position || '', ...BENEFITS.map(b => (b === '401(k)' ? (R.k401(p).yes ? 'Yes' : 'No') : R.statusOf(p, b) || 'Not recorded'))]) })]);
       sheets.push(['Team by role', styledSheet(X, { headers: ['Role', 'People', 'Names'], widths: [32, 9, 80], rows: R.topRoles.map(([l, n]) => [l, n.length, n.join(', ')]) })]);
       sheets.push(['Tenure', styledSheet(X, { headers: ['Tenure', 'People'], widths: [18, 10], rows: R.bands.map(([l, f]) => [l, R.tenures.filter(f).length]) })]);

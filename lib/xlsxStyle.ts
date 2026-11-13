@@ -67,7 +67,9 @@ export function styledSheet(X: any, spec: SheetSpec) {
 
 export function downloadWorkbook(X: any, sheets: [string, any][], filename: string) {
   const wb = X.utils.book_new();
-  for (const [name, ws] of sheets) X.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+  // Tab names: no apostrophes (the library doesn't escape them in filter ranges, which makes Excel
+  // report the file as damaged) and none of Excel's forbidden characters; max 31 characters.
+  for (const [name, ws] of sheets) X.utils.book_append_sheet(wb, ws, name.replace(/['’]/g, '').replace(/[\\/?*:\[\]]/g, '-').slice(0, 31));
   const out = X.write(wb, { type: 'array', bookType: 'xlsx' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
