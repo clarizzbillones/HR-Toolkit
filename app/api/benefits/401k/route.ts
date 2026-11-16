@@ -4,6 +4,7 @@ import { sql } from '@/lib/db';
 import { costViewerSession } from '@/lib/costAccess';
 import { sendMail, sendMailAsApp } from '@/lib/graph';
 import { K401_ELIGIBLE, K401_PLANS, K401_STATUSES, money, fmtDay, type K401Row } from '@/lib/k401';
+import { normName } from '@/lib/employeeFiles';
 
 // 401(k) contributions per employee, entered by hand from payroll. Only the cost viewers (Clarizz and
 // Catie) can read, change or email these; everyone else gets 403.
@@ -25,13 +26,18 @@ async function rows(): Promise<K401Row[]> {
     WHERE NOT COALESCE(offboarded, false) AND COALESCE(worker_type, 'Employee') <> 'Contractor' ORDER BY name ASC` as any[];
   const saved = await sql`SELECT * FROM retirement_401k` as any[];
   const by = new Map(saved.map(r => [r.staff_id, r]));
+  // The 401(k) line on the Benefits roster, matched by name, to compare against.
+  let roster: any[] = [];
+  try { roster = await sql`SELECT person_name, status FROM benefit_enrollments WHERE benefit = '401(k)'` as any[]; } catch { /* no roster yet */ }
+  const rosterBy = new Map(roster.map(x => [normName(x.person_name), x.status || null]));
   return staff.map(s => {
     const r = by.get(s.id) ?? {};
     return { staff_id: s.id, name: s.name, position: s.position, email: s.email,
       eligible: r.eligible ?? null, eligible_date: r.eligible_date ?? null, plan: r.plan ?? null,
       emp_pct: num(r.emp_pct), emp_check: num(r.emp_check), er_check: num(r.er_check), as_of: r.as_of ?? null,
       status: r.status ?? null, note: r.note ?? null, sent_at: r.sent_at ? new Date(r.sent_at).toISOString() : null,
-      updated_by: r.updated_by ?? null, updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : null };
+      updated_by: r.updated_by ?? null, updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : null,
+      roster: rosterBy.get(normName(s.name)) ?? null };
   });
 }
 
