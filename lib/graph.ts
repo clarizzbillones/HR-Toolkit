@@ -79,7 +79,7 @@ export interface MailAttachment { name: string; contentBytes: string; contentTyp
 
 // Send mail as a specific mailbox using the app-only token. Optional file
 // attachments (contentBytes = base64) are sent as Graph fileAttachments.
-export async function sendMailAsApp(fromUpn: string, to: string, subject: string, body: string, cc?: string | string[], attachments?: MailAttachment[]) {
+export async function sendMailAsApp(fromUpn: string, to: string, subject: string, body: string, cc?: string | string[], attachments?: MailAttachment[], replyTo?: string) {
   const token = await getAppToken();
   if (!token) return { ok: false, error: 'App credentials not configured (AZURE_AD_CLIENT_ID/SECRET/TENANT_ID)' };
   try {
@@ -87,7 +87,8 @@ export async function sendMailAsApp(fromUpn: string, to: string, subject: string
     const res = await fetch(`${GRAPH_BASE}/users/${encodeURIComponent(fromUpn)}/sendMail`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: redirectAddr(to) } }], ...ccList(cc), ...(atts.length ? { attachments: atts } : {}) } }),
+      body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: body }, toRecipients: [{ emailAddress: { address: redirectAddr(to) } }], ...ccList(cc), ...(atts.length ? { attachments: atts } : {}),
+        ...(replyTo ? { replyTo: [{ emailAddress: { address: replyTo } }] } : {}) } }),
     });
     if (!res.ok) return { ok: false, error: `Graph sendMail ${res.status}: ${(await res.text()).slice(0, 300)}` };
     return { ok: true };

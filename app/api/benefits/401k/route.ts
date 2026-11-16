@@ -19,6 +19,9 @@ async function ensure() {
   )`;
 }
 
+// Shared mailbox the 401(k) emails come from (shows as its name, e.g. "Litson HR"). Unset = your own mailbox.
+const HR_SENDER = (process.env.HR_SENDER ?? '').trim();
+
 const num = (v: any) => (v === null || v === undefined || String(v).trim() === '' ? null : Number(String(v).replace(/[$,%\s]/g, '')));
 const day = (v: any) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : null);
 
@@ -124,8 +127,10 @@ export async function POST(req: Request) {
   const results: { staff_id: string; name: string; ok: boolean; error?: string }[] = [];
   for (const r of list) {
     if (!r.email) { results.push({ staff_id: r.staff_id, name: r.name, ok: false, error: 'No email on file in Staffing' }); continue; }
-    // From the signed-in person's own mailbox, so replies come back to them.
-    let res: any = token ? await sendMail(token, r.email, subject, emailHtml(r)) : { ok: false };
+    // From the "Litson HR" shared mailbox when HR_SENDER is set (replies still go to whoever sent);
+    // otherwise from the signed-in person's own mailbox.
+    let res: any = HR_SENDER ? await sendMailAsApp(HR_SENDER, r.email, subject, emailHtml(r), undefined, undefined, who.email) : { ok: false };
+    if (!res.ok && token) res = await sendMail(token, r.email, subject, emailHtml(r));
     if (!res.ok) res = await sendMailAsApp(who.email, r.email, subject, emailHtml(r));
     if (res.ok) await sql`INSERT INTO retirement_401k (staff_id, status, sent_at, updated_by) VALUES (${r.staff_id}, 'Emailed', NOW(), ${who.email})
       ON CONFLICT (staff_id) DO UPDATE SET status = 'Emailed', sent_at = NOW(), updated_by = EXCLUDED.updated_by, updated_at = NOW()`;
