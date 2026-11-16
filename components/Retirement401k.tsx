@@ -8,6 +8,8 @@ import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 // Litson's $ per paycheck, and whether the employee has confirmed it. Only Clarizz and Catie get data
 // from the API; for anyone else this renders nothing.
 
+// $1,234.56 for the per-paycheck amounts.
+const usd = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const cell = 'w-full bg-transparent border border-transparent hover:border-border-light focus:border-ink focus:bg-white rounded-ctrl px-2 py-1.5 text-sm focus:outline-none';
 const th = 'text-left text-[11px] font-bold uppercase tracking-wider text-text-muted px-2 py-2 whitespace-nowrap';
 
@@ -130,12 +132,13 @@ export default function Retirement401k() {
                   {(['emp_pct', 'emp_check', 'er_check'] as const).map(k => (
                     <td key={k} className="px-1 min-w-[110px]"><input inputMode="decimal"
                       className={`${cell} text-right tabular-nums ${off ? 'text-text-muted' : ''}`} key={`${k}${r[k]}`}
-                      defaultValue={r[k] == null ? '' : k === 'emp_pct' ? `${r[k]}%` : Number(r[k]).toFixed(2)} placeholder={k === 'emp_pct' ? '0%' : '$0.00'}
+                      defaultValue={r[k] == null ? '' : k === 'emp_pct' ? `${r[k]}%` : usd(Number(r[k]))} placeholder={k === 'emp_pct' ? '0%' : '$0.00'}
                       // Employee %: the % sign is added for you; it's dropped while you edit.
-                      onFocus={k === 'emp_pct' ? e => { e.target.value = e.target.value.replace(/%/g, ''); e.target.select(); } : undefined}
+                      onFocus={e => { e.target.value = e.target.value.replace(/[$,%\s]/g, ''); e.target.select(); }}
                       onBlur={e => { const v = e.target.value.replace(/[$,%\s]/g, '');
-                        if (k === 'emp_pct') e.target.value = v === '' ? '' : `${Number(v)}%`;
-                        if (v !== (r[k] == null ? '' : String(r[k]))) save(r.staff_id, { [k]: v === '' ? null : Number(v) } as any); }} /></td>
+                        e.target.value = v === '' || !Number.isFinite(Number(v)) ? v : k === 'emp_pct' ? `${Number(v)}%` : usd(Number(v));
+                        // Save only a real change ("120.00" and 120 are the same amount).
+                        if (v === '' ? r[k] != null : Number(v) !== Number(r[k])) save(r.staff_id, { [k]: v === '' ? null : Number(v) } as any); }} /></td>
                   ))}
                 </tr>
               );

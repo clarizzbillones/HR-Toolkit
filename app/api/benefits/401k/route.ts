@@ -104,6 +104,8 @@ function emailHtml(r: K401Row) {
 <p>We’re double-checking everyone’s 401(k) details. Please look over yours below and let me know if anything isn’t right.</p>
 <table cellpadding="0" cellspacing="0" style="width:100%;border-bottom:1px solid #E4E7EC;margin:14px 0">${lines}</table>
 <p style="color:#4B5563">These amounts come from your payroll deductions, which take priority over the election in Guideline. If something doesn’t match what you expect, just reply to this email.</p>
+<div style="margin:16px 0;padding:12px 14px;border-left:4px solid #C2410C;background:#FFF4E8;border-radius:6px;color:#111827">
+<b>Changing your 401(k)?</b> Admins can’t see the deductions/contributions you elect in Guideline, so if you make any changes, please email HR immediately.</div>
 <p>Thank you!</p></div>`;
 }
 
