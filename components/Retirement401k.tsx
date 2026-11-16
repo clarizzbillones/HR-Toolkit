@@ -73,18 +73,18 @@ export default function Retirement401k() {
   }
   async function exportExcel() {
     const X: any = await import('xlsx-js-style');
-    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Eligible date', 'Plan', 'Employee %', 'Employee / paycheck', 'Employer / paycheck', 'Emailed'];
-    const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not recorded', rosterMismatch(r) ?? '', fmtDay(r.eligible_date), r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
+    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Plan', 'Employee %', 'Employee contribution / paycheck', 'Employer contribution / paycheck', 'Emailed'];
+    const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not recorded', rosterMismatch(r) ?? '', r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
       r.emp_check ?? '', r.er_check ?? '', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '']);
-    downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 7 || i === 8,
-      widths: [24, 26, 15, 40, 14, 16, 11, 18, 18, 14] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 6 || i === 7,
+      widths: [24, 26, 15, 40, 16, 11, 32, 32, 14] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const p = preview?.previews[pi];
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {([['Enrolled', `${enrolled.length} of ${rows.length}`], ['Employees / paycheck', money(totals.emp) || '$0.00'], ['Litson / paycheck', money(totals.er) || '$0.00'],
+        {([['Enrolled', `${enrolled.length} of ${rows.length}`], ['Employee contributions / paycheck', money(totals.emp) || '$0.00'], ['Employer contributions / paycheck', money(totals.er) || '$0.00'],
           ['Plan differs from eligibility', String(diffs)]] as [string, string][]).map(([l, v]) => (
           <div key={l} className="bg-white border border-border-light rounded-card px-4 py-3" style={{ borderTop: '3px solid #2a5d7a' }}>
             <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
@@ -107,8 +107,8 @@ export default function Retirement401k() {
         <table className="w-full text-sm">
           <thead className="bg-canvas border-b border-border-light"><tr>
             <th className="px-2 py-2 w-8"><input type="checkbox" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(list.map(r => r.staff_id)) : new Set())} aria-label="Select all" /></th>
-            <th className={th}>Employee</th><th className={th}>Eligibility</th><th className={th}>Eligible date</th><th className={th}>Plan</th>
-            <th className={`${th} text-right`}>Employee %</th><th className={`${th} text-right`}>Employee / paycheck</th><th className={`${th} text-right`}>Employer / paycheck</th>
+            <th className={th}>Employee</th><th className={th}>Eligibility</th><th className={th}>Plan</th>
+            <th className={`${th} text-right`}>Employee %</th><th className={`${th} text-right`}>Employee contribution / paycheck</th><th className={`${th} text-right`}>Employer contribution / paycheck</th>
           </tr></thead>
           <tbody>
             {list.map(r => {
@@ -125,7 +125,6 @@ export default function Retirement401k() {
                       <select className={`${cell} font-semibold ${tone}`} value={t ?? ''} onChange={e => save(r.staff_id, { roster: e.target.value || null })}>
                         <option value="">Not recorded</option>{BENEFIT_STATUSES.map(x => <option key={x}>{x}</option>)}</select>
                       {d && <span className="text-[#b0412f] font-bold" aria-label={d}>⚠</span>}</span>; })()}</td>
-                  <td className="px-1 min-w-[140px]"><input type="date" className={cell} defaultValue={r.eligible_date ?? ''} key={`ed${r.eligible_date}`} onBlur={e => e.target.value !== (r.eligible_date ?? '') && save(r.staff_id, { eligible_date: e.target.value || null })} /></td>
                   <td className="px-1 min-w-[140px]"><select className={cell} value={r.plan ?? ''} onChange={e => save(r.staff_id, { plan: e.target.value || null })}>
                     <option value="">—</option>{K401_PLANS.map(x => <option key={x}>{x}</option>)}</select></td>
                   {(['emp_pct', 'emp_check', 'er_check'] as const).map(k => (
@@ -142,7 +141,7 @@ export default function Retirement401k() {
               );
             })}
             <tr className="border-t-2 border-text-primary bg-canvas font-bold">
-              <td /><td className="px-2 py-2">Total per paycheck</td><td colSpan={4} />
+              <td /><td className="px-2 py-2">Total per paycheck</td><td colSpan={3} />
               <td className="px-3 py-2 text-right tabular-nums">{money(totals.emp)}</td><td className="px-3 py-2 text-right tabular-nums">{money(totals.er)}</td>
             </tr>
           </tbody>

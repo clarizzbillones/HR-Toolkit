@@ -91,7 +91,7 @@ function emailHtml(r: K401Row) {
   const line = (k: string, v: string) => `<tr><td style="padding:9px 0;color:#6B7280;width:190px;border-top:1px solid #E4E7EC">${k}</td><td style="padding:9px 0;color:#111827;font-weight:600;border-top:1px solid #E4E7EC">${v}</td></tr>`;
   const enrolled = r.plan && r.plan !== 'Not enrolled';
   const lines = [
-    line('Eligibility', r.roster === 'Not eligible' ? `Not eligible yet${r.eligible_date ? ` · eligible ${fmtDay(r.eligible_date)}` : ''}` : r.roster || '—'),
+    line('Eligibility', r.roster === 'Not eligible' ? 'Not eligible yet' : r.roster || '—'),
     line('Plan', r.plan || '—'),
     ...(enrolled ? [
       line('Your contribution', [r.emp_pct != null ? `${r.emp_pct}% of pay` : '', r.emp_check != null ? `${money(r.emp_check)} per paycheck` : ''].filter(Boolean).join(' · ') || '—'),
