@@ -17,6 +17,8 @@ async function ensure() {
     status TEXT, note TEXT, sent_at TIMESTAMPTZ,
     updated_by TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE retirement_401k ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`; // employee confirmed it's all correct
+  await sql`ALTER TABLE retirement_401k ADD COLUMN IF NOT EXISTS verified_by TEXT`;
 }
 
 // Shared mailbox the 401(k) emails come from (shows as its name, e.g. "Litson HR"). Unset = your own mailbox.
@@ -40,6 +42,7 @@ async function rows(): Promise<K401Row[]> {
       eligible: r.eligible ?? null, eligible_date: r.eligible_date ?? null, plan: r.plan ?? null,
       emp_pct: num(r.emp_pct), emp_check: num(r.emp_check), er_check: num(r.er_check), as_of: r.as_of ?? null,
       status: r.status ?? null, note: r.note ?? null, sent_at: r.sent_at ? new Date(r.sent_at).toISOString() : null,
+      verified_at: r.verified_at ? new Date(r.verified_at).toISOString() : null,
       updated_by: r.updated_by ?? null, updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : null,
       roster: rosterBy.get(normName(s.name)) ?? null };
   });
@@ -64,6 +67,10 @@ export async function PATCH(req: Request) {
   const e = pick('eligible', K401_ELIGIBLE); if (e !== undefined) vals.eligible = e;
   const p = pick('plan', K401_PLANS); if (p !== undefined) vals.plan = p;
   const st = pick('status', K401_STATUSES); if (st !== undefined) vals.status = st;
+  // Verified = the employee confirmed everything is correct. Stamped with the date and who marked it.
+  if ('verified' in b) Object.assign(vals, b.verified
+    ? { verified_at: new Date(), verified_by: who.email, status: 'Confirmed' }
+    : { verified_at: null, verified_by: null, status: null });
   for (const k of ['emp_pct', 'emp_check', 'er_check']) if (k in b) {
     const n = num(b[k]);
     if (n != null && (!Number.isFinite(n) || n < 0)) return NextResponse.json({ error: 'Amounts must be zero or more.' }, { status: 400 });

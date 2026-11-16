@@ -8,7 +8,7 @@ export interface K401Row {
   staff_id: string; name: string; position: string | null; email: string | null;
   eligible: string | null; eligible_date: string | null; plan: string | null;
   emp_pct: number | null; emp_check: number | null; er_check: number | null; as_of: string | null;
-  status: string | null; note: string | null; sent_at: string | null; updated_by: string | null; updated_at: string | null;
+  status: string | null; note: string | null; sent_at: string | null; verified_at: string | null; updated_by: string | null; updated_at: string | null;
   roster: string | null; // 401(k) status on the Benefits roster (Enrolled / Declined / Not eligible / …)
 }
 

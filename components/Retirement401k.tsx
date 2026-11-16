@@ -75,19 +75,19 @@ export default function Retirement401k() {
   }
   async function exportExcel() {
     const X: any = await import('xlsx-js-style');
-    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Plan', 'Employee %', 'Employee contribution / paycheck', 'Employer contribution / paycheck', 'Emailed'];
+    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Plan', 'Employee %', 'Employee contribution / paycheck', 'Employer contribution / paycheck', 'Emailed', 'Verified'];
     const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not recorded', rosterMismatch(r) ?? '', r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
-      r.emp_check ?? '', r.er_check ?? '', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '']);
+      r.emp_check ?? '', r.er_check ?? '', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '', r.verified_at ? fmtDay(r.verified_at.slice(0, 10)) : '']);
     downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 6 || i === 7,
-      widths: [24, 26, 15, 40, 16, 11, 32, 32, 14] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      widths: [24, 26, 15, 40, 16, 11, 32, 32, 14, 14] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const p = preview?.previews[pi];
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {([['Enrolled', `${enrolled.length} of ${rows.length}`], ['Employee contributions / paycheck', money(totals.emp) || '$0.00'], ['Employer contributions / paycheck', money(totals.er) || '$0.00'],
-          ['Plan differs from eligibility', String(diffs)]] as [string, string][]).map(([l, v]) => (
+          ['Verified', `${rows.filter(r => r.verified_at).length} of ${rows.length}`], ['Plan differs from eligibility', String(diffs)]] as [string, string][]).map(([l, v]) => (
           <div key={l} className="bg-white border border-border-light rounded-card px-4 py-3" style={{ borderTop: '3px solid #2a5d7a' }}>
             <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
             <div className="text-[18px] font-semibold text-text-primary tabular-nums">{v}</div>
@@ -120,7 +120,13 @@ export default function Retirement401k() {
                   <td className="px-2"><input type="checkbox" checked={sel.has(r.staff_id)} onChange={e => setSel(s => { const n = new Set(s); e.target.checked ? n.add(r.staff_id) : n.delete(r.staff_id); return n; })} aria-label={`Select ${r.name}`} /></td>
                   <td className="px-2 py-1.5 whitespace-nowrap"><div className="font-semibold text-text-primary">{r.name}</div>
                     <div className={`text-[11px] ${r.email ? 'text-text-muted' : 'text-[#b07d2a]'}`}>{r.email || 'No email in Staffing'}</div>
-                    {r.sent_at && <div className="text-[10px] text-[#2563eb]">✉ emailed {fmtDay(r.sent_at.slice(0, 10))}</div>}</td>
+                    {r.sent_at && <div className="text-[10px] text-[#2563eb]">✉ emailed {fmtDay(r.sent_at.slice(0, 10))}</div>}
+                    {/* Verified badge: click to mark that they confirmed it's all correct; click again to undo. */}
+                    {r.verified_at
+                      ? <button onClick={() => save(r.staff_id, { verified: false } as any)} title="They confirmed everything is correct. Click to undo."
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#eef5f1] text-[#2f7d5b] border border-[#cfe5d8]">✓ Verified {fmtDay(r.verified_at.slice(0, 10))}</button>
+                      : <button onClick={() => save(r.staff_id, { verified: true } as any)} title="Mark verified once they confirm everything is correct"
+                          className="mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-dashed border-border-light text-text-muted hover:text-[#2f7d5b] hover:border-[#2f7d5b]">Mark verified</button>}</td>
                   <td className="px-1 min-w-[150px] whitespace-nowrap">{(() => { const d = rosterMismatch(r); const t = r.roster;
                     const tone = !t ? 'bg-[#f7efe1] text-[#b07d2a]' : t === 'Enrolled' ? 'bg-[#eef5f1] text-[#2f7d5b]' : t === 'Declined' ? 'bg-[#f3e9e7] text-[#b0412f]' : 'bg-[#eceef2] text-[#5a6b82]';
                     return <span className="inline-flex items-center gap-1" title={d || 'Same as the 401(k) status on the Benefits roster; changing it here updates the roster'}>
