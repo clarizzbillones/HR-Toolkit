@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { K401_ELIGIBLE, K401_PLANS, K401_STATUSES, money, fmtDay, rosterMismatch, fromRoster, type K401Row } from '@/lib/k401';
+import { BENEFIT_STATUSES } from '@/lib/benefits';
+import { K401_PLANS, K401_STATUSES, money, fmtDay, rosterMismatch, fromRoster, type K401Row } from '@/lib/k401';
 import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 
 // 401(k) contributions, entered by hand from payroll: eligibility, plan, employee % and $ per paycheck,
@@ -53,7 +54,7 @@ export default function Retirement401k() {
   const allSel = list.length > 0 && list.every(r => sel.has(r.staff_id));
   const diffs = rows.filter(r => rosterMismatch(r)).length;
   // People with nothing entered yet whose roster status tells us their eligibility.
-  const fillable = rows.filter(r => !r.eligible && !r.plan && fromRoster(r.roster));
+  const fillable = rows.filter(r => !r.plan && fromRoster(r.roster));
   async function fillFromRoster() {
     for (const r of fillable) await save(r.staff_id, fromRoster(r.roster)! as any);
     setMsg(`Filled ${fillable.length} from the Benefits roster.`);
@@ -77,11 +78,11 @@ export default function Retirement401k() {
   }
   async function exportExcel() {
     const X: any = await import('xlsx-js-style');
-    const headers = ['Employee', 'Position', 'Benefits roster', 'Differs from roster', 'Eligible', 'Eligible date', 'Plan', 'Employee %', 'Employee / paycheck', 'Employer / paycheck', 'As of paycheck', 'Employee check', 'Emailed', 'Note'];
-    const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not on roster', rosterMismatch(r) ?? '', r.eligible ?? '', fmtDay(r.eligible_date), r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
+    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Eligible date', 'Plan', 'Employee %', 'Employee / paycheck', 'Employer / paycheck', 'As of paycheck', 'Employee check', 'Emailed', 'Note'];
+    const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not recorded', rosterMismatch(r) ?? '', fmtDay(r.eligible_date), r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
       r.emp_check ?? '', r.er_check ?? '', fmtDay(r.as_of), r.status || 'Not sent', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '', r.note ?? '']);
-    downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 8 || i === 9,
-      widths: [24, 26, 15, 40, 10, 14, 16, 11, 18, 18, 15, 14, 12, 30] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 7 || i === 8,
+      widths: [24, 26, 15, 40, 14, 16, 11, 18, 18, 15, 14, 12, 30] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const p = preview?.previews[pi];
@@ -89,7 +90,7 @@ export default function Retirement401k() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([['Enrolled', `${enrolled.length} of ${rows.length}`], ['Employees / paycheck', money(totals.emp) || '$0.00'], ['Litson / paycheck', money(totals.er) || '$0.00'],
-          ['Differs from roster', String(diffs)]] as [string, string][]).map(([l, v]) => (
+          ['Plan differs from eligibility', String(diffs)]] as [string, string][]).map(([l, v]) => (
           <div key={l} className="bg-white border border-border-light rounded-card px-4 py-3" style={{ borderTop: '3px solid #2a5d7a' }}>
             <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1">{l}</div>
             <div className="text-[18px] font-semibold text-text-primary tabular-nums">{v}</div>
@@ -102,7 +103,7 @@ export default function Retirement401k() {
         <span className="text-xs text-text-muted flex-1">Type straight into the table; each change saves. Payroll deductions override the election in Guideline.</span>
         {msg && <span className="text-xs text-text-muted">{msg}</span>}
         <label className="text-sm flex items-center gap-1.5 text-text-secondary"><input type="checkbox" checked={onlyDiff} onChange={e => setOnlyDiff(e.target.checked)} />Only differences ({diffs})</label>
-        {fillable.length > 0 && <button onClick={fillFromRoster} title="For people not entered yet: Enrolled → eligible Yes; Declined → eligible Yes, Not enrolled; Not eligible → Not yet, Not enrolled" className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Fill {fillable.length} from roster</button>}
+        {fillable.length > 0 && <button onClick={fillFromRoster} title="For people with no plan yet whose Eligibility is Declined, Waived or Not eligible: set plan to Not enrolled" className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">Fill {fillable.length} from roster</button>}
         <button onClick={exportExcel} className="bg-white border border-border-light text-ink text-sm font-semibold px-4 py-2 rounded-ctrl hover:bg-canvas">⬇ Excel</button>
         <button onClick={openPreview} disabled={!sel.size} className="bg-ink text-white text-sm font-semibold px-4 py-2 rounded-ctrl disabled:opacity-40">✉ Email {sel.size || ''} to confirm</button>
       </div>
@@ -111,26 +112,25 @@ export default function Retirement401k() {
         <table className="w-full text-sm">
           <thead className="bg-canvas border-b border-border-light"><tr>
             <th className="px-2 py-2 w-8"><input type="checkbox" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(list.map(r => r.staff_id)) : new Set())} aria-label="Select all" /></th>
-            <th className={th}>Employee</th><th className={th}>Benefits roster</th><th className={th}>Eligible</th><th className={th}>Eligible date</th><th className={th}>Plan</th>
+            <th className={th}>Employee</th><th className={th}>Eligibility</th><th className={th}>Eligible date</th><th className={th}>Plan</th>
             <th className={`${th} text-right`}>Employee %</th><th className={`${th} text-right`}>Employee / paycheck</th><th className={`${th} text-right`}>Employer / paycheck</th>
             <th className={th}>As of paycheck</th><th className={th}>Employee check</th><th className={th}>Note</th>
           </tr></thead>
           <tbody>
             {list.map(r => {
-              const off = r.plan === 'Not enrolled' || r.eligible === 'No' || r.eligible === 'Not yet';
+              const off = r.plan === 'Not enrolled' || r.roster === 'Not eligible' || r.roster === 'Declined';
               const st = r.status || 'Not sent';
               return (
                 <tr key={r.staff_id} className={`border-t border-[#f1ece3] ${sel.has(r.staff_id) ? 'bg-[#f6f9ff]' : ''}`}>
                   <td className="px-2"><input type="checkbox" checked={sel.has(r.staff_id)} onChange={e => setSel(s => { const n = new Set(s); e.target.checked ? n.add(r.staff_id) : n.delete(r.staff_id); return n; })} aria-label={`Select ${r.name}`} /></td>
                   <td className="px-2 py-1.5 whitespace-nowrap"><div className="font-semibold text-text-primary">{r.name}</div>
                     <div className={`text-[11px] ${r.email ? 'text-text-muted' : 'text-[#b07d2a]'}`}>{r.email || 'No email in Staffing'}</div></td>
-                  <td className="px-2 whitespace-nowrap">{(() => { const d = rosterMismatch(r); const t = r.roster;
+                  <td className="px-1 min-w-[150px] whitespace-nowrap">{(() => { const d = rosterMismatch(r); const t = r.roster;
                     const tone = !t ? 'bg-[#f7efe1] text-[#b07d2a]' : t === 'Enrolled' ? 'bg-[#eef5f1] text-[#2f7d5b]' : t === 'Declined' ? 'bg-[#f3e9e7] text-[#b0412f]' : 'bg-[#eceef2] text-[#5a6b82]';
-                    return <span title={d || (t ? 'Matches what’s entered here' : 'No 401(k) status on the Benefits roster')} className="inline-flex items-center gap-1">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${tone}`}>{t || 'Not on roster'}</span>
+                    return <span className="inline-flex items-center gap-1" title={d || 'Same as the 401(k) status on the Benefits roster; changing it here updates the roster'}>
+                      <select className={`${cell} font-semibold ${tone}`} value={t ?? ''} onChange={e => save(r.staff_id, { roster: e.target.value || null })}>
+                        <option value="">Not recorded</option>{BENEFIT_STATUSES.map(x => <option key={x}>{x}</option>)}</select>
                       {d && <span className="text-[#b0412f] font-bold" aria-label={d}>⚠</span>}</span>; })()}</td>
-                  <td className="px-1 min-w-[96px]"><select className={cell} value={r.eligible ?? ''} onChange={e => save(r.staff_id, { eligible: e.target.value || null })}>
-                    <option value="">—</option>{K401_ELIGIBLE.map(x => <option key={x}>{x}</option>)}</select></td>
                   <td className="px-1 min-w-[140px]"><input type="date" className={cell} defaultValue={r.eligible_date ?? ''} key={`ed${r.eligible_date}`} onBlur={e => e.target.value !== (r.eligible_date ?? '') && save(r.staff_id, { eligible_date: e.target.value || null })} /></td>
                   <td className="px-1 min-w-[140px]"><select className={cell} value={r.plan ?? ''} onChange={e => save(r.staff_id, { plan: e.target.value || null })}>
                     <option value="">—</option>{K401_PLANS.map(x => <option key={x}>{x}</option>)}</select></td>
@@ -150,7 +150,7 @@ export default function Retirement401k() {
               );
             })}
             <tr className="border-t-2 border-text-primary bg-canvas font-bold">
-              <td /><td className="px-2 py-2">Total per paycheck</td><td colSpan={5} />
+              <td /><td className="px-2 py-2">Total per paycheck</td><td colSpan={4} />
               <td className="px-3 py-2 text-right tabular-nums">{money(totals.emp)}</td><td className="px-3 py-2 text-right tabular-nums">{money(totals.er)}</td><td colSpan={3} />
             </tr>
           </tbody>

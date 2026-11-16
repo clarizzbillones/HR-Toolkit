@@ -13,27 +13,18 @@ export interface K401Row {
 }
 
 export const ENROLLED_PLANS = ['401(k)', 'Roth 401(k)', '401(k) + Roth'];
-// Where this table and the Benefits roster disagree (null = they agree, or nothing to compare yet).
-export function rosterMismatch(r: Pick<K401Row, 'roster' | 'eligible' | 'plan'>): string | null {
+// Where the plan entered here and the Eligibility (Benefits roster 401(k) status) disagree.
+export function rosterMismatch(r: Pick<K401Row, 'roster' | 'plan'>): string | null {
   const inPlan = !!r.plan && ENROLLED_PLANS.includes(r.plan);
-  if (!r.roster || (!r.eligible && !r.plan)) return null;
-  if (r.roster === 'Enrolled') {
-    if (r.eligible && r.eligible !== 'Yes') return `Roster says Enrolled, but eligible is “${r.eligible}”.`;
-    if (r.plan === 'Not enrolled') return 'Roster says Enrolled, but plan is “Not enrolled”.';
-  }
-  if (r.roster === 'Not eligible') {
-    if (r.eligible === 'Yes') return 'Roster says Not eligible, but eligible is “Yes”.';
-    if (inPlan) return `Roster says Not eligible, but plan is “${r.plan}”.`;
-  }
-  if ((r.roster === 'Declined' || r.roster === 'Waived') && inPlan) return `Roster says ${r.roster}, but plan is “${r.plan}”.`;
+  if (!r.roster || !r.plan) return null;
+  if (r.roster === 'Enrolled' && r.plan === 'Not enrolled') return 'Eligibility says Enrolled, but plan is “Not enrolled”.';
+  if (r.roster === 'Not eligible' && inPlan) return `Eligibility says Not eligible, but plan is “${r.plan}”.`;
+  if ((r.roster === 'Declined' || r.roster === 'Waived') && inPlan) return `Eligibility says ${r.roster}, but plan is “${r.plan}”.`;
   return null;
 }
 // What to fill in from the roster for someone not entered yet.
-export function fromRoster(roster: string | null): { eligible?: string; plan?: string } | null {
-  if (roster === 'Enrolled') return { eligible: 'Yes' };
-  if (roster === 'Declined' || roster === 'Waived') return { eligible: 'Yes', plan: 'Not enrolled' };
-  if (roster === 'Not eligible') return { eligible: 'Not yet', plan: 'Not enrolled' };
-  return null;
+export function fromRoster(roster: string | null): { plan?: string } | null {
+  return roster === 'Declined' || roster === 'Waived' || roster === 'Not eligible' ? { plan: 'Not enrolled' } : null;
 }
 
 export const money = (n: number | null | undefined) =>

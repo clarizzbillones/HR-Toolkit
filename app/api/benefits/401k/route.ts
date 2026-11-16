@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, cuid } from '@/lib/db';
+import { BENEFIT_STATUSES } from '@/lib/benefits';
 import { costViewerSession } from '@/lib/costAccess';
 import { sendMail, sendMailAsApp } from '@/lib/graph';
 import { K401_ELIGIBLE, K401_PLANS, K401_STATUSES, money, fmtDay, type K401Row } from '@/lib/k401';
@@ -67,6 +68,17 @@ export async function PATCH(req: Request) {
   }
   for (const k of ['eligible_date', 'as_of']) if (k in b) vals[k] = day(b[k]);
   if ('note' in b) vals.note = String(b.note ?? '').slice(0, 1000) || null;
+  // Eligibility = the 401(k) status on the Benefits roster. Change only the status there (keeps its plan/notes).
+  if ('roster' in b) {
+    const st = BENEFIT_STATUSES.includes(b.roster) ? String(b.roster) : '';
+    const [person] = await sql`SELECT name FROM staff_directory WHERE id = ${id}` as any[];
+    if (person?.name) {
+      const key = String(person.name).trim().toLowerCase();
+      const [ex] = await sql`SELECT id FROM benefit_enrollments WHERE lower(btrim(person_name)) = ${key} AND benefit = '401(k)'` as any[];
+      if (ex) await sql`UPDATE benefit_enrollments SET status = ${st} WHERE id = ${ex.id}`;
+      else if (st) await sql`INSERT INTO benefit_enrollments (id, person_name, benefit, status, enrolled_date, plan, notes) VALUES (${cuid()}, ${person.name}, '401(k)', ${st}, '', '', '')`;
+    }
+  }
   await sql`INSERT INTO retirement_401k (staff_id) VALUES (${id}) ON CONFLICT (staff_id) DO NOTHING`;
   if (Object.keys(vals).length) await sql`UPDATE retirement_401k SET ${sql({ ...vals, updated_by: who.email, updated_at: new Date() })} WHERE staff_id = ${id}`;
   const [row] = (await rows()).filter(r => r.staff_id === id);
@@ -79,7 +91,7 @@ function emailHtml(r: K401Row) {
   const line = (k: string, v: string) => `<tr><td style="padding:9px 0;color:#6B7280;width:190px;border-top:1px solid #E4E7EC">${k}</td><td style="padding:9px 0;color:#111827;font-weight:600;border-top:1px solid #E4E7EC">${v}</td></tr>`;
   const enrolled = r.plan && r.plan !== 'Not enrolled';
   const lines = [
-    line('Eligible for 401(k)', r.eligible === 'Not yet' && r.eligible_date ? `Not yet · eligible ${fmtDay(r.eligible_date)}` : r.eligible || '—'),
+    line('Eligibility', r.roster === 'Not eligible' ? `Not eligible yet${r.eligible_date ? ` · eligible ${fmtDay(r.eligible_date)}` : ''}` : r.roster || '—'),
     line('Plan', r.plan || '—'),
     ...(enrolled ? [
       line('Your contribution', [r.emp_pct != null ? `${r.emp_pct}% of pay` : '', r.emp_check != null ? `${money(r.emp_check)} per paycheck` : ''].filter(Boolean).join(' · ') || '—'),
