@@ -4,6 +4,7 @@ import { useToast } from '@/components/Toast';
 import { useAccess } from '@/components/AccessProvider';
 import { formatDate } from '@/lib/formatDate';
 import BenefitsEnrollment from '@/components/BenefitsEnrollment';
+import Retirement401k, { use401kAllowed } from '@/components/Retirement401k';
 
 interface Policy {
   id: string; category: string; ins_type: string; carrier: string; policy_number: string;
@@ -91,6 +92,8 @@ export default function InsuranceClient({ initialPolicies, initialFollowups, cat
   const readOnly = !!me?.restricted && !(me?.editSections ?? []).includes('/insurance');
   const [locked, setLocked] = useState(!!initialLocked);
   const editable = !readOnly && !locked; // may add/edit/delete
+  const k401Allowed = use401kAllowed();
+  const [layer, setLayer] = useState<'policies' | '401k'>('policies');
   async function toggleLock() {
     const next = !locked; setLocked(next);
     await fetch('/api/insurance', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'lock', locked: next }) });
@@ -280,6 +283,16 @@ ${catBlocks}${openHtml}${exclHtml}
       </header>
 
       <div className="flex-1 overflow-auto px-8 py-6 space-y-6">
+        {/* Layers: policies & enrollment, and 401(k) contributions (Clarizz and Catie only). */}
+        {k401Allowed && (
+          <div className="flex gap-1 border-b border-border-light -mt-2">
+            {([['policies', 'Policies & enrollment'], ['401k', '401(k) contributions']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setLayer(k)} className={`text-sm font-semibold px-4 py-2 border-b-2 -mb-px ${layer === k ? 'border-gold text-text-primary' : 'border-transparent text-text-muted hover:text-text-secondary'}`}>{l}</button>
+            ))}
+          </div>
+        )}
+        {layer === '401k' && k401Allowed && <Retirement401k />}
+        <div className="space-y-6" hidden={layer === '401k' && !!k401Allowed}>
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl">
           {([['Policies on file', String(policies.length)], ['Known annual premium', fmtUSD(totalPremium)], ['Renewing ≤60 days', String(upcoming.length)], ['Open items', String(openItems.length)]] as [string, string][]).map(([l, v]) => (
@@ -477,6 +490,7 @@ ${catBlocks}${openHtml}${exclHtml}
               <p className="text-[11px] text-text-muted mt-2">Full monthly premium per covered person by age, effective Jan 1, 2026. Litson PLLC covers $600/month toward the premium; the remainder is the employee&rsquo;s responsibility. Rates are set by the carrier and updated at each renewal.</p>
             </div>
           )}
+        </div>
         </div>
       </div>
 
