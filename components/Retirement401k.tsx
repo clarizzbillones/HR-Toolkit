@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { BENEFIT_STATUSES } from '@/lib/benefits';
-import { K401_PLANS, K401_STATUSES, money, fmtDay, rosterMismatch, fromRoster, type K401Row } from '@/lib/k401';
+import { K401_PLANS, money, fmtDay, rosterMismatch, fromRoster, type K401Row } from '@/lib/k401';
 import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 
 // 401(k) contributions, entered by hand from payroll: eligibility, plan, employee % and $ per paycheck,
@@ -10,10 +10,6 @@ import { styledSheet, downloadWorkbook } from '@/lib/xlsxStyle';
 
 const cell = 'w-full bg-transparent border border-transparent hover:border-border-light focus:border-ink focus:bg-white rounded-ctrl px-2 py-1.5 text-sm focus:outline-none';
 const th = 'text-left text-[11px] font-bold uppercase tracking-wider text-text-muted px-2 py-2 whitespace-nowrap';
-const STATUS_TONE: Record<string, string> = {
-  'Not sent': 'bg-[#f1ece3] text-[#8b8478]', Emailed: 'bg-[#e8f0fe] text-[#2563eb]',
-  Confirmed: 'bg-[#eef5f1] text-[#2f7d5b]', 'Needs fix': 'bg-[#f3e9e7] text-[#b0412f]',
-};
 
 export function use401kAllowed() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -50,7 +46,6 @@ export default function Retirement401k() {
 
   const enrolled = rows.filter(r => r.plan && r.plan !== 'Not enrolled');
   const totals = { emp: enrolled.reduce((t, r) => t + (r.emp_check ?? 0), 0), er: enrolled.reduce((t, r) => t + (r.er_check ?? 0), 0) };
-  const counts = Object.fromEntries(K401_STATUSES.map(s => [s, rows.filter(r => (r.status || 'Not sent') === s).length]));
   const allSel = list.length > 0 && list.every(r => sel.has(r.staff_id));
   const diffs = rows.filter(r => rosterMismatch(r)).length;
   // People with nothing entered yet whose roster status tells us their eligibility.
@@ -78,11 +73,11 @@ export default function Retirement401k() {
   }
   async function exportExcel() {
     const X: any = await import('xlsx-js-style');
-    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Eligible date', 'Plan', 'Employee %', 'Employee / paycheck', 'Employer / paycheck', 'As of paycheck', 'Employee check', 'Emailed', 'Note'];
+    const headers = ['Employee', 'Position', 'Eligibility', 'Mismatch', 'Eligible date', 'Plan', 'Employee %', 'Employee / paycheck', 'Employer / paycheck', 'Emailed'];
     const data = rows!.map(r => [r.name, r.position ?? '', r.roster || 'Not recorded', rosterMismatch(r) ?? '', fmtDay(r.eligible_date), r.plan ?? '', r.emp_pct != null ? `${r.emp_pct}%` : '',
-      r.emp_check ?? '', r.er_check ?? '', fmtDay(r.as_of), r.status || 'Not sent', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '', r.note ?? '']);
+      r.emp_check ?? '', r.er_check ?? '', r.sent_at ? fmtDay(r.sent_at.slice(0, 10)) : '']);
     downloadWorkbook(X, [['401(k) contributions', styledSheet(X, { headers, rows: data, totals: true, money: i => i === 7 || i === 8,
-      widths: [24, 26, 15, 40, 14, 16, 11, 18, 18, 15, 14, 12, 30] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      widths: [24, 26, 15, 40, 14, 16, 11, 18, 18, 14] })]], `Litson-401k-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const p = preview?.previews[pi];
@@ -114,17 +109,16 @@ export default function Retirement401k() {
             <th className="px-2 py-2 w-8"><input type="checkbox" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(list.map(r => r.staff_id)) : new Set())} aria-label="Select all" /></th>
             <th className={th}>Employee</th><th className={th}>Eligibility</th><th className={th}>Eligible date</th><th className={th}>Plan</th>
             <th className={`${th} text-right`}>Employee %</th><th className={`${th} text-right`}>Employee / paycheck</th><th className={`${th} text-right`}>Employer / paycheck</th>
-            <th className={th}>As of paycheck</th><th className={th}>Employee check</th><th className={th}>Note</th>
           </tr></thead>
           <tbody>
             {list.map(r => {
               const off = r.plan === 'Not enrolled' || r.roster === 'Not eligible' || r.roster === 'Declined';
-              const st = r.status || 'Not sent';
               return (
                 <tr key={r.staff_id} className={`border-t border-[#f1ece3] ${sel.has(r.staff_id) ? 'bg-[#f6f9ff]' : ''}`}>
                   <td className="px-2"><input type="checkbox" checked={sel.has(r.staff_id)} onChange={e => setSel(s => { const n = new Set(s); e.target.checked ? n.add(r.staff_id) : n.delete(r.staff_id); return n; })} aria-label={`Select ${r.name}`} /></td>
                   <td className="px-2 py-1.5 whitespace-nowrap"><div className="font-semibold text-text-primary">{r.name}</div>
-                    <div className={`text-[11px] ${r.email ? 'text-text-muted' : 'text-[#b07d2a]'}`}>{r.email || 'No email in Staffing'}</div></td>
+                    <div className={`text-[11px] ${r.email ? 'text-text-muted' : 'text-[#b07d2a]'}`}>{r.email || 'No email in Staffing'}</div>
+                    {r.sent_at && <div className="text-[10px] text-[#2563eb]">✉ emailed {fmtDay(r.sent_at.slice(0, 10))}</div>}</td>
                   <td className="px-1 min-w-[150px] whitespace-nowrap">{(() => { const d = rosterMismatch(r); const t = r.roster;
                     const tone = !t ? 'bg-[#f7efe1] text-[#b07d2a]' : t === 'Enrolled' ? 'bg-[#eef5f1] text-[#2f7d5b]' : t === 'Declined' ? 'bg-[#f3e9e7] text-[#b0412f]' : 'bg-[#eceef2] text-[#5a6b82]';
                     return <span className="inline-flex items-center gap-1" title={d || 'Same as the 401(k) status on the Benefits roster; changing it here updates the roster'}>
@@ -144,18 +138,12 @@ export default function Retirement401k() {
                         if (k === 'emp_pct') e.target.value = v === '' ? '' : `${Number(v)}%`;
                         if (v !== (r[k] == null ? '' : String(r[k]))) save(r.staff_id, { [k]: v === '' ? null : Number(v) } as any); }} /></td>
                   ))}
-                  <td className="px-1 min-w-[140px]"><input type="date" className={cell} defaultValue={r.as_of ?? ''} key={`ao${r.as_of}`} onBlur={e => e.target.value !== (r.as_of ?? '') && save(r.staff_id, { as_of: e.target.value || null })} /></td>
-                  <td className="px-1 min-w-[130px]"><select className={`${cell} font-semibold ${STATUS_TONE[st]}`} value={st} onChange={e => save(r.staff_id, { status: e.target.value })}>
-                    {K401_STATUSES.map(x => <option key={x}>{x}</option>)}</select>
-                    {r.sent_at && <div className="text-[10px] text-text-muted px-2">emailed {fmtDay(r.sent_at.slice(0, 10))}</div>}</td>
-                  <td className="px-1 min-w-[180px]"><input className={cell} defaultValue={r.note ?? ''} key={`n${r.note}`} placeholder="e.g. says 5%, payroll shows 6%"
-                    onBlur={e => e.target.value !== (r.note ?? '') && save(r.staff_id, { note: e.target.value })} /></td>
                 </tr>
               );
             })}
             <tr className="border-t-2 border-text-primary bg-canvas font-bold">
               <td /><td className="px-2 py-2">Total per paycheck</td><td colSpan={4} />
-              <td className="px-3 py-2 text-right tabular-nums">{money(totals.emp)}</td><td className="px-3 py-2 text-right tabular-nums">{money(totals.er)}</td><td colSpan={3} />
+              <td className="px-3 py-2 text-right tabular-nums">{money(totals.emp)}</td><td className="px-3 py-2 text-right tabular-nums">{money(totals.er)}</td>
             </tr>
           </tbody>
         </table>
