@@ -137,8 +137,12 @@ export default function Retirement401k() {
                   {(['emp_pct', 'emp_check', 'er_check'] as const).map(k => (
                     <td key={k} className="px-1 min-w-[110px]"><input inputMode="decimal"
                       className={`${cell} text-right tabular-nums ${off ? 'text-text-muted' : ''}`} key={`${k}${r[k]}`}
-                      defaultValue={r[k] == null ? '' : k === 'emp_pct' ? String(r[k]) : Number(r[k]).toFixed(2)} placeholder={k === 'emp_pct' ? '%' : '$0.00'}
-                      onBlur={e => { const v = e.target.value.replace(/[$,%\s]/g, ''); if (v !== (r[k] == null ? '' : String(r[k]))) save(r.staff_id, { [k]: v === '' ? null : Number(v) } as any); }} /></td>
+                      defaultValue={r[k] == null ? '' : k === 'emp_pct' ? `${r[k]}%` : Number(r[k]).toFixed(2)} placeholder={k === 'emp_pct' ? '0%' : '$0.00'}
+                      // Employee %: the % sign is added for you; it's dropped while you edit.
+                      onFocus={k === 'emp_pct' ? e => { e.target.value = e.target.value.replace(/%/g, ''); e.target.select(); } : undefined}
+                      onBlur={e => { const v = e.target.value.replace(/[$,%\s]/g, '');
+                        if (k === 'emp_pct') e.target.value = v === '' ? '' : `${Number(v)}%`;
+                        if (v !== (r[k] == null ? '' : String(r[k]))) save(r.staff_id, { [k]: v === '' ? null : Number(v) } as any); }} /></td>
                   ))}
                   <td className="px-1 min-w-[140px]"><input type="date" className={cell} defaultValue={r.as_of ?? ''} key={`ao${r.as_of}`} onBlur={e => e.target.value !== (r.as_of ?? '') && save(r.staff_id, { as_of: e.target.value || null })} /></td>
                   <td className="px-1 min-w-[130px]"><select className={`${cell} font-semibold ${STATUS_TONE[st]}`} value={st} onChange={e => save(r.staff_id, { status: e.target.value })}>
