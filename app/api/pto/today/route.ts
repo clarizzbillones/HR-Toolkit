@@ -4,6 +4,7 @@ import { sql } from '@/lib/db';
 // exclusions) shared with the PTO dashboard and report — so "out today" always
 // matches the rows people actually see on the PTO page.
 import { mergePto, type PtoEntry, type CalEvent } from '@/lib/pto';
+import { calendarWithArchive } from '@/lib/calendarArchive';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,9 +24,8 @@ export async function GET(req: Request) {
     days: Number(r.days) || 0,
   }));
 
-  const settingsRows = await sql`SELECT calendar_events, hidden_cal_ids FROM app_settings WHERE id = 'singleton'` as any[];
-  let calEvents: CalEvent[] = [];
-  try { calEvents = settingsRows[0]?.calendar_events ? JSON.parse(settingsRows[0].calendar_events) : []; } catch { calEvents = []; }
+  const settingsRows = await sql`SELECT calendar_events, calendar_archive, calendar_cutover, hidden_cal_ids FROM app_settings WHERE id = 'singleton'` as any[];
+  const calEvents: CalEvent[] = calendarWithArchive(settingsRows[0]?.calendar_events, settingsRows[0]?.calendar_archive, settingsRows[0]?.calendar_cutover);
   let hiddenIds: string[] = [];
   try { hiddenIds = settingsRows[0]?.hidden_cal_ids ? JSON.parse(settingsRows[0].hidden_cal_ids) : []; } catch { hiddenIds = []; }
 

@@ -109,6 +109,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   const [calUrl, setCalUrl] = useState('');
   const [calConnected, setCalConnected] = useState(false);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
+  const [calArchive, setCalArchive] = useState<{ count: number; cutover: string } | null>(null);
   const [calLoading, setCalLoading] = useState(false);
   const [calStatus, setCalStatus] = useState('');
 
@@ -119,10 +120,10 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
   useEffect(() => {
     fetch('/api/connections').then(r => r.json()).then(data => {
       if (data.calendar_url) setCalUrl(data.calendar_url);
-      if (data.calendar_events?.length) {
-        setCalEvents(data.calendar_events);
-        setCalConnected(true);
-      }
+      if (data.calendar_events?.length) setCalEvents(data.calendar_events);
+      // Connected = a current calendar is linked (kept entries from the old calendar show either way).
+      setCalConnected(!!data.calendar_connected);
+      if (data.calendar_archive) setCalArchive(data.calendar_archive);
       if (Array.isArray(data.hidden_cal_ids)) setHiddenCalIds(new Set(data.hidden_cal_ids));
     }).catch(() => {});
   }, []);
@@ -356,8 +357,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       if (r.ok) {
         const d = await r.json();
         if (d.events?.length) {
-          await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: icsUrl, calendar_events: d.events }) });
-          setCalEvents(d.events);
+          const sv = await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_url: icsUrl, calendar_events: d.events }) }).then(x => x.json()).catch(() => null);
+          setCalEvents(sv?.calendar_events ?? d.events);
           setCalConnected(true);
           return true;
         }
@@ -390,8 +391,8 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
 
   async function disconnectCalendar() {
     setCalConnected(false);
-    setCalEvents([]);
-    await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) });
+    const sv = await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: null }) }).then(x => x.json()).catch(() => null);
+    setCalEvents(sv?.calendar_events ?? []); // kept entries from the old calendar stay
     showToast('Calendar disconnected');
   }
 
@@ -407,9 +408,9 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
       const data = await res.json();
       if (!res.ok) { showToast(data.error ?? 'Invalid ICS file'); setCalLoading(false); return; }
       const events = data.events ?? [];
-      setCalEvents(events);
       setCalConnected(true);
-      await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: events }) });
+      const sv = await fetch('/api/connections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendar_events: events }) }).then(x => x.json()).catch(() => null);
+      setCalEvents(sv?.calendar_events ?? events);
       showToast(`Loaded — ${events.length} events from ICS file`);
     } catch { showToast('Failed to read ICS file'); }
     setCalLoading(false);
@@ -571,9 +572,12 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
               </span>
               {calConnected && <span className="ml-auto text-xs font-semibold text-text-muted">{calEvents.length} events</span>}
             </div>
+            {calArchive && (
+              <p className="text-[11px] text-text-muted mb-2">From {formatDate(calArchive.cutover)}: availability@litson.co. {calArchive.count} earlier entries are kept from the previous calendar so reports stay accurate.</p>
+            )}
             {calConnected ? (
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm text-[#2f7d5b] font-medium flex-1">Litson Availability synced</p>
+                <p className="text-sm text-[#2f7d5b] font-medium flex-1">availability@litson.co synced</p>
                 <button onClick={() => setShowHidden(true)}
                   className="text-xs text-[#b07d2a] hover:text-ink font-semibold">Hidden ({hiddenList.length})</button>
                 <button onClick={refreshCalendar} disabled={calLoading}
@@ -585,7 +589,7 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
               <div className="flex flex-col gap-2 mt-1">
                 <div className="flex gap-2">
                   <input value={calUrl} onChange={e => setCalUrl(e.target.value)}
-                    placeholder="Paste published Outlook ICS link…"
+                    placeholder="Paste availability@litson.co’s published ICS link…"
                     className="flex-1 border border-border-light rounded-ctrl px-2.5 py-1.5 text-xs focus:outline-none focus:border-ink" />
                   <button onClick={connectCalendar} disabled={calLoading || !calUrl.trim()}
                     className="bg-[#0F6CBD] text-white text-xs font-semibold px-3 py-1.5 rounded-ctrl hover:opacity-90 disabled:opacity-40 whitespace-nowrap min-w-[80px] text-center">
