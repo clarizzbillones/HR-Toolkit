@@ -15,6 +15,8 @@ function detectTag(summary: string): string {
 }
 function extractName(summary: string): string {
   return summary
+    // Entries copied between Outlook calendars start with "Copy: " — not part of the name.
+    .replace(/^\s*copy\s*:\s*/i, '')
     .replace(/\b(OOO|PTO|WFH|OUT OF OFFICE|VACATION|LEAVE|REMOTE|WORK FROM HOME)\b/gi, '')
     .replace(/[-–—]/g, ' ').replace(/\s+/g, ' ').trim().split(' ')[0] || summary.trim();
 }
@@ -45,7 +47,8 @@ function parseIcs(text: string) {
     }
     if (end < '2026-06-01') continue;
     // Identify the event by its content, not its position or UID.
-    const id = stableId(`${summary.toLowerCase().trim()}|${start}|${end}`);
+    // "Copy: X" (copied between calendars) is the same entry as "X".
+    const id = stableId(`${summary.replace(/^\s*copy\s*:\s*/i, "").toLowerCase().trim()}|${start}|${end}`);
     events.push({ id, name: extractName(summary), tag: detectTag(summary), start, end, title: summary });
   }
   return events;
