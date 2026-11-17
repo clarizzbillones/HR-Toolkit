@@ -39,7 +39,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(ridwan|ridwan\s+ahmed)$/i, 'Ridwan Ahmed'],
   [/^(alex|alex\s+little)$/i, 'Alex Little'],
   [/^(ashley|ashley\s+abraham)$/i, 'Ashley Abraham'],
-  [/^(fernanda|fernanda\s+guillen)$/i, 'Fernanda Guillen'],
+  [/^(fer|fernanda|fernanda\s+guillen)$/i, 'Fernanda Guillen'],
   [/^(joey|joey\s+mundy)$/i, 'Joey Mundy'],
   [/^(kelley|kelley\s+hess)$/i, 'Kelley Hess'],
   [/^(sloan|sloan\s+nickel)$/i, 'Sloan Nickel'],
@@ -47,6 +47,7 @@ const NAME_ALIASES: [RegExp, string][] = [
   [/^(zach|zachary|zachary\s+lawson|zach\s+lawson)$/i, 'Zachary Lawson'],
   [/^(isabella|isabella\s+maria\s+ardila|isabella\s+ardila)$/i, 'Isabella Maria Ardila'],
   [/^(naomi|naomi\s+alinajad)$/i, 'Naomi Alinajad'],
+  [/^(paige|paige\s+nutini)$/i, 'Paige Nutini'],
 ];
 
 export function resolveAlias(n: string): string {
