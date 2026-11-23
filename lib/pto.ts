@@ -91,7 +91,7 @@ export function mergePto(entries: PtoEntry[], calEvents: CalEvent[], hiddenIds: 
     if (calMatch) usedCalIds.add(calMatch.id);
     const days = e.days || workingDays(e.start_date, e.end_date);
     if (days < 1) return;
-    rows.push({ key: e.id, employee: resolveAlias(e.employee), start: e.start_date, end: e.end_date, days, type: e.type, status: e.status, source: calMatch ? 'both' : 'report', calTitle: calMatch?.title, calId: calMatch?.id });
+    rows.push({ key: e.id, employee: resolveAlias(e.employee), start: e.start_date, end: e.end_date, days, type: e.type, status: e.status, source: calMatch ? 'both' : 'report', calTitle: calMatch?.title ?? (e.notes || undefined), calId: calMatch?.id });
   });
 
   (calEvents ?? []).forEach(c => {

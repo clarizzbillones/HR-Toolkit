@@ -188,6 +188,11 @@ export default function PtoClient({ initialEntries }: { initialEntries: PtoEntry
         const data = await res.json();
         if (Array.isArray(data.entries)) setEntries(data.entries);
         await hideCalId(calEditRow.calId ?? calEditRow.key, calEditRow.employee, calEditRow.start, calEditRow.end);
+        // Keep the saved entry in view if filters are on (e.g. the name was corrected, or "Calendar" source).
+        const newName = resolveAlias(editForm.employee);
+        if (filterNames.size && !filterNames.has(newName)) setFilterNames(prev => new Set([...prev, newName]));
+        if (filterTypes.size && !filterTypes.has(editForm.type)) setFilterTypes(prev => new Set([...prev, editForm.type]));
+        if (filterSources.size && !filterSources.has('report' as Source)) setFilterSources(prev => new Set([...prev, 'report' as Source]));
         closeEdit();
         showToast('Saved to report (edited from Outlook; original kept in Outlook)');
         return;
